@@ -40,6 +40,11 @@ impl SystemWindow
 		self.sdl2_event_pump.poll_iter().collect()
 	}
 
+	pub fn get_keyboard_state(&mut self) -> sdl2::keyboard::KeyboardState
+	{
+		self.sdl2_event_pump.keyboard_state()
+	}
+
 	pub fn end_frame<F: FnOnce(&mut [u8], &SurfaceInfo)>(&mut self, draw_fn: F)
 	{
 		let mut surface = self.sdl2_window.surface(&self.sdl2_event_pump).unwrap();

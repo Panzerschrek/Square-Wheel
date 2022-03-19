@@ -7,6 +7,9 @@ use std::time::Duration;
 pub fn main()
 {
 	let mut window = system_window::SystemWindow::new();
+	let mut camera_controller = common::camera_controller::CameraController::new();
+
+	let frame_duration_s = 1.0 / 30.0;
 	'running: loop
 	{
 		for event in window.get_events()
@@ -23,9 +26,11 @@ pub fn main()
 			}
 		}
 
+		camera_controller.update(&window.get_keyboard_state(), frame_duration_s);
+
 		window.end_frame(draw_background);
 
-		::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+		std::thread::sleep(Duration::from_secs_f32(frame_duration_s));
 	}
 }
 

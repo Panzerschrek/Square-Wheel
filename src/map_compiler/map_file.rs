@@ -1,5 +1,4 @@
-type Vec2f = cgmath::Vector2<f32>;
-type Vec3f = cgmath::Vector3<f32>;
+use common::math_types::*;
 
 #[derive(Debug)]
 pub struct BrushPlane
