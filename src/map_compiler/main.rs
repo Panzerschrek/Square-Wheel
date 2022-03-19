@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 use structopt::StructOpt;
 
+mod map_file;
+
 #[derive(Debug, StructOpt)]
 #[structopt(name = "map_compiler", about = "SquareWheel map compiler.")]
 struct Opt
