@@ -16,4 +16,7 @@ fn main()
 {
 	let opt = Opt::from_args();
 	println!("Input file: {:?}", opt.input);
+
+	let file_contents_str = std::fs::read_to_string(opt.input).unwrap();
+	map_file::parse_map_file_content(&file_contents_str);
 }
