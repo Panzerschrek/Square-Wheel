@@ -8,8 +8,14 @@ edition = "2018"
 
 [dependencies]
 cgmath = "0.18"
+sdl2 = "0.35"
 structopt = "0.3"
+
 
 [[bin]]
 name = "map_compiler"
 path = "map_compiler/main.rs"
+
+[[bin]]
+name = "map_viewer"
+path = "map_viewer/main.rs"
