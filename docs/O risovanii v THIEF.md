@@ -24,7 +24,10 @@ Sektora strojatä iz listjev dereva dvoicnogo zarbijenija prostranstva.
 S odnoj storony eto dostoinstvo - uproscäjetsä redaktirovanije urovnej.
 S drugoj storony nalicije dvoicnogo razbijenija prostranstva možet privoditj k izlišnej narezke poligonov.
 Zadaca postrojenija grafa sektorov/portalov iz dereva dvoicnogo razbijenija prostranstva ne prosta.
+
 Jescö jestj problmena otsecenija nevidimyh poverhnostej pri postrojenii dereva iz brašej (v formate kart "Quake").
+Jestj predpoloženije, cto nevidimyje poverhnosti za graniçami urovä budut obrazovyvatj sektora, nedostižimyje iz osnovnyh sektorov urovnä.
+V takom slucaje takije sektora možno budet prosto otbrositj obhodom grafa - vybrositj izolirovannyje podgrafy.
 
 Risovanije poverhnostej po derevu dvoicnogo razbijenija prostranstva imejet preimuscestvo nad podhodom s risovanijem poverhnostej pri obhode dereva sektorov.
 V etom variante poverhnostj, vidimaja cerez neskoljko raznyh putej, risujetsä odin raz.
