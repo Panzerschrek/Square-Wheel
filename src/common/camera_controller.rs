@@ -1,5 +1,4 @@
 use super::math_types::*;
-use cgmath::{Angle, InnerSpace, Rad, SquareMatrix, Zero};
 use sdl2::keyboard::Scancode;
 
 pub struct CameraController
