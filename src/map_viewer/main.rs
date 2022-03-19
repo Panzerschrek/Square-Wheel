@@ -1,8 +1,7 @@
 extern crate sdl2;
 
 use common::system_window;
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
+use sdl2::{event::Event, keyboard::Keycode};
 use std::time::Duration;
 
 pub fn main()
@@ -37,10 +36,34 @@ fn draw_background(pixels: &mut [u8], surface_info: &system_window::SurfaceInfo)
 		for y in 0 .. surface_info.height
 		{
 			let index = 4 * x + y * surface_info.pitch;
-			pixels[index] = 255;
+			pixels[index] = 0 * 255;
 			pixels[index + 1] = ((x + y * 2) & 255) as u8;
-			pixels[index + 2] = 255;
-			pixels[index + 3] = 128;
+			pixels[index + 2] = 0 * 255;
+			pixels[index + 3] = 0 * 128;
 		}
 	}
+
+	use common::{debug_renderer::*, fixed_math::*};
+
+	let mut renderer = DebugRenderer::new(pixels, surface_info);
+	renderer.draw_line(
+		PointProjected {
+			x: int_to_fixed16(145),
+			y: int_to_fixed16(77),
+		},
+		PointProjected {
+			x: int_to_fixed16(77),
+			y: int_to_fixed16(95),
+		},
+	);
+	renderer.draw_line(
+		PointProjected {
+			x: int_to_fixed16(3),
+			y: int_to_fixed16(5),
+		},
+		PointProjected {
+			x: int_to_fixed16(17),
+			y: int_to_fixed16(210),
+		},
+	);
 }

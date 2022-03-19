@@ -35,7 +35,10 @@ impl SystemWindow
 		}
 	}
 
-	pub fn get_events(&mut self) -> Vec<sdl2::event::Event> { self.sdl2_event_pump.poll_iter().collect() }
+	pub fn get_events(&mut self) -> Vec<sdl2::event::Event>
+	{
+		self.sdl2_event_pump.poll_iter().collect()
+	}
 
 	pub fn end_frame<F: FnOnce(&mut [u8], &SurfaceInfo)>(&mut self, draw_fn: F)
 	{
