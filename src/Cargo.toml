@@ -12,6 +12,10 @@ cgmath = "0.18"
 sdl2 = "0.35"
 structopt = "0.3"
 
+[lib]
+name = "common"
+path = "common/lib.rs"
+
 [[bin]]
 name = "map_compiler"
 path = "map_compiler/main.rs"

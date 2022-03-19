@@ -1,34 +1,16 @@
 extern crate sdl2;
 
+use common::system_window;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-use sdl2::pixels::Color;
 use std::time::Duration;
 
 pub fn main()
 {
-	let sdl_context = sdl2::init().unwrap();
-	let video_subsystem = sdl_context.video().unwrap();
-
-	let window = video_subsystem
-		.window("rust-sdl2 demo", 800, 600)
-		.position_centered()
-		.build()
-		.unwrap();
-
-	let mut canvas = window.into_canvas().build().unwrap();
-
-	canvas.set_draw_color(Color::RGB(0, 255, 255));
-	canvas.clear();
-	canvas.present();
-	let mut event_pump = sdl_context.event_pump().unwrap();
-	let mut i = 0;
+	let mut window = system_window::SystemWindow::new();
 	'running: loop
 	{
-		i = (i + 1) % 255;
-		canvas.set_draw_color(Color::RGB(i, 64, 255 - i));
-		canvas.clear();
-		for event in event_pump.poll_iter()
+		for event in window.get_events()
 		{
 			match event
 			{
@@ -41,9 +23,24 @@ pub fn main()
 				{},
 			}
 		}
-		// The rest of the game loop goes here...
 
-		canvas.present();
+		window.end_frame(draw_background);
+
 		::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+	}
+}
+
+fn draw_background(pixels: &mut [u8], surface_info: &system_window::SurfaceInfo)
+{
+	for x in 0 .. surface_info.width
+	{
+		for y in 0 .. surface_info.height
+		{
+			let index = 4 * x + y * surface_info.pitch;
+			pixels[index] = 255;
+			pixels[index + 1] = ((x + y * 2) & 255) as u8;
+			pixels[index + 2] = 255;
+			pixels[index + 3] = 128;
+		}
 	}
 }
