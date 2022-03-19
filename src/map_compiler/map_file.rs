@@ -1,6 +1,7 @@
 type Vec2f = cgmath::Vector2<f32>;
 type Vec3f = cgmath::Vector3<f32>;
 
+#[derive(Debug)]
 pub struct BrushPlane
 {
 	pub vertices: [Vec3f; 3],
@@ -12,7 +13,7 @@ pub struct BrushPlane
 
 pub type Brush = Vec<BrushPlane>;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Entity
 {
 	pub brushes: Vec<Brush>,
@@ -21,6 +22,7 @@ pub struct Entity
 
 pub type MapFileParsed = Vec<Entity>;
 
+#[derive(Debug)]
 pub struct ParseError
 {
 	pub text_left: String,
@@ -48,6 +50,7 @@ pub fn parse_map_file_content(content: Iterator) -> ParseResult<MapFileParsed>
 
 	while !it.is_empty()
 	{
+		skip_whitespaces(&mut it);
 		if it.starts_with("{")
 		{
 			result.push(parse_entity(&mut it)?);
@@ -56,6 +59,7 @@ pub fn parse_map_file_content(content: Iterator) -> ParseResult<MapFileParsed>
 		{
 			return Err(ParseError::build(it));
 		}
+		skip_whitespaces(&mut it);
 	}
 
 	Ok(result)
@@ -69,6 +73,7 @@ fn parse_entity(it: &mut Iterator) -> ParseResult<Entity>
 
 	while !it.is_empty() && !it.starts_with("}")
 	{
+		skip_whitespaces(it);
 		if it.starts_with("{")
 		{
 			result.brushes.push(parse_brush(it)?);
@@ -82,12 +87,14 @@ fn parse_entity(it: &mut Iterator) -> ParseResult<Entity>
 		{
 			return Err(ParseError::build(it));
 		}
+		skip_whitespaces(it);
 	}
 
 	if !it.starts_with("}")
 	{
 		return Err(ParseError::build(it));
 	}
+	*it = &it[1 ..]; // Skip "}"
 
 	Ok(result)
 }
@@ -100,24 +107,147 @@ fn parse_brush(it: &mut Iterator) -> ParseResult<Brush>
 
 	while !it.is_empty() && !it.starts_with("}")
 	{
-		// TODO
+		result.push(parse_brush_plane(it)?);
+		skip_whitespaces(it);
 	}
 
 	if !it.starts_with("}")
 	{
 		return Err(ParseError::build(it));
 	}
+	*it = &it[1 ..]; // Skip "}"
 
 	Ok(result)
 }
 
+fn parse_brush_plane(it: &mut Iterator) -> ParseResult<BrushPlane>
+{
+	Ok(BrushPlane {
+		vertices: [
+			parse_brush_plane_vertex(it)?,
+			parse_brush_plane_vertex(it)?,
+			parse_brush_plane_vertex(it)?,
+		],
+		texture: parse_whitespace_separated_string(it)?,
+		tc_offset: Vec2f::new(parse_number(it)?, parse_number(it)?),
+		tc_scale: Vec2f::new(parse_number(it)?, parse_number(it)?),
+		tc_angle: parse_number(it)?,
+	})
+}
+
+fn parse_brush_plane_vertex(it: &mut Iterator) -> ParseResult<Vec3f>
+{
+	skip_whitespaces(it);
+	if !it.starts_with("(")
+	{
+		return Err(ParseError::build(it));
+	}
+	*it = &it[1 ..];
+
+	let result = Vec3f::new(parse_number(it)?, parse_number(it)?, parse_number(it)?);
+
+	skip_whitespaces(it);
+	if !it.starts_with(")")
+	{
+		return Err(ParseError::build(it));
+	}
+	*it = &it[1 ..];
+
+	Ok(result)
+}
+
+fn parse_number(it: &mut Iterator) -> ParseResult<f32>
+{
+	let mut s = String::new();
+
+	skip_whitespaces(it);
+	while let Some(c) = it.chars().next()
+	{
+		if c == '.' || (c >= '0' && c <= '9') || c == '-'
+		{
+			s.push(c);
+			*it = &it[1 ..];
+		}
+		else
+		{
+			break;
+		}
+	}
+
+	if let Ok(parse_res) = s.parse::<f32>()
+	{
+		Ok(parse_res)
+	}
+	else
+	{
+		Err(ParseError::build(it))
+	}
+}
+
 fn parse_key_value_pair(it: &mut Iterator) -> ParseResult<(String, String)>
 {
-	Ok((parse_quoted_string(it)?, parse_quoted_string(it)?))
+	let k = parse_quoted_string(it)?;
+	skip_whitespaces(it);
+	let v = parse_quoted_string(it)?;
+	skip_whitespaces(it);
+
+	Ok((k, v))
+}
+
+fn parse_whitespace_separated_string(it: &mut Iterator) -> ParseResult<String>
+{
+	let mut result = String::new();
+
+	skip_whitespaces(it);
+	while let Some(c) = it.chars().next()
+	{
+		if c.is_ascii_whitespace()
+		{
+			*it = &it[1 ..];
+			break;
+		}
+		else
+		{
+			*it = &it[1 ..];
+			result.push(c);
+		}
+	}
+
+	Ok(result)
 }
 
 fn parse_quoted_string(it: &mut Iterator) -> ParseResult<String>
 {
-	// TODO
-	Ok(String::new())
+	*it = &it[1 ..]; // Skip "
+
+	let mut result = String::new();
+
+	while !it.is_empty() && !it.starts_with("\"")
+	{
+		result.push_str(&it[0 .. 1]);
+		*it = &it[1 ..];
+	}
+
+	if !it.starts_with("\"")
+	{
+		return Err(ParseError::build(it));
+	}
+	*it = &it[1 ..]; // Skip "
+
+	Ok(result)
+}
+
+fn skip_whitespaces(it: &mut Iterator)
+{
+	while let Some(c) = it.chars().next()
+	{
+		if c.is_ascii_whitespace()
+		{
+			*it = &it[1 ..];
+		}
+		else
+		{
+			break;
+		}
+	}
 }
