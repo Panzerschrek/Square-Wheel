@@ -1,13 +1,12 @@
 use super::math_types::*;
-use cgmath::InnerSpace;
+use cgmath::{Angle, InnerSpace, Rad, SquareMatrix, Zero};
 use sdl2::keyboard::Scancode;
-use std::f32::consts::PI;
 
 pub struct CameraController
 {
 	pos: Vec3f,
-	azimuth: f32,
-	elevation: f32,
+	azimuth: RadiansF,
+	elevation: RadiansF,
 }
 
 impl CameraController
@@ -16,8 +15,8 @@ impl CameraController
 	{
 		CameraController {
 			pos: Vec3f::new(0.0, 0.0, 0.0),
-			azimuth: 0.0,
-			elevation: 0.0,
+			azimuth: RadiansF::zero(),
+			elevation: RadiansF::zero(),
 		}
 	}
 
@@ -25,7 +24,10 @@ impl CameraController
 	{
 		const SPEED: f32 = 1.0;
 		const JUMP_SPEED: f32 = 0.8 * SPEED;
-		const ANGLE_SPEED: f32 = 1.0;
+		const ANGLE_SPEED: RadiansF = Rad(1.0);
+		const PI: RadiansF = Rad(std::f32::consts::PI);
+		let half_pi = PI / 2.0;
+		let two_pi = PI * 2.0;
 
 		let forward_vector = Vec3f::new(-(self.azimuth.sin()), self.azimuth.cos(), 0.0);
 		let left_vector = Vec3f::new(self.azimuth.cos(), self.azimuth.sin(), 0.0);
@@ -65,38 +67,59 @@ impl CameraController
 
 		if keyboard_state.is_scancode_pressed(Scancode::Left)
 		{
-			self.azimuth += time_delta_s * ANGLE_SPEED;
+			self.azimuth += ANGLE_SPEED * time_delta_s;
 		}
 		if keyboard_state.is_scancode_pressed(Scancode::Right)
 		{
-			self.azimuth -= time_delta_s * ANGLE_SPEED;
+			self.azimuth -= ANGLE_SPEED * time_delta_s;
 		}
 
 		if keyboard_state.is_scancode_pressed(Scancode::Up)
 		{
-			self.elevation += time_delta_s * ANGLE_SPEED;
+			self.elevation += ANGLE_SPEED * time_delta_s;
 		}
 		if keyboard_state.is_scancode_pressed(Scancode::Down)
 		{
-			self.elevation -= time_delta_s * ANGLE_SPEED;
+			self.elevation -= ANGLE_SPEED * time_delta_s;
 		}
 
-		while self.azimuth > PI
+		while self.azimuth > two_pi
 		{
-			self.azimuth -= 2.0 * PI;
+			self.azimuth -= two_pi;
 		}
-		while self.azimuth < -PI
+		while self.azimuth < -two_pi
 		{
-			self.azimuth += 2.0 * PI;
+			self.azimuth += two_pi;
 		}
 
-		if self.elevation > PI * 0.5
+		if self.elevation > half_pi
 		{
-			self.elevation = PI * 0.5;
+			self.elevation = half_pi;
 		}
-		if self.elevation < -PI * 0.5
+		if self.elevation < half_pi
 		{
-			self.elevation = -PI * 0.5;
+			self.elevation = half_pi;
 		}
+	}
+
+	pub fn build_view_matrix(&self) -> Mat4f
+	{
+		// TODO - tune this?
+		let fov = Rad(std::f32::consts::PI * 0.375);
+		let aspect = 1.0;
+		let z_near = 1.0;
+		let z_far = 128.0;
+
+		let rotate_z = Mat4f::from_angle_z(-self.azimuth);
+		let rotate_x = Mat4f::from_angle_x(-self.elevation);
+		let perspective = cgmath::perspective(fov, aspect, z_near, z_far);
+
+		let mut basis_change = Mat4f::identity();
+		basis_change.y.y = 0.0;
+		basis_change.z.y = 1.0;
+		basis_change.y.z = -1.0;
+		basis_change.z.z = 0.0;
+
+		rotate_z * rotate_x * perspective * basis_change
 	}
 }
