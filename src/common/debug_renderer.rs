@@ -1,8 +1,8 @@
-use super::{fixed_math::*, system_window};
+use super::{color::*, fixed_math::*, system_window};
 
 pub struct DebugRenderer<'a>
 {
-	color_buffer: &'a mut [u8],
+	color_buffer: &'a mut [Color32],
 	width: i32,
 	height: i32,
 	row_size: i32,
@@ -10,20 +10,18 @@ pub struct DebugRenderer<'a>
 
 impl<'a> DebugRenderer<'a>
 {
-	pub fn new(color_buffer: &'a mut [u8], surface_info: &system_window::SurfaceInfo) -> Self
+	pub fn new(color_buffer: &'a mut [Color32], surface_info: &system_window::SurfaceInfo) -> Self
 	{
 		DebugRenderer {
 			color_buffer,
 			width: surface_info.width as i32,
 			height: surface_info.height as i32,
-			row_size: (surface_info.pitch / 4) as i32,
+			row_size: (surface_info.pitch) as i32,
 		}
 	}
 
-	pub fn draw_line(&mut self, mut v0: PointProjected, mut v1: PointProjected)
+	pub fn draw_line(&mut self, mut v0: PointProjected, mut v1: PointProjected, color: Color32)
 	{
-		// TODO - provide input color.
-		// TODO - work with 32-bit values, not bytes.
 		// TODO - optimize this. Discard lines totally outside viewport.
 
 		if (v1.x - v0.x).abs() >= (v1.y - v0.y).abs()
@@ -47,11 +45,8 @@ impl<'a> DebugRenderer<'a>
 				let y_int = fixed16_floor_to_int(y);
 				if y_int >= 0 && y_int < self.height
 				{
-					let pix_address = (4 * (x_int + y_int * self.row_size)) as usize;
-					self.color_buffer[pix_address] = 255;
-					self.color_buffer[pix_address + 1] = 255;
-					self.color_buffer[pix_address + 2] = 255;
-					self.color_buffer[pix_address + 3] = 255;
+					let pix_address = (x_int + y_int * self.row_size) as usize;
+					self.color_buffer[pix_address] = color;
 				}
 				y += dy_dx;
 			}
@@ -77,11 +72,8 @@ impl<'a> DebugRenderer<'a>
 				let x_int = fixed16_floor_to_int(x);
 				if x_int >= 0 && x_int < self.width
 				{
-					let pix_address = (4 * (x_int + y_int * self.row_size)) as usize;
-					self.color_buffer[pix_address] = 255;
-					self.color_buffer[pix_address + 1] = 255;
-					self.color_buffer[pix_address + 2] = 255;
-					self.color_buffer[pix_address + 3] = 255;
+					let pix_address = (x_int + y_int * self.row_size) as usize;
+					self.color_buffer[pix_address] = color;
 				}
 				x += dx_dy;
 			}

@@ -1,3 +1,5 @@
+use super::color::*;
+
 pub struct SystemWindow
 {
 	sdl2_window: sdl2::video::Window,
@@ -45,17 +47,21 @@ impl SystemWindow
 		self.sdl2_event_pump.keyboard_state()
 	}
 
-	pub fn end_frame<F: FnOnce(&mut [u8], &SurfaceInfo)>(&mut self, draw_fn: F)
+	pub fn end_frame<F: FnOnce(&mut [Color32], &SurfaceInfo)>(&mut self, draw_fn: F)
 	{
 		let mut surface = self.sdl2_window.surface(&self.sdl2_event_pump).unwrap();
 
 		let surface_info = SurfaceInfo {
 			width: surface.width() as usize,
 			height: surface.height() as usize,
-			pitch: surface.pitch() as usize,
+			pitch: surface.pitch() as usize / 4,
 		};
 
-		surface.with_lock_mut(|pixels| draw_fn(pixels, &surface_info));
+		surface.with_lock_mut(|pixels| {
+			// Pixels must be 4-byte aligned.
+			let pixels_32 = unsafe { pixels.align_to_mut::<Color32>().1 };
+			draw_fn(pixels_32, &surface_info)
+		});
 
 		let _ = surface.update_window();
 	}

@@ -1,4 +1,5 @@
 pub mod camera_controller;
+pub mod color;
 pub mod debug_renderer;
 pub mod fixed_math;
 pub mod map_file;

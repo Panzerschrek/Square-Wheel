@@ -1,4 +1,4 @@
-use common::{map_file, system_window};
+use common::{color::*, map_file, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
 use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
@@ -57,35 +57,52 @@ pub fn main()
 	}
 }
 
-fn draw_frame(pixels: &mut [u8], surface_info: &system_window::SurfaceInfo, view_matrix: &common::math_types::Mat4f)
+fn draw_frame(
+	pixels: &mut [Color32],
+	surface_info: &system_window::SurfaceInfo,
+	view_matrix: &common::math_types::Mat4f,
+)
 {
 	draw_background(pixels, surface_info);
 	draw_lines(pixels, surface_info, view_matrix);
 }
 
-fn draw_background(pixels: &mut [u8], surface_info: &system_window::SurfaceInfo)
+fn draw_background(pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo)
 {
 	for x in 0 .. surface_info.width
 	{
 		for y in 0 .. surface_info.height
 		{
-			let index = 4 * x + y * surface_info.pitch;
-			pixels[index] = 0 * 255;
-			pixels[index + 1] = ((x + y * 2) & 255) as u8;
-			pixels[index + 2] = 0 * 255;
-			pixels[index + 3] = 0 * 128;
+			let index = x + y * surface_info.pitch;
+			pixels[index] = Color32::from_rgb(((x + y * 2) & 255) as u8, 0, 0);
 		}
 	}
 }
 
-fn draw_lines(pixels: &mut [u8], surface_info: &system_window::SurfaceInfo, view_matrix: &common::math_types::Mat4f)
+fn draw_lines(
+	pixels: &mut [Color32],
+	surface_info: &system_window::SurfaceInfo,
+	view_matrix: &common::math_types::Mat4f,
+)
 {
 	use common::{debug_renderer::*, fixed_math::*, math_types::*};
 
 	let lines = [
-		(Vec3f::new(1.0, 1.0, 1.0), Vec3f::new(2.0, 1.5, 1.0)),
-		(Vec3f::new(1.0, 1.0, 1.0), Vec3f::new(1.5, 2.0, 1.0)),
-		(Vec3f::new(1.0, 1.0, 1.0), Vec3f::new(1.0, 1.0, 3.0)),
+		(
+			Vec3f::new(1.0, 1.0, 1.0),
+			Vec3f::new(2.0, 1.1, 1.0),
+			Color32::from_rgb(255, 0, 0),
+		),
+		(
+			Vec3f::new(1.0, 1.0, 1.0),
+			Vec3f::new(1.1, 2.0, 1.0),
+			Color32::from_rgb(0, 255, 0),
+		),
+		(
+			Vec3f::new(1.0, 1.0, 1.0),
+			Vec3f::new(1.0, 1.0, 2.5),
+			Color32::from_rgb(0, 0, 255),
+		),
 	];
 
 	let mut renderer = DebugRenderer::new(pixels, surface_info);
@@ -116,7 +133,6 @@ fn draw_lines(pixels: &mut [u8], surface_info: &system_window::SurfaceInfo, view
 			continue;
 		}
 
-		// TODO - perform scaling to Fixed16 via matrix?
 		renderer.draw_line(
 			PointProjected {
 				x: v0.x as Fixed16,
@@ -126,6 +142,7 @@ fn draw_lines(pixels: &mut [u8], surface_info: &system_window::SurfaceInfo, view
 				x: v1.x as Fixed16,
 				y: v1.y as Fixed16,
 			},
+			line.2,
 		);
 	}
 }
