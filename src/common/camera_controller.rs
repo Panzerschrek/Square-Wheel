@@ -82,11 +82,11 @@ impl CameraController
 			self.elevation -= ANGLE_SPEED * time_delta_s;
 		}
 
-		while self.azimuth > two_pi
+		while self.azimuth > PI
 		{
 			self.azimuth -= two_pi;
 		}
-		while self.azimuth < -two_pi
+		while self.azimuth < -PI
 		{
 			self.azimuth += two_pi;
 		}
@@ -95,9 +95,9 @@ impl CameraController
 		{
 			self.elevation = half_pi;
 		}
-		if self.elevation < half_pi
+		if self.elevation < -half_pi
 		{
-			self.elevation = half_pi;
+			self.elevation = -half_pi;
 		}
 	}
 
@@ -109,16 +109,18 @@ impl CameraController
 		let z_near = 1.0;
 		let z_far = 128.0;
 
+		let translate = Mat4f::from_translation(-self.pos);
 		let rotate_z = Mat4f::from_angle_z(-self.azimuth);
 		let rotate_x = Mat4f::from_angle_x(-self.elevation);
 		let perspective = cgmath::perspective(fov, aspect, z_near, z_far);
 
 		let mut basis_change = Mat4f::identity();
 		basis_change.y.y = 0.0;
-		basis_change.z.y = 1.0;
+		basis_change.z.y = -1.0;
 		basis_change.y.z = -1.0;
 		basis_change.z.z = 0.0;
 
-		rotate_z * rotate_x * perspective * basis_change
+		// Perform transformations in reverse order in order to perform transformation via "matrix * vector".
+		perspective * basis_change * rotate_x * rotate_z * translate
 	}
 }
