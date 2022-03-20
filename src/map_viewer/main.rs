@@ -65,19 +65,15 @@ fn draw_frame(
 	map: Option<&map_file::MapFileParsed>,
 )
 {
-	draw_background(pixels, surface_info);
+	draw_background(pixels);
 	draw_map(pixels, surface_info, view_matrix, map);
 }
 
-fn draw_background(pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo)
+fn draw_background(pixels: &mut [Color32])
 {
-	for x in 0 .. surface_info.width
+	for pixel in pixels.iter_mut()
 	{
-		for y in 0 .. surface_info.height
-		{
-			let index = x + y * surface_info.pitch;
-			pixels[index] = Color32::from_rgb(((x + y * 2) & 255) as u8, 0, 0);
-		}
+		*pixel = Color32::from_rgb(16, 8, 4);
 	}
 }
 
@@ -92,17 +88,22 @@ fn draw_map(
 
 	let fixed_scale = FIXED16_ONE as f32;
 	let mat = Mat4f::from_nonuniform_scale(fixed_scale, fixed_scale, 1.0) * view_matrix;
-	let mat_for_scaled_map = mat * Mat4f::from_scale(1.0 / 512.0);
 
 	if let Some(entities) = map
 	{
 		for entity in entities
 		{
-			for brush in &entity.brushes
+			for (brush_number, brush) in entity.brushes.iter().enumerate()
 			{
+				let bush_number_scaled = brush_number * 16;
+				let color = Color32::from_rgb(
+					(bush_number_scaled & 255) as u8,
+					((bush_number_scaled * 3) & 255) as u8,
+					((bush_number_scaled * 5) & 255) as u8,
+				);
+
 				for brush_plane in brush
 				{
-					let color = Color32::from_rgb(255, 0, 255);
 					let lines = [
 						(brush_plane.vertices[0], brush_plane.vertices[1], color),
 						(brush_plane.vertices[1], brush_plane.vertices[2], color),
@@ -110,7 +111,7 @@ fn draw_map(
 					];
 					for line in lines
 					{
-						draw_line(&mut renderer, &mat_for_scaled_map, &line);
+						draw_line(&mut renderer, &mat, &line);
 					}
 				}
 			}
@@ -176,10 +177,12 @@ fn draw_line(renderer: &mut DebugRenderer, transform_matrix: &Mat4f, line: &Worl
 		PointProjected {
 			x: v0.x as Fixed16,
 			y: v0.y as Fixed16,
+			z: v0.z,
 		},
 		PointProjected {
 			x: v1.x as Fixed16,
 			y: v1.y as Fixed16,
+			z: v1.z,
 		},
 		line.2,
 	);

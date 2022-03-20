@@ -21,7 +21,7 @@ impl CameraController
 
 	pub fn update(&mut self, keyboard_state: &sdl2::keyboard::KeyboardState, time_delta_s: f32)
 	{
-		const SPEED: f32 = 1.0;
+		const SPEED: f32 = 512.0;
 		const JUMP_SPEED: f32 = 0.8 * SPEED;
 		const ANGLE_SPEED: RadiansF = Rad(1.0);
 		const PI: RadiansF = Rad(std::f32::consts::PI);
@@ -107,7 +107,7 @@ impl CameraController
 		let fov = Rad(std::f32::consts::PI * 0.375);
 		let aspect = viewport_width / viewport_height;
 		let z_near = 1.0;
-		let z_far = 128.0;
+		let z_far = 64.0 * 256.0;
 
 		let translate = Mat4f::from_translation(-self.pos);
 		let rotate_z = Mat4f::from_angle_z(-self.azimuth);
