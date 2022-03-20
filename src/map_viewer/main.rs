@@ -1,13 +1,30 @@
-extern crate sdl2;
-
-use common::system_window;
+use common::{map_file, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
+use structopt::StructOpt;
+
+#[derive(Debug, StructOpt)]
+#[structopt(name = "map_compiler", about = "SquareWheel map compiler.")]
+struct Opt
+{
+	/// Input file
+	#[structopt(parse(from_os_str), short = "i")]
+	input: Option<PathBuf>,
+}
 
 pub fn main()
 {
+	let opt = Opt::from_args();
+
 	let mut window = system_window::SystemWindow::new();
 	let mut camera_controller = common::camera_controller::CameraController::new();
+
+	let mut map_file_parsed: Option<map_file::MapFileParsed> = None;
+	if let Some(path) = opt.input
+	{
+		let file_contents_str = std::fs::read_to_string(path).unwrap();
+		map_file_parsed = map_file::parse_map_file_content(&file_contents_str).ok();
+	}
 
 	let frame_duration_s = 1.0 / 30.0;
 	'running: loop

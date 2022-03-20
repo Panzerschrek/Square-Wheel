@@ -125,6 +125,7 @@ impl CameraController
 			Mat4f::from_translation(Vec3f::new(viewport_width * 0.5, viewport_height * 0.5, 0.0));
 
 		// Perform transformations in reverse order in order to perform transformation via "matrix * vector".
+		// TODO - perform calculations in "double" for better pericision?
 		shift_to_viewport_center * resize_to_viewport * perspective * basis_change * rotate_x * rotate_z * translate
 	}
 }

@@ -1,4 +1,4 @@
-use common::math_types::*;
+use super::math_types::*;
 
 #[derive(Debug)]
 pub struct BrushPlane
