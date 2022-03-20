@@ -20,6 +20,16 @@ impl<'a> DebugRenderer<'a>
 		}
 	}
 
+	pub fn get_width(&self) -> i32
+	{
+		self.width
+	}
+
+	pub fn get_height(&self) -> i32
+	{
+		self.height
+	}
+
 	pub fn draw_line(&mut self, mut v0: PointProjected, mut v1: PointProjected, color: Color32)
 	{
 		// TODO - optimize this. Discard lines totally outside viewport.

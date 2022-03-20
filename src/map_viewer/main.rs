@@ -1,4 +1,4 @@
-use common::{color::*, map_file, system_window};
+use common::{color::*, debug_renderer::*, fixed_math::*, map_file, math_types::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
 use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
@@ -50,6 +50,7 @@ pub fn main()
 				pixels,
 				surface_info,
 				&camera_controller.build_view_matrix(surface_info.width as f32, surface_info.height as f32),
+				map_file_parsed.as_ref(),
 			)
 		});
 
@@ -60,11 +61,12 @@ pub fn main()
 fn draw_frame(
 	pixels: &mut [Color32],
 	surface_info: &system_window::SurfaceInfo,
-	view_matrix: &common::math_types::Mat4f,
+	view_matrix: &Mat4f,
+	map: Option<&map_file::MapFileParsed>,
 )
 {
 	draw_background(pixels, surface_info);
-	draw_lines(pixels, surface_info, view_matrix);
+	draw_map(pixels, surface_info, view_matrix, map);
 }
 
 fn draw_background(pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo)
@@ -79,70 +81,106 @@ fn draw_background(pixels: &mut [Color32], surface_info: &system_window::Surface
 	}
 }
 
-fn draw_lines(
+fn draw_map(
 	pixels: &mut [Color32],
 	surface_info: &system_window::SurfaceInfo,
-	view_matrix: &common::math_types::Mat4f,
+	view_matrix: &Mat4f,
+	map: Option<&map_file::MapFileParsed>,
 )
 {
-	use common::{debug_renderer::*, fixed_math::*, math_types::*};
+	let mut renderer = DebugRenderer::new(pixels, surface_info);
 
-	let lines = [
+	let fixed_scale = FIXED16_ONE as f32;
+	let mat = Mat4f::from_nonuniform_scale(fixed_scale, fixed_scale, 1.0) * view_matrix;
+	let mat_for_scaled_map = mat * Mat4f::from_scale(1.0 / 512.0);
+
+	if let Some(entities) = map
+	{
+		for entity in entities
+		{
+			for brush in &entity.brushes
+			{
+				for brush_plane in brush
+				{
+					let color = Color32::from_rgb(255, 0, 255);
+					let lines = [
+						(brush_plane.vertices[0], brush_plane.vertices[1], color),
+						(brush_plane.vertices[1], brush_plane.vertices[2], color),
+						(brush_plane.vertices[2], brush_plane.vertices[0], color),
+					];
+					for line in lines
+					{
+						draw_line(&mut renderer, &mat_for_scaled_map, &line);
+					}
+				}
+			}
+		}
+	}
+
+	let basis_lines = [
 		(
-			Vec3f::new(1.0, 1.0, 1.0),
-			Vec3f::new(2.0, 1.1, 1.0),
+			Vec3f::new(0.0, 0.0, 0.0),
+			Vec3f::new(1.0, 0.0, 0.0),
 			Color32::from_rgb(255, 0, 0),
 		),
 		(
-			Vec3f::new(1.0, 1.0, 1.0),
-			Vec3f::new(1.1, 2.0, 1.0),
+			Vec3f::new(0.0, 0.0, 0.0),
+			Vec3f::new(0.0, 1.0, 0.0),
 			Color32::from_rgb(0, 255, 0),
 		),
 		(
-			Vec3f::new(1.0, 1.0, 1.0),
-			Vec3f::new(1.0, 1.0, 2.5),
+			Vec3f::new(0.0, 0.0, 0.0),
+			Vec3f::new(0.0, 0.0, 1.0),
 			Color32::from_rgb(0, 0, 255),
 		),
 	];
 
-	let mut renderer = DebugRenderer::new(pixels, surface_info);
-
-	let fixed_scale = FIXED16_ONE as f32;
-	let width = (surface_info.width as f32) * fixed_scale;
-	let height = (surface_info.height as f32) * fixed_scale;
-	let mat = Mat4f::from_nonuniform_scale(fixed_scale, fixed_scale, 1.0) * view_matrix;
-	for line in lines
+	for line in &basis_lines
 	{
-		let v0 = mat * line.0.extend(1.0);
-		let v1 = mat * line.1.extend(1.0);
-
-		// TODO - perform proper clipping
-		if v0.w <= 0.1 || v1.w <= 0.1
-		{
-			continue;
-		}
-		let v0 = v0.truncate() / v0.w;
-		let v1 = v1.truncate() / v1.w;
-
-		if v0.x < 0.0 ||
-			v0.x > width || v0.y < 0.0 ||
-			v0.y > height ||
-			v1.x < 0.0 || v1.x > width ||
-			v1.y < 0.0 || v1.y > height
-		{
-			continue;
-		}
-
-		renderer.draw_line(
-			PointProjected {
-				x: v0.x as Fixed16,
-				y: v0.y as Fixed16,
-			},
-			PointProjected {
-				x: v1.x as Fixed16,
-				y: v1.y as Fixed16,
-			},
-			line.2,
-		);
+		draw_line(&mut renderer, &mat, line);
 	}
+}
+
+type WorldLine = (Vec3f, Vec3f, Color32);
+
+fn draw_line(renderer: &mut DebugRenderer, transform_matrix: &Mat4f, line: &WorldLine)
+{
+	let fixed_scale = FIXED16_ONE as f32;
+	let width = (renderer.get_width() as f32) * fixed_scale;
+	let height = (renderer.get_width() as f32) * fixed_scale;
+
+	let v0 = transform_matrix * line.0.extend(1.0);
+	let v1 = transform_matrix * line.1.extend(1.0);
+
+	// TODO - perform proper clipping
+	if v0.w <= 0.1 || v1.w <= 0.1
+	{
+		return;
+	}
+	let v0 = v0.truncate() / v0.w;
+	let v1 = v1.truncate() / v1.w;
+
+	if v0.x < 0.0 ||
+		v0.x > width ||
+		v0.y < 0.0 ||
+		v0.y > height ||
+		v1.x < 0.0 ||
+		v1.x > width ||
+		v1.y < 0.0 ||
+		v1.y > height
+	{
+		return;
+	}
+
+	renderer.draw_line(
+		PointProjected {
+			x: v0.x as Fixed16,
+			y: v0.y as Fixed16,
+		},
+		PointProjected {
+			x: v1.x as Fixed16,
+			y: v1.y as Fixed16,
+		},
+		line.2,
+	);
 }
