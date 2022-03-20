@@ -1,5 +1,5 @@
 [package]
-name = "src"
+name = "square_wheel"
 version = "0.1.0"
 authors = ["Panzerschrek <AntiPanzerschrek@yandex.ru>"]
 edition = "2018"
