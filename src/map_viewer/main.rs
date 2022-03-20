@@ -28,8 +28,13 @@ pub fn main()
 
 		camera_controller.update(&window.get_keyboard_state(), frame_duration_s);
 
-		window
-			.end_frame(|pixels, surface_info| draw_frame(pixels, surface_info, &camera_controller.build_view_matrix()));
+		window.end_frame(|pixels, surface_info| {
+			draw_frame(
+				pixels,
+				surface_info,
+				&camera_controller.build_view_matrix(surface_info.width as f32, surface_info.height as f32),
+			)
+		});
 
 		std::thread::sleep(Duration::from_secs_f32(frame_duration_s));
 	}
@@ -68,13 +73,14 @@ fn draw_lines(pixels: &mut [u8], surface_info: &system_window::SurfaceInfo, view
 
 	let mut renderer = DebugRenderer::new(pixels, surface_info);
 
-	let half_width = (surface_info.width as f32) * 0.5;
-	let half_height = (surface_info.height as f32) * 0.5;
 	let fixed_scale = FIXED16_ONE as f32;
+	let width = (surface_info.width as f32) * fixed_scale;
+	let height = (surface_info.height as f32) * fixed_scale;
+	let mat = Mat4f::from_nonuniform_scale(fixed_scale, fixed_scale, 1.0) * view_matrix;
 	for line in lines
 	{
-		let v0 = view_matrix * line.0.extend(1.0);
-		let v1 = view_matrix * line.1.extend(1.0);
+		let v0 = mat * line.0.extend(1.0);
+		let v1 = mat * line.1.extend(1.0);
 
 		// TODO - perform proper clipping
 		if v0.w <= 0.1 || v1.w <= 0.1
@@ -84,24 +90,24 @@ fn draw_lines(pixels: &mut [u8], surface_info: &system_window::SurfaceInfo, view
 		let v0 = v0.truncate() / v0.w;
 		let v1 = v1.truncate() / v1.w;
 
-		if v0.x < -2.0 ||
-			v0.x > 2.0 || v0.y < -2.0 ||
-			v0.y > 2.0 || v1.x < -2.0 ||
-			v1.x > 2.0 || v1.y < -2.0 ||
-			v1.y > 2.0
+		if v0.x < 0.0 ||
+			v0.x > width || v0.y < 0.0 ||
+			v0.y > height ||
+			v1.x < 0.0 || v1.x > width ||
+			v1.y < 0.0 || v1.y > height
 		{
 			continue;
 		}
 
-		// TODO - perform final transformations via same view matrix
+		// TODO - perform scaling to Fixed16 via matrix?
 		renderer.draw_line(
 			PointProjected {
-				x: ((v0.x + 1.0) * half_width * fixed_scale) as Fixed16,
-				y: ((v0.y + 1.0) * half_height * fixed_scale) as Fixed16,
+				x: v0.x as Fixed16,
+				y: v0.y as Fixed16,
 			},
 			PointProjected {
-				x: ((v1.x + 1.0) * half_width * fixed_scale) as Fixed16,
-				y: ((v1.y + 1.0) * half_height * fixed_scale) as Fixed16,
+				x: v1.x as Fixed16,
+				y: v1.y as Fixed16,
 			},
 		);
 	}

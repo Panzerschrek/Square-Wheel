@@ -101,18 +101,17 @@ impl CameraController
 		}
 	}
 
-	pub fn build_view_matrix(&self) -> Mat4f
+	pub fn build_view_matrix(&self, viewport_width: f32, viewport_height: f32) -> Mat4f
 	{
 		// TODO - tune this?
 		let fov = Rad(std::f32::consts::PI * 0.375);
-		let aspect = 1.0;
+		let aspect = viewport_width / viewport_height;
 		let z_near = 1.0;
 		let z_far = 128.0;
 
 		let translate = Mat4f::from_translation(-self.pos);
 		let rotate_z = Mat4f::from_angle_z(-self.azimuth);
 		let rotate_x = Mat4f::from_angle_x(-self.elevation);
-		let perspective = cgmath::perspective(fov, aspect, z_near, z_far);
 
 		let mut basis_change = Mat4f::identity();
 		basis_change.y.y = 0.0;
@@ -120,7 +119,12 @@ impl CameraController
 		basis_change.y.z = -1.0;
 		basis_change.z.z = 0.0;
 
+		let perspective = cgmath::perspective(fov, aspect, z_near, z_far);
+		let resize_to_viewport = Mat4f::from_nonuniform_scale(viewport_width * 0.5, viewport_height * 0.5, 1.0);
+		let shift_to_viewport_center =
+			Mat4f::from_translation(Vec3f::new(viewport_width * 0.5, viewport_height * 0.5, 0.0));
+
 		// Perform transformations in reverse order in order to perform transformation via "matrix * vector".
-		perspective * basis_change * rotate_x * rotate_z * translate
+		shift_to_viewport_center * resize_to_viewport * perspective * basis_change * rotate_x * rotate_z * translate
 	}
 }
