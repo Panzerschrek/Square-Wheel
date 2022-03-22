@@ -1,6 +1,6 @@
 use super::{color::*, fixed_math::*, system_window};
 
-pub struct DebugRenderer<'a>
+pub struct DebugRasterizer<'a>
 {
 	color_buffer: &'a mut [Color32],
 	width: i32,
@@ -9,11 +9,11 @@ pub struct DebugRenderer<'a>
 	depth_buffer: Vec<f32>,
 }
 
-impl<'a> DebugRenderer<'a>
+impl<'a> DebugRasterizer<'a>
 {
 	pub fn new(color_buffer: &'a mut [Color32], surface_info: &system_window::SurfaceInfo) -> Self
 	{
-		DebugRenderer {
+		DebugRasterizer {
 			color_buffer,
 			width: surface_info.width as i32,
 			height: surface_info.height as i32,

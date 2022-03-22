@@ -1,4 +1,4 @@
-use common::{color::*, debug_renderer::*, fixed_math::*, map_file, math_types::*, system_window};
+use common::{color::*, debug_rasterizer::*, fixed_math::*, map_file, math_types::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
 use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
@@ -84,7 +84,7 @@ fn draw_map(
 	map: Option<&map_file::MapFileParsed>,
 )
 {
-	let mut renderer = DebugRenderer::new(pixels, surface_info);
+	let mut rasterizer = DebugRasterizer::new(pixels, surface_info);
 
 	let fixed_scale = FIXED16_ONE as f32;
 	let mat = Mat4f::from_nonuniform_scale(fixed_scale, fixed_scale, 1.0) * view_matrix;
@@ -104,7 +104,7 @@ fn draw_map(
 
 				for brush_plane in brush
 				{
-					draw_triangle(&mut renderer, &mat, &brush_plane.vertices, color);
+					draw_triangle(&mut rasterizer, &mat, &brush_plane.vertices, color);
 				}
 			}
 		}
@@ -130,17 +130,17 @@ fn draw_map(
 
 	for line in &basis_lines
 	{
-		draw_line(&mut renderer, &mat, line);
+		draw_line(&mut rasterizer, &mat, line);
 	}
 }
 
 type WorldLine = (Vec3f, Vec3f, Color32);
 
-fn draw_line(renderer: &mut DebugRenderer, transform_matrix: &Mat4f, line: &WorldLine)
+fn draw_line(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, line: &WorldLine)
 {
 	let fixed_scale = FIXED16_ONE as f32;
-	let width = (renderer.get_width() as f32) * fixed_scale;
-	let height = (renderer.get_width() as f32) * fixed_scale;
+	let width = (rasterizer.get_width() as f32) * fixed_scale;
+	let height = (rasterizer.get_width() as f32) * fixed_scale;
 
 	let v0 = transform_matrix * line.0.extend(1.0);
 	let v1 = transform_matrix * line.1.extend(1.0);
@@ -165,7 +165,7 @@ fn draw_line(renderer: &mut DebugRenderer, transform_matrix: &Mat4f, line: &Worl
 		return;
 	}
 
-	renderer.draw_line(
+	rasterizer.draw_line(
 		PointProjected {
 			x: v0.x as Fixed16,
 			y: v0.y as Fixed16,
@@ -180,11 +180,11 @@ fn draw_line(renderer: &mut DebugRenderer, transform_matrix: &Mat4f, line: &Worl
 	);
 }
 
-fn draw_triangle(renderer: &mut DebugRenderer, transform_matrix: &Mat4f, vertices: &[Vec3f; 3], color: Color32)
+fn draw_triangle(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, vertices: &[Vec3f; 3], color: Color32)
 {
 	let fixed_scale = FIXED16_ONE as f32;
-	let width = (renderer.get_width() as f32) * fixed_scale;
-	let height = (renderer.get_width() as f32) * fixed_scale;
+	let width = (rasterizer.get_width() as f32) * fixed_scale;
+	let height = (rasterizer.get_width() as f32) * fixed_scale;
 
 	let v0 = transform_matrix * vertices[0].extend(1.0);
 	let v1 = transform_matrix * vertices[1].extend(1.0);
@@ -215,7 +215,7 @@ fn draw_triangle(renderer: &mut DebugRenderer, transform_matrix: &Mat4f, vertice
 		return;
 	}
 
-	renderer.fill_triangle(
+	rasterizer.fill_triangle(
 		&[
 			PointProjected {
 				x: v0.x as Fixed16,
