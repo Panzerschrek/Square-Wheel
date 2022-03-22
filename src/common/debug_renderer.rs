@@ -279,14 +279,14 @@ impl<'a> DebugRenderer<'a>
 		let y_start_int = fixed16_round_to_int(y_start).max(0);
 		let y_end_int = fixed16_round_to_int(y_end).min(self.height);
 		let y_start_delta = int_to_fixed16(y_start_int) + FIXED16_HALF - y_start;
-		let mut x_left = left_side.x_start + fixed16_mul(y_start_delta, left_side.dx_dy);
-		let mut x_right = right_side.x_start + fixed16_mul(y_start_delta, right_side.dx_dy);
+		let mut x_left = left_side.x_start + fixed16_mul(y_start_delta, left_side.dx_dy) + FIXED16_HALF;
+		let mut x_right = right_side.x_start + fixed16_mul(y_start_delta, right_side.dx_dy) + FIXED16_HALF;
 		let mut z_left = left_side.z_start + fixed16_to_f32(y_start_delta) * left_side.dz_dy;
 		let mut _z_right = right_side.z_start + fixed16_to_f32(y_start_delta) * right_side.dz_dy;
 		for y_int in y_start_int .. y_end_int
 		{
-			let x_start_int = fixed16_round_to_int(x_left).max(0);
-			let x_end_int = fixed16_round_to_int(x_right).min(self.width);
+			let x_start_int = fixed16_floor_to_int(x_left).max(0);
+			let x_end_int = fixed16_floor_to_int(x_right).min(self.width);
 			let x_start_delta = int_to_fixed16(x_start_int) + FIXED16_HALF - x_left;
 			let mut z = z_left + fixed16_to_f32(x_start_delta) * dz_dx;
 			for x_int in x_start_int .. x_end_int
