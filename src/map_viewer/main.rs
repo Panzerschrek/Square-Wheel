@@ -104,15 +104,7 @@ fn draw_map(
 
 				for brush_plane in brush
 				{
-					let lines = [
-						(brush_plane.vertices[0], brush_plane.vertices[1], color),
-						(brush_plane.vertices[1], brush_plane.vertices[2], color),
-						(brush_plane.vertices[2], brush_plane.vertices[0], color),
-					];
-					for line in lines
-					{
-						draw_line(&mut renderer, &mat, &line);
-					}
+					draw_triangle(&mut renderer, &mat, &brush_plane.vertices, color);
 				}
 			}
 		}
@@ -185,5 +177,62 @@ fn draw_line(renderer: &mut DebugRenderer, transform_matrix: &Mat4f, line: &Worl
 			z: v1.z,
 		},
 		line.2,
+	);
+}
+
+fn draw_triangle(renderer: &mut DebugRenderer, transform_matrix: &Mat4f, vertices: &[Vec3f; 3], color: Color32)
+{
+	let fixed_scale = FIXED16_ONE as f32;
+	let width = (renderer.get_width() as f32) * fixed_scale;
+	let height = (renderer.get_width() as f32) * fixed_scale;
+
+	let v0 = transform_matrix * vertices[0].extend(1.0);
+	let v1 = transform_matrix * vertices[1].extend(1.0);
+	let v2 = transform_matrix * vertices[2].extend(1.0);
+
+	// TODO - perform proper clipping
+	if v0.w <= 0.1 || v1.w <= 0.1 || v2.w <= 0.1
+	{
+		return;
+	}
+	let v0 = v0.truncate() / v0.w;
+	let v1 = v1.truncate() / v1.w;
+	let v2 = v2.truncate() / v2.w;
+
+	if v0.x < 0.0 ||
+		v0.x > width ||
+		v0.y < 0.0 ||
+		v0.y > height ||
+		v1.x < 0.0 ||
+		v1.x > width ||
+		v1.y < 0.0 ||
+		v1.y > height ||
+		v2.x < 0.0 ||
+		v2.x > width ||
+		v2.y < 0.0 ||
+		v2.x > height
+	{
+		return;
+	}
+
+	renderer.fill_triangle(
+		&[
+			PointProjected {
+				x: v0.x as Fixed16,
+				y: v0.y as Fixed16,
+				z: v0.z,
+			},
+			PointProjected {
+				x: v1.x as Fixed16,
+				y: v1.y as Fixed16,
+				z: v1.z,
+			},
+			PointProjected {
+				x: v2.x as Fixed16,
+				y: v2.y as Fixed16,
+				z: v2.z,
+			},
+		],
+		color,
 	);
 }

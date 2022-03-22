@@ -106,6 +106,166 @@ impl<'a> DebugRenderer<'a>
 			}
 		}
 	}
+
+	pub fn fill_triangle(&mut self, vertices: &[PointProjected; 3], color: Color32)
+	{
+		// TODO - process thin triangles specially.
+
+		// Sort triangle vertices.
+		let upper_index;
+		let middle_index;
+		let lower_index;
+		if vertices[0].y >= vertices[1].y && vertices[0].y >= vertices[2].y
+		{
+			upper_index = 0;
+			lower_index = if vertices[1].y < vertices[2].y { 1 } else { 2 };
+		}
+		else if vertices[1].y >= vertices[0].y && vertices[1].y >= vertices[2].y
+		{
+			upper_index = 1;
+			lower_index = if vertices[0].y < vertices[2].y { 0 } else { 2 };
+		}
+		else
+		{
+			upper_index = 2;
+			lower_index = if vertices[0].y < vertices[1].y { 0 } else { 1 };
+		}
+		middle_index = 0 + 1 + 2 - upper_index - lower_index;
+
+		let long_edge_dy = vertices[upper_index].y - vertices[lower_index].y;
+		if long_edge_dy < FIXED16_HALF
+		{
+			return;
+		}
+
+		let long_edge_dx_dy = fixed16_div(vertices[upper_index].x - vertices[lower_index].x, long_edge_dy);
+		let long_edge_x_in_middle =
+			vertices[lower_index].x + fixed16_mul(long_edge_dx_dy, vertices[middle_index].y - vertices[lower_index].y);
+
+		let lower_part_dy = vertices[middle_index].y - vertices[lower_index].y;
+		let upper_part_dy = vertices[upper_index].y - vertices[middle_index].y;
+
+		if long_edge_x_in_middle >= vertices[middle_index].x
+		{
+			//    /\
+			//   /  \
+			//  /    \
+			// +_     \  <-
+			//    _    \
+			//      _   \
+			//        _  \
+			//          _ \
+			//            _\
+
+			if lower_part_dy >= FIXED16_HALF
+			{
+				self.fill_polygon_part(
+					vertices[lower_index].y,
+					vertices[middle_index].y,
+					PolygonSide {
+						x_start: vertices[lower_index].x,
+						dx_dy: fixed16_div(vertices[middle_index].x - vertices[lower_index].x, lower_part_dy),
+					},
+					PolygonSide {
+						x_start: vertices[lower_index].x,
+						dx_dy: long_edge_dx_dy,
+					},
+					color,
+				);
+			}
+			if upper_part_dy >= FIXED16_HALF
+			{
+				self.fill_polygon_part(
+					vertices[middle_index].y,
+					vertices[upper_index].y,
+					PolygonSide {
+						x_start: vertices[middle_index].x,
+						dx_dy: fixed16_div(vertices[upper_index].x - vertices[middle_index].x, upper_part_dy),
+					},
+					PolygonSide {
+						x_start: long_edge_x_in_middle,
+						dx_dy: long_edge_dx_dy,
+					},
+					color,
+				);
+			}
+		}
+		else
+		{
+			//         /\
+			//        /  \
+			//       /    \
+			// ->   /     _+
+			//     /    _
+			//    /   _
+			//   /  _
+			//  / _
+			// /_
+
+			if lower_part_dy >= FIXED16_HALF
+			{
+				self.fill_polygon_part(
+					vertices[lower_index].y,
+					vertices[middle_index].y,
+					PolygonSide {
+						x_start: vertices[lower_index].x,
+						dx_dy: long_edge_dx_dy,
+					},
+					PolygonSide {
+						x_start: vertices[lower_index].x,
+						dx_dy: fixed16_div(vertices[middle_index].x - vertices[lower_index].x, lower_part_dy),
+					},
+					color,
+				);
+			}
+			if upper_part_dy >= FIXED16_HALF
+			{
+				self.fill_polygon_part(
+					vertices[middle_index].y,
+					vertices[upper_index].y,
+					PolygonSide {
+						x_start: long_edge_x_in_middle,
+						dx_dy: long_edge_dx_dy,
+					},
+					PolygonSide {
+						x_start: vertices[middle_index].x,
+						dx_dy: fixed16_div(vertices[upper_index].x - vertices[middle_index].x, upper_part_dy),
+					},
+					color,
+				);
+			}
+		}
+	}
+
+	fn fill_polygon_part(
+		&mut self,
+		y_start: Fixed16,
+		y_end: Fixed16,
+		left_side: PolygonSide,
+		right_side: PolygonSide,
+		color: Color32,
+	)
+	{
+		let y_start_int = fixed16_round_to_int(y_start).max(0);
+		let y_end_int = fixed16_round_to_int(y_end).min(self.height);
+		let y_start_delta = int_to_fixed16(y_start_int) + FIXED16_HALF - y_start;
+		let mut x_left = left_side.x_start + fixed16_mul(y_start_delta, left_side.dx_dy);
+		let mut x_right = right_side.x_start + fixed16_mul(y_start_delta, right_side.dx_dy);
+		for y_int in y_start_int .. y_end_int
+		{
+			let x_start_int = fixed16_round_to_int(x_left).max(0);
+			let x_end_int = fixed16_round_to_int(x_right).min(self.width);
+			// let x_start_delta = int_to_fixed16(x_start_int) + FIXED16_HALF - x_left;
+			for x_int in x_start_int .. x_end_int
+			{
+				let pix_address = (x_int + y_int * self.row_size) as usize;
+				self.color_buffer[pix_address] = color;
+			}
+
+			x_left += left_side.dx_dy;
+			x_right += right_side.dx_dy;
+		}
+	}
 }
 
 pub struct PointProjected
@@ -113,4 +273,10 @@ pub struct PointProjected
 	pub x: Fixed16,
 	pub y: Fixed16,
 	pub z: f32,
+}
+
+struct PolygonSide
+{
+	x_start: Fixed16,
+	dx_dy: Fixed16,
 }
