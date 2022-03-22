@@ -215,6 +215,11 @@ fn draw_triangle(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, ver
 		return;
 	}
 
+	if (v0.truncate() - v1.truncate()).perp_dot(v0.truncate() - v2.truncate()) <= 0.0
+	{
+		return;
+	}
+
 	rasterizer.fill_triangle(
 		&[
 			PointProjected {
