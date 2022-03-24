@@ -6,6 +6,9 @@ pub type Vec2d = cgmath::Vector2<f64>;
 pub type Vec3d = cgmath::Vector3<f64>;
 pub type Vec4d = cgmath::Vector4<f64>;
 
+pub type Mat3f = cgmath::Matrix3<f32>;
+pub type Mat3d = cgmath::Matrix3<f64>;
+
 pub type Mat4f = cgmath::Matrix4<f32>;
 pub type Mat4d = cgmath::Matrix4<f64>;
 
