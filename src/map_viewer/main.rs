@@ -1,4 +1,4 @@
-use common::{color::*, debug_rasterizer::*, fixed_math::*, map_file, math_types::*, system_window};
+use common::{color::*, debug_rasterizer::*, fixed_math::*, map_file, map_polygonizer, math_types::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
 use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
@@ -20,10 +20,15 @@ pub fn main()
 	let mut camera_controller = common::camera_controller::CameraController::new();
 
 	let mut map_file_parsed: Option<map_file::MapFileParsed> = None;
+	let mut map_polygonized: Option<map_polygonizer::MapPolygonized> = None;
 	if let Some(path) = opt.input
 	{
 		let file_contents_str = std::fs::read_to_string(path).unwrap();
 		map_file_parsed = map_file::parse_map_file_content(&file_contents_str).ok();
+		if let Some(map_file) = &map_file_parsed
+		{
+			map_polygonized = Some(map_polygonizer::polygonize_map(map_file));
+		}
 	}
 
 	let frame_duration_s = 1.0 / 30.0;
@@ -51,6 +56,7 @@ pub fn main()
 				surface_info,
 				&camera_controller.build_view_matrix(surface_info.width as f32, surface_info.height as f32),
 				map_file_parsed.as_ref(),
+				map_polygonized.as_ref(),
 			)
 		});
 
@@ -63,10 +69,11 @@ fn draw_frame(
 	surface_info: &system_window::SurfaceInfo,
 	view_matrix: &Mat4f,
 	map: Option<&map_file::MapFileParsed>,
+	map_polygonized: Option<&map_polygonizer::MapPolygonized>,
 )
 {
 	draw_background(pixels);
-	draw_map(pixels, surface_info, view_matrix, map);
+	draw_map(pixels, surface_info, view_matrix, map, map_polygonized);
 }
 
 fn draw_background(pixels: &mut [Color32])
@@ -82,29 +89,64 @@ fn draw_map(
 	surface_info: &system_window::SurfaceInfo,
 	view_matrix: &Mat4f,
 	map: Option<&map_file::MapFileParsed>,
+	map_polygonized: Option<&map_polygonizer::MapPolygonized>,
 )
 {
+	let draw_raw_map = false;
+	let draw_polygonized_map = true;
+	let draw_only_first_entity = false;
+
 	let mut rasterizer = DebugRasterizer::new(pixels, surface_info);
 
 	let fixed_scale = FIXED16_ONE as f32;
 	let mat = Mat4f::from_nonuniform_scale(fixed_scale, fixed_scale, 1.0) * view_matrix;
 
-	if let Some(entities) = map
+	if draw_raw_map
 	{
-		for entity in entities
+		if let Some(entities) = map
 		{
-			for (brush_number, brush) in entity.brushes.iter().enumerate()
+			for entity in entities
 			{
-				let bush_number_scaled = brush_number * 16;
-				let color = Color32::from_rgb(
-					(bush_number_scaled & 255) as u8,
-					((bush_number_scaled * 3) & 255) as u8,
-					((bush_number_scaled * 5) & 255) as u8,
-				);
-
-				for brush_plane in brush
+				for (brush_number, brush) in entity.brushes.iter().enumerate()
 				{
-					draw_triangle(&mut rasterizer, &mat, &brush_plane.vertices, color);
+					let color = get_pseudo_random_color(brush_number);
+
+					for brush_plane in brush
+					{
+						draw_triangle(&mut rasterizer, &mat, &brush_plane.vertices, color);
+					}
+				}
+				if draw_only_first_entity
+				{
+					break;
+				}
+			}
+		}
+	}
+
+	if draw_polygonized_map
+	{
+		if let Some(entities) = map_polygonized
+		{
+			for entity in entities
+			{
+				for (polygon_number, polygon) in entity.polygons.iter().enumerate()
+				{
+					if polygon.vertices.len() < 3
+					{
+						continue;
+					}
+					let color = get_pseudo_random_color(polygon_number);
+
+					for i in 0 .. polygon.vertices.len() - 2
+					{
+						let vertices = [polygon.vertices[0], polygon.vertices[i + 1], polygon.vertices[i + 2]];
+						draw_triangle(&mut rasterizer, &mat, &vertices, color);
+					}
+				}
+				if draw_only_first_entity
+				{
+					break;
 				}
 			}
 		}
@@ -132,6 +174,12 @@ fn draw_map(
 	{
 		draw_line(&mut rasterizer, &mat, line);
 	}
+}
+
+fn get_pseudo_random_color(num: usize) -> Color32
+{
+	let num = num * 16;
+	Color32::from_rgb((num & 255) as u8, ((num * 3) & 255) as u8, ((num * 5) & 255) as u8)
 }
 
 type WorldLine = (Vec3f, Vec3f, Color32);
