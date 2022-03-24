@@ -244,6 +244,15 @@ fn skip_whitespaces(it: &mut Iterator)
 		{
 			*it = &it[1 ..];
 		}
+		else if it.starts_with("//")
+		{
+			// Comments
+			*it = &it[2 ..];
+			while !it.is_empty() && !it.starts_with("\n")
+			{
+				*it = &it[1 ..];
+			}
+		}
 		else
 		{
 			break;
