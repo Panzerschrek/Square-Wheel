@@ -126,13 +126,20 @@ fn polygonize_brush(brush: &map_file::Brush) -> Vec<Polygon>
 		vertices = remove_duplicate_vertices(&vertices);
 		if vertices.len() < 3
 		{
+			println!("Wrong polygon with only {} vertices", vertices.len());
 			continue;
 		}
 
-		// TODO - sort vertices - make correct (clockwise/anticlockwise order).
+		let vertices_sorted = sort_convex_polygon_vertices(vertices, &plane_i);
+		if vertices_sorted.len() < 3
+		{
+			println!("Wrong polygon with only {} vertices_sorted", vertices_sorted.len());
+			continue;
+		}
+
 		result.push(Polygon {
 			plane: plane_i,
-			vertices: vertices,
+			vertices: vertices_sorted,
 		});
 	} // for i
 
@@ -172,5 +179,68 @@ fn remove_duplicate_vertices(in_vertices: &[Vec3f]) -> Vec<Vec3f>
 			result.push(*in_vertex);
 		}
 	}
+	result
+}
+
+fn sort_convex_polygon_vertices(mut in_vertices: Vec<Vec3f>, plane: &Plane) -> Vec<Vec3f>
+{
+	// First, find average vertex. For convex polygon it is always inside it.
+	let mut vertitces_sum = Vec3f::zero();
+	for v in &in_vertices
+	{
+		vertitces_sum += *v;
+	}
+	let middle_vertex = vertitces_sum / (in_vertices.len() as f32);
+
+	// Select first vertex.
+	let mut result = Vec::new();
+	result.push(in_vertices.pop().unwrap());
+
+	while !in_vertices.is_empty()
+	{
+		// Search for vertex with smallest angle relative to vector from middle to last vertex.
+		let v0 = result.last().unwrap() - middle_vertex;
+
+		let mut largest_cotan_vert = None;
+		for i in 0 .. in_vertices.len()
+		{
+			let v1 = in_vertices[i] - middle_vertex;
+
+			let dot = v0.dot(v1);
+			let cross = v0.cross(v1);
+			let cross_plane_vec_dot = cross.dot(plane.vec);
+			if cross_plane_vec_dot <= 0.0
+			{
+				continue; // Wrong direction.
+			}
+			let scaled_angle_cotan = dot / cross_plane_vec_dot; // Should be equal to angle cotangent multiplied by plane vector length.
+			if let Some((_, prev_cotan)) = largest_cotan_vert
+			{
+				if scaled_angle_cotan > prev_cotan
+				{
+					largest_cotan_vert = Some((i, scaled_angle_cotan));
+				}
+			}
+			else
+			{
+				largest_cotan_vert = Some((i, scaled_angle_cotan));
+			}
+		}
+		if let Some((index, _)) = largest_cotan_vert
+		{
+			result.push(in_vertices.remove(index));
+		}
+		else
+		{
+			// WTF?
+			println!(
+				"Can't find best vertex for sorting. Vertices produced: {}, left : {}",
+				result.len(),
+				in_vertices.len()
+			);
+			break;
+		}
+	}
+
 	result
 }
