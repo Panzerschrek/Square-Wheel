@@ -287,7 +287,7 @@ impl<'a> DebugRasterizer<'a>
 		{
 			let x_start_int = fixed16_floor_to_int(x_left).max(0);
 			let x_end_int = fixed16_floor_to_int(x_right).min(self.width);
-			let x_start_delta = int_to_fixed16(x_start_int) + FIXED16_HALF - x_left;
+			let x_start_delta = int_to_fixed16(x_start_int) + FIXED16_ONE - x_left;
 			let mut z = z_left + fixed16_to_f32(x_start_delta) * dz_dx;
 			for x_int in x_start_int .. x_end_int
 			{
