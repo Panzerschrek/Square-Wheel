@@ -72,9 +72,9 @@ fn polygonize_brush(brush: &map_file::Brush) -> Vec<Polygon>
 			}
 			let plane_j = plane_j_opt.unwrap();
 
-			for k in 0 .. brush.len()
+			for k in j + 1 .. brush.len()
 			{
-				if k == i || k == j
+				if k == i
 				{
 					continue;
 				}
