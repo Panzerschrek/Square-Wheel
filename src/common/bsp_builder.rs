@@ -42,10 +42,37 @@ fn build_leaf_bsp_tree_r(mut in_polygons: Vec<Polygon>) -> BSPNodeChild
 	let mut polygons_back = Vec::new();
 	for polygon in in_polygons.drain(..)
 	{
-		// TODO
+		match get_polygon_position_relative_plane(&polygon, &splitter_plane)
+		{
+			PolygonPositionRelativePlane::Front | PolygonPositionRelativePlane::CoplanarFront =>
+			{
+				polygons_front.push(polygon);
+			},
+			PolygonPositionRelativePlane::Back | PolygonPositionRelativePlane::CoplanarBack =>
+			{
+				polygons_back.push(polygon);
+			},
+			PolygonPositionRelativePlane::Splitted =>
+			{
+				// TODO - split this polygon.
+			},
+		}
 	}
 
-	// TODO
+	// HACK! Somethhing went wrong and we processing leaf now.
+	if polygons_front.is_empty()
+	{
+		return BSPNodeChild::LeafChild(BSPLeaf {
+			polygons: polygons_back,
+		});
+	}
+	if polygons_back.is_empty()
+	{
+		return BSPNodeChild::LeafChild(BSPLeaf {
+			polygons: polygons_front,
+		});
+	}
+
 	BSPNodeChild::NodeChild(Box::new(BSPNode {
 		plane: splitter_plane,
 		children: [
@@ -57,12 +84,31 @@ fn build_leaf_bsp_tree_r(mut in_polygons: Vec<Polygon>) -> BSPNodeChild
 
 fn is_convex_set_of_polygons(polygons: &[Polygon]) -> bool
 {
-	if polygons.is_empty()
+	if polygons.len() <= 1
 	{
 		return true;
 	}
 
-	// TODO
+	// Avoid cuclulation of convex criteria for large sets of polygons.
+	// Jut treat such sets as non-convex.
+	if polygons.len() > 64
+	{
+		return false;
+	}
+
+	// For each polygon check if all other polygons are at front of it.
+	for polygon0 in polygons
+	{
+		for polygon1 in polygons
+		{
+			let pos = get_polygon_position_relative_plane(polygon1, &polygon0.plane);
+			if !(pos == PolygonPositionRelativePlane::Front || pos == PolygonPositionRelativePlane::CoplanarFront)
+			{
+				return false;
+			}
+		}
+	}
+
 	true
 }
 
@@ -131,6 +177,7 @@ fn get_splitter_plane_score(polygons: &[Polygon], plane: &Plane) -> f32
 	base_score as f32
 }
 
+#[derive(PartialEq, Eq)]
 enum PolygonPositionRelativePlane
 {
 	Front,
@@ -183,6 +230,7 @@ fn get_polygon_position_relative_plane(polygon: &Polygon, plane: &Plane) -> Poly
 	}
 }
 
+#[derive(PartialEq, Eq)]
 enum PointPositionRelativePlane
 {
 	Front,

@@ -1,4 +1,4 @@
-use common::{map_file, map_polygonizer};
+use common::{bsp_builder, map_file, map_polygonizer};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -20,10 +20,43 @@ fn main()
 	let file_content = map_file::parse_map_file_content(&file_contents_str);
 	if let Ok(map_file_parsed) = &file_content
 	{
-		map_polygonizer::polygonize_map(&map_file_parsed);
+		let map_polygonized = map_polygonizer::polygonize_map(&map_file_parsed);
+		let bsp_tree = bsp_builder::build_leaf_bsp_tree(&map_polygonized[0]);
+		let mut stats = BSPStats::default();
+		calculate_bsp_tree_stats_r(&bsp_tree, &mut stats);
+		println!("Initial polygons: {}", map_polygonized[0].polygons.len());
+		println!("BSP Tree stats: {:?}", stats);
 	}
 	else
 	{
 		println!("Failed to parse map file: {:?}", file_content);
+	}
+}
+
+#[derive(Debug, Default)]
+struct BSPStats
+{
+	num_polygons: usize,
+	num_nodes: usize,
+	num_leafs: usize,
+}
+
+fn calculate_bsp_tree_stats_r(node_child: &bsp_builder::BSPNodeChild, stats: &mut BSPStats)
+{
+	match node_child
+	{
+		bsp_builder::BSPNodeChild::NodeChild(node) =>
+		{
+			stats.num_nodes += 1;
+			for child in &node.children
+			{
+				calculate_bsp_tree_stats_r(child, stats);
+			}
+		},
+		bsp_builder::BSPNodeChild::LeafChild(leaf) =>
+		{
+			stats.num_leafs += 1;
+			stats.num_polygons += leaf.polygons.len();
+		},
 	}
 }
