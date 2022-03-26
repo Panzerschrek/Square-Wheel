@@ -36,9 +36,10 @@ fn main()
 #[derive(Debug, Default)]
 struct BSPStats
 {
-	num_polygons: usize,
 	num_nodes: usize,
 	num_leafs: usize,
+	num_polygons: usize,
+	num_polygon_vertices: usize,
 }
 
 fn calculate_bsp_tree_stats_r(node_child: &bsp_builder::BSPNodeChild, stats: &mut BSPStats)
@@ -57,6 +58,10 @@ fn calculate_bsp_tree_stats_r(node_child: &bsp_builder::BSPNodeChild, stats: &mu
 		{
 			stats.num_leafs += 1;
 			stats.num_polygons += leaf.polygons.len();
+			for polygon in &leaf.polygons
+			{
+				stats.num_polygon_vertices += polygon.vertices.len();
+			}
 		},
 	}
 }
