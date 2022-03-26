@@ -109,7 +109,7 @@ fn polygonize_brush(brush: &map_file::Brush) -> Vec<Polygon>
 					}
 					let plane_l = plane_l_opt.unwrap();
 
-					if intersection_point.dot(plane_l.vec) < plane_l.dist
+					if intersection_point.dot(plane_l.vec) > plane_l.dist
 					{
 						is_behind_another_plane = true;
 						break;
@@ -148,7 +148,7 @@ fn polygonize_brush(brush: &map_file::Brush) -> Vec<Polygon>
 
 fn get_brush_side_plane(brush_side: &map_file::BrushPlane) -> Option<Plane>
 {
-	let vec = (brush_side.vertices[0] - brush_side.vertices[1]).cross(brush_side.vertices[1] - brush_side.vertices[2]);
+	let vec = (brush_side.vertices[0] - brush_side.vertices[1]).cross(brush_side.vertices[2] - brush_side.vertices[1]);
 	if vec.is_zero()
 	{
 		return None;
@@ -201,7 +201,7 @@ fn sort_convex_polygon_vertices(mut in_vertices: Vec<Vec3f>, plane: &Plane) -> V
 		// Search for vertex with smallest angle relative to vector from middle to last vertex.
 		let v0 = result.last().unwrap() - middle_vertex;
 
-		let mut largest_cotan_vert = None;
+		let mut smallest_cotan_vert = None;
 		for i in 0 .. in_vertices.len()
 		{
 			let v1 = in_vertices[i] - middle_vertex;
@@ -209,24 +209,24 @@ fn sort_convex_polygon_vertices(mut in_vertices: Vec<Vec3f>, plane: &Plane) -> V
 			let dot = v0.dot(v1);
 			let cross = v0.cross(v1);
 			let cross_plane_vec_dot = cross.dot(plane.vec);
-			if cross_plane_vec_dot <= 0.0
+			if cross_plane_vec_dot >= 0.0
 			{
 				continue; // Wrong direction.
 			}
 			let scaled_angle_cotan = dot / cross_plane_vec_dot; // Should be equal to angle cotangent multiplied by plane vector length.
-			if let Some((_, prev_cotan)) = largest_cotan_vert
+			if let Some((_, prev_cotan)) = smallest_cotan_vert
 			{
-				if scaled_angle_cotan > prev_cotan
+				if scaled_angle_cotan < prev_cotan
 				{
-					largest_cotan_vert = Some((i, scaled_angle_cotan));
+					smallest_cotan_vert = Some((i, scaled_angle_cotan));
 				}
 			}
 			else
 			{
-				largest_cotan_vert = Some((i, scaled_angle_cotan));
+				smallest_cotan_vert = Some((i, scaled_angle_cotan));
 			}
 		}
-		if let Some((index, _)) = largest_cotan_vert
+		if let Some((index, _)) = smallest_cotan_vert
 		{
 			result.push(in_vertices.remove(index));
 		}
