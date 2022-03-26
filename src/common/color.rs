@@ -7,4 +7,9 @@ impl Color32
 	{
 		Color32(((r as u32) << 16) | ((g as u32) << 8) | ((b as u32) << 0))
 	}
+
+	pub fn get_inverted(self) -> Self
+	{
+		Color32(!self.0)
+	}
 }

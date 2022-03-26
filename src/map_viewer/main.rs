@@ -95,6 +95,7 @@ fn draw_map(
 	let draw_raw_map = false;
 	let draw_polygonized_map = true;
 	let draw_only_first_entity = false;
+	let draw_polygon_normals = true;
 
 	let mut rasterizer = DebugRasterizer::new(pixels, surface_info);
 
@@ -142,6 +143,22 @@ fn draw_map(
 					{
 						let vertices = [polygon.vertices[0], polygon.vertices[i + 1], polygon.vertices[i + 2]];
 						draw_triangle(&mut rasterizer, &mat, &vertices, color);
+					}
+
+					if draw_polygon_normals
+					{
+						let mut vertices_sum = Vec3f::zero();
+						for v in &polygon.vertices
+						{
+							vertices_sum += *v;
+						}
+						let center = vertices_sum / (polygon.vertices.len() as f32);
+						let line = (
+							center,
+							center + polygon.plane.vec * (16.0 / polygon.plane.vec.magnitude()),
+							color.get_inverted(),
+						);
+						draw_line(&mut rasterizer, &mat, &line);
 					}
 				}
 				if draw_only_first_entity
