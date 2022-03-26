@@ -227,8 +227,29 @@ fn get_splitter_plane_score(polygons: &[Polygon], plane: &Plane) -> Option<f32>
 	}
 
 	let base_score = (polygons_front_total - polygons_back_total).abs() + polygons_splitted;
-	// TODO - scale down score for planes parallel to base planes (XY, XZ, YZ)
-	Some(base_score as f32)
+
+	// Make score greater (worse) for planes non-parallel to axis planes.
+	let mut num_zero_normal_components = 0;
+	let plane_vec_as_array: &[f32; 3] = plane.vec.as_ref();
+	for component in plane_vec_as_array
+	{
+		if *component == 0.0
+		{
+			num_zero_normal_components += 1;
+		}
+	}
+
+	let mut score_scaled = base_score as f32;
+	if num_zero_normal_components == 0
+	{
+		score_scaled *= 2.0;
+	}
+	if num_zero_normal_components == 1
+	{
+		score_scaled *= 1.5;
+	}
+
+	Some(score_scaled)
 }
 
 #[derive(PartialEq, Eq)]
