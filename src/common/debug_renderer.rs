@@ -1,10 +1,13 @@
-use super::{color::*, debug_rasterizer::*, fixed_math::*, map_file, map_polygonizer, math_types::*, system_window};
+use super::{
+	bsp_builder, color::*, debug_rasterizer::*, fixed_math::*, map_file, map_polygonizer, math_types::*, system_window,
+};
 
 #[derive(Default)]
 pub struct DrawOptions
 {
 	pub draw_raw_map: bool,
 	pub draw_polygonized_map: bool,
+	pub draw_bsp_map: bool,
 	pub draw_only_first_entity: bool,
 	pub draw_polygon_normals: bool,
 }
@@ -16,10 +19,19 @@ pub fn draw_frame(
 	view_matrix: &Mat4f,
 	map: Option<&map_file::MapFileParsed>,
 	map_polygonized: Option<&map_polygonizer::MapPolygonized>,
+	map_bsp: Option<&bsp_builder::BSPTree>,
 )
 {
 	draw_background(pixels);
-	draw_map(pixels, surface_info, draw_options, view_matrix, map, map_polygonized);
+	draw_map(
+		pixels,
+		surface_info,
+		draw_options,
+		view_matrix,
+		map,
+		map_polygonized,
+		map_bsp,
+	);
 }
 
 fn draw_background(pixels: &mut [Color32])
@@ -37,6 +49,7 @@ fn draw_map(
 	view_matrix: &Mat4f,
 	map: Option<&map_file::MapFileParsed>,
 	map_polygonized: Option<&map_polygonizer::MapPolygonized>,
+	map_bsp: Option<&bsp_builder::BSPTree>,
 )
 {
 	let mut rasterizer = DebugRasterizer::new(pixels, surface_info);
@@ -63,6 +76,14 @@ fn draw_map(
 				draw_options.draw_only_first_entity,
 				draw_options.draw_polygon_normals,
 			);
+		}
+	}
+
+	if draw_options.draw_bsp_map
+	{
+		if let Some(map_bsp_non_opt) = map_bsp
+		{
+			draw_map_bsp_r(&mut rasterizer, &mat, map_bsp_non_opt);
 		}
 	}
 
@@ -137,6 +158,44 @@ fn draw_map_polygonized(
 		if draw_only_first_entity
 		{
 			break;
+		}
+	}
+}
+
+fn draw_map_bsp_r(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, bsp_node: &bsp_builder::BSPNodeChild)
+{
+	match bsp_node
+	{
+		bsp_builder::BSPNodeChild::NodeChild(node) =>
+		{
+			for child in &node.children
+			{
+				draw_map_bsp_r(rasterizer, transform_matrix, child);
+			}
+		},
+		bsp_builder::BSPNodeChild::LeafChild(leaf) =>
+		{
+			draw_map_bsp_leaf(rasterizer, transform_matrix, leaf);
+		},
+	}
+}
+
+fn draw_map_bsp_leaf(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, bsp_leaf: &bsp_builder::BSPLeaf)
+{
+	let leaf_ptr_as_int = bsp_leaf as *const bsp_builder::BSPLeaf as usize;
+	let color = get_pseudo_random_color(leaf_ptr_as_int / std::mem::size_of::<bsp_builder::BSPLeaf>());
+
+	for polygon in &bsp_leaf.polygons
+	{
+		if polygon.vertices.len() < 3
+		{
+			continue;
+		}
+
+		for i in 0 .. polygon.vertices.len() - 2
+		{
+			let vertices = [polygon.vertices[0], polygon.vertices[i + 1], polygon.vertices[i + 2]];
+			draw_triangle(rasterizer, &transform_matrix, &vertices, color);
 		}
 	}
 }
