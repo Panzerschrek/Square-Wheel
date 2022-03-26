@@ -226,7 +226,9 @@ fn get_splitter_plane_score(polygons: &[Polygon], plane: &Plane) -> Option<f32>
 		return None;
 	}
 
-	let base_score = (polygons_front_total - polygons_back_total).abs() + polygons_splitted;
+	// TODO - tune this carefully.
+	const SPLITTED_POLYGON_SCALE : i32 = 5;
+	let base_score = (polygons_front_total - polygons_back_total).abs() + SPLITTED_POLYGON_SCALE * polygons_splitted;
 
 	// Make score greater (worse) for planes non-parallel to axis planes.
 	let mut num_zero_normal_components = 0;
