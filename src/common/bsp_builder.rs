@@ -31,12 +31,13 @@ pub fn build_leaf_bsp_tree(entity: &map_polygonizer::Entity) -> BSPTree
 
 fn build_leaf_bsp_tree_r(mut in_polygons: Vec<Polygon>) -> BSPNodeChild
 {
-	if is_convex_set_of_polygons(&in_polygons)
+	let splitter_plane_opt = choose_best_splitter_plane(&in_polygons);
+	if splitter_plane_opt.is_none()
 	{
+		// No splitter plane means this is a leaf.
 		return BSPNodeChild::LeafChild(BSPLeaf { polygons: in_polygons });
 	}
-
-	let splitter_plane = choose_best_splitter_plane(&in_polygons);
+	let splitter_plane = splitter_plane_opt.unwrap();
 
 	let mut polygons_front = Vec::new();
 	let mut polygons_back = Vec::new();
@@ -82,60 +83,34 @@ fn build_leaf_bsp_tree_r(mut in_polygons: Vec<Polygon>) -> BSPNodeChild
 	}))
 }
 
-fn is_convex_set_of_polygons(polygons: &[Polygon]) -> bool
-{
-	if polygons.len() <= 1
-	{
-		return true;
-	}
-
-	// Avoid cuclulation of convex criteria for large sets of polygons.
-	// Jut treat such sets as non-convex.
-	if polygons.len() > 64
-	{
-		return false;
-	}
-
-	// For each polygon check if all other polygons are at front of it.
-	for polygon0 in polygons
-	{
-		for polygon1 in polygons
-		{
-			let pos = get_polygon_position_relative_plane(polygon1, &polygon0.plane);
-			if !(pos == PolygonPositionRelativePlane::Front || pos == PolygonPositionRelativePlane::CoplanarFront)
-			{
-				return false;
-			}
-		}
-	}
-
-	true
-}
-
-fn choose_best_splitter_plane(polygons: &[Polygon]) -> Plane
+// Returns None if can't find any situable splitter.
+fn choose_best_splitter_plane(polygons: &[Polygon]) -> Option<Plane>
 {
 	let mut best_score_plane: Option<(f32, Plane)> = None;
 	for polygon in polygons
 	{
-		let score = get_splitter_plane_score(polygons, &polygon.plane);
-		if let Some((prev_score, _)) = best_score_plane
+		if let Some(score) = get_splitter_plane_score(polygons, &polygon.plane)
 		{
-			if score < prev_score
+			if let Some((prev_score, _)) = best_score_plane
+			{
+				if score < prev_score
+				{
+					best_score_plane = Some((score, polygon.plane))
+				}
+			}
+			else
 			{
 				best_score_plane = Some((score, polygon.plane))
 			}
 		}
-		else
-		{
-			best_score_plane = Some((score, polygon.plane))
-		}
 	}
 
-	best_score_plane.unwrap().1
+	best_score_plane.map(|x| x.1)
 }
 
 // smaller score means better
-fn get_splitter_plane_score(polygons: &[Polygon], plane: &Plane) -> f32
+// None score means plane is not a splitter
+fn get_splitter_plane_score(polygons: &[Polygon], plane: &Plane) -> Option<f32>
 {
 	let mut polygons_front = 0i32;
 	let mut polygons_back = 0i32;
@@ -172,9 +147,15 @@ fn get_splitter_plane_score(polygons: &[Polygon], plane: &Plane) -> f32
 	let polygons_front_total = polygons_front + polygons_coplanar_front;
 	let polygons_back_total = polygons_back + polygons_coplanar_back;
 
+	// All polygons are at one of sides. So, this is not a splitter.
+	if polygons_splitted == 0 && (polygons_front_total == 0 || polygons_back_total == 0)
+	{
+		return None;
+	}
+
 	let base_score = (polygons_front_total - polygons_back_total).abs() + polygons_splitted;
 	// TODO - scale down score for planes parallel to base planes (XY, XZ, YZ)
-	base_score as f32
+	Some(base_score as f32)
 }
 
 #[derive(PartialEq, Eq)]
