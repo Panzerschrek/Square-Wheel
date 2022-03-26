@@ -1,20 +1,20 @@
 use super::{map_file, math_types::*};
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct Plane
 {
 	pub vec: Vec3f, // Unnormalized direction
 	pub dist: f32,  // for point on plane dot(vec, point) = dist
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Polygon
 {
 	pub plane: Plane,
 	pub vertices: Vec<Vec3f>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Entity
 {
 	pub polygons: Vec<Polygon>,

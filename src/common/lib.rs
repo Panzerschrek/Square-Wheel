@@ -1,3 +1,4 @@
+pub mod bsp_builder;
 pub mod camera_controller;
 pub mod color;
 pub mod debug_rasterizer;
