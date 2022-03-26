@@ -55,7 +55,16 @@ fn build_leaf_bsp_tree_r(mut in_polygons: Vec<Polygon>) -> BSPNodeChild
 			},
 			PolygonPositionRelativePlane::Splitted =>
 			{
-				// TODO - split this polygon.
+				let (front_polygon, back_polygon) = split_polygon(&polygon, &splitter_plane);
+				// Check for number of vertices is not needed here, but add anyway to avoid further problems if something is broken.
+				if front_polygon.vertices.len() >= 3
+				{
+					polygons_front.push(front_polygon);
+				}
+				if back_polygon.vertices.len() >= 3
+				{
+					polygons_back.push(back_polygon);
+				}
 			},
 		}
 	}
@@ -81,6 +90,70 @@ fn build_leaf_bsp_tree_r(mut in_polygons: Vec<Polygon>) -> BSPNodeChild
 			build_leaf_bsp_tree_r(polygons_back),
 		],
 	}))
+}
+
+// Returns pair of front and back polygons.
+fn split_polygon(in_polygon: &Polygon, plane: &Plane) -> (Polygon, Polygon)
+{
+	let mut polygon_front = Polygon {
+		plane: in_polygon.plane,
+		vertices: Vec::new(),
+	};
+	let mut polygon_back = Polygon {
+		plane: in_polygon.plane,
+		vertices: Vec::new(),
+	};
+
+	let mut prev_vert = in_polygon.vertices.last().unwrap();
+	let mut prev_vert_pos = get_point_position_relative_plane(&prev_vert, plane);
+	for vert in &in_polygon.vertices
+	{
+		let vert_pos = get_point_position_relative_plane(&vert, plane);
+
+		match vert_pos
+		{
+			PointPositionRelativePlane::Front =>
+			{
+				if prev_vert_pos == PointPositionRelativePlane::Back
+				{
+					let intersection = get_line_plane_intersection(prev_vert, vert, plane);
+					polygon_back.vertices.push(intersection);
+					polygon_front.vertices.push(intersection);
+				}
+				polygon_front.vertices.push(*vert);
+			},
+			PointPositionRelativePlane::Back =>
+			{
+				if prev_vert_pos == PointPositionRelativePlane::Front
+				{
+					let intersection = get_line_plane_intersection(prev_vert, vert, plane);
+					polygon_front.vertices.push(intersection);
+					polygon_back.vertices.push(intersection);
+				}
+				polygon_back.vertices.push(*vert);
+			},
+			PointPositionRelativePlane::OnPlane =>
+			{
+				polygon_front.vertices.push(*vert);
+				polygon_back.vertices.push(*vert);
+			},
+		};
+
+		prev_vert = vert;
+		prev_vert_pos = vert_pos;
+	}
+
+	(polygon_front, polygon_back)
+}
+
+fn get_line_plane_intersection(v0: &Vec3f, v1: &Vec3f, plane: &Plane) -> Vec3f
+{
+	let dist0 = v0.dot(plane.vec) - plane.dist;
+	let dist1 = v1.dot(plane.vec) - plane.dist;
+	let dist_sum = dist1 - dist0;
+	let k0 = dist0 / dist_sum;
+	let k1 = dist1 / dist_sum;
+	v0 * k1 - v1 * k0
 }
 
 // Returns None if can't find any situable splitter.
