@@ -211,19 +211,21 @@ fn draw_polygon(
 	}
 	
 	let mut plane_transformed = transform_matrix.transpose().invert().unwrap() * polygon.plane.vec.extend(-polygon.plane.dist);
-	
 	if plane_transformed.z == 0.0
 	{
 		return;
 	}
 	
-	let mut depth_equation = 
+	let half_width  = rasterizer.get_width () as f32 * 0.5;
+	let half_height = rasterizer.get_height() as f32 * 0.5;
+	let dz_dx = plane_transformed.x / ( plane_transformed.w * half_width  );
+	let dz_dy = plane_transformed.y / ( plane_transformed.w * half_height );
+	let depth_equation = 
 	DepthEquation{
-		dz_dx : -plane_transformed.x  / plane_transformed.w / (rasterizer.get_width() as f32 * 0.5),
-		dz_dy : -plane_transformed.y  / plane_transformed.w / (rasterizer.get_height() as f32 * 0.5),
-		k: -plane_transformed.z / plane_transformed.w,
+		dz_dx,
+		dz_dy,
+		k: plane_transformed.z / plane_transformed.w - dz_dx * half_width - dz_dy * half_height,
 	};
-	depth_equation.k -= depth_equation.dz_dx * (rasterizer.get_width() as f32 * 0.5) + depth_equation.dz_dy * (rasterizer.get_height() as f32 * 0.5);
 
 	for i in 0 .. polygon.vertices.len() - 2
 	{

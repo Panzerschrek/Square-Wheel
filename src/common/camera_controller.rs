@@ -116,13 +116,13 @@ impl CameraController
 		let mut basis_change = Mat4f::identity();
 		basis_change.y.y = 0.0;
 		basis_change.z.y = -1.0;
-		basis_change.y.z = -1.0;
+		basis_change.y.z = 1.0;
 		basis_change.z.z = 0.0;
 
 		//let perspective = cgmath::perspective(fov, aspect, z_near, z_far);
 		//let perspective = Mat4f::from_nonuniform_scale(1.0 / 256.0, 1.0 / 256.0, 1.0);
 		
-		let perspective = Mat4f::from_nonuniform_scale(1.0 / aspect, 1.0, -1.0);
+		let perspective = Mat4f::from_nonuniform_scale(1.0 / aspect, 1.0, 1.0);
 		
 		let resize_to_viewport = Mat4f::from_nonuniform_scale(viewport_width * 0.5, viewport_height * 0.5, 1.0);
 		let shift_to_viewport_center =

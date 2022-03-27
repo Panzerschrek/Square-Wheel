@@ -258,17 +258,18 @@ impl<'a> DebugRasterizer<'a>
 		let y_start_delta = int_to_fixed16(y_start_int) + FIXED16_HALF - y_start;
 		let mut x_left = left_side.x_start + fixed16_mul(y_start_delta, left_side.dx_dy) + FIXED16_HALF;
 		let mut x_right = right_side.x_start + fixed16_mul(y_start_delta, right_side.dx_dy) + FIXED16_HALF;
+		let mut line_z = (y_start_int as f32 + 0.5) * depth_equation.dz_dy + depth_equation.k;
 		for y_int in y_start_int .. y_end_int
 		{
 			let x_start_int = fixed16_floor_to_int(x_left).max(0);
 			let x_end_int = fixed16_floor_to_int(x_right).min(self.width);
-			let mut z = (x_start_int as f32 + 0.5) * depth_equation.dz_dx + (y_int as f32 + 0.5) * depth_equation.dz_dy + depth_equation.k;
+			let mut z = (x_start_int as f32 + 0.5) * depth_equation.dz_dx + line_z;
 			for x_int in x_start_int .. x_end_int
 			{
 				let pix_address = (x_int + y_int * self.row_size) as usize;
 				if z <= self.depth_buffer[pix_address]
 				{
-					let inv_z = 0.001 / z;
+					let inv_z = -0.001 / z;
 					let mut brightness = 255.0 * inv_z;
 					if brightness < 0.0 { brightness = 0.0; }
 					if brightness > 255.0 { brightness= 255.0; }
@@ -298,6 +299,7 @@ impl<'a> DebugRasterizer<'a>
 
 			x_left += left_side.dx_dy;
 			x_right += right_side.dx_dy;
+			line_z += depth_equation.dz_dy;
 		}
 	}
 }
