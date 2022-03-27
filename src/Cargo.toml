@@ -1,0 +1,25 @@
+[package]
+name = "square_wheel"
+version = "0.1.0"
+authors = ["Panzerschrek <AntiPanzerschrek@yandex.ru>"]
+edition = "2018"
+
+[profile.release]
+panic = "abort"
+
+[dependencies]
+cgmath = "0.18"
+sdl2 = "0.35"
+structopt = "0.3"
+
+[lib]
+name = "common"
+path = "common/lib.rs"
+
+[[bin]]
+name = "map_compiler"
+path = "map_compiler/main.rs"
+
+[[bin]]
+name = "map_viewer"
+path = "map_viewer/main.rs"
