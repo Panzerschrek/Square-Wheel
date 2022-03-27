@@ -18,7 +18,7 @@ impl<'a> DebugRasterizer<'a>
 			width: surface_info.width as i32,
 			height: surface_info.height as i32,
 			row_size: (surface_info.pitch) as i32,
-			depth_buffer: vec![1.0; surface_info.width * surface_info.pitch],
+			depth_buffer: vec![1.0e10; surface_info.width * surface_info.pitch],
 		}
 	}
 
@@ -268,7 +268,28 @@ impl<'a> DebugRasterizer<'a>
 				let pix_address = (x_int + y_int * self.row_size) as usize;
 				if z <= self.depth_buffer[pix_address]
 				{
-					self.color_buffer[pix_address] = color;
+					let inv_z = 1.0 - z / 64.0;
+					let mut brightness = 255.0 * inv_z;
+					if brightness < 0.0 { brightness = 0.0; }
+					if brightness > 255.0 { brightness= 255.0; }
+					//brightness = 0.0;
+					
+					let d_scale = 65536.0;
+					
+					let mut dz_dx = depth_equation.dz_dx * d_scale;
+					if dz_dx < -1.0 { dz_dx = -1.0; }
+					if dz_dx >  1.0 { dz_dx = 1.0; }
+					dz_dx = dz_dx * 127.5 + 127.5;
+					dz_dx = 0.0;
+					
+					let mut dz_dy = depth_equation.dz_dy * d_scale;
+					if dz_dy < -1.0 { dz_dy = -1.0; }
+					if dz_dy >  1.0 { dz_dy = 1.0; }
+					dz_dy = dz_dy * 127.5 + 127.5;
+					dz_dy = 0.0;
+	
+					self.color_buffer[pix_address] = Color32::from_rgb(dz_dx as u8, dz_dy as u8, brightness as u8);
+					//self.color_buffer[pix_address] = color;
 					self.depth_buffer[pix_address] = z;
 				}
 

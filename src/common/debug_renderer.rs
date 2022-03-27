@@ -38,7 +38,7 @@ fn draw_background(pixels: &mut [Color32])
 {
 	for pixel in pixels.iter_mut()
 	{
-		*pixel = Color32::from_rgb(16, 8, 4);
+		*pixel = Color32::from_rgb(32, 16, 8);
 	}
 }
 
@@ -54,8 +54,9 @@ fn draw_map(
 {
 	let mut rasterizer = DebugRasterizer::new(pixels, surface_info);
 
-	let fixed_scale = FIXED16_ONE as f32;
-	let mat = Mat4f::from_nonuniform_scale(fixed_scale, fixed_scale, 1.0) * view_matrix;
+	//let fixed_scale = FIXED16_ONE as f32;
+	//let mat = Mat4f::from_nonuniform_scale(fixed_scale, fixed_scale, 1.0) * view_matrix;
+	let mat = view_matrix;
 
 	if draw_options.draw_raw_map
 	{
@@ -207,7 +208,8 @@ fn draw_polygon(
 		return;
 	}
 	
-	let plane_transformed = transform_matrix.transpose() * polygon.plane.vec.extend(-polygon.plane.dist);
+	let mut plane_transformed = transform_matrix.transpose().invert().unwrap() * polygon.plane.vec.extend(-polygon.plane.dist);
+	
 	if plane_transformed.z == 0.0
 	{
 		return;
@@ -216,6 +218,10 @@ fn draw_polygon(
 	let depth_equation = 
 	DepthEquation
 	{
+		//dz_dx : -plane_transformed.x / plane_transformed.z / plane_transformed.w,
+		//dz_dy : -plane_transformed.y / plane_transformed.z / plane_transformed.w,
+		//k: -plane_transformed.z / plane_transformed.w ,
+		
 		dz_dx : -plane_transformed.x / plane_transformed.z,
 		dz_dy : -plane_transformed.y / plane_transformed.z,
 		k: -plane_transformed.w / plane_transformed.z,
@@ -249,17 +255,17 @@ fn draw_basis(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f)
 	let basis_lines = [
 		(
 			Vec3f::new(0.0, 0.0, 0.0),
-			Vec3f::new(1.0, 0.0, 0.0),
+			Vec3f::new(64.0, 0.0, 0.0),
 			Color32::from_rgb(255, 0, 0),
 		),
 		(
 			Vec3f::new(0.0, 0.0, 0.0),
-			Vec3f::new(0.0, 1.0, 0.0),
+			Vec3f::new(0.0, 64.0, 0.0),
 			Color32::from_rgb(0, 255, 0),
 		),
 		(
 			Vec3f::new(0.0, 0.0, 0.0),
-			Vec3f::new(0.0, 0.0, 1.0),
+			Vec3f::new(0.0, 0.0, 64.0),
 			Color32::from_rgb(0, 0, 255),
 		),
 	];
@@ -337,9 +343,9 @@ fn draw_triangle(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, ver
 	{
 		return;
 	}
-	let v0 = v0.truncate() / v0.w;
-	let v1 = v1.truncate() / v1.w;
-	let v2 = v2.truncate() / v2.w;
+	let v0 = v0.truncate() / v0.w * fixed_scale;
+	let v1 = v1.truncate() / v1.w * fixed_scale;
+	let v2 = v2.truncate() / v2.w * fixed_scale;
 
 	if v0.x < 0.0 ||
 		v0.x > width ||
