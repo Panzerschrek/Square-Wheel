@@ -83,7 +83,12 @@ fn draw_map(
 	{
 		if let Some(map_bsp_non_opt) = map_bsp
 		{
-			draw_map_bsp_r(&mut rasterizer, &mat, map_bsp_non_opt);
+			draw_map_bsp_r(
+				&mut rasterizer,
+				&mat,
+				draw_options.draw_polygon_normals,
+				map_bsp_non_opt,
+			);
 		}
 	}
 
@@ -132,28 +137,7 @@ fn draw_map_polygonized(
 				continue;
 			}
 			let color = get_pseudo_random_color(polygon_number);
-
-			for i in 0 .. polygon.vertices.len() - 2
-			{
-				let vertices = [polygon.vertices[0], polygon.vertices[i + 1], polygon.vertices[i + 2]];
-				draw_triangle(rasterizer, &transform_matrix, &vertices, color);
-			}
-
-			if draw_polygon_normals
-			{
-				let mut vertices_sum = Vec3f::zero();
-				for v in &polygon.vertices
-				{
-					vertices_sum += *v;
-				}
-				let center = vertices_sum / (polygon.vertices.len() as f32);
-				let line = (
-					center,
-					center + polygon.plane.vec * (16.0 / polygon.plane.vec.magnitude()),
-					color.get_inverted(),
-				);
-				draw_line(rasterizer, &transform_matrix, &line);
-			}
+			draw_polygon(rasterizer, transform_matrix, polygon, color, draw_polygon_normals);
 		}
 		if draw_only_first_entity
 		{
@@ -162,7 +146,12 @@ fn draw_map_polygonized(
 	}
 }
 
-fn draw_map_bsp_r(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, bsp_node: &bsp_builder::BSPNodeChild)
+fn draw_map_bsp_r(
+	rasterizer: &mut DebugRasterizer,
+	transform_matrix: &Mat4f,
+	draw_polygon_normals: bool,
+	bsp_node: &bsp_builder::BSPNodeChild,
+)
 {
 	match bsp_node
 	{
@@ -170,33 +159,65 @@ fn draw_map_bsp_r(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, bs
 		{
 			for child in &node.children
 			{
-				draw_map_bsp_r(rasterizer, transform_matrix, child);
+				draw_map_bsp_r(rasterizer, transform_matrix, draw_polygon_normals, child);
 			}
 		},
 		bsp_builder::BSPNodeChild::LeafChild(leaf) =>
 		{
-			draw_map_bsp_leaf(rasterizer, transform_matrix, leaf);
+			draw_map_bsp_leaf(rasterizer, transform_matrix, draw_polygon_normals, leaf);
 		},
 	}
 }
 
-fn draw_map_bsp_leaf(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, bsp_leaf: &bsp_builder::BSPLeaf)
+fn draw_map_bsp_leaf(
+	rasterizer: &mut DebugRasterizer,
+	transform_matrix: &Mat4f,
+	draw_polygon_normals: bool,
+	bsp_leaf: &bsp_builder::BSPLeaf,
+)
 {
 	let leaf_ptr_as_int = bsp_leaf as *const bsp_builder::BSPLeaf as usize;
 	let color = get_pseudo_random_color(leaf_ptr_as_int / std::mem::size_of::<bsp_builder::BSPLeaf>());
 
 	for polygon in &bsp_leaf.polygons
 	{
-		if polygon.vertices.len() < 3
-		{
-			continue;
-		}
+		draw_polygon(rasterizer, transform_matrix, polygon, color, draw_polygon_normals);
+	}
+}
 
-		for i in 0 .. polygon.vertices.len() - 2
+fn draw_polygon(
+	rasterizer: &mut DebugRasterizer,
+	transform_matrix: &Mat4f,
+	polygon: &map_polygonizer::Polygon,
+	color: Color32,
+	draw_normal: bool,
+)
+{
+	if polygon.vertices.len() < 3
+	{
+		return;
+	}
+
+	for i in 0 .. polygon.vertices.len() - 2
+	{
+		let vertices = [polygon.vertices[0], polygon.vertices[i + 1], polygon.vertices[i + 2]];
+		draw_triangle(rasterizer, &transform_matrix, &vertices, color);
+	}
+
+	if draw_normal
+	{
+		let mut vertices_sum = Vec3f::zero();
+		for v in &polygon.vertices
 		{
-			let vertices = [polygon.vertices[0], polygon.vertices[i + 1], polygon.vertices[i + 2]];
-			draw_triangle(rasterizer, &transform_matrix, &vertices, color);
+			vertices_sum += *v;
 		}
+		let center = vertices_sum / (polygon.vertices.len() as f32);
+		let line = (
+			center,
+			center + polygon.plane.vec * (16.0 / polygon.plane.vec.magnitude()),
+			color.get_inverted(),
+		);
+		draw_line(rasterizer, &transform_matrix, &line);
 	}
 }
 
