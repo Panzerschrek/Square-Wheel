@@ -24,9 +24,14 @@ fn main()
 		let bsp_tree = bsp_builder::build_leaf_bsp_tree(&map_polygonized[0]);
 		let mut stats = BSPStats::default();
 		calculate_bsp_tree_stats_r(&bsp_tree, 0, &mut stats);
-		stats.sum_leaf_depth /= stats.num_leafs;
+		stats.average_depth /= stats.num_leafs as f32;
 		println!("Initial polygons: {}", map_polygonized[0].polygons.len());
-		println!("BSP Tree stats: {:?}", stats);
+		println!(
+			"BSP Tree stats: {:?}, average polygons in leaf: {}, average vertices in polygon: {}",
+			stats,
+			(stats.num_polygons as f32) / (stats.num_leafs as f32),
+			(stats.num_polygon_vertices as f32) / (stats.num_polygons as f32)
+		);
 	}
 	else
 	{
@@ -41,9 +46,11 @@ struct BSPStats
 	num_leafs: usize,
 	num_polygons: usize,
 	num_polygon_vertices: usize,
+	min_polygons_in_leaf: usize,
+	max_polygons_in_leaf: usize,
 	min_depth: usize,
 	max_depth: usize,
-	sum_leaf_depth: usize,
+	average_depth: f32,
 }
 
 fn calculate_bsp_tree_stats_r(node_child: &bsp_builder::BSPNodeChild, depth: usize, stats: &mut BSPStats)
@@ -60,6 +67,8 @@ fn calculate_bsp_tree_stats_r(node_child: &bsp_builder::BSPNodeChild, depth: usi
 		},
 		bsp_builder::BSPNodeChild::LeafChild(leaf) =>
 		{
+			stats.num_leafs += 1;
+
 			if stats.min_depth == 0
 			{
 				stats.min_depth = depth;
@@ -69,9 +78,18 @@ fn calculate_bsp_tree_stats_r(node_child: &bsp_builder::BSPNodeChild, depth: usi
 				stats.min_depth = std::cmp::min(stats.min_depth, depth);
 			}
 			stats.max_depth = std::cmp::max(stats.max_depth, depth);
-			stats.sum_leaf_depth += depth;
+			stats.average_depth += depth as f32;
 
-			stats.num_leafs += 1;
+			if stats.min_polygons_in_leaf == 0
+			{
+				stats.min_polygons_in_leaf = std::cmp::max(1, leaf.polygons.len());
+			}
+			else
+			{
+				stats.min_polygons_in_leaf = std::cmp::min(stats.min_polygons_in_leaf, leaf.polygons.len());
+			}
+			stats.max_polygons_in_leaf = std::cmp::max(stats.max_polygons_in_leaf, leaf.polygons.len());
+
 			stats.num_polygons += leaf.polygons.len();
 			for polygon in &leaf.polygons
 			{
