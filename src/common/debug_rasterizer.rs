@@ -268,13 +268,13 @@ impl<'a> DebugRasterizer<'a>
 				let pix_address = (x_int + y_int * self.row_size) as usize;
 				if z <= self.depth_buffer[pix_address]
 				{
-					let inv_z = 1.0 - z / 64.0;
+					let inv_z = 0.001 / z;
 					let mut brightness = 255.0 * inv_z;
 					if brightness < 0.0 { brightness = 0.0; }
 					if brightness > 255.0 { brightness= 255.0; }
 					//brightness = 0.0;
 					
-					let d_scale = 65536.0;
+					let d_scale = 4.0;
 					
 					let mut dz_dx = depth_equation.dz_dx * d_scale;
 					if dz_dx < -1.0 { dz_dx = -1.0; }

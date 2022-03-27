@@ -22,7 +22,7 @@ impl SystemWindow
 		let mut window = context
 			.video()
 			.unwrap()
-			.window("Square Wheel", 800, 600)
+			.window("Square Wheel", 800, 800)
 			.resizable()
 			.position_centered()
 			.build()

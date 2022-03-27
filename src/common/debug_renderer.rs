@@ -32,6 +32,8 @@ pub fn draw_frame(
 		map_polygonized,
 		map_bsp,
 	);
+	
+	pixels[ surface_info.width / 2 + surface_info.height / 2 * surface_info.pitch ] = Color32::from_rgb(255, 255, 255);
 }
 
 fn draw_background(pixels: &mut [Color32])
@@ -215,17 +217,13 @@ fn draw_polygon(
 		return;
 	}
 	
-	let depth_equation = 
-	DepthEquation
-	{
-		//dz_dx : -plane_transformed.x / plane_transformed.z / plane_transformed.w,
-		//dz_dy : -plane_transformed.y / plane_transformed.z / plane_transformed.w,
-		//k: -plane_transformed.z / plane_transformed.w ,
-		
-		dz_dx : -plane_transformed.x / plane_transformed.z,
-		dz_dy : -plane_transformed.y / plane_transformed.z,
-		k: -plane_transformed.w / plane_transformed.z,
+	let mut depth_equation = 
+	DepthEquation{
+		dz_dx : -plane_transformed.x  / plane_transformed.w / (rasterizer.get_width() as f32 * 0.5),
+		dz_dy : -plane_transformed.y  / plane_transformed.w / (rasterizer.get_height() as f32 * 0.5),
+		k: -plane_transformed.z / plane_transformed.w,
 	};
+	depth_equation.k -= depth_equation.dz_dx * (rasterizer.get_width() as f32 * 0.5) + depth_equation.dz_dy * (rasterizer.get_height() as f32 * 0.5);
 
 	for i in 0 .. polygon.vertices.len() - 2
 	{
@@ -332,33 +330,36 @@ fn draw_triangle(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, ver
 {
 	let fixed_scale = FIXED16_ONE as f32;
 	let width = (rasterizer.get_width() as f32) * fixed_scale;
-	let height = (rasterizer.get_width() as f32) * fixed_scale;
+	let height = (rasterizer.get_height() as f32) * fixed_scale;
 
 	let v0 = transform_matrix * vertices[0].extend(1.0);
 	let v1 = transform_matrix * vertices[1].extend(1.0);
 	let v2 = transform_matrix * vertices[2].extend(1.0);
 
 	// TODO - perform proper clipping
-	if v0.w <= 0.1 || v1.w <= 0.1 || v2.w <= 0.1
+	if v0.z <= 0.1 || v1.z <= 0.1 || v2.z <= 0.1
 	{
 		return;
 	}
-	let v0 = v0.truncate() / v0.w * fixed_scale;
-	let v1 = v1.truncate() / v1.w * fixed_scale;
-	let v2 = v2.truncate() / v2.w * fixed_scale;
+	let mut v0 = v0.truncate() / v0.z * fixed_scale;
+	let mut v1 = v1.truncate() / v1.z * fixed_scale;
+	let mut v2 = v2.truncate() / v2.z * fixed_scale;
+	
+	v0.x = v0.x * 0.5 * (rasterizer.get_width() as f32) + width * 0.5;
+	v0.y = v0.y * 0.5 * (rasterizer.get_height() as f32) + height * 0.5;
 
-	if v0.x < 0.0 ||
-		v0.x > width ||
-		v0.y < 0.0 ||
-		v0.y > height ||
-		v1.x < 0.0 ||
-		v1.x > width ||
-		v1.y < 0.0 ||
-		v1.y > height ||
-		v2.x < 0.0 ||
-		v2.x > width ||
-		v2.y < 0.0 ||
-		v2.x > height
+	v1.x = v1.x * 0.5 * (rasterizer.get_width() as f32) + width * 0.5;
+	v1.y = v1.y * 0.5 * (rasterizer.get_height() as f32) + height * 0.5;
+	
+	v2.x = v2.x * 0.5 * (rasterizer.get_width() as f32) + width * 0.5;
+	v2.y = v2.y * 0.5 * (rasterizer.get_height() as f32) + height * 0.5;
+
+	if v0.x < 0.0 || v0.x > width ||
+		v0.y < 0.0 || v0.y > height ||
+		v1.x < 0.0 || v1.x > width ||
+		v1.y < 0.0 || v1.y > height ||
+		v2.x < 0.0 || v2.x > width ||
+		v2.y < 0.0 || v2.y > height
 	{
 		return;
 	}
