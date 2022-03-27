@@ -1,5 +1,6 @@
 use super::{
 	bsp_builder, color::*, debug_rasterizer::*, fixed_math::*, map_file, map_polygonizer, math_types::*, system_window,
+	camera_controller::CameraMatrices,
 };
 
 #[derive(Default)]
@@ -16,7 +17,7 @@ pub fn draw_frame(
 	pixels: &mut [Color32],
 	surface_info: &system_window::SurfaceInfo,
 	draw_options: &DrawOptions,
-	view_matrix: &Mat4f,
+	camera_matrices: &CameraMatrices,
 	map: Option<&map_file::MapFileParsed>,
 	map_polygonized: Option<&map_polygonizer::MapPolygonized>,
 	map_bsp: Option<&bsp_builder::BSPTree>,
@@ -27,7 +28,7 @@ pub fn draw_frame(
 		pixels,
 		surface_info,
 		draw_options,
-		view_matrix,
+		camera_matrices,
 		map,
 		map_polygonized,
 		map_bsp,
@@ -48,7 +49,7 @@ fn draw_map(
 	pixels: &mut [Color32],
 	surface_info: &system_window::SurfaceInfo,
 	draw_options: &DrawOptions,
-	view_matrix: &Mat4f,
+	camera_matrices: &CameraMatrices,
 	map: Option<&map_file::MapFileParsed>,
 	map_polygonized: Option<&map_polygonizer::MapPolygonized>,
 	map_bsp: Option<&bsp_builder::BSPTree>,
@@ -56,13 +57,12 @@ fn draw_map(
 {
 	let mut rasterizer = DebugRasterizer::new(pixels, surface_info);
 
-	let mat = view_matrix;
 
 	if draw_options.draw_raw_map
 	{
 		if let Some(map_non_opt) = map
 		{
-			draw_map_brushes(&mut rasterizer, &mat, map_non_opt, draw_options.draw_only_first_entity);
+			draw_map_brushes(&mut rasterizer, camera_matrices, map_non_opt, draw_options.draw_only_first_entity);
 		}
 	}
 
@@ -72,7 +72,7 @@ fn draw_map(
 		{
 			draw_map_polygonized(
 				&mut rasterizer,
-				&mat,
+				camera_matrices,
 				map_polygonized_non_opt,
 				draw_options.draw_only_first_entity,
 				draw_options.draw_polygon_normals,
@@ -86,19 +86,19 @@ fn draw_map(
 		{
 			draw_map_bsp_r(
 				&mut rasterizer,
-				&mat,
+				camera_matrices,
 				draw_options.draw_polygon_normals,
 				map_bsp_non_opt,
 			);
 		}
 	}
 
-	draw_basis(&mut rasterizer, &mat);
+	draw_basis(&mut rasterizer, &camera_matrices.view_matrix);
 }
 
 fn draw_map_brushes(
 	rasterizer: &mut DebugRasterizer,
-	transform_matrix: &Mat4f,
+	camera_matrices: &CameraMatrices,
 	map: &map_file::MapFileParsed,
 	draw_only_first_entity: bool,
 )
@@ -120,7 +120,7 @@ fn draw_map_brushes(
 	
 			for brush_plane in brush
 			{
-				draw_triangle(rasterizer, &transform_matrix, &brush_plane.vertices, &depth_equation, color);
+				draw_triangle(rasterizer, &camera_matrices.view_matrix, &brush_plane.vertices, &depth_equation, color);
 			}
 		}
 		if draw_only_first_entity
@@ -132,7 +132,7 @@ fn draw_map_brushes(
 
 fn draw_map_polygonized(
 	rasterizer: &mut DebugRasterizer,
-	transform_matrix: &Mat4f,
+	camera_matrices: &CameraMatrices,
 	map: &map_polygonizer::MapPolygonized,
 	draw_only_first_entity: bool,
 	draw_polygon_normals: bool,
@@ -147,7 +147,7 @@ fn draw_map_polygonized(
 				continue;
 			}
 			let color = get_pseudo_random_color(polygon_number);
-			draw_polygon(rasterizer, transform_matrix, polygon, color, draw_polygon_normals);
+			draw_polygon(rasterizer, camera_matrices, polygon, color, draw_polygon_normals);
 		}
 		if draw_only_first_entity
 		{
@@ -158,7 +158,7 @@ fn draw_map_polygonized(
 
 fn draw_map_bsp_r(
 	rasterizer: &mut DebugRasterizer,
-	transform_matrix: &Mat4f,
+	camera_matrices: &CameraMatrices,
 	draw_polygon_normals: bool,
 	bsp_node: &bsp_builder::BSPNodeChild,
 )
@@ -169,19 +169,19 @@ fn draw_map_bsp_r(
 		{
 			for child in &node.children
 			{
-				draw_map_bsp_r(rasterizer, transform_matrix, draw_polygon_normals, child);
+				draw_map_bsp_r(rasterizer, camera_matrices, draw_polygon_normals, child);
 			}
 		},
 		bsp_builder::BSPNodeChild::LeafChild(leaf) =>
 		{
-			draw_map_bsp_leaf(rasterizer, transform_matrix, draw_polygon_normals, leaf);
+			draw_map_bsp_leaf(rasterizer, camera_matrices, draw_polygon_normals, leaf);
 		},
 	}
 }
 
 fn draw_map_bsp_leaf(
 	rasterizer: &mut DebugRasterizer,
-	transform_matrix: &Mat4f,
+	camera_matrices: &CameraMatrices,
 	draw_polygon_normals: bool,
 	bsp_leaf: &bsp_builder::BSPLeaf,
 )
@@ -191,13 +191,13 @@ fn draw_map_bsp_leaf(
 
 	for polygon in &bsp_leaf.polygons
 	{
-		draw_polygon(rasterizer, transform_matrix, polygon, color, draw_polygon_normals);
+		draw_polygon(rasterizer, camera_matrices, polygon, color, draw_polygon_normals);
 	}
 }
 
 fn draw_polygon(
 	rasterizer: &mut DebugRasterizer,
-	transform_matrix: &Mat4f,
+	camera_matrices: &CameraMatrices,
 	polygon: &map_polygonizer::Polygon,
 	color: Color32,
 	draw_normal: bool,
@@ -208,8 +208,8 @@ fn draw_polygon(
 		return;
 	}
 	
-	let mut plane_transformed = transform_matrix.transpose().invert().unwrap() * polygon.plane.vec.extend(-polygon.plane.dist);
-	if plane_transformed.z == 0.0
+	let plane_transformed = camera_matrices.planes_matrix * polygon.plane.vec.extend(-polygon.plane.dist);
+	if plane_transformed.w == 0.0
 	{
 		return;
 	}
@@ -226,7 +226,7 @@ fn draw_polygon(
 	for i in 0 .. polygon.vertices.len() - 2
 	{
 		let vertices = [polygon.vertices[0], polygon.vertices[i + 1], polygon.vertices[i + 2]];
-		draw_triangle(rasterizer, &transform_matrix, &vertices, &depth_equation, color);
+		draw_triangle(rasterizer, &camera_matrices.view_matrix, &vertices, &depth_equation, color);
 	}
 
 	if draw_normal
@@ -242,7 +242,7 @@ fn draw_polygon(
 			center + polygon.plane.vec * (16.0 / polygon.plane.vec.magnitude()),
 			color.get_inverted(),
 		);
-		draw_line(rasterizer, &transform_matrix, &line);
+		draw_line(rasterizer, &camera_matrices.view_matrix, &line);
 	}
 }
 
@@ -335,22 +335,13 @@ fn draw_triangle(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, ver
 	let v2 = transform_matrix * vertices[2].extend(1.0);
 
 	// TODO - perform proper clipping
-	if v0.z <= 0.1 || v1.z <= 0.1 || v2.z <= 0.1
+	if v0.w <= 0.1 || v1.w <= 0.1 || v2.w <= 0.1
 	{
 		return;
 	}
-	let mut v0 = v0.truncate() / v0.z;
-	let mut v1 = v1.truncate() / v1.z;
-	let mut v2 = v2.truncate() / v2.z;
-	
-	v0.x = (v0.x + width * 0.5);
-	v0.y = (v0.y + height * 0.5);
-
-	v1.x = (v1.x + width * 0.5);
-	v1.y = (v1.y + height * 0.5);
-	
-	v2.x = (v2.x + width * 0.5);
-	v2.y = (v2.y + height * 0.5);
+	let v0 = v0.truncate() / v0.w;
+	let v1 = v1.truncate() / v1.w;
+	let v2 = v2.truncate() / v2.w;
 
 	if v0.x < 0.0 || v0.x > width ||
 		v0.y < 0.0 || v0.y > height ||
