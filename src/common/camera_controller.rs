@@ -130,6 +130,6 @@ impl CameraController
 
 		// Perform transformations in reverse order in order to perform transformation via "matrix * vector".
 		// TODO - perform calculations in "double" for better pericision?
-		/*shift_to_viewport_center * resize_to_viewport * */ perspective * basis_change * rotate_x * rotate_z * translate
+		/*shift_to_viewport_center */ resize_to_viewport * perspective * basis_change * rotate_x * rotate_z * translate
 	}
 }

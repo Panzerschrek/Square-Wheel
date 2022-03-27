@@ -56,8 +56,6 @@ fn draw_map(
 {
 	let mut rasterizer = DebugRasterizer::new(pixels, surface_info);
 
-	//let fixed_scale = FIXED16_ONE as f32;
-	//let mat = Mat4f::from_nonuniform_scale(fixed_scale, fixed_scale, 1.0) * view_matrix;
 	let mat = view_matrix;
 
 	if draw_options.draw_raw_map
@@ -215,16 +213,14 @@ fn draw_polygon(
 	{
 		return;
 	}
-	
-	let half_width  = rasterizer.get_width () as f32 * 0.5;
-	let half_height = rasterizer.get_height() as f32 * 0.5;
-	let dz_dx = plane_transformed.x / ( plane_transformed.w * half_width  );
-	let dz_dy = plane_transformed.y / ( plane_transformed.w * half_height );
+
+	let dz_dx = plane_transformed.x / plane_transformed.w;
+	let dz_dy = plane_transformed.y / plane_transformed.w;
 	let depth_equation = 
 	DepthEquation{
 		dz_dx,
 		dz_dy,
-		k: plane_transformed.z / plane_transformed.w - dz_dx * half_width - dz_dy * half_height,
+		k: plane_transformed.z / plane_transformed.w - dz_dx * (rasterizer.get_width() as f32 * 0.5) - dz_dy * (rasterizer.get_height() as f32 * 0.5),
 	};
 
 	for i in 0 .. polygon.vertices.len() - 2
@@ -330,9 +326,9 @@ fn draw_line(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, line: &
 
 fn draw_triangle(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, vertices: &[Vec3f; 3], depth_equation : &DepthEquation, color: Color32)
 {
-	let fixed_scale = FIXED16_ONE as f32;
-	let width = (rasterizer.get_width() as f32) * fixed_scale;
-	let height = (rasterizer.get_height() as f32) * fixed_scale;
+	// TODO - perform scaling to "Fixed16" via prescaled matrix.
+	let width = rasterizer.get_width() as f32;
+	let height = rasterizer.get_height() as f32;
 
 	let v0 = transform_matrix * vertices[0].extend(1.0);
 	let v1 = transform_matrix * vertices[1].extend(1.0);
@@ -343,18 +339,18 @@ fn draw_triangle(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, ver
 	{
 		return;
 	}
-	let mut v0 = v0.truncate() / v0.z * fixed_scale;
-	let mut v1 = v1.truncate() / v1.z * fixed_scale;
-	let mut v2 = v2.truncate() / v2.z * fixed_scale;
+	let mut v0 = v0.truncate() / v0.z;
+	let mut v1 = v1.truncate() / v1.z;
+	let mut v2 = v2.truncate() / v2.z;
 	
-	v0.x = v0.x * 0.5 * (rasterizer.get_width() as f32) + width * 0.5;
-	v0.y = v0.y * 0.5 * (rasterizer.get_height() as f32) + height * 0.5;
+	v0.x = (v0.x + width * 0.5);
+	v0.y = (v0.y + height * 0.5);
 
-	v1.x = v1.x * 0.5 * (rasterizer.get_width() as f32) + width * 0.5;
-	v1.y = v1.y * 0.5 * (rasterizer.get_height() as f32) + height * 0.5;
+	v1.x = (v1.x + width * 0.5);
+	v1.y = (v1.y + height * 0.5);
 	
-	v2.x = v2.x * 0.5 * (rasterizer.get_width() as f32) + width * 0.5;
-	v2.y = v2.y * 0.5 * (rasterizer.get_height() as f32) + height * 0.5;
+	v2.x = (v2.x + width * 0.5);
+	v2.y = (v2.y + height * 0.5);
 
 	if v0.x < 0.0 || v0.x > width ||
 		v0.y < 0.0 || v0.y > height ||
@@ -374,18 +370,18 @@ fn draw_triangle(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, ver
 	rasterizer.fill_triangle(
 		&[
 			PointProjected {
-				x: v0.x as Fixed16,
-				y: v0.y as Fixed16,
+				x: f32_to_fixed16(v0.x),
+				y: f32_to_fixed16(v0.y),
 				z: v0.z,
 			},
 			PointProjected {
-				x: v1.x as Fixed16,
-				y: v1.y as Fixed16,
+				x: f32_to_fixed16(v1.x),
+				y: f32_to_fixed16(v1.y),
 				z: v1.z,
 			},
 			PointProjected {
-				x: v2.x as Fixed16,
-				y: v2.y as Fixed16,
+				x: f32_to_fixed16(v2.x),
+				y: f32_to_fixed16(v2.y),
 				z: v2.z,
 			},
 		],
