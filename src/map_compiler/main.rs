@@ -23,7 +23,8 @@ fn main()
 		let map_polygonized = map_polygonizer::polygonize_map(&map_file_parsed);
 		let bsp_tree = bsp_builder::build_leaf_bsp_tree(&map_polygonized[0]);
 		let mut stats = BSPStats::default();
-		calculate_bsp_tree_stats_r(&bsp_tree, &mut stats);
+		calculate_bsp_tree_stats_r(&bsp_tree, 0, &mut stats);
+		stats.sum_leaf_depth /= stats.num_leafs;
 		println!("Initial polygons: {}", map_polygonized[0].polygons.len());
 		println!("BSP Tree stats: {:?}", stats);
 	}
@@ -40,9 +41,12 @@ struct BSPStats
 	num_leafs: usize,
 	num_polygons: usize,
 	num_polygon_vertices: usize,
+	min_depth: usize,
+	max_depth: usize,
+	sum_leaf_depth: usize,
 }
 
-fn calculate_bsp_tree_stats_r(node_child: &bsp_builder::BSPNodeChild, stats: &mut BSPStats)
+fn calculate_bsp_tree_stats_r(node_child: &bsp_builder::BSPNodeChild, depth: usize, stats: &mut BSPStats)
 {
 	match node_child
 	{
@@ -51,11 +55,22 @@ fn calculate_bsp_tree_stats_r(node_child: &bsp_builder::BSPNodeChild, stats: &mu
 			stats.num_nodes += 1;
 			for child in &node.children
 			{
-				calculate_bsp_tree_stats_r(child, stats);
+				calculate_bsp_tree_stats_r(child, depth + 1, stats);
 			}
 		},
 		bsp_builder::BSPNodeChild::LeafChild(leaf) =>
 		{
+			if stats.min_depth == 0
+			{
+				stats.min_depth = depth;
+			}
+			else
+			{
+				stats.min_depth = std::cmp::min(stats.min_depth, depth);
+			}
+			stats.max_depth = std::cmp::max(stats.max_depth, depth);
+			stats.sum_leaf_depth += depth;
+
 			stats.num_leafs += 1;
 			stats.num_polygons += leaf.polygons.len();
 			for polygon in &leaf.polygons
