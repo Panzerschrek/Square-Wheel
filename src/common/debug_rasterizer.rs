@@ -107,7 +107,7 @@ impl<'a> DebugRasterizer<'a>
 		}
 	}
 
-	pub fn fill_triangle(&mut self, vertices: &[PointProjected; 3], color: Color32)
+	pub fn fill_triangle(&mut self, vertices: &[PointProjected; 3], depth_equation: &DepthEquation, color: Color32)
 	{
 		// TODO - process thin triangles specially.
 
@@ -145,9 +145,6 @@ impl<'a> DebugRasterizer<'a>
 		let lower_part_dy = vertices[middle_index].y - vertices[lower_index].y;
 		let upper_part_dy = vertices[upper_index].y - vertices[middle_index].y;
 
-		let long_edge_dz_dy = (vertices[upper_index].z - vertices[lower_index].z) / fixed16_to_f32(long_edge_dy);
-		let long_edge_z_in_middle = vertices[lower_index].z +
-			long_edge_dz_dy * fixed16_to_f32(vertices[middle_index].y - vertices[lower_index].y);
 
 		if long_edge_x_in_middle >= vertices[middle_index].x
 		{
@@ -161,8 +158,6 @@ impl<'a> DebugRasterizer<'a>
 			//          _ \
 			//            _\
 
-			let dz_dx = (long_edge_z_in_middle - vertices[middle_index].z) /
-				fixed16_to_f32(long_edge_x_in_middle - vertices[middle_index].x);
 			if lower_part_dy >= FIXED16_HALF
 			{
 				self.fill_polygon_part(
@@ -171,16 +166,12 @@ impl<'a> DebugRasterizer<'a>
 					PolygonSide {
 						x_start: vertices[lower_index].x,
 						dx_dy: fixed16_div(vertices[middle_index].x - vertices[lower_index].x, lower_part_dy),
-						z_start: vertices[lower_index].z,
-						dz_dy: (vertices[middle_index].z - vertices[lower_index].z) / fixed16_to_f32(lower_part_dy),
 					},
 					PolygonSide {
 						x_start: vertices[lower_index].x,
 						dx_dy: long_edge_dx_dy,
-						z_start: vertices[lower_index].z,
-						dz_dy: long_edge_dz_dy,
 					},
-					dz_dx,
+					depth_equation,
 					color,
 				);
 			}
@@ -192,16 +183,12 @@ impl<'a> DebugRasterizer<'a>
 					PolygonSide {
 						x_start: vertices[middle_index].x,
 						dx_dy: fixed16_div(vertices[upper_index].x - vertices[middle_index].x, upper_part_dy),
-						z_start: vertices[middle_index].z,
-						dz_dy: (vertices[upper_index].z - vertices[middle_index].z) / fixed16_to_f32(upper_part_dy),
 					},
 					PolygonSide {
 						x_start: long_edge_x_in_middle,
 						dx_dy: long_edge_dx_dy,
-						z_start: long_edge_z_in_middle,
-						dz_dy: long_edge_dz_dy,
 					},
-					dz_dx,
+					depth_equation,
 					color,
 				);
 			}
@@ -218,8 +205,6 @@ impl<'a> DebugRasterizer<'a>
 			//  / _
 			// /_
 
-			let dz_dx = (vertices[middle_index].z - long_edge_z_in_middle) /
-				fixed16_to_f32(vertices[middle_index].x - long_edge_x_in_middle);
 			if lower_part_dy >= FIXED16_HALF
 			{
 				self.fill_polygon_part(
@@ -228,16 +213,12 @@ impl<'a> DebugRasterizer<'a>
 					PolygonSide {
 						x_start: vertices[lower_index].x,
 						dx_dy: long_edge_dx_dy,
-						z_start: vertices[lower_index].z,
-						dz_dy: long_edge_dz_dy,
 					},
 					PolygonSide {
 						x_start: vertices[lower_index].x,
 						dx_dy: fixed16_div(vertices[middle_index].x - vertices[lower_index].x, lower_part_dy),
-						z_start: vertices[lower_index].z,
-						dz_dy: (vertices[middle_index].z - vertices[lower_index].z) / fixed16_to_f32(lower_part_dy),
 					},
-					dz_dx,
+					depth_equation,
 					color,
 				);
 			}
@@ -249,16 +230,12 @@ impl<'a> DebugRasterizer<'a>
 					PolygonSide {
 						x_start: long_edge_x_in_middle,
 						dx_dy: long_edge_dx_dy,
-						z_start: long_edge_z_in_middle,
-						dz_dy: long_edge_dz_dy,
 					},
 					PolygonSide {
 						x_start: vertices[middle_index].x,
 						dx_dy: fixed16_div(vertices[upper_index].x - vertices[middle_index].x, upper_part_dy),
-						z_start: vertices[middle_index].z,
-						dz_dy: (vertices[upper_index].z - vertices[middle_index].z) / fixed16_to_f32(upper_part_dy),
 					},
-					dz_dx,
+					depth_equation,
 					color,
 				);
 			}
@@ -271,7 +248,7 @@ impl<'a> DebugRasterizer<'a>
 		y_end: Fixed16,
 		left_side: PolygonSide,
 		right_side: PolygonSide,
-		dz_dx: f32,
+		depth_equation: &DepthEquation,
 		color: Color32,
 	)
 	{
@@ -281,14 +258,11 @@ impl<'a> DebugRasterizer<'a>
 		let y_start_delta = int_to_fixed16(y_start_int) + FIXED16_HALF - y_start;
 		let mut x_left = left_side.x_start + fixed16_mul(y_start_delta, left_side.dx_dy) + FIXED16_HALF;
 		let mut x_right = right_side.x_start + fixed16_mul(y_start_delta, right_side.dx_dy) + FIXED16_HALF;
-		let mut z_left = left_side.z_start + fixed16_to_f32(y_start_delta) * left_side.dz_dy;
-		let mut _z_right = right_side.z_start + fixed16_to_f32(y_start_delta) * right_side.dz_dy;
 		for y_int in y_start_int .. y_end_int
 		{
 			let x_start_int = fixed16_floor_to_int(x_left).max(0);
 			let x_end_int = fixed16_floor_to_int(x_right).min(self.width);
-			let x_start_delta = int_to_fixed16(x_start_int) + FIXED16_ONE - x_left;
-			let mut z = z_left + fixed16_to_f32(x_start_delta) * dz_dx;
+			let mut z = (x_start_int as f32 + 0.5) * depth_equation.dz_dx + (y_int as f32 + 0.5) * depth_equation.dz_dy + depth_equation.k;
 			for x_int in x_start_int .. x_end_int
 			{
 				let pix_address = (x_int + y_int * self.row_size) as usize;
@@ -298,12 +272,11 @@ impl<'a> DebugRasterizer<'a>
 					self.depth_buffer[pix_address] = z;
 				}
 
-				z += dz_dx;
+				z += depth_equation.dz_dx;
 			}
 
 			x_left += left_side.dx_dy;
 			x_right += right_side.dx_dy;
-			z_left += left_side.dz_dy;
 		}
 	}
 }
@@ -315,10 +288,15 @@ pub struct PointProjected
 	pub z: f32,
 }
 
+pub struct DepthEquation
+{
+	pub dz_dx : f32,
+	pub dz_dy : f32,
+	pub k : f32,
+}
+
 struct PolygonSide
 {
 	x_start: Fixed16,
 	dx_dy: Fixed16,
-	z_start: f32,
-	dz_dy: f32,
 }

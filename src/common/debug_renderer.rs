@@ -108,9 +108,18 @@ fn draw_map_brushes(
 		{
 			let color = get_pseudo_random_color(brush_number);
 
+			// TODO
+			let depth_equation = 
+			DepthEquation
+			{
+				dz_dx : 0.0,
+				dz_dy : 0.0,
+				k: 0.0,
+			};
+	
 			for brush_plane in brush
 			{
-				draw_triangle(rasterizer, &transform_matrix, &brush_plane.vertices, color);
+				draw_triangle(rasterizer, &transform_matrix, &brush_plane.vertices, &depth_equation, color);
 			}
 		}
 		if draw_only_first_entity
@@ -197,11 +206,25 @@ fn draw_polygon(
 	{
 		return;
 	}
+	
+	let plane_transformed = transform_matrix.transpose() * polygon.plane.vec.extend(-polygon.plane.dist);
+	if plane_transformed.z == 0.0
+	{
+		return;
+	}
+	
+	let depth_equation = 
+	DepthEquation
+	{
+		dz_dx : -plane_transformed.x / plane_transformed.z,
+		dz_dy : -plane_transformed.y / plane_transformed.z,
+		k: -plane_transformed.w / plane_transformed.z,
+	};
 
 	for i in 0 .. polygon.vertices.len() - 2
 	{
 		let vertices = [polygon.vertices[0], polygon.vertices[i + 1], polygon.vertices[i + 2]];
-		draw_triangle(rasterizer, &transform_matrix, &vertices, color);
+		draw_triangle(rasterizer, &transform_matrix, &vertices, &depth_equation, color);
 	}
 
 	if draw_normal
@@ -299,7 +322,7 @@ fn draw_line(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, line: &
 	);
 }
 
-fn draw_triangle(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, vertices: &[Vec3f; 3], color: Color32)
+fn draw_triangle(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, vertices: &[Vec3f; 3], depth_equation : &DepthEquation, color: Color32)
 {
 	let fixed_scale = FIXED16_ONE as f32;
 	let width = (rasterizer.get_width() as f32) * fixed_scale;
@@ -357,6 +380,7 @@ fn draw_triangle(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, ver
 				z: v2.z,
 			},
 		],
+		depth_equation,
 		color,
 	);
 }
