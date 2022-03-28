@@ -214,6 +214,9 @@ fn draw_polygon(
 	{
 		return;
 	}
+	
+	let width = rasterizer.get_width() as f32;
+	let height = rasterizer.get_width() as f32;
 
 	let dz_dx = plane_transformed.x / plane_transformed.w;
 	let dz_dy = plane_transformed.y / plane_transformed.w;
@@ -221,13 +224,58 @@ fn draw_polygon(
 	DepthEquation{
 		dz_dx,
 		dz_dy,
-		k: plane_transformed.z / plane_transformed.w - dz_dx * (rasterizer.get_width() as f32 * 0.5) - dz_dy * (rasterizer.get_height() as f32 * 0.5),
+		k: plane_transformed.z / plane_transformed.w - dz_dx * (width * 0.5) - dz_dy * (height * 0.5),
 	};
+	
+	const MAX_VERTICES : usize = 128;
+	let mut vertices_projected = [ Vec3f::zero(); MAX_VERTICES ]; // TODO - avoid calling "memset"
+	for (index, vertex) in polygon.vertices.iter().enumerate()
+	{
+		let vertex_projected = camera_matrices.view_matrix * vertex.extend(1.0);
+		if vertex_projected.w < 0.1
+		{
+			return;
+		}
+		
+		let vertex_projected_div_w = vertex_projected.truncate() / vertex_projected.w;
+
+		if vertex_projected_div_w.x < 0.0 || vertex_projected_div_w.x > width ||
+			vertex_projected_div_w.y < 0.0 || vertex_projected_div_w.y > height
+		{
+			return;
+		}
+		
+		vertices_projected[index] = vertex_projected_div_w * (FIXED16_ONE as f32);
+		
+		if index == MAX_VERTICES
+		{
+			break;
+		}
+	}
 
 	for i in 0 .. polygon.vertices.len() - 2
 	{
-		let vertices = [polygon.vertices[0], polygon.vertices[i + 1], polygon.vertices[i + 2]];
-		draw_triangle(rasterizer, &camera_matrices.view_matrix, &vertices, &depth_equation, color);
+		rasterizer.fill_triangle(
+			&[
+				PointProjected {
+					x: vertices_projected[0].x as Fixed16,
+					y: vertices_projected[0].y as Fixed16,
+					z: 1.0,
+				},
+				PointProjected {
+					x: vertices_projected[i + 1].x as Fixed16,
+					y: vertices_projected[i + 1].x as Fixed16,
+					z: 1.0,
+				},
+				PointProjected {
+					x: vertices_projected[i + 2].x as Fixed16,
+					y: vertices_projected[i + 2].x as Fixed16,
+					z: 1.0,
+				},
+			],
+			&depth_equation,
+			color,
+		);
 	}
 
 	if draw_normal
