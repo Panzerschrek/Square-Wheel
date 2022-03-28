@@ -228,7 +228,7 @@ fn draw_polygon(
 	};
 	
 	const MAX_VERTICES : usize = 128;
-	let mut vertices_projected = [ Vec3f::zero(); MAX_VERTICES ]; // TODO - avoid calling "memset"
+	let mut vertices_projected = [ PointProjected{x : 0, y : 0, z : 1.0 }; MAX_VERTICES ]; // TODO - avoid calling "memset"
 	for (index, vertex) in polygon.vertices.iter().enumerate()
 	{
 		let vertex_projected = camera_matrices.view_matrix * vertex.extend(1.0);
@@ -245,7 +245,11 @@ fn draw_polygon(
 			return;
 		}
 		
-		vertices_projected[index] = vertex_projected_div_w * (FIXED16_ONE as f32);
+		vertices_projected[index] =
+			PointProjected{
+				x : f32_to_fixed16(vertex_projected_div_w.x),
+				y : f32_to_fixed16(vertex_projected_div_w.y),
+				z : 1.0 };
 		
 		if index == MAX_VERTICES
 		{
@@ -253,30 +257,7 @@ fn draw_polygon(
 		}
 	}
 
-	for i in 0 .. polygon.vertices.len() - 2
-	{
-		rasterizer.fill_triangle(
-			&[
-				PointProjected {
-					x: vertices_projected[0].x as Fixed16,
-					y: vertices_projected[0].y as Fixed16,
-					z: 1.0,
-				},
-				PointProjected {
-					x: vertices_projected[i + 1].x as Fixed16,
-					y: vertices_projected[i + 1].x as Fixed16,
-					z: 1.0,
-				},
-				PointProjected {
-					x: vertices_projected[i + 2].x as Fixed16,
-					y: vertices_projected[i + 2].x as Fixed16,
-					z: 1.0,
-				},
-			],
-			&depth_equation,
-			color,
-		);
-	}
+	rasterizer.fill_polygon(&vertices_projected[0..polygon.vertices.len()], &depth_equation, color);
 
 	if draw_normal
 	{

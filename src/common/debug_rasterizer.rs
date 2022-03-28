@@ -241,6 +241,86 @@ impl<'a> DebugRasterizer<'a>
 			}
 		}
 	}
+	
+	// Fill convex clockwise polygon.
+	pub fn fill_polygon(
+		&mut self,
+		vertices : &[PointProjected],
+		depth_equation: &DepthEquation,
+		color: Color32,
+		)
+	{
+		// Search for start vertex (with min y).
+		let mut lower_vertex_index = 0;
+		let mut min_y = vertices[0].y;
+		for (index, vertex) in vertices.iter().enumerate()
+		{
+			if vertex.y < min_y
+			{
+				min_y = vertex.y;
+				lower_vertex_index = index;
+			}
+		}
+		
+		let mut left_index = lower_vertex_index;
+		let mut right_index = lower_vertex_index;
+		let mut cur_y = min_y;
+		loop
+		{
+			let mut next_left_index = left_index + vertices.len() - 1;
+			if next_left_index >= vertices.len()
+			{
+				next_left_index -= vertices.len();
+			}
+			
+			let mut next_right_index = right_index + 1;
+			if next_right_index >= vertices.len()
+			{
+				next_right_index -= vertices.len();
+			}
+			
+			let dy_left = vertices[next_left_index].y - vertices[left_index].y;
+			let dy_right = vertices[next_right_index].y - vertices[right_index].y;
+			let next_y = std::cmp::min( vertices[next_left_index].y, vertices[next_right_index].y );
+			if dy_left > FIXED16_HALF && dy_right > FIXED16_HALF
+			{
+				let dx_dy_left = fixed16_div(vertices[next_left_index].x - vertices[left_index].x, dy_left);
+				let dx_dy_right = fixed16_div(vertices[next_right_index].x - vertices[right_index].x, dy_right);
+				self.fill_polygon_part(
+					cur_y,
+					next_y,
+					PolygonSide {
+						x_start: vertices[left_index].x + fixed16_mul(dx_dy_left, cur_y - vertices[left_index].y),
+						dx_dy: dx_dy_left,
+					},
+					PolygonSide {
+						x_start: vertices[right_index].x + fixed16_mul(dx_dy_right, cur_y - vertices[right_index].y),
+						dx_dy: dx_dy_right,
+					},
+					depth_equation,
+					color,
+				);
+			}
+			else
+			{
+				// TODO - handle thin polygon segments
+			}
+			
+			if vertices[next_right_index].y < vertices[next_left_index].y
+			{
+				right_index = next_right_index;
+			}
+			else
+			{
+				left_index = next_left_index;
+			}
+			if left_index == right_index
+			{
+				break;
+			}
+			cur_y = next_y;
+		}
+	}
 
 	fn fill_polygon_part(
 		&mut self,
@@ -273,24 +353,9 @@ impl<'a> DebugRasterizer<'a>
 					let mut brightness = 255.0 * inv_z;
 					if brightness < 0.0 { brightness = 0.0; }
 					if brightness > 255.0 { brightness= 255.0; }
-					//brightness = 0.0;
-					
-					let d_scale = 4.0;
-					
-					let mut dz_dx = depth_equation.dz_dx * d_scale;
-					if dz_dx < -1.0 { dz_dx = -1.0; }
-					if dz_dx >  1.0 { dz_dx = 1.0; }
-					dz_dx = dz_dx * 127.5 + 127.5;
-					dz_dx = 0.0;
-					
-					let mut dz_dy = depth_equation.dz_dy * d_scale;
-					if dz_dy < -1.0 { dz_dy = -1.0; }
-					if dz_dy >  1.0 { dz_dy = 1.0; }
-					dz_dy = dz_dy * 127.5 + 127.5;
-					dz_dy = 0.0;
-	
-					self.color_buffer[pix_address] = Color32::from_rgb(dz_dx as u8, dz_dy as u8, brightness as u8);
-					//self.color_buffer[pix_address] = color;
+
+					//self.color_buffer[pix_address] = Color32::from_rgb(dz_dx as u8, dz_dy as u8, brightness as u8);
+					self.color_buffer[pix_address] = color;
 					self.depth_buffer[pix_address] = z;
 				}
 
@@ -304,6 +369,7 @@ impl<'a> DebugRasterizer<'a>
 	}
 }
 
+#[derive(Copy, Clone)]
 pub struct PointProjected
 {
 	pub x: Fixed16,
