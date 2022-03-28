@@ -209,7 +209,8 @@ fn draw_polygon(
 	}
 	
 	let plane_transformed = camera_matrices.planes_matrix * polygon.plane.vec.extend(-polygon.plane.dist);
-	if plane_transformed.w == 0.0
+	// Cull back faces.
+	if plane_transformed.w <= 0.0
 	{
 		return;
 	}
