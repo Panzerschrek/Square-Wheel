@@ -216,7 +216,7 @@ fn draw_polygon(
 	}
 	
 	let width = rasterizer.get_width() as f32;
-	let height = rasterizer.get_width() as f32;
+	let height = rasterizer.get_height() as f32;
 
 	let dz_dx = plane_transformed.x / plane_transformed.w;
 	let dz_dy = plane_transformed.y / plane_transformed.w;
@@ -228,36 +228,70 @@ fn draw_polygon(
 	};
 	
 	const MAX_VERTICES : usize = 128;
-	let mut vertices_projected = [ PointProjected{x : 0, y : 0, z : 1.0 }; MAX_VERTICES ]; // TODO - avoid calling "memset"
-	for (index, vertex) in polygon.vertices.iter().enumerate()
+	let mut vertex_count = polygon.vertices.len();
+	
+	let mut vertices_transformed = [ Vec4f::zero(); MAX_VERTICES ]; // TODO - use uninitialized memory
+	for (index, vertex) in polygon.vertices.iter().enumerate().take(MAX_VERTICES)
 	{
-		let vertex_projected = camera_matrices.view_matrix * vertex.extend(1.0);
-		if vertex_projected.w < 0.1
+		vertices_transformed[index] = camera_matrices.view_matrix * vertex.extend(1.0);
+	}
+	
+	// TODO - perform Z_near clip
+	
+	// Make 2d vertices, then perform clipping in 2d space.
+	// This is needed to avoid later overflows for Fixed16 vertex coords in rasterizer. 
+	let mut vertices_2d_0 = [ Vec2f::zero(); MAX_VERTICES ]; // TODO - use uninitialized memory
+	let mut vertices_2d_1 = [ Vec2f::zero(); MAX_VERTICES ]; // TODO - use uninitialized memory
+	for (index, vertex_transformed) in vertices_transformed.iter().enumerate().take(vertex_count)
+	{
+		if vertex_transformed.w < 0.1
 		{
 			return;
 		}
-		
-		let vertex_projected_div_w = vertex_projected.truncate() / vertex_projected.w;
-
-		if vertex_projected_div_w.x < 0.0 || vertex_projected_div_w.x > width ||
-			vertex_projected_div_w.y < 0.0 || vertex_projected_div_w.y > height
-		{
-			return;
-		}
-		
-		vertices_projected[index] =
+		vertices_2d_0[index] = vertex_transformed.truncate().truncate() / vertex_transformed.w;
+	}
+	
+	// TODO - optimize this. Perform clipping, using 3 planes (for screen-space triangle), not 4 (for rectangle).
+	let clip_plane_eps = -1.0;
+	vertex_count = clip_2d_polygon(&vertices_2d_0[.. vertex_count], &Vec3f::new(1.0, 0.0, clip_plane_eps), &mut vertices_2d_1[..]);
+	if vertex_count < 3
+	{
+		return;
+	}
+	vertex_count = clip_2d_polygon(&vertices_2d_1[.. vertex_count], &Vec3f::new(-1.0, 0.0, clip_plane_eps - width), &mut vertices_2d_0[..]);
+	if vertex_count < 3
+	{
+		return;
+	}
+	vertex_count = clip_2d_polygon(&vertices_2d_0[.. vertex_count], &Vec3f::new(0.0, 1.0, clip_plane_eps), &mut vertices_2d_1[..]);
+	if vertex_count < 3
+	{
+		return;
+	}
+	vertex_count = clip_2d_polygon(&vertices_2d_1[.. vertex_count], &Vec3f::new(0.0, -1.0, clip_plane_eps - height), &mut vertices_2d_0[..]);
+	if vertex_count < 3
+	{
+		return;
+	}
+	
+	// Perform f32 to Fixed16 conversion.
+	let mut vertices_for_rasterizer = [ PointProjected{x : 0, y : 0, z : 1.0 }; MAX_VERTICES ]; // TODO - use uninitialized memory
+	for (index, vertex_2d) in vertices_2d_0.iter().enumerate().take(vertex_count)
+	{
+		vertices_for_rasterizer[index] =
 			PointProjected{
-				x : f32_to_fixed16(vertex_projected_div_w.x),
-				y : f32_to_fixed16(vertex_projected_div_w.y),
+				x : f32_to_fixed16(vertex_2d.x),
+				y : f32_to_fixed16(vertex_2d.y),
 				z : 1.0 };
-		
-		if index == MAX_VERTICES
-		{
-			break;
-		}
+	}
+	
+	if vertex_count < 3
+	{
+		return;
 	}
 
-	rasterizer.fill_polygon(&vertices_projected[0..polygon.vertices.len()], &depth_equation, color);
+	// Perform rasterization of fully clipped polygon.
+	rasterizer.fill_polygon(&vertices_for_rasterizer[0..vertex_count], &depth_equation, color);
 
 	if draw_normal
 	{
@@ -274,6 +308,68 @@ fn draw_polygon(
 		);
 		draw_line(rasterizer, &camera_matrices.view_matrix, &line);
 	}
+}
+
+fn clip_2d_polygon(polygon : &[Vec2f], clip_line_equation : &Vec3f, out_polygon : &mut [Vec2f]) -> usize
+{
+	let mut prev_v = polygon.last().unwrap();
+	let mut prev_dist = prev_v.dot(clip_line_equation.truncate()) - clip_line_equation.z;
+	let mut out_vertex_count = 0;
+	for v in polygon
+	{
+		let dist = v.dot(clip_line_equation.truncate()) - clip_line_equation.z;
+		if dist > 0.0 
+		{
+			if prev_dist < 0.0 
+			{
+				out_polygon[out_vertex_count] = get_line_line_intersection(prev_v, v, clip_line_equation);
+				out_vertex_count += 1;
+				if out_vertex_count == out_polygon.len()
+				{
+					break;
+				}
+			}
+			out_polygon[out_vertex_count] = *v;
+			out_vertex_count += 1;
+			if out_vertex_count == out_polygon.len()
+			{
+				break;
+			}
+		}
+		else if dist == 0.0 
+		{
+			out_polygon[out_vertex_count] = *v;
+			out_vertex_count += 1;
+			if out_vertex_count == out_polygon.len()
+			{
+				break;
+			}
+		}
+		else if prev_dist > 0.0
+		{
+			out_polygon[out_vertex_count] = get_line_line_intersection(prev_v, v, clip_line_equation);
+			out_vertex_count += 1;
+			if out_vertex_count == out_polygon.len()
+			{
+				break;
+			}
+		}
+		
+		prev_v = v;
+		prev_dist = dist;
+	}
+	
+	out_vertex_count
+}
+
+fn get_line_line_intersection(v0: &Vec2f, v1: &Vec2f, line: &Vec3f) -> Vec2f
+{
+	let dist0 = v0.dot(line.truncate()) - line.z;
+	let dist1 = v1.dot(line.truncate()) - line.z;
+	let dist_sum = dist1 - dist0;
+	let k0 = dist0 / dist_sum;
+	let k1 = dist1 / dist_sum;
+	v0 * k1 - v1 * k0
 }
 
 fn draw_basis(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f)

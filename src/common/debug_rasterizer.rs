@@ -306,6 +306,11 @@ impl<'a> DebugRasterizer<'a>
 				// TODO - handle thin polygon segments
 			}
 			
+			if next_left_index == next_right_index
+			{
+				break;
+			}
+			
 			if vertices[next_right_index].y < vertices[next_left_index].y
 			{
 				right_index = next_right_index;
@@ -313,10 +318,6 @@ impl<'a> DebugRasterizer<'a>
 			else
 			{
 				left_index = next_left_index;
-			}
-			if left_index == right_index
-			{
-				break;
 			}
 			cur_y = next_y;
 		}
