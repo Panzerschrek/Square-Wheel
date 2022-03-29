@@ -284,11 +284,6 @@ fn draw_polygon(
 				y : f32_to_fixed16(vertex_2d.y),
 				z : 1.0 };
 	}
-	
-	if vertex_count < 3
-	{
-		return;
-	}
 
 	// Perform rasterization of fully clipped polygon.
 	rasterizer.fill_polygon(&vertices_for_rasterizer[0..vertex_count], &depth_equation, color);
@@ -400,17 +395,15 @@ fn draw_basis(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f)
 
 fn get_pseudo_random_color(num: usize) -> Color32
 {
-	let num = num * 16;
-	Color32::from_rgb((num & 255) as u8, ((num * 3) & 255) as u8, ((num * 5) & 255) as u8)
+	Color32::from_rgb(((num * 11) & 255) as u8, ((num * 17) & 255) as u8, ((num * 23) & 255) as u8)
 }
 
 type WorldLine = (Vec3f, Vec3f, Color32);
 
 fn draw_line(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, line: &WorldLine)
 {
-	let fixed_scale = FIXED16_ONE as f32;
-	let width = (rasterizer.get_width() as f32) * fixed_scale;
-	let height = (rasterizer.get_width() as f32) * fixed_scale;
+	let width = rasterizer.get_width() as f32;
+	let height = rasterizer.get_width() as f32;
 
 	let v0 = transform_matrix * line.0.extend(1.0);
 	let v1 = transform_matrix * line.1.extend(1.0);
@@ -437,13 +430,13 @@ fn draw_line(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, line: &
 
 	rasterizer.draw_line(
 		PointProjected {
-			x: v0.x as Fixed16,
-			y: v0.y as Fixed16,
+			x: f32_to_fixed16(v0.x),
+			y: f32_to_fixed16(v0.y),
 			z: v0.z,
 		},
 		PointProjected {
-			x: v1.x as Fixed16,
-			y: v1.y as Fixed16,
+			x: f32_to_fixed16(v1.x),
+			y: f32_to_fixed16(v1.y),
 			z: v1.z,
 		},
 		line.2,

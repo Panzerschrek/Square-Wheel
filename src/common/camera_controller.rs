@@ -107,9 +107,7 @@ impl CameraController
 		let fov = std::f32::consts::PI * 0.375;
 		let inv_half_fov_tan = 1.0 / ((fov * 0.5).tan());
 		let aspect = viewport_width / viewport_height;
-		let z_near = 1.0;
-		let z_far = 64.0 * 256.0;
-
+		
 		let translate = Mat4f::from_translation(-self.pos);
 		let rotate_z = Mat4f::from_angle_z(-self.azimuth);
 		let rotate_x = Mat4f::from_angle_x(-self.elevation);
@@ -123,8 +121,8 @@ impl CameraController
 		let perspective = Mat4f::from_nonuniform_scale(inv_half_fov_tan / aspect, inv_half_fov_tan, 1.0);
 		// Perform Z and W manipulations only for view matrix, but not for planes equation matrix.
 		let mut perspective_finalization = Mat4f::identity();
-		perspective_finalization.w.z = -2.0 * z_near * z_far / ( z_far - z_near );
-		perspective_finalization.z.z = (z_near + z_far) / ( z_far - z_near );
+		perspective_finalization.w.z = -1.0;
+		perspective_finalization.z.z = 0.0;
 		perspective_finalization.z.w = 1.0;
 		perspective_finalization.w.w = 0.0;
 		
