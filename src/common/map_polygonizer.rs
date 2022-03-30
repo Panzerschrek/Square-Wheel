@@ -8,9 +8,17 @@ pub struct Plane
 }
 
 #[derive(Debug, Clone)]
+pub struct TextureInfo
+{
+	pub tex_coord_equation : [ Plane; 2],
+	pub texture : String,
+}
+
+#[derive(Debug, Clone)]
 pub struct Polygon
 {
 	pub plane: Plane,
+	pub texture_info: TextureInfo,
 	pub vertices: Vec<Vec3f>,
 }
 
@@ -139,6 +147,7 @@ fn polygonize_brush(brush: &map_file::Brush) -> Vec<Polygon>
 
 		result.push(Polygon {
 			plane: plane_i,
+			texture_info:  get_polygon_texture_info(&brush[i], &plane_i.vec),
 			vertices: vertices_sorted,
 		});
 	} // for i
@@ -243,4 +252,51 @@ fn sort_convex_polygon_vertices(mut in_vertices: Vec<Vec3f>, plane: &Plane) -> V
 	}
 
 	result
+}
+
+fn get_polygon_texture_info(brush_plane : &map_file::BrushPlane, polygon_normal :& Vec3f) -> TextureInfo
+{
+	let basis = get_texture_basis(polygon_normal);
+	// TODO - apply scale, shift, angle.
+	TextureInfo
+	{
+		tex_coord_equation:
+		[
+			Plane{ vec: basis[0], dist: 0.0 },
+			Plane{ vec: basis[1], dist: 0.0 },
+		],
+		texture: brush_plane.texture.clone(),
+	}
+}
+
+// See QBSP/MAP.C: TextureAxisFromPlane
+fn get_texture_basis(polygon_normal :& Vec3f) -> [Vec3f; 2]
+{
+	let mut best_dot = 0.0;
+	let mut best_basis = 0;
+	
+	const BASISES : [ [ Vec3f; 3]; 6 ] =
+	[
+		[ Vec3f::new(0.0, 0.0, 1.0), Vec3f::new(1.0, 0.0, 0.0), Vec3f::new(0.0, -1.0, 0.0) ],			// floor
+		[ Vec3f::new(0.0, 0.0, -1.0), Vec3f::new(1.0 , 0.0, 0.0), Vec3f::new(0.0, -1.0, 0.0) ],		// ceiling
+		[ Vec3f::new(1.0, 0.0, 0.0), Vec3f::new(0.0, 1.0, 0.0), Vec3f::new(0.0, 0.0, -1.0) ],			// west wall
+		[ Vec3f::new(-1.0, 0.0, 0.0), Vec3f::new(0.0, 1.0, 0.0), Vec3f::new(0.0, 0.0, -1.0) ],		// east wall
+		[ Vec3f::new(0.0 ,1.0, 0.0), Vec3f::new(1.0, 0.0, 0.0), Vec3f::new(0.0, 0.0, -1.0) ],			// south wall
+		[ Vec3f::new(0.0 ,-1.0, 0.0), Vec3f::new(1.0, 0.0, 0.0), Vec3f::new(0.0 ,0.0, -1.0) ]			// north wall
+	];
+	
+	for i in 0 .. 6
+	{
+		let dot = polygon_normal.dot(BASISES[i][0]);
+		if dot > best_dot
+		{
+			best_basis = i;
+			best_dot = dot;
+		}
+	}
+	
+	[
+		BASISES[best_basis][1],
+		BASISES[best_basis][2],
+	]
 }

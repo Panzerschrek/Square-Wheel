@@ -97,10 +97,12 @@ fn split_polygon(in_polygon: &Polygon, plane: &Plane) -> (Polygon, Polygon)
 {
 	let mut polygon_front = Polygon {
 		plane: in_polygon.plane,
+		texture_info: in_polygon.texture_info.clone(),
 		vertices: Vec::new(),
 	};
 	let mut polygon_back = Polygon {
 		plane: in_polygon.plane,
+		texture_info: in_polygon.texture_info.clone(),
 		vertices: Vec::new(),
 	};
 
