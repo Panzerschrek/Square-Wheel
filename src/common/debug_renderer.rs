@@ -111,18 +111,10 @@ fn draw_map_brushes(
 		{
 			let color = get_pseudo_random_color(brush_number);
 
-			// TODO
-			let depth_equation = 
-			DepthEquation
-			{
-				dz_dx : 0.0,
-				dz_dy : 0.0,
-				k: 0.0,
-			};
 	
 			for brush_plane in brush
 			{
-				draw_triangle(rasterizer, &camera_matrices.view_matrix, &brush_plane.vertices, &depth_equation, color);
+				draw_triangle(rasterizer, &camera_matrices.view_matrix, &brush_plane.vertices, color);
 			}
 		}
 		if draw_only_first_entity
@@ -313,9 +305,22 @@ fn draw_polygon(
 				y : f32_to_fixed16(vertex_2d.y),
 				z : 1.0 };
 	}
+	
+	let tc_basis_transformed =
+	[
+		camera_matrices.planes_matrix * polygon.texture_info.tex_coord_equation[0].vec.extend(polygon.texture_info.tex_coord_equation[0].dist),
+		camera_matrices.planes_matrix * polygon.texture_info.tex_coord_equation[1].vec.extend(polygon.texture_info.tex_coord_equation[1].dist),
+	];
+	let tc_equation = TexCoordEquation
+	{
+		d_tc_dx: [ tc_basis_transformed[0].x, tc_basis_transformed[1].x ],
+		d_tc_dy: [ tc_basis_transformed[0].y, tc_basis_transformed[1].y ],
+		d_tc_dz: [ tc_basis_transformed[0].z, tc_basis_transformed[1].z ],
+		k : [ -tc_basis_transformed[0].w, tc_basis_transformed[1].w ]
+	};
 
 	// Perform rasterization of fully clipped polygon.
-	rasterizer.fill_polygon(&vertices_for_rasterizer[0..vertex_count], &depth_equation, color);
+	rasterizer.fill_polygon(&vertices_for_rasterizer[0..vertex_count], &depth_equation, &tc_equation, color);
 
 	if draw_normal
 	{
@@ -531,7 +536,7 @@ fn draw_line(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, line: &
 	);
 }
 
-fn draw_triangle(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, vertices: &[Vec3f; 3], depth_equation : &DepthEquation, color: Color32)
+fn draw_triangle(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, vertices: &[Vec3f; 3], color: Color32)
 {
 	// TODO - perform scaling to "Fixed16" via prescaled matrix.
 	let width = rasterizer.get_width() as f32;
@@ -564,6 +569,22 @@ fn draw_triangle(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, ver
 	{
 		return;
 	}
+	
+	// TODO
+	let depth_equation = 
+	DepthEquation
+	{
+		dz_dx : 0.0,
+		dz_dy : 0.0,
+		k: 0.0,
+	};
+	let tc_equation = TexCoordEquation
+	{
+		d_tc_dx: [ 0.0, 0.0 ],
+		d_tc_dy: [ 0.0, 0.0, ],
+		d_tc_dz: [ 0.0, 0.0 ],
+		k : [ 0.0, 0.0 ]
+	};
 
 	rasterizer.fill_triangle(
 		&[
@@ -583,7 +604,8 @@ fn draw_triangle(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, ver
 				z: v2.z,
 			},
 		],
-		depth_equation,
+		&depth_equation,
+		&tc_equation,
 		color,
 	);
 }

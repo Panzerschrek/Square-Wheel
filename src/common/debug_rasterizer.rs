@@ -107,7 +107,7 @@ impl<'a> DebugRasterizer<'a>
 		}
 	}
 
-	pub fn fill_triangle(&mut self, vertices: &[PointProjected; 3], depth_equation: &DepthEquation, color: Color32)
+	pub fn fill_triangle(&mut self, vertices: &[PointProjected; 3], depth_equation: &DepthEquation, tex_coord_equation: &TexCoordEquation, color: Color32)
 	{
 		// TODO - process thin triangles specially.
 
@@ -172,6 +172,7 @@ impl<'a> DebugRasterizer<'a>
 						dx_dy: long_edge_dx_dy,
 					},
 					depth_equation,
+					tex_coord_equation,
 					color,
 				);
 			}
@@ -189,6 +190,7 @@ impl<'a> DebugRasterizer<'a>
 						dx_dy: long_edge_dx_dy,
 					},
 					depth_equation,
+					tex_coord_equation,
 					color,
 				);
 			}
@@ -219,6 +221,7 @@ impl<'a> DebugRasterizer<'a>
 						dx_dy: fixed16_div(vertices[middle_index].x - vertices[lower_index].x, lower_part_dy),
 					},
 					depth_equation,
+					tex_coord_equation,
 					color,
 				);
 			}
@@ -236,6 +239,7 @@ impl<'a> DebugRasterizer<'a>
 						dx_dy: fixed16_div(vertices[upper_index].x - vertices[middle_index].x, upper_part_dy),
 					},
 					depth_equation,
+					tex_coord_equation,
 					color,
 				);
 			}
@@ -247,6 +251,7 @@ impl<'a> DebugRasterizer<'a>
 		&mut self,
 		vertices : &[PointProjected],
 		depth_equation: &DepthEquation,
+		tex_coord_equation: &TexCoordEquation,
 		color: Color32,
 		)
 	{
@@ -298,6 +303,7 @@ impl<'a> DebugRasterizer<'a>
 						dx_dy: dx_dy_right,
 					},
 					depth_equation,
+					tex_coord_equation,
 					color,
 				);
 			}
@@ -330,6 +336,7 @@ impl<'a> DebugRasterizer<'a>
 		left_side: PolygonSide,
 		right_side: PolygonSide,
 		depth_equation: &DepthEquation,
+		tex_coord_equation: &TexCoordEquation,
 		color: Color32,
 	)
 	{
@@ -350,13 +357,36 @@ impl<'a> DebugRasterizer<'a>
 				let pix_address = (x_int + y_int * self.row_size) as usize;
 				if z <= self.depth_buffer[pix_address]
 				{
-					let inv_z = -0.001 / z;
-					let mut brightness = 255.0 * inv_z;
-					if brightness < 0.0 { brightness = 0.0; }
-					if brightness > 255.0 { brightness= 255.0; }
+					// TODO - optimize this.
+					let actual_z = 1.0 / z;
+					let world_pos = super::math_types::Vec3f::new( (x_int as f32 + 0.5 - (self.width as f32 * 0.5)) * actual_z, (y_int as f32 + 0.5 - (self.height as f32 * 0.5)) * actual_z, actual_z );
+					let tc =
+					[
+						world_pos.x * tex_coord_equation.d_tc_dx[0] + world_pos.y * tex_coord_equation.d_tc_dy[0] + world_pos.z * tex_coord_equation.d_tc_dz[0] + tex_coord_equation.k[0],
+						world_pos.x * tex_coord_equation.d_tc_dx[1] + world_pos.y * tex_coord_equation.d_tc_dy[1] + world_pos.z * tex_coord_equation.d_tc_dz[1] + tex_coord_equation.k[1],
+					 ];
+					
+					let tc_int =
+					[
+						tc[0] as i32,
+						tc[1]as i32,
+					];
+					
+					if ( ( ( tc_int[0] ^ tc_int[1] )  >> 4 ) & 1 ) != 0
+					{
+						self.color_buffer[pix_address] = color;
+					}
+					else
+					{
+						self.color_buffer[pix_address] = color.get_inverted();
+					}
+					
+					
+					//let inv_z = -0.001 / z;
+					//let mut brightness = 255.0 * inv_z;
+					//if brightness < 0.0 { brightness = 0.0; }
+					//if brightness > 255.0 { brightness= 255.0; }
 
-					//self.color_buffer[pix_address] = Color32::from_rgb(dz_dx as u8, dz_dy as u8, brightness as u8);
-					self.color_buffer[pix_address] = color;
 					self.depth_buffer[pix_address] = z;
 				}
 
@@ -383,6 +413,14 @@ pub struct DepthEquation
 	pub dz_dx : f32,
 	pub dz_dy : f32,
 	pub k : f32,
+}
+
+pub struct TexCoordEquation
+{
+	pub d_tc_dx : [f32; 2],
+	pub d_tc_dy : [f32; 2],
+	pub d_tc_dz : [f32; 2],
+	pub k : [f32; 2],
 }
 
 struct PolygonSide
