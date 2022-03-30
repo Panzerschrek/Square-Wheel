@@ -354,7 +354,12 @@ impl<'a> DebugRasterizer<'a>
 			y_start_f32 * tex_coord_equation.d_tc_dy[0] + tex_coord_equation.d_tc_dz[0],
 			y_start_f32 * tex_coord_equation.d_tc_dy[1] + tex_coord_equation.d_tc_dz[1],
 		];
-		
+		let line_d_tc =
+		[
+			tex_coord_equation.d_tc_dx[0] + tex_coord_equation.k[0] * depth_equation.dz_dx,
+			tex_coord_equation.d_tc_dx[1] + tex_coord_equation.k[1] * depth_equation.dz_dx,
+		];
+
 		for y_int in y_start_int .. y_end_int
 		{
 			let x_start_int = fixed16_floor_to_int(x_left).max(0);
@@ -363,10 +368,10 @@ impl<'a> DebugRasterizer<'a>
 			let mut z = x_start_f32 * depth_equation.dz_dx + line_z;
 			let mut tc =
 			[
-				x_start_f32 * tex_coord_equation.d_tc_dx[0] + line_tc[0],
-				x_start_f32 * tex_coord_equation.d_tc_dx[1] + line_tc[1],
+				x_start_f32 * tex_coord_equation.d_tc_dx[0] + line_tc[0] + tex_coord_equation.k[0] * z,
+				x_start_f32 * tex_coord_equation.d_tc_dx[1] + line_tc[1] + tex_coord_equation.k[1] * z,
 			];
-			
+
 			for x_int in x_start_int .. x_end_int
 			{
 				let pix_address = (x_int + y_int * self.row_size) as usize;
@@ -375,8 +380,8 @@ impl<'a> DebugRasterizer<'a>
 					let actual_z = 1.0 / z;
 					let pix_tc =
 					[
-						( actual_z * tc[0] + tex_coord_equation.k[0] ) as i32,
-						( actual_z * tc[1] + tex_coord_equation.k[1] ) as i32,
+						( actual_z * tc[0] ) as i32,
+						( actual_z * tc[1] ) as i32,
 					];
 
 					if ( ( ( pix_tc[0] ^ pix_tc[1] )  >> 4 ) & 1 ) != 0
@@ -392,8 +397,8 @@ impl<'a> DebugRasterizer<'a>
 				}
 
 				z += depth_equation.dz_dx;
-				tc[0] += tex_coord_equation.d_tc_dx[0];
-				tc[1] += tex_coord_equation.d_tc_dx[1];
+				tc[0] += line_d_tc[0];
+				tc[1] += line_d_tc[1];
 			}
 
 			x_left += left_side.dx_dy;
