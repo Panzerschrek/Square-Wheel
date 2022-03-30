@@ -234,13 +234,13 @@ fn draw_polygon(
 	let width = rasterizer.get_width() as f32;
 	let height = rasterizer.get_height() as f32;
 
-	let dz_dx = plane_transformed.x / plane_transformed.w;
-	let dz_dy = plane_transformed.y / plane_transformed.w;
+	let d_inv_z_dx = plane_transformed.x / plane_transformed.w;
+	let d_inv_z_dy = plane_transformed.y / plane_transformed.w;
 	let depth_equation = 
 	DepthEquation{
-		dz_dx,
-		dz_dy,
-		k: plane_transformed.z / plane_transformed.w - dz_dx * (width * 0.5) - dz_dy * (height * 0.5),
+		d_inv_z_dx,
+		d_inv_z_dy,
+		k: plane_transformed.z / plane_transformed.w - d_inv_z_dx * (width * 0.5) - d_inv_z_dy * (height * 0.5),
 	};
 	
 	const MAX_VERTICES : usize = 128;
@@ -578,8 +578,8 @@ fn draw_triangle(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, ver
 	let depth_equation = 
 	DepthEquation
 	{
-		dz_dx : 0.0,
-		dz_dy : 0.0,
+		d_inv_z_dx : 0.0,
+		d_inv_z_dy : 0.0,
 		k: 0.0,
 	};
 	let tc_equation = TexCoordEquation
