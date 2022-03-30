@@ -84,11 +84,13 @@ fn draw_map(
 	{
 		if let Some(map_bsp_non_opt) = map_bsp
 		{
+			let mut index = 0;
 			draw_map_bsp_r(
 				&mut rasterizer,
 				camera_matrices,
 				draw_options.draw_polygon_normals,
 				map_bsp_non_opt,
+				&mut index,
 			);
 		}
 	}
@@ -161,20 +163,29 @@ fn draw_map_bsp_r(
 	camera_matrices: &CameraMatrices,
 	draw_polygon_normals: bool,
 	bsp_node: &bsp_builder::BSPNodeChild,
+	index : &mut usize,
 )
 {
+	*index += 1;
 	match bsp_node
 	{
 		bsp_builder::BSPNodeChild::NodeChild(node) =>
 		{
-			for child in &node.children
+			let plane_transformed = camera_matrices.planes_matrix * node.plane.vec.extend(-node.plane.dist);
+			if plane_transformed.w >= 0.0
 			{
-				draw_map_bsp_r(rasterizer, camera_matrices, draw_polygon_normals, child);
+				draw_map_bsp_r(rasterizer, camera_matrices, draw_polygon_normals, &node.children[0], index);
+				draw_map_bsp_r(rasterizer, camera_matrices, draw_polygon_normals, &node.children[1], index);
+			}
+			else
+			{
+				draw_map_bsp_r(rasterizer, camera_matrices, draw_polygon_normals, &node.children[1], index);
+				draw_map_bsp_r(rasterizer, camera_matrices, draw_polygon_normals, &node.children[0], index);
 			}
 		},
 		bsp_builder::BSPNodeChild::LeafChild(leaf) =>
 		{
-			draw_map_bsp_leaf(rasterizer, camera_matrices, draw_polygon_normals, leaf);
+			draw_map_bsp_leaf(rasterizer, camera_matrices, draw_polygon_normals, leaf, *index);
 		},
 	}
 }
@@ -184,10 +195,23 @@ fn draw_map_bsp_leaf(
 	camera_matrices: &CameraMatrices,
 	draw_polygon_normals: bool,
 	bsp_leaf: &bsp_builder::BSPLeaf,
+	_index : usize,
 )
 {
 	let leaf_ptr_as_int = bsp_leaf as *const bsp_builder::BSPLeaf as usize;
 	let color = get_pseudo_random_color(leaf_ptr_as_int / std::mem::size_of::<bsp_builder::BSPLeaf>());
+	/*
+	let color = Color32::from_rgb(
+		(index * 3 % 511 - 255) as u8,
+		(index * 5 % 511 - 255) as u8,
+		(index * 7 % 511 - 255) as u8 );
+	*/
+	/*
+	let color = Color32::from_rgb(
+		((index / 32).min(255)) as u8,
+		((index / 32).min(255)) as u8,
+		((index / 32).min(255)) as u8,);
+	*/
 
 	for polygon in &bsp_leaf.polygons
 	{
