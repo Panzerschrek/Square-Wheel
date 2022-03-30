@@ -254,25 +254,30 @@ fn draw_polygon(
 	const MAX_VERTICES : usize = 128;
 	let mut vertex_count = polygon.vertices.len();
 	
-	let mut vertices_transformed = [ Vec4f::zero(); MAX_VERTICES ]; // TODO - use uninitialized memory
+	// Perform initial matrix tranformation, obtain 3d vertices in camera-aligned space.
+	let mut vertices_transformed = [ Vec3f::zero(); MAX_VERTICES ]; // TODO - use uninitialized memory
 	for (index, vertex) in polygon.vertices.iter().enumerate().take(MAX_VERTICES)
 	{
-		vertices_transformed[index] = camera_matrices.view_matrix * vertex.extend(1.0);
+		let vertex_transformed = camera_matrices.view_matrix * vertex.extend(1.0);
+		vertices_transformed[index] = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
 	}
 	
-	// TODO - perform Z_near clip
+	// Perform z_near clipping.
+	let mut vertices_transformed_z_clipped = [ Vec3f::zero(); MAX_VERTICES ]; // TODO - use uninitialized memory
+	const Z_NEAR : f32 = 1.0;
+	vertex_count = clip_3d_polygon_by_z_plane(&vertices_transformed[.. vertex_count], Z_NEAR, &mut vertices_transformed_z_clipped);
+	if vertex_count < 3
+	{
+		return;
+	}
 	
 	// Make 2d vertices, then perform clipping in 2d space.
 	// This is needed to avoid later overflows for Fixed16 vertex coords in rasterizer. 
 	let mut vertices_2d_0 = [ Vec2f::zero(); MAX_VERTICES ]; // TODO - use uninitialized memory
 	let mut vertices_2d_1 = [ Vec2f::zero(); MAX_VERTICES ]; // TODO - use uninitialized memory
-	for (index, vertex_transformed) in vertices_transformed.iter().enumerate().take(vertex_count)
+	for (index, vertex_transformed) in vertices_transformed_z_clipped.iter().enumerate().take(vertex_count)
 	{
-		if vertex_transformed.w < 0.1
-		{
-			return;
-		}
-		vertices_2d_0[index] = vertex_transformed.truncate().truncate() / vertex_transformed.w;
+		vertices_2d_0[index] = vertex_transformed.truncate() / vertex_transformed.z;
 	}
 	
 	// TODO - optimize this. Perform clipping, using 3 planes (for screen-space triangle), not 4 (for rectangle).
@@ -327,6 +332,65 @@ fn draw_polygon(
 		);
 		draw_line(rasterizer, &camera_matrices.view_matrix, &line);
 	}
+}
+
+fn clip_3d_polygon_by_z_plane(polygon : &[Vec3f], z_dist : f32, out_polygon : &mut [Vec3f]) -> usize
+{
+	let mut prev_v = polygon.last().unwrap();
+	let mut out_vertex_count = 0;
+	for v in polygon
+	{
+		if v.z > z_dist 
+		{
+			if prev_v.z < z_dist 
+			{
+				out_polygon[out_vertex_count] = get_line_z_intersection(prev_v, v, z_dist);
+				out_vertex_count += 1;
+				if out_vertex_count == out_polygon.len()
+				{
+					break;
+				}
+			}
+			out_polygon[out_vertex_count] = *v;
+			out_vertex_count += 1;
+			if out_vertex_count == out_polygon.len()
+			{
+				break;
+			}
+		}
+		else if v.z == z_dist 
+		{
+			out_polygon[out_vertex_count] = *v;
+			out_vertex_count += 1;
+			if out_vertex_count == out_polygon.len()
+			{
+				break;
+			}
+		}
+		else if prev_v.z > z_dist
+		{
+			out_polygon[out_vertex_count] = get_line_z_intersection(prev_v, v, z_dist);
+			out_vertex_count += 1;
+			if out_vertex_count == out_polygon.len()
+			{
+				break;
+			}
+		}
+		
+		prev_v = v;
+	}
+	
+	out_vertex_count
+}
+
+fn get_line_z_intersection(v0: &Vec3f, v1: &Vec3f, z: f32) -> Vec3f
+{
+	let dist0 = v0.z - z;
+	let dist1 = v1.z - z;
+	let dist_sum = v1.z - v0.z;
+	let k0 = dist0 / dist_sum;
+	let k1 = dist1 / dist_sum;
+	v0 * k1 - v1 * k0
 }
 
 fn clip_2d_polygon(polygon : &[Vec2f], clip_line_equation : &Vec3f, out_polygon : &mut [Vec2f]) -> usize
