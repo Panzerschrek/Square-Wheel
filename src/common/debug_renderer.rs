@@ -315,8 +315,12 @@ fn draw_polygon(
 	{
 		d_tc_dx: [ tc_basis_transformed[0].x, tc_basis_transformed[1].x ],
 		d_tc_dy: [ tc_basis_transformed[0].y, tc_basis_transformed[1].y ],
-		d_tc_dz: [ tc_basis_transformed[0].z, tc_basis_transformed[1].z ],
-		k : [ -tc_basis_transformed[0].w, tc_basis_transformed[1].w ]
+		d_tc_dz:
+		[
+			tc_basis_transformed[0].z - tc_basis_transformed[0].x * width * 0.5 - tc_basis_transformed[0].y * height * 0.5,
+			tc_basis_transformed[1].z - tc_basis_transformed[1].x * width * 0.5 - tc_basis_transformed[1].y * height * 0.5,
+		],
+		k : [ -tc_basis_transformed[0].w, -tc_basis_transformed[1].w ]
 	};
 
 	// Perform rasterization of fully clipped polygon.

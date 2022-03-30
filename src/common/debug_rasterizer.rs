@@ -341,38 +341,45 @@ impl<'a> DebugRasterizer<'a>
 	)
 	{
 		// TODO replace "F32" with Fixed16 for Z calculation.
+		// TODO - avoid adding "0.5" for some calculations.
 		let y_start_int = fixed16_round_to_int(y_start).max(0);
 		let y_end_int = fixed16_round_to_int(y_end).min(self.height);
 		let y_start_delta = int_to_fixed16(y_start_int) + FIXED16_HALF - y_start;
 		let mut x_left = left_side.x_start + fixed16_mul(y_start_delta, left_side.dx_dy) + FIXED16_HALF;
 		let mut x_right = right_side.x_start + fixed16_mul(y_start_delta, right_side.dx_dy) + FIXED16_HALF;
-		let mut line_z = (y_start_int as f32 + 0.5) * depth_equation.dz_dy + depth_equation.k;
+		let y_start_f32 = y_start_int as f32 + 0.5;
+		let mut line_z = y_start_f32 * depth_equation.dz_dy + depth_equation.k;
+		let mut line_tc =
+		[
+			y_start_f32 * tex_coord_equation.d_tc_dy[0] + tex_coord_equation.d_tc_dz[0],
+			y_start_f32 * tex_coord_equation.d_tc_dy[1] + tex_coord_equation.d_tc_dz[1],
+		];
+		
 		for y_int in y_start_int .. y_end_int
 		{
 			let x_start_int = fixed16_floor_to_int(x_left).max(0);
 			let x_end_int = fixed16_floor_to_int(x_right).min(self.width);
-			let mut z = (x_start_int as f32 + 0.5) * depth_equation.dz_dx + line_z;
+			let x_start_f32 = x_start_int as f32 + 0.5;
+			let mut z = x_start_f32 * depth_equation.dz_dx + line_z;
+			let mut tc =
+			[
+				x_start_f32 * tex_coord_equation.d_tc_dx[0] + line_tc[0],
+				x_start_f32 * tex_coord_equation.d_tc_dx[1] + line_tc[1],
+			];
+			
 			for x_int in x_start_int .. x_end_int
 			{
 				let pix_address = (x_int + y_int * self.row_size) as usize;
 				if z <= self.depth_buffer[pix_address]
 				{
-					// TODO - optimize this.
 					let actual_z = 1.0 / z;
-					let world_pos = super::math_types::Vec3f::new( (x_int as f32 + 0.5 - (self.width as f32 * 0.5)) * actual_z, (y_int as f32 + 0.5 - (self.height as f32 * 0.5)) * actual_z, actual_z );
-					let tc =
+					let pix_tc =
 					[
-						world_pos.x * tex_coord_equation.d_tc_dx[0] + world_pos.y * tex_coord_equation.d_tc_dy[0] + world_pos.z * tex_coord_equation.d_tc_dz[0] + tex_coord_equation.k[0],
-						world_pos.x * tex_coord_equation.d_tc_dx[1] + world_pos.y * tex_coord_equation.d_tc_dy[1] + world_pos.z * tex_coord_equation.d_tc_dz[1] + tex_coord_equation.k[1],
-					 ];
-					
-					let tc_int =
-					[
-						tc[0] as i32,
-						tc[1]as i32,
+						( actual_z * tc[0] + tex_coord_equation.k[0] ) as i32,
+						( actual_z * tc[1] + tex_coord_equation.k[1] ) as i32,
 					];
-					
-					if ( ( ( tc_int[0] ^ tc_int[1] )  >> 4 ) & 1 ) != 0
+
+					if ( ( ( pix_tc[0] ^ pix_tc[1] )  >> 4 ) & 1 ) != 0
 					{
 						self.color_buffer[pix_address] = color;
 					}
@@ -380,22 +387,20 @@ impl<'a> DebugRasterizer<'a>
 					{
 						self.color_buffer[pix_address] = color.get_inverted();
 					}
-					
-					
-					//let inv_z = -0.001 / z;
-					//let mut brightness = 255.0 * inv_z;
-					//if brightness < 0.0 { brightness = 0.0; }
-					//if brightness > 255.0 { brightness= 255.0; }
 
 					self.depth_buffer[pix_address] = z;
 				}
 
 				z += depth_equation.dz_dx;
+				tc[0] += tex_coord_equation.d_tc_dx[0];
+				tc[1] += tex_coord_equation.d_tc_dx[1];
 			}
 
 			x_left += left_side.dx_dy;
 			x_right += right_side.dx_dy;
 			line_z += depth_equation.dz_dy;
+			line_tc[0] += tex_coord_equation.d_tc_dy[0];
+			line_tc[1] += tex_coord_equation.d_tc_dy[1];
 		}
 	}
 }
