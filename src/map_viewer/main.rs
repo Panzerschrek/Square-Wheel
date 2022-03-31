@@ -52,7 +52,8 @@ pub fn main()
 		}
 	}
 
-	let frame_duration_s = 1.0 / 30.0;
+	let mut prev_time = std::time::Instant::now();
+	
 	'running: loop
 	{
 		for event in window.get_events()
@@ -69,7 +70,11 @@ pub fn main()
 			}
 		}
 
-		camera_controller.update(&window.get_keyboard_state(), frame_duration_s);
+		let cur_time = std::time::Instant::now();
+		let time_delta_s = (cur_time - prev_time).as_secs_f32();
+		prev_time = cur_time;
+		
+		camera_controller.update(&window.get_keyboard_state(), time_delta_s);
 
 		window.end_frame(|pixels, surface_info| {
 			debug_renderer::draw_frame(
@@ -89,6 +94,12 @@ pub fn main()
 			)
 		});
 
-		std::thread::sleep(Duration::from_secs_f32(frame_duration_s));
+		let frame_end_time = std::time::Instant::now();
+		let frame_time_s = (frame_end_time - prev_time).as_secs_f32();
+		let min_frame_time = 0.01;
+		if frame_time_s < min_frame_time
+		{
+			std::thread::sleep(Duration::from_secs_f32(min_frame_time - frame_time_s));
+		}
 	}
 }
