@@ -307,9 +307,26 @@ impl<'a> DebugRasterizer<'a>
 					color,
 				);
 			}
-			else
+			else if dy_left > 0 && dy_right > 0
 			{
-				// TODO - handle thin polygon segments
+				let cur_y_int = fixed16_round_to_int(cur_y);
+				let next_y_int = fixed16_round_to_int(next_y);
+				if cur_y_int < next_y_int
+				{
+					// Fill single line.
+					let thin_line_y = int_to_fixed16(cur_y_int) + FIXED16_HALF;
+					let x_start_left = vertices[left_index].x + fixed16_mul_div(thin_line_y - vertices[left_index].y, vertices[next_left_index].x - vertices[left_index].x, dy_left);
+					let x_start_right = vertices[right_index].x + fixed16_mul_div(thin_line_y - vertices[right_index].y, vertices[next_right_index].x - vertices[right_index].x, dy_right);
+					self.fill_polygon_part(
+						cur_y,
+						next_y,
+						PolygonSide { x_start: x_start_left, dx_dy: 0, },
+						PolygonSide { x_start: x_start_right, dx_dy: 0 },
+						depth_equation,
+						tex_coord_equation,
+						color,
+					);
+				}
 			}
 			
 			if next_left_index == next_right_index
