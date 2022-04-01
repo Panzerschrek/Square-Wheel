@@ -248,23 +248,7 @@ fn draw_map_bsp_leaf(
 
 	if index == 0
 	{
-		for portal in &bsp_leaf.portals
-		{
-			for v0 in &portal.vertices
-			{
-				for v1 in &portal.vertices
-				{
-					if v0 != v1
-					{
-						draw_line(
-							rasterizer,
-							&camera_matrices.view_matrix,
-							&(*v0, *v1, Color32::from_rgb(255, 255, 255)),
-						);
-					}
-				}
-			}
-		}
+		// TODO - draw portals.
 	}
 }
 

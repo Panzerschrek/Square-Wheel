@@ -25,16 +25,22 @@ fn main()
 		let mut stats = BSPStats::default();
 		calculate_bsp_tree_stats_r(&bsp_tree.root, 0, &mut stats);
 		stats.average_depth /= stats.num_leafs as f32;
+
+		let mut num_portal_vertices = 0;
+		for portal in &bsp_tree.portals
+		{
+			num_portal_vertices += portal.vertices.len();
+		}
 		println!("Initial polygons: {}", map_polygonized[0].polygons.len());
 		println!(
-			"BSP Tree stats: {:?}, average polygons in leaf: {}, average vertices in polygon: {}, average portals in \
-			 leaf: {}, average vertices in poral: {}, final portals: {}",
+			"BSP Tree stats: {:?}, average polygons in leaf: {}, average vertices in polygon: {}, portals: {}, portal \
+			 vertices: {}, average vertices in portal: {}",
 			stats,
 			(stats.num_polygons as f32) / (stats.num_leafs as f32),
 			(stats.num_polygon_vertices as f32) / (stats.num_polygons as f32),
-			(stats.num_portals as f32) / (stats.num_leafs as f32),
-			(stats.num_portal_vertices as f32) / (stats.num_portals as f32),
-			bsp_tree.portals.len()
+			bsp_tree.portals.len(),
+			num_portal_vertices,
+			(num_portal_vertices as f32) / (bsp_tree.portals.len() as f32),
 		);
 	}
 	else
@@ -49,9 +55,7 @@ struct BSPStats
 	num_nodes: usize,
 	num_leafs: usize,
 	num_polygons: usize,
-	num_portals: usize,
 	num_polygon_vertices: usize,
-	num_portal_vertices: usize,
 	min_polygons_in_leaf: usize,
 	max_polygons_in_leaf: usize,
 	min_depth: usize,
@@ -101,12 +105,6 @@ fn calculate_bsp_tree_stats_r(node_child: &bsp_builder::BSPNodeChild, depth: usi
 			for polygon in &leaf.polygons
 			{
 				stats.num_polygon_vertices += polygon.vertices.len();
-			}
-
-			stats.num_portals += leaf.portals.len();
-			for portal in &leaf.portals
-			{
-				stats.num_portal_vertices += portal.vertices.len();
 			}
 		},
 	}
