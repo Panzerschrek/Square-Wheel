@@ -245,7 +245,7 @@ fn draw_polygon(
 		k: plane_transformed.z / plane_transformed.w - d_inv_z_dx * half_width - d_inv_z_dy * half_height,
 	};
 	
-	const MAX_VERTICES : usize = 128;
+	const MAX_VERTICES : usize = 24;
 	let mut vertex_count = polygon.vertices.len();
 	
 	// Perform initial matrix tranformation, obtain 3d vertices in camera-aligned space.
