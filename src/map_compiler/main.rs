@@ -65,13 +65,14 @@ fn calculate_bsp_tree_stats_r(node_child: &bsp_builder::BSPNodeChild, depth: usi
 		bsp_builder::BSPNodeChild::NodeChild(node) =>
 		{
 			stats.num_nodes += 1;
-			for child in &node.children
+			for child in &node.borrow().children
 			{
 				calculate_bsp_tree_stats_r(child, depth + 1, stats);
 			}
 		},
-		bsp_builder::BSPNodeChild::LeafChild(leaf) =>
+		bsp_builder::BSPNodeChild::LeafChild(leaf_ptr) =>
 		{
+			let leaf = leaf_ptr.borrow();
 			stats.num_leafs += 1;
 
 			if stats.min_depth == 0

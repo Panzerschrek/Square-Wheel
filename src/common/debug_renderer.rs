@@ -163,8 +163,9 @@ fn draw_map_bsp_r(
 {
 	match bsp_node
 	{
-		bsp_builder::BSPNodeChild::NodeChild(node) =>
+		bsp_builder::BSPNodeChild::NodeChild(node_ptr) =>
 		{
+			let node = node_ptr.borrow();
 			let plane_transformed = camera_matrices.planes_matrix * node.plane.vec.extend(-node.plane.dist);
 			if plane_transformed.w >= 0.0
 			{
@@ -203,7 +204,13 @@ fn draw_map_bsp_r(
 		},
 		bsp_builder::BSPNodeChild::LeafChild(leaf) =>
 		{
-			draw_map_bsp_leaf(rasterizer, camera_matrices, draw_polygon_normals, leaf, *index);
+			draw_map_bsp_leaf(
+				rasterizer,
+				camera_matrices,
+				draw_polygon_normals,
+				&mut leaf.borrow_mut(),
+				*index,
+			);
 			*index += 1;
 		},
 	}
