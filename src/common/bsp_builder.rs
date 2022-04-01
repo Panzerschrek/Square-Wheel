@@ -426,6 +426,7 @@ fn build_leaf_portals(leaf: &mut BSPLeaf, splitter_planes: &[Plane])
 		dist: inf,
 	});
 
+	let mut portals = Vec::new();
 	for portal_plane in splitter_planes
 	{
 		let mut portal_vertices = Vec::new();
@@ -497,9 +498,76 @@ fn build_leaf_portals(leaf: &mut BSPLeaf, splitter_planes: &[Plane])
 		{
 			continue;
 		}
-		leaf.portals.push(LeafPortal {
+		portals.push(LeafPortal {
 			vertices: portal_vertices_sorted,
 			plane: *portal_plane,
 		});
 	} // for portal planes
+
+	// Perform basic portals filtering.
+	// Remove portals that are fully covered by one of leaf polygons.
+	// Generally we should check for coverage by multiple polygons, but not now.
+
+	const PORTAL_POLYGON_COVERAGE_EPS: f32 = 0.25;
+
+	let mut portals_filtered = Vec::new();
+	for portal in portals
+	{
+		let portal_plane_inverted = Plane {
+			vec: -portal.plane.vec,
+			dist: -portal.plane.dist,
+		};
+		let mut is_covered = false;
+		for polygon in &leaf.polygons
+		{
+			// Check only polygons in same plane.
+			if portal_plane_inverted != polygon.plane
+			{
+				continue;
+			}
+
+			let mut prev_polygon_vertex = polygon.vertices.last().unwrap();
+			let mut portal_is_inside_polygon = true;
+			for polygon_vertex in &polygon.vertices
+			{
+				let vec = (prev_polygon_vertex - polygon_vertex).cross(polygon.plane.vec);
+				let eps_scaled = PORTAL_POLYGON_COVERAGE_EPS * vec.magnitude();
+				let cut_plane = Plane {
+					vec: vec,
+					dist: vec.dot(*polygon_vertex),
+				};
+
+				let mut all_vertices_are_inside = true;
+				for portal_vertex in &portal.vertices
+				{
+					if portal_vertex.dot(cut_plane.vec) > cut_plane.dist + eps_scaled
+					{
+						all_vertices_are_inside = false;
+						break;
+					}
+				}
+
+				prev_polygon_vertex = polygon_vertex;
+
+				if !all_vertices_are_inside
+				{
+					portal_is_inside_polygon = false;
+					break;
+				}
+			} // for polygon edges
+
+			if portal_is_inside_polygon
+			{
+				is_covered = true;
+				break;
+			}
+		} // for polygons
+
+		if !is_covered
+		{
+			portals_filtered.push(portal);
+		}
+	} // for portals
+
+	leaf.portals = portals_filtered;
 }

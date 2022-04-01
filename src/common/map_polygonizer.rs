@@ -242,11 +242,11 @@ pub fn sort_convex_polygon_vertices(mut in_vertices: Vec<Vec3f>, plane: &Plane) 
 		else
 		{
 			// WTF?
-			println!(
-				"Can't find best vertex for sorting. Vertices produced: {}, left : {}",
-				result.len(),
-				in_vertices.len()
-			);
+			// println!(
+			// "Can't find best vertex for sorting. Vertices produced: {}, left : {}",
+			// result.len(),
+			// in_vertices.len()
+			// );
 			break;
 		}
 	}
