@@ -37,6 +37,14 @@ impl<'a> DebugRasterizer<'a>
 		// TODO - optimize this. Discard lines totally outside viewport.
 		// TODO - process depth using fixed values, instead of floating point.
 
+		if (v0.x <= 0 && v1.x <= 0) ||
+			(v0.x > int_to_fixed16(self.width) && v1.x > int_to_fixed16(self.width)) ||
+			(v0.y <= 0 && v1.y <= 0) ||
+			(v0.y >= int_to_fixed16(self.height) && v1.y >= int_to_fixed16(self.height))
+		{
+			return;
+		}
+
 		if (v1.x - v0.x).abs() >= (v1.y - v0.y).abs()
 		{
 			if v0.x > v1.x

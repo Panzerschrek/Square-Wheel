@@ -21,6 +21,9 @@ struct Opt
 	draw_bsp_map: bool,
 
 	#[structopt(long)]
+	draw_all_portals: bool,
+
+	#[structopt(long)]
 	draw_polygon_normals: bool,
 }
 
@@ -86,6 +89,7 @@ pub fn main()
 					draw_bsp_map: opt.draw_bsp_map,
 					draw_only_first_entity: false,
 					draw_polygon_normals: opt.draw_polygon_normals,
+					draw_all_portals: opt.draw_all_portals,
 				},
 				&camera_controller.build_view_matrix(surface_info.width as f32, surface_info.height as f32),
 				map_file_parsed_opt.as_ref(),

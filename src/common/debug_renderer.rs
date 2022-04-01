@@ -9,6 +9,7 @@ pub struct DrawOptions
 	pub draw_raw_map: bool,
 	pub draw_polygonized_map: bool,
 	pub draw_bsp_map: bool,
+	pub draw_all_portals: bool,
 	pub draw_only_first_entity: bool,
 	pub draw_polygon_normals: bool,
 }
@@ -96,6 +97,27 @@ fn draw_map(
 				&map_bsp_non_opt.root,
 				&mut index,
 			);
+
+			if draw_options.draw_all_portals
+			{
+				for portal in &map_bsp_non_opt.portals
+				{
+					for v0 in &portal.vertices
+					{
+						for v1 in &portal.vertices
+						{
+							if v0 != v1
+							{
+								draw_line(
+									&mut rasterizer,
+									&camera_matrices.view_matrix,
+									&(*v0, *v1, Color32::from_rgb(255, 255, 255)),
+								);
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 
