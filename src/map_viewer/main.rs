@@ -53,7 +53,7 @@ pub fn main()
 	}
 
 	let mut prev_time = std::time::Instant::now();
-	
+
 	'running: loop
 	{
 		for event in window.get_events()
@@ -73,7 +73,7 @@ pub fn main()
 		let cur_time = std::time::Instant::now();
 		let time_delta_s = (cur_time - prev_time).as_secs_f32();
 		prev_time = cur_time;
-		
+
 		camera_controller.update(&window.get_keyboard_state(), time_delta_s);
 
 		window.end_frame(|pixels, surface_info| {

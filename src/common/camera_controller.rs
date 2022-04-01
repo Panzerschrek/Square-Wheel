@@ -107,7 +107,7 @@ impl CameraController
 		let fov = std::f32::consts::PI * 0.375;
 		let inv_half_fov_tan = 1.0 / ((fov * 0.5).tan());
 		let aspect = viewport_width / viewport_height;
-		
+
 		let translate = Mat4f::from_translation(-self.pos);
 		let rotate_z = Mat4f::from_angle_z(-self.azimuth);
 		let rotate_x = Mat4f::from_angle_x(-self.elevation);
@@ -125,7 +125,7 @@ impl CameraController
 		perspective_finalization.z.z = 0.0;
 		perspective_finalization.z.w = 1.0;
 		perspective_finalization.w.w = 0.0;
-		
+
 		let resize_to_viewport = Mat4f::from_nonuniform_scale(viewport_width * 0.5, viewport_height * 0.5, 1.0);
 		let shift_to_viewport_center =
 			Mat4f::from_translation(Vec3f::new(viewport_width * 0.5, viewport_height * 0.5, 0.0));
@@ -135,9 +135,8 @@ impl CameraController
 		let base_view_matrix = resize_to_viewport * perspective * basis_change * rotate_x * rotate_z * translate;
 		// TODO - maybe avoid clculation of inverse matrix and perform direct matrix calculation?
 		let planes_matrix = base_view_matrix.transpose().invert().unwrap();
-		CameraMatrices
-		{
-			view_matrix : shift_to_viewport_center * perspective_finalization * base_view_matrix,
+		CameraMatrices {
+			view_matrix: shift_to_viewport_center * perspective_finalization * base_view_matrix,
 			planes_matrix,
 		}
 	}
