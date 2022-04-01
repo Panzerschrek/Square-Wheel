@@ -27,10 +27,13 @@ fn main()
 		stats.average_depth /= stats.num_leafs as f32;
 		println!("Initial polygons: {}", map_polygonized[0].polygons.len());
 		println!(
-			"BSP Tree stats: {:?}, average polygons in leaf: {}, average vertices in polygon: {}",
+			"BSP Tree stats: {:?}, average polygons in leaf: {}, average vertices in polygon: {}, average portals in \
+			 leaf: {}, average vertices in poral: {}",
 			stats,
 			(stats.num_polygons as f32) / (stats.num_leafs as f32),
-			(stats.num_polygon_vertices as f32) / (stats.num_polygons as f32)
+			(stats.num_polygon_vertices as f32) / (stats.num_polygons as f32),
+			(stats.num_portals as f32) / (stats.num_leafs as f32),
+			(stats.num_portal_vertices as f32) / (stats.num_portals as f32),
 		);
 	}
 	else
