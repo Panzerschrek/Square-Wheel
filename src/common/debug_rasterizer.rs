@@ -475,7 +475,7 @@ impl<'a> DebugRasterizer<'a>
 					}
 					else
 					{
-						self.color_buffer[pix_address] = color.get_inverted();
+						self.color_buffer[pix_address] = color.get_half_dark();
 					}
 
 					self.depth_buffer[pix_address] = inv_z;

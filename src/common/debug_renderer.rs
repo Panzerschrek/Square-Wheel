@@ -161,7 +161,6 @@ fn draw_map_bsp_r(
 	index: &mut usize,
 )
 {
-	*index += 1;
 	match bsp_node
 	{
 		bsp_builder::BSPNodeChild::NodeChild(node) =>
@@ -205,6 +204,7 @@ fn draw_map_bsp_r(
 		bsp_builder::BSPNodeChild::LeafChild(leaf) =>
 		{
 			draw_map_bsp_leaf(rasterizer, camera_matrices, draw_polygon_normals, leaf, *index);
+			*index += 1;
 		},
 	}
 }
@@ -214,23 +214,50 @@ fn draw_map_bsp_leaf(
 	camera_matrices: &CameraMatrices,
 	draw_polygon_normals: bool,
 	bsp_leaf: &bsp_builder::BSPLeaf,
-	_index: usize,
+	index: usize,
 )
 {
 	let leaf_ptr_as_int = bsp_leaf as *const bsp_builder::BSPLeaf as usize;
-	let color = get_pseudo_random_color(leaf_ptr_as_int / std::mem::size_of::<bsp_builder::BSPLeaf>());
+	let mut color = get_pseudo_random_color(leaf_ptr_as_int / std::mem::size_of::<bsp_builder::BSPLeaf>());
 	// let color = Color32::from_rgb(
 	// (index * 3 % 511 - 255) as u8,
 	// (index * 5 % 511 - 255) as u8,
 	// (index * 7 % 511 - 255) as u8 );
 	// let color = Color32::from_rgb(
-	// ((index / 32).min(255)) as u8,
-	// ((index / 32).min(255)) as u8,
-	// ((index / 32).min(255)) as u8,);
+	// 	((index / 32).min(255)) as u8,
+	// 	((index / 32).min(255)) as u8,
+	// 	((index / 32).min(255)) as u8,
+	//);
+
+	if index == 0
+	{
+		color = Color32::from_rgb(8, 8, 8);
+	}
 
 	for polygon in &bsp_leaf.polygons
 	{
 		draw_polygon(rasterizer, camera_matrices, polygon, color, draw_polygon_normals);
+	}
+
+	if index == 0
+	{
+		for portal in &bsp_leaf.portals
+		{
+			for v0 in &portal.vertices
+			{
+				for v1 in &portal.vertices
+				{
+					if v0 != v1
+					{
+						draw_line(
+							rasterizer,
+							&camera_matrices.view_matrix,
+							&(*v0, *v1, Color32::from_rgb(255, 255, 255)),
+						);
+					}
+				}
+			}
+		}
 	}
 }
 
