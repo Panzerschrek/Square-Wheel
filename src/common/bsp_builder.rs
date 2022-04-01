@@ -12,6 +12,15 @@ pub struct LeafPortal
 }
 
 #[derive(Debug)]
+pub struct NodePortalFinal
+{
+	pub leaf_front: rc::Rc<cell::RefCell<BSPLeaf>>,
+	pub leaf_back: rc::Rc<cell::RefCell<BSPLeaf>>,
+	pub plane: Plane,
+	pub vertices: Vec<Vec3f>,
+}
+
+#[derive(Debug)]
 pub struct BSPNode
 {
 	pub plane: Plane,
@@ -32,13 +41,18 @@ pub enum BSPNodeChild
 	LeafChild(rc::Rc<cell::RefCell<BSPLeaf>>),
 }
 
-pub type BSPTree = BSPNodeChild;
+pub struct BSPTree
+{
+	pub root: BSPNodeChild,
+	pub portals: Vec<NodePortalFinal>,
+}
 
 pub fn build_leaf_bsp_tree(entity: &map_polygonizer::Entity) -> BSPTree
 {
-	let mut tree = build_leaf_bsp_tree_r(entity.polygons.clone());
-	build_protals(&mut tree);
-	tree
+	let mut root = build_leaf_bsp_tree_r(entity.polygons.clone());
+	build_leafs_protals(&mut root);
+	let portals = build_portals(&mut root);
+	BSPTree { root, portals }
 }
 
 fn build_leaf_bsp_tree_r(mut in_polygons: Vec<Polygon>) -> BSPNodeChild
@@ -355,10 +369,10 @@ fn get_point_position_relative_plane(point: &Vec3f, plane: &Plane) -> PointPosit
 	}
 }
 
-fn build_protals(node: &mut BSPNodeChild)
+fn build_leafs_protals(node: &mut BSPNodeChild)
 {
 	let mut splitter_nodes = Vec::new();
-	build_protals_r(node, &mut splitter_nodes);
+	build_leafs_protals_r(node, &mut splitter_nodes);
 }
 
 struct NodeForPortalsBuild
@@ -367,7 +381,7 @@ struct NodeForPortalsBuild
 	is_front: bool,
 }
 
-fn build_protals_r(node_child: &BSPNodeChild, splitter_nodes: &mut Vec<NodeForPortalsBuild>)
+fn build_leafs_protals_r(node_child: &BSPNodeChild, splitter_nodes: &mut Vec<NodeForPortalsBuild>)
 {
 	match node_child
 	{
@@ -377,14 +391,14 @@ fn build_protals_r(node_child: &BSPNodeChild, splitter_nodes: &mut Vec<NodeForPo
 				node: rc::Rc::clone(node),
 				is_front: true,
 			});
-			build_protals_r(&node.borrow().children[0], splitter_nodes);
+			build_leafs_protals_r(&node.borrow().children[0], splitter_nodes);
 			splitter_nodes.pop();
 
 			splitter_nodes.push(NodeForPortalsBuild {
 				node: rc::Rc::clone(node),
 				is_front: false,
 			});
-			build_protals_r(&node.borrow().children[1], splitter_nodes);
+			build_leafs_protals_r(&node.borrow().children[1], splitter_nodes);
 			splitter_nodes.pop();
 		},
 		BSPNodeChild::LeafChild(leaf) =>
@@ -615,4 +629,179 @@ fn build_leaf_portals(leaf: &mut BSPLeaf, splitter_nodes: &[NodeForPortalsBuild]
 	} // for portals
 
 	leaf.portals = portals_filtered;
+}
+
+fn build_portals(node: &mut BSPNodeChild) -> Vec<NodePortalFinal>
+{
+	let mut leaf_portals_by_node = LeafPortalsByNode::new();
+	collect_leaf_portals_r(node, &mut leaf_portals_by_node);
+
+	let mut result = Vec::new();
+	for (_node, node_portals) in leaf_portals_by_node
+	{
+		result.append(&mut build_node_portals(&node_portals));
+	}
+	result
+}
+
+struct NodePortal
+{
+	leaf: rc::Rc<cell::RefCell<BSPLeaf>>,
+	portal_index: usize,
+}
+type LeafPortalsByNode = std::collections::HashMap<*const BSPNode, Vec<NodePortal>>;
+
+// Collect all leaf portals and group them by BSP node on which plane portal is located.
+fn collect_leaf_portals_r(node_child: &BSPNodeChild, leaf_portals_by_node: &mut LeafPortalsByNode)
+{
+	match node_child
+	{
+		BSPNodeChild::NodeChild(node) =>
+		{
+			for chuld in &node.borrow().children
+			{
+				collect_leaf_portals_r(chuld, leaf_portals_by_node);
+			}
+		},
+		BSPNodeChild::LeafChild(leaf_ptr) =>
+		{
+			for (index, portal) in leaf_ptr.borrow().portals.iter().enumerate()
+			{
+				let shared_ptr = portal.node.upgrade().unwrap();
+				let ptr = (&*shared_ptr.borrow()) as *const BSPNode;
+				if !leaf_portals_by_node.contains_key(&ptr)
+				{
+					leaf_portals_by_node.insert(ptr, Vec::new());
+				}
+				leaf_portals_by_node.get_mut(&ptr).unwrap().push(NodePortal {
+					leaf: leaf_ptr.clone(),
+					portal_index: index,
+				});
+			}
+		},
+	}
+}
+
+// Iterate over all pairs of portals of same node.
+// Search for intersection of such portals.
+fn build_node_portals(in_portals: &[NodePortal]) -> Vec<NodePortalFinal>
+{
+	let mut result = Vec::new();
+	for portal_a in in_portals
+	{
+		let leaf_a = portal_a.leaf.borrow();
+		let leaf_portal_a = &leaf_a.portals[portal_a.portal_index];
+		let plane = leaf_portal_a.node.upgrade().unwrap().borrow().plane;
+		for portal_b in in_portals
+		{
+			let leaf_b = portal_b.leaf.borrow();
+			let leaf_portal_b = &leaf_b.portals[portal_b.portal_index];
+			// Process pairs on different sides of node plane.
+			if leaf_portal_a.is_front == leaf_portal_b.is_front
+			{
+				continue;
+			}
+
+			let portals_intersection =
+				build_portals_intersection(&plane, &leaf_portal_a.vertices, &leaf_portal_b.vertices);
+			if portals_intersection.len() < 3
+			{
+				continue;
+			}
+
+			let portal_final = if leaf_portal_a.is_front
+			{
+				NodePortalFinal {
+					leaf_front: portal_a.leaf.clone(),
+					leaf_back: portal_b.leaf.clone(),
+					plane: plane,
+					vertices: portals_intersection,
+				}
+			}
+			else
+			{
+				NodePortalFinal {
+					leaf_back: portal_b.leaf.clone(),
+					leaf_front: portal_a.leaf.clone(),
+					plane: plane,
+					vertices: portals_intersection,
+				}
+			};
+			result.push(portal_final);
+		}
+	}
+
+	result
+}
+
+// Return < 3 vertices if failed.
+fn build_portals_intersection(plane: &Plane, vertices0: &[Vec3f], vertices1: &[Vec3f]) -> Vec<Vec3f>
+{
+	let mut clip_planes = Vec::new();
+
+	// Add vertices0 planes.
+	let mut prev_v = vertices0.last().unwrap();
+	for v in vertices0
+	{
+		let vec = (prev_v - v).cross(plane.vec);
+		clip_planes.push(Plane { vec, dist: vec.dot(*v) });
+		prev_v = v;
+	}
+	// Add vertices1 planes using different sign of cross product.
+	let mut prev_v = vertices1.last().unwrap();
+	for v in vertices1
+	{
+		let vec = (v - prev_v).cross(plane.vec);
+		clip_planes.push(Plane { vec, dist: vec.dot(*v) });
+		prev_v = v;
+	}
+
+	// Build set of vertices based on input planes
+	let mut vertices = Vec::new();
+	for plane_a in &clip_planes
+	{
+		for plane_b in &clip_planes
+		{
+			if plane_a == plane_b
+			{
+				continue;
+			}
+
+			// Find intersection point between portal side planes and plane of portal.
+			let mat = Mat3f::from_cols(plane.vec, plane_a.vec, plane_b.vec).transpose();
+			let inv_mat_opt = mat.invert();
+			if inv_mat_opt.is_none()
+			{
+				continue; // No solution - some planes are parallel.
+			}
+			let intersection_point = inv_mat_opt.unwrap() * Vec3f::new(plane.dist, plane_a.dist, plane_b.dist);
+
+			let mut is_behind_another_plane = false;
+			for plane_c in &clip_planes
+			{
+				if plane_c == plane_a || plane_c == plane_b
+				{
+					continue;
+				}
+
+				if intersection_point.dot(plane_c.vec) > plane_c.dist
+				{
+					is_behind_another_plane = true;
+					break;
+				}
+			} // for plane_c
+
+			if !is_behind_another_plane
+			{
+				vertices.push(intersection_point);
+			}
+		} // for plane_b
+	} // for plane_a
+
+	if vertices.len() < 3
+	{
+		return vertices;
+	}
+
+	map_polygonizer::sort_convex_polygon_vertices(vertices, &plane)
 }

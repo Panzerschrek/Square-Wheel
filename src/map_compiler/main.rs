@@ -23,17 +23,18 @@ fn main()
 		let map_polygonized = map_polygonizer::polygonize_map(&map_file_parsed);
 		let bsp_tree = bsp_builder::build_leaf_bsp_tree(&map_polygonized[0]);
 		let mut stats = BSPStats::default();
-		calculate_bsp_tree_stats_r(&bsp_tree, 0, &mut stats);
+		calculate_bsp_tree_stats_r(&bsp_tree.root, 0, &mut stats);
 		stats.average_depth /= stats.num_leafs as f32;
 		println!("Initial polygons: {}", map_polygonized[0].polygons.len());
 		println!(
 			"BSP Tree stats: {:?}, average polygons in leaf: {}, average vertices in polygon: {}, average portals in \
-			 leaf: {}, average vertices in poral: {}",
+			 leaf: {}, average vertices in poral: {}, final portals: {}",
 			stats,
 			(stats.num_polygons as f32) / (stats.num_leafs as f32),
 			(stats.num_polygon_vertices as f32) / (stats.num_polygons as f32),
 			(stats.num_portals as f32) / (stats.num_leafs as f32),
 			(stats.num_portal_vertices as f32) / (stats.num_portals as f32),
+			bsp_tree.portals.len()
 		);
 	}
 	else

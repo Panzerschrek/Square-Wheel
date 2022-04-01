@@ -93,7 +93,7 @@ fn draw_map(
 				&mut rasterizer,
 				camera_matrices,
 				draw_options.draw_polygon_normals,
-				map_bsp_non_opt,
+				&map_bsp_non_opt.root,
 				&mut index,
 			);
 		}
