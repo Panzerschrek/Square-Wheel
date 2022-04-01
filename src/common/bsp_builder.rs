@@ -45,7 +45,10 @@ fn build_leaf_bsp_tree_r(mut in_polygons: Vec<Polygon>) -> BSPNodeChild
 	if splitter_plane_opt.is_none()
 	{
 		// No splitter plane means this is a leaf.
-		return BSPNodeChild::LeafChild(BSPLeaf { polygons: in_polygons, portals : Vec::new() });
+		return BSPNodeChild::LeafChild(BSPLeaf {
+			polygons: in_polygons,
+			portals: Vec::new(),
+		});
 	}
 	let splitter_plane = splitter_plane_opt.unwrap();
 
@@ -350,19 +353,22 @@ fn get_point_position_relative_plane(point: &Vec3f, plane: &Plane) -> PointPosit
 	}
 }
 
-fn build_protals(node : &mut BSPNodeChild)
+fn build_protals(node: &mut BSPNodeChild)
 {
 	let mut splitter_planes = Vec::new();
 	build_protals_r(node, &mut splitter_planes);
 }
 
-fn build_protals_r(node_child : &mut BSPNodeChild, splitter_planes : &mut Vec<Plane>)
+fn build_protals_r(node_child: &mut BSPNodeChild, splitter_planes: &mut Vec<Plane>)
 {
 	match node_child
 	{
 		BSPNodeChild::NodeChild(node) =>
 		{
-			splitter_planes.push(Plane{ vec: -node.plane.vec, dist: -node.plane.dist });
+			splitter_planes.push(Plane {
+				vec: -node.plane.vec,
+				dist: -node.plane.dist,
+			});
 			build_protals_r(&mut node.children[0], splitter_planes);
 			splitter_planes.pop();
 			splitter_planes.push(node.plane);
@@ -376,10 +382,10 @@ fn build_protals_r(node_child : &mut BSPNodeChild, splitter_planes : &mut Vec<Pl
 	}
 }
 
-fn build_leaf_portals(leaf : &mut BSPLeaf, splitter_planes : &[Plane])
+fn build_leaf_portals(leaf: &mut BSPLeaf, splitter_planes: &[Plane])
 {
 	// For each splitter plane create portal polygon - boounded with all other splitter planes and leaf polygons.
-	
+
 	let mut cut_planes = Vec::<Plane>::new();
 	for splitter_plane in splitter_planes
 	{
@@ -387,18 +393,39 @@ fn build_leaf_portals(leaf : &mut BSPLeaf, splitter_planes : &[Plane])
 	}
 	for polygon in &leaf.polygons
 	{
-		cut_planes.push(Plane{vec: -polygon.plane.vec, dist: -polygon.plane.dist});
+		cut_planes.push(Plane {
+			vec: -polygon.plane.vec,
+			dist: -polygon.plane.dist,
+		});
 	}
-	
+
 	// Add extra large bounding box in case of open leafs.
 	let inf = 1.0e8;
-	cut_planes.push(Plane{vec: Vec3f::new(1.0, 0.0, 0.0), dist: inf });
-	cut_planes.push(Plane{vec: Vec3f::new(-1.0, 0.0, 0.0), dist: inf });
-	cut_planes.push(Plane{vec: Vec3f::new(0.0, 1.0, 0.0), dist: inf });
-	cut_planes.push(Plane{vec: Vec3f::new(0.0, -1.0, 0.0), dist: inf });
-	cut_planes.push(Plane{vec: Vec3f::new(0.0, 0.0, 1.0), dist: inf });
-	cut_planes.push(Plane{vec: Vec3f::new(0.0, 0.0, -1.0), dist: inf });
-	
+	cut_planes.push(Plane {
+		vec: Vec3f::new(1.0, 0.0, 0.0),
+		dist: inf,
+	});
+	cut_planes.push(Plane {
+		vec: Vec3f::new(-1.0, 0.0, 0.0),
+		dist: inf,
+	});
+	cut_planes.push(Plane {
+		vec: Vec3f::new(0.0, 1.0, 0.0),
+		dist: inf,
+	});
+	cut_planes.push(Plane {
+		vec: Vec3f::new(0.0, -1.0, 0.0),
+		dist: inf,
+	});
+	cut_planes.push(Plane {
+		vec: Vec3f::new(0.0, 0.0, 1.0),
+		dist: inf,
+	});
+	cut_planes.push(Plane {
+		vec: Vec3f::new(0.0, 0.0, -1.0),
+		dist: inf,
+	});
+
 	for portal_plane in splitter_planes
 	{
 		let mut portal_vertices = Vec::new();
@@ -417,15 +444,16 @@ fn build_leaf_portals(leaf : &mut BSPLeaf, splitter_planes : &[Plane])
 				{
 					continue;
 				}
-				
+
 				let mat = Mat3f::from_cols(portal_plane.vec, cut_plane_i.vec, cut_plane_j.vec).transpose();
 				let inv_mat_opt = mat.invert();
 				if inv_mat_opt.is_none()
 				{
 					continue; // No solution - some planes are parallel.
 				}
-				let intersection_point = inv_mat_opt.unwrap() * Vec3f::new(portal_plane.dist, cut_plane_i.dist, cut_plane_j.dist);
-				
+				let intersection_point =
+					inv_mat_opt.unwrap() * Vec3f::new(portal_plane.dist, cut_plane_i.dist, cut_plane_j.dist);
+
 				let mut is_behind_another_plane = false;
 				for k in 0 .. cut_planes.len()
 				{
@@ -444,30 +472,34 @@ fn build_leaf_portals(leaf : &mut BSPLeaf, splitter_planes : &[Plane])
 						break;
 					}
 				} // for k
-				
+
 				if !is_behind_another_plane
 				{
 					portal_vertices.push(intersection_point);
 				}
 			} // for j
 		} // for i
-		
+
 		if portal_vertices.is_empty()
 		{
 			continue;
 		}
-		
+
 		let portal_vertices_deduplicated = map_polygonizer::remove_duplicate_vertices(&portal_vertices);
 		if portal_vertices_deduplicated.len() < 3
 		{
 			continue;
 		}
 
-		let portal_vertices_sorted = map_polygonizer::sort_convex_polygon_vertices(portal_vertices_deduplicated, portal_plane);
+		let portal_vertices_sorted =
+			map_polygonizer::sort_convex_polygon_vertices(portal_vertices_deduplicated, portal_plane);
 		if portal_vertices_sorted.len() < 3
 		{
 			continue;
 		}
-		leaf.portals.push(LeafPortal{ vertices: portal_vertices_sorted, plane: *portal_plane } );
+		leaf.portals.push(LeafPortal {
+			vertices: portal_vertices_sorted,
+			plane: *portal_plane,
+		});
 	} // for portal planes
 }

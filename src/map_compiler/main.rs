@@ -97,7 +97,7 @@ fn calculate_bsp_tree_stats_r(node_child: &bsp_builder::BSPNodeChild, depth: usi
 			{
 				stats.num_polygon_vertices += polygon.vertices.len();
 			}
-			
+
 			stats.num_portals += leaf.portals.len();
 			for portal in &leaf.portals
 			{
