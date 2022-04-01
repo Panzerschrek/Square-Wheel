@@ -107,7 +107,7 @@ impl<'a> DebugRasterizer<'a>
 		}
 	}
 
-	pub fn fill_triangle(&mut self, vertices: &[PointProjected; 3], depth_equation: &DepthEquation, tex_coord_equation: &TexCoordEquation, color: Color32)
+	pub fn fill_triangle(&mut self, vertices: &[PointProjected; 3], color: Color32)
 	{
 		// TODO - process thin triangles specially.
 
@@ -145,6 +145,9 @@ impl<'a> DebugRasterizer<'a>
 		let lower_part_dy = vertices[middle_index].y - vertices[lower_index].y;
 		let upper_part_dy = vertices[upper_index].y - vertices[middle_index].y;
 
+		let long_edge_dz_dy = (vertices[upper_index].z - vertices[lower_index].z) / fixed16_to_f32(long_edge_dy);
+		let long_edge_z_in_middle = vertices[lower_index].z +
+			long_edge_dz_dy * fixed16_to_f32(vertices[middle_index].y - vertices[lower_index].y);
 
 		if long_edge_x_in_middle >= vertices[middle_index].x
 		{
@@ -158,9 +161,13 @@ impl<'a> DebugRasterizer<'a>
 			//          _ \
 			//            _\
 
+			let dz_dx = (long_edge_z_in_middle - vertices[middle_index].z) /
+				fixed16_to_f32(long_edge_x_in_middle - vertices[middle_index].x);
+			let dz_dy = long_edge_dz_dy - dz_dx * fixed16_to_f32(long_edge_dx_dy);
+			let depth_equation = DepthEquation{ d_inv_z_dx : dz_dx, d_inv_z_dy: dz_dy, k: vertices[0].z - fixed16_to_f32(vertices[0].x) * dz_dx - fixed16_to_f32(vertices[0].y) * dz_dy };
 			if lower_part_dy >= FIXED16_HALF
 			{
-				self.fill_polygon_part(
+				self.fill_triangle_part(
 					vertices[lower_index].y,
 					vertices[middle_index].y,
 					PolygonSide {
@@ -171,14 +178,13 @@ impl<'a> DebugRasterizer<'a>
 						x_start: vertices[lower_index].x,
 						dx_dy: long_edge_dx_dy,
 					},
-					depth_equation,
-					tex_coord_equation,
+					&depth_equation,
 					color,
 				);
 			}
 			if upper_part_dy >= FIXED16_HALF
 			{
-				self.fill_polygon_part(
+				self.fill_triangle_part(
 					vertices[middle_index].y,
 					vertices[upper_index].y,
 					PolygonSide {
@@ -189,8 +195,7 @@ impl<'a> DebugRasterizer<'a>
 						x_start: long_edge_x_in_middle,
 						dx_dy: long_edge_dx_dy,
 					},
-					depth_equation,
-					tex_coord_equation,
+					&depth_equation,
 					color,
 				);
 			}
@@ -207,9 +212,13 @@ impl<'a> DebugRasterizer<'a>
 			//  / _
 			// /_
 
+			let dz_dx = (vertices[middle_index].z - long_edge_z_in_middle) /
+				fixed16_to_f32(vertices[middle_index].x - long_edge_x_in_middle);
+			let dz_dy = long_edge_dz_dy - dz_dx * fixed16_to_f32(long_edge_dx_dy);
+			let depth_equation = DepthEquation{ d_inv_z_dx : dz_dx, d_inv_z_dy: dz_dy, k: vertices[0].z - fixed16_to_f32(vertices[0].x) * dz_dx - fixed16_to_f32(vertices[0].y) * dz_dy };
 			if lower_part_dy >= FIXED16_HALF
 			{
-				self.fill_polygon_part(
+				self.fill_triangle_part(
 					vertices[lower_index].y,
 					vertices[middle_index].y,
 					PolygonSide {
@@ -220,14 +229,13 @@ impl<'a> DebugRasterizer<'a>
 						x_start: vertices[lower_index].x,
 						dx_dy: fixed16_div(vertices[middle_index].x - vertices[lower_index].x, lower_part_dy),
 					},
-					depth_equation,
-					tex_coord_equation,
+					&depth_equation,
 					color,
 				);
 			}
 			if upper_part_dy >= FIXED16_HALF
 			{
-				self.fill_polygon_part(
+				self.fill_triangle_part(
 					vertices[middle_index].y,
 					vertices[upper_index].y,
 					PolygonSide {
@@ -238,11 +246,51 @@ impl<'a> DebugRasterizer<'a>
 						x_start: vertices[middle_index].x,
 						dx_dy: fixed16_div(vertices[upper_index].x - vertices[middle_index].x, upper_part_dy),
 					},
-					depth_equation,
-					tex_coord_equation,
+					&depth_equation,
 					color,
 				);
 			}
+		}
+	}
+	
+	fn fill_triangle_part(
+		&mut self,
+		y_start: Fixed16,
+		y_end: Fixed16,
+		left_side: PolygonSide,
+		right_side: PolygonSide,
+		depth_equation: &DepthEquation,
+		color: Color32,
+	)
+	{
+		// TODO replace "F32" with Fixed16 for Z calculation.
+		// TODO - avoid adding "0.5" for some calculations.
+		let y_start_int = fixed16_round_to_int(y_start).max(0);
+		let y_end_int = fixed16_round_to_int(y_end).min(self.height);
+		let y_start_delta = int_to_fixed16(y_start_int) + FIXED16_HALF - y_start;
+		let mut x_left = left_side.x_start + fixed16_mul(y_start_delta, left_side.dx_dy) + FIXED16_HALF;
+		let mut x_right = right_side.x_start + fixed16_mul(y_start_delta, right_side.dx_dy) + FIXED16_HALF;
+		let y_start_f32 = y_start_int as f32 + 0.5;
+		let mut line_inv_z = y_start_f32 * depth_equation.d_inv_z_dy + depth_equation.k;
+		for y_int in y_start_int .. y_end_int
+		{
+			let x_start_int = fixed16_floor_to_int(x_left).max(0);
+			let x_end_int = fixed16_floor_to_int(x_right).min(self.width);
+			let x_start_f32 = x_start_int as f32 + 0.5;
+			let mut inv_z = x_start_f32 * depth_equation.d_inv_z_dx + line_inv_z;
+			for x_int in x_start_int .. x_end_int
+			{
+				let pix_address = (x_int + y_int * self.row_size) as usize;
+				if inv_z <= self.depth_buffer[pix_address]
+				{
+					self.color_buffer[pix_address] = color;
+					self.depth_buffer[pix_address] = inv_z;
+				}
+				inv_z += depth_equation.d_inv_z_dx;
+			}
+			x_left += left_side.dx_dy;
+			x_right += right_side.dx_dy;
+			line_inv_z += depth_equation.d_inv_z_dy;
 		}
 	}
 	

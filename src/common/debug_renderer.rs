@@ -575,22 +575,6 @@ fn draw_triangle(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, ver
 	{
 		return;
 	}
-	
-	// TODO
-	let depth_equation = 
-	DepthEquation
-	{
-		d_inv_z_dx : 0.0,
-		d_inv_z_dy : 0.0,
-		k: 0.0,
-	};
-	let tc_equation = TexCoordEquation
-	{
-		d_tc_dx: [ 0.0, 0.0 ],
-		d_tc_dy: [ 0.0, 0.0, ],
-		d_tc_dz: [ 0.0, 0.0 ],
-		k : [ 0.0, 0.0 ]
-	};
 
 	rasterizer.fill_triangle(
 		&[
@@ -610,8 +594,6 @@ fn draw_triangle(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, ver
 				z: v2.z,
 			},
 		],
-		&depth_equation,
-		&tc_equation,
 		color,
 	);
 }
