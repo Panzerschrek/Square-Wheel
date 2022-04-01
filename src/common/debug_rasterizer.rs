@@ -32,7 +32,7 @@ impl<'a> DebugRasterizer<'a>
 		self.height
 	}
 
-	pub fn draw_line(&mut self, mut v0: PointProjected, mut v1: PointProjected, color: Color32)
+	pub fn draw_line(&mut self, mut v0: PointProjectedWithZ, mut v1: PointProjectedWithZ, color: Color32)
 	{
 		// TODO - optimize this. Discard lines totally outside viewport.
 		// TODO - process depth using fixed values, instead of floating point.
@@ -107,7 +107,7 @@ impl<'a> DebugRasterizer<'a>
 		}
 	}
 
-	pub fn fill_triangle(&mut self, vertices: &[PointProjected; 3], color: Color32)
+	pub fn fill_triangle(&mut self, vertices: &[PointProjectedWithZ; 3], color: Color32)
 	{
 		// TODO - process thin triangles specially.
 
@@ -297,7 +297,7 @@ impl<'a> DebugRasterizer<'a>
 	// Fill convex clockwise polygon.
 	pub fn fill_polygon(
 		&mut self,
-		vertices : &[PointProjected],
+		vertices : &[PolygonPointProjected],
 		depth_equation: &DepthEquation,
 		tex_coord_equation: &TexCoordEquation,
 		color: Color32,
@@ -480,11 +480,18 @@ impl<'a> DebugRasterizer<'a>
 }
 
 #[derive(Copy, Clone)]
-pub struct PointProjected
+pub struct PointProjectedWithZ
 {
 	pub x: Fixed16,
 	pub y: Fixed16,
 	pub z: f32,
+}
+
+#[derive(Copy, Clone)]
+pub struct PolygonPointProjected
+{
+	pub x: Fixed16,
+	pub y: Fixed16,
 }
 
 pub struct DepthEquation

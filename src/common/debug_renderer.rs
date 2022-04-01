@@ -298,14 +298,13 @@ fn draw_polygon(
 	}
 	
 	// Perform f32 to Fixed16 conversion.
-	let mut vertices_for_rasterizer = [ PointProjected{x : 0, y : 0, z : 1.0 }; MAX_VERTICES ]; // TODO - use uninitialized memory
+	let mut vertices_for_rasterizer = [ PolygonPointProjected{x : 0, y : 0 }; MAX_VERTICES ]; // TODO - use uninitialized memory
 	for (index, vertex_2d) in vertices_2d_0.iter().enumerate().take(vertex_count)
 	{
 		vertices_for_rasterizer[index] =
-			PointProjected{
+			PolygonPointProjected{
 				x : f32_to_fixed16(vertex_2d.x),
-				y : f32_to_fixed16(vertex_2d.y),
-				z : 1.0 };
+				y : f32_to_fixed16(vertex_2d.y)};
 	}
 	
 	let tc_basis_transformed =
@@ -528,12 +527,12 @@ fn draw_line(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, line: &
 	}
 
 	rasterizer.draw_line(
-		PointProjected {
+		PointProjectedWithZ {
 			x: f32_to_fixed16(v0.x),
 			y: f32_to_fixed16(v0.y),
 			z: v0.z,
 		},
-		PointProjected {
+		PointProjectedWithZ {
 			x: f32_to_fixed16(v1.x),
 			y: f32_to_fixed16(v1.y),
 			z: v1.z,
@@ -578,17 +577,17 @@ fn draw_triangle(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, ver
 
 	rasterizer.fill_triangle(
 		&[
-			PointProjected {
+			PointProjectedWithZ {
 				x: f32_to_fixed16(v0.x),
 				y: f32_to_fixed16(v0.y),
 				z: v0.z,
 			},
-			PointProjected {
+			PointProjectedWithZ {
 				x: f32_to_fixed16(v1.x),
 				y: f32_to_fixed16(v1.y),
 				z: v1.z,
 			},
-			PointProjected {
+			PointProjectedWithZ {
 				x: f32_to_fixed16(v2.x),
 				y: f32_to_fixed16(v2.y),
 				z: v2.z,
