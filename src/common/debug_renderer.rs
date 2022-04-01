@@ -558,28 +558,46 @@ type WorldLine = (Vec3f, Vec3f, Color32);
 
 fn draw_line(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, line: &WorldLine)
 {
-	let width = rasterizer.get_width() as f32;
-	let height = rasterizer.get_width() as f32;
-
 	let v0 = transform_matrix * line.0.extend(1.0);
 	let v1 = transform_matrix * line.1.extend(1.0);
 
-	// TODO - perform proper clipping
-	if v0.w <= 0.1 || v1.w <= 0.1
+	let mut v0 = Vec3f::new(v0.x, v0.y, v0.w);
+	let mut v1 = Vec3f::new(v1.x, v1.y, v1.w);
+
+	// Perform z_near clipping.
+	const Z_NEAR: f32 = 1.0;
+	if v0.z < Z_NEAR && v1.z < Z_NEAR
 	{
 		return;
 	}
-	let v0 = v0.truncate() / v0.w;
-	let v1 = v1.truncate() / v1.w;
+	if v0.z >= Z_NEAR && v1.z >= Z_NEAR
+	{
+	}
+	else if v0.z > Z_NEAR && v1.z <= Z_NEAR
+	{
+		v1 = get_line_z_intersection(&v0, &v1, Z_NEAR);
+	}
+	else
+	{
+		v0 = get_line_z_intersection(&v0, &v1, Z_NEAR);
+	}
 
-	if v0.x < 0.0 ||
-		v0.x > width ||
-		v0.y < 0.0 ||
-		v0.y > height ||
-		v1.x < 0.0 ||
-		v1.x > width ||
-		v1.y < 0.0 ||
-		v1.y > height
+	let z0 = v0.z;
+	let z1 = v1.z;
+	let v0 = v0.truncate() / z0;
+	let v1 = v1.truncate() / z1;
+
+	// TODO - perform proper clipping.
+	// Now - just prevent Fixed16 overflow.
+	const MAX_COORD: f32 = 8192.0;
+	if v0.x < -MAX_COORD ||
+		v0.x > MAX_COORD ||
+		v0.y < -MAX_COORD ||
+		v0.y > MAX_COORD ||
+		v1.x < -MAX_COORD ||
+		v1.x > MAX_COORD ||
+		v1.y < -MAX_COORD ||
+		v1.y > MAX_COORD
 	{
 		return;
 	}
@@ -588,12 +606,12 @@ fn draw_line(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, line: &
 		PointProjectedWithZ {
 			x: f32_to_fixed16(v0.x),
 			y: f32_to_fixed16(v0.y),
-			z: v0.z,
+			z: -1.0 / z0,
 		},
 		PointProjectedWithZ {
 			x: f32_to_fixed16(v1.x),
 			y: f32_to_fixed16(v1.y),
-			z: v1.z,
+			z: -1.0 / z1,
 		},
 		line.2,
 	);
