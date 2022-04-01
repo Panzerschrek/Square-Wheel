@@ -45,7 +45,9 @@ struct BSPStats
 	num_nodes: usize,
 	num_leafs: usize,
 	num_polygons: usize,
+	num_portals: usize,
 	num_polygon_vertices: usize,
+	num_portal_vertices: usize,
 	min_polygons_in_leaf: usize,
 	max_polygons_in_leaf: usize,
 	min_depth: usize,
@@ -94,6 +96,12 @@ fn calculate_bsp_tree_stats_r(node_child: &bsp_builder::BSPNodeChild, depth: usi
 			for polygon in &leaf.polygons
 			{
 				stats.num_polygon_vertices += polygon.vertices.len();
+			}
+			
+			stats.num_portals += leaf.portals.len();
+			for portal in &leaf.portals
+			{
+				stats.num_portal_vertices += portal.vertices.len();
 			}
 		},
 	}

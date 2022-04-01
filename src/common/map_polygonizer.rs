@@ -1,6 +1,6 @@
 use super::{map_file, math_types::*};
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Plane
 {
 	pub vec: Vec3f, // Unnormalized direction
@@ -169,7 +169,7 @@ fn get_brush_side_plane(brush_side: &map_file::BrushPlane) -> Option<Plane>
 	})
 }
 
-fn remove_duplicate_vertices(in_vertices: &[Vec3f]) -> Vec<Vec3f>
+pub fn remove_duplicate_vertices(in_vertices: &[Vec3f]) -> Vec<Vec3f>
 {
 	let mut result = Vec::new();
 	for in_vertex in in_vertices
@@ -191,7 +191,7 @@ fn remove_duplicate_vertices(in_vertices: &[Vec3f]) -> Vec<Vec3f>
 	result
 }
 
-fn sort_convex_polygon_vertices(mut in_vertices: Vec<Vec3f>, plane: &Plane) -> Vec<Vec3f>
+pub fn sort_convex_polygon_vertices(mut in_vertices: Vec<Vec3f>, plane: &Plane) -> Vec<Vec3f>
 {
 	// First, find average vertex. For convex polygon it is always inside it.
 	let mut vertitces_sum = Vec3f::zero();
