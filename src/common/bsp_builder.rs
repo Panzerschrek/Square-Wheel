@@ -362,16 +362,6 @@ fn get_point_position_relative_plane(point: &Vec3f, plane: &Plane) -> PointPosit
 	}
 }
 
-struct LeafPortalInitial
-{
-	vertices: Vec<Vec3f>,
-	node: rc::Rc<cell::RefCell<BSPNode>>,
-	leaf: rc::Rc<cell::RefCell<BSPLeaf>>,
-	is_front: bool,
-}
-
-type LeafPortalsInitialByNode = std::collections::HashMap<*const BSPNode, Vec<LeafPortalInitial>>;
-
 fn build_protals(node: &BSPNodeChild) -> Vec<LeafsPortal>
 {
 	let mut splitter_nodes = Vec::new();
@@ -392,6 +382,16 @@ struct NodeForPortalsBuild
 	is_front: bool,
 }
 
+struct LeafPortalInitial
+{
+	vertices: Vec<Vec3f>,
+	node: rc::Rc<cell::RefCell<BSPNode>>,
+	leaf: rc::Rc<cell::RefCell<BSPLeaf>>,
+	is_front: bool,
+}
+
+type LeafPortalsInitialByNode = std::collections::HashMap<*const BSPNode, Vec<LeafPortalInitial>>;
+
 fn build_protals_r(
 	node_child: &BSPNodeChild,
 	splitter_nodes: &mut Vec<NodeForPortalsBuild>,
@@ -403,14 +403,14 @@ fn build_protals_r(
 		BSPNodeChild::NodeChild(node) =>
 		{
 			splitter_nodes.push(NodeForPortalsBuild {
-				node: rc::Rc::clone(node),
+				node: node.clone(),
 				is_front: true,
 			});
 			build_protals_r(&node.borrow().children[0], splitter_nodes, leaf_portals_by_node);
 			splitter_nodes.pop();
 
 			splitter_nodes.push(NodeForPortalsBuild {
-				node: rc::Rc::clone(node),
+				node: node.clone(),
 				is_front: false,
 			});
 			build_protals_r(&node.borrow().children[1], splitter_nodes, leaf_portals_by_node);
@@ -418,6 +418,7 @@ fn build_protals_r(
 		},
 		BSPNodeChild::LeafChild(leaf_ptr) =>
 		{
+			// Build list of portals by leaf. Than group portals by node.
 			for leaf_portal in build_leaf_portals(leaf_ptr, &splitter_nodes)
 			{
 				let node = leaf_portal.node.clone();
@@ -437,8 +438,8 @@ fn build_leaf_portals(
 	splitter_nodes: &[NodeForPortalsBuild],
 ) -> Vec<LeafPortalInitial>
 {
-	let leaf = &mut leaf_ptr.borrow_mut();
-	// For each splitter plane create portal polygon - boounded with all other splitter planes and leaf polygons.
+	let leaf = &leaf_ptr.borrow();
+	// For each splitter plane create portal polygon - bounded with all other splitter planes and leaf polygons.
 
 	let mut cut_planes = Vec::<Plane>::new();
 	for splitter_node in splitter_nodes
@@ -729,7 +730,7 @@ fn build_portals_intersection(plane: &Plane, vertices0: &[Vec3f], vertices1: &[V
 		prev_v = v;
 	}
 
-	// Build set of vertices based on input planes
+	// Build set of vertices based on input planes.
 	let mut vertices = Vec::new();
 	for plane_a in &clip_planes
 	{
