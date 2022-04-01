@@ -21,7 +21,7 @@ impl CameraController
 
 	pub fn update(&mut self, keyboard_state: &sdl2::keyboard::KeyboardState, time_delta_s: f32)
 	{
-		const SPEED: f32 = 512.0;
+		const SPEED: f32 = 256.0;
 		const JUMP_SPEED: f32 = 0.8 * SPEED;
 		const ANGLE_SPEED: RadiansF = Rad(1.0);
 		const PI: RadiansF = Rad(std::f32::consts::PI);
@@ -101,13 +101,12 @@ impl CameraController
 		}
 	}
 
-	pub fn build_view_matrix(&self, viewport_width: f32, viewport_height: f32) -> Mat4f
+	pub fn build_view_matrix(&self, viewport_width: f32, viewport_height: f32) -> CameraMatrices
 	{
 		// TODO - tune this?
-		let fov = Rad(std::f32::consts::PI * 0.375);
+		let fov = std::f32::consts::PI * 0.375;
+		let inv_half_fov_tan = 1.0 / ((fov * 0.5).tan());
 		let aspect = viewport_width / viewport_height;
-		let z_near = 1.0;
-		let z_far = 64.0 * 256.0;
 
 		let translate = Mat4f::from_translation(-self.pos);
 		let rotate_z = Mat4f::from_angle_z(-self.azimuth);
@@ -116,16 +115,37 @@ impl CameraController
 		let mut basis_change = Mat4f::identity();
 		basis_change.y.y = 0.0;
 		basis_change.z.y = -1.0;
-		basis_change.y.z = -1.0;
+		basis_change.y.z = 1.0;
 		basis_change.z.z = 0.0;
 
-		let perspective = cgmath::perspective(fov, aspect, z_near, z_far);
+		let perspective = Mat4f::from_nonuniform_scale(inv_half_fov_tan / aspect, inv_half_fov_tan, 1.0);
+		// Perform Z and W manipulations only for view matrix, but not for planes equation matrix.
+		let mut perspective_finalization = Mat4f::identity();
+		perspective_finalization.w.z = -1.0;
+		perspective_finalization.z.z = 0.0;
+		perspective_finalization.z.w = 1.0;
+		perspective_finalization.w.w = 0.0;
+
 		let resize_to_viewport = Mat4f::from_nonuniform_scale(viewport_width * 0.5, viewport_height * 0.5, 1.0);
 		let shift_to_viewport_center =
 			Mat4f::from_translation(Vec3f::new(viewport_width * 0.5, viewport_height * 0.5, 0.0));
 
 		// Perform transformations in reverse order in order to perform transformation via "matrix * vector".
 		// TODO - perform calculations in "double" for better pericision?
-		shift_to_viewport_center * resize_to_viewport * perspective * basis_change * rotate_x * rotate_z * translate
+		let base_view_matrix = resize_to_viewport * perspective * basis_change * rotate_x * rotate_z * translate;
+		// TODO - maybe avoid clculation of inverse matrix and perform direct matrix calculation?
+		let planes_matrix = base_view_matrix.transpose().invert().unwrap();
+		CameraMatrices {
+			view_matrix: shift_to_viewport_center * perspective_finalization * base_view_matrix,
+			planes_matrix,
+		}
 	}
+}
+
+pub struct CameraMatrices
+{
+	// Matrix used for vertices projection. Viewport size scale and shift applied.
+	pub view_matrix: Mat4f,
+	// Matrix used for transformation of plane equations. Viewport center shift is not applied.
+	pub planes_matrix: Mat4f,
 }

@@ -28,6 +28,11 @@ pub fn fixed16_to_f32(x: Fixed16) -> f32
 	(x as f32) / (FIXED16_ONE as f32)
 }
 
+pub fn f32_to_fixed16(x: f32) -> Fixed16
+{
+	(x * (FIXED16_ONE as f32)) as Fixed16
+}
+
 pub fn fixed16_mul(x: Fixed16, y: Fixed16) -> Fixed16
 {
 	(((x as i64) * (y as i64)) >> FIXED16_BASE) as i32
