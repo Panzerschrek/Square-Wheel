@@ -676,10 +676,6 @@ fn build_leafs_portals(in_portals: &[LeafPortalInitial]) -> Vec<LeafsPortal>
 		}
 
 		let plane = portal_front.node.borrow().plane;
-		let plane_inverted = Plane {
-			vec: -plane.vec,
-			dist: -plane.dist,
-		};
 
 		for portal_back in in_portals
 		{
@@ -695,11 +691,10 @@ fn build_leafs_portals(in_portals: &[LeafPortalInitial]) -> Vec<LeafsPortal>
 				continue;
 			}
 
-			// TODO - enable this check.
-			// if is_portal_fully_covered_by_leaf_polygons(&plane_inverted, &portals_intersection, &portal_a.leaf.borrow()) ||
-			// 	is_portal_fully_covered_by_leaf_polygons(&plane, &portals_intersection, &portal_b.leaf.borrow())
+			if portal_is_fully_covered_by_leaf_polygons(&plane, &portals_intersection, &portal_front.leaf.borrow()) ||
+				portal_is_fully_covered_by_leaf_polygons(&plane, &portals_intersection, &portal_back.leaf.borrow())
 			{
-				// continue;
+				continue;
 			}
 
 			result.push(LeafsPortal {
@@ -801,11 +796,7 @@ fn build_portals_intersection(plane: &Plane, vertices0: &[Vec3f], vertices1: &[V
 	map_polygonizer::sort_convex_polygon_vertices(vertices_deduplicated, &plane)
 }
 
-fn is_portal_fully_covered_by_leaf_polygons(
-	portal_plane_inverted: &Plane,
-	portal_vertices: &[Vec3f],
-	leaf: &BSPLeaf,
-) -> bool
+fn portal_is_fully_covered_by_leaf_polygons(portal_plane: &Plane, portal_vertices: &[Vec3f], leaf: &BSPLeaf) -> bool
 {
 	// Perform basic portals filtering.
 	// Remove portals that are fully covered by one of leaf polygons.
@@ -815,8 +806,9 @@ fn is_portal_fully_covered_by_leaf_polygons(
 
 	for polygon in &leaf.polygons
 	{
-		// Check only polygons in same plane.
-		if *portal_plane_inverted != polygon.plane
+		let polygon_position = get_polygon_position_relative_plane(polygon, portal_plane);
+		if !(polygon_position == PolygonPositionRelativePlane::CoplanarFront ||
+			polygon_position == PolygonPositionRelativePlane::CoplanarBack)
 		{
 			continue;
 		}
