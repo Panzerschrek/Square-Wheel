@@ -46,7 +46,10 @@ pub fn build_leaf_bsp_tree(entity: &map_polygonizer::Entity) -> BSPTree
 	let tree_root = build_leaf_bsp_tree_r(entity.polygons.clone());
 	let portals = build_protals(&tree_root, &bbox);
 	set_leafs_portals(&portals);
-	BSPTree { root: tree_root, portals }
+	BSPTree {
+		root: tree_root,
+		portals,
+	}
 }
 
 fn build_bounding_box(entity: &map_polygonizer::Entity) -> MapBBox

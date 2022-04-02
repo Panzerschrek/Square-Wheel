@@ -98,20 +98,6 @@ fn draw_map(
 				&map_bsp_non_opt.root,
 				&mut index,
 			);
-
-			if draw_options.draw_all_portals
-			{
-				for (index, portal) in map_bsp_non_opt.portals.iter().enumerate()
-				{
-					draw_portal(
-						&mut rasterizer,
-						camera_matrices,
-						&portal.borrow(),
-						// Color32::from_rgb(255, 255, 255),
-						get_pseudo_random_color(index * 4),
-					);
-				}
-			}
 		}
 		if draw_options.draw_map_sectors_graph
 		{
@@ -121,6 +107,19 @@ fn draw_map(
 				draw_options.draw_polygon_normals,
 				map_bsp_non_opt,
 			);
+		}
+		if draw_options.draw_all_portals
+		{
+			for (index, portal) in map_bsp_non_opt.portals.iter().enumerate()
+			{
+				draw_portal(
+					&mut rasterizer,
+					camera_matrices,
+					&portal.borrow(),
+					// Color32::from_rgb(255, 255, 255),
+					get_pseudo_random_color(index * 4),
+				);
+			}
 		}
 	}
 
@@ -229,13 +228,34 @@ fn draw_map_bsp_r(
 		},
 		bsp_builder::BSPNodeChild::LeafChild(leaf) =>
 		{
-			draw_map_bsp_leaf(
-				rasterizer,
-				camera_matrices,
-				draw_polygon_normals,
-				&leaf.borrow(),
-				*index,
-			);
+			let leaf_ptr_as_int = (&*leaf.borrow()) as *const bsp_builder::BSPLeaf as usize;
+			let mut color = get_pseudo_random_color(leaf_ptr_as_int / std::mem::size_of::<bsp_builder::BSPLeaf>());
+			// let mut color = Color32::from_rgb(
+			// (*index * 3 % 511 - 255) as u8,
+			// (*index * 5 % 511 - 255) as u8,
+			// (*index * 7 % 511 - 255) as u8 );
+
+			if *index == 0
+			{
+				color = Color32::from_rgb(8, 8, 8);
+			}
+
+			draw_map_bsp_leaf(rasterizer, camera_matrices, draw_polygon_normals, &leaf.borrow(), color);
+
+			if *index == 0
+			{
+				for portal_ptr_weak in &leaf.borrow().portals
+				{
+					let portal_ptr = portal_ptr_weak.upgrade().unwrap();
+					draw_portal(
+						rasterizer,
+						camera_matrices,
+						&portal_ptr.borrow(),
+						Color32::from_rgb(255, 255, 255),
+					);
+				}
+			}
+
 			*index += 1;
 		},
 	}
@@ -246,43 +266,12 @@ fn draw_map_bsp_leaf(
 	camera_matrices: &CameraMatrices,
 	draw_polygon_normals: bool,
 	bsp_leaf: &bsp_builder::BSPLeaf,
-	index: usize,
+	color: Color32,
 )
 {
-	// let leaf_ptr_as_int = bsp_leaf as *const bsp_builder::BSPLeaf as usize;
-	// let mut color = get_pseudo_random_color(leaf_ptr_as_int / std::mem::size_of::<bsp_builder::BSPLeaf>());
-	// let color = Color32::from_rgb(
-	// (index * 3 % 511 - 255) as u8,
-	// (index * 5 % 511 - 255) as u8,
-	// (index * 7 % 511 - 255) as u8 );
-	let mut color = Color32::from_rgb(
-		((index * 28).min(255)) as u8,
-		((index * 24).min(255)) as u8,
-		((index * 24).min(255)) as u8,
-	);
-
-	if index == 0
-	{
-		color = Color32::from_rgb(8, 8, 8);
-	}
-
 	for polygon in &bsp_leaf.polygons
 	{
 		draw_polygon(rasterizer, camera_matrices, polygon, color, draw_polygon_normals);
-	}
-
-	if index == 0
-	{
-		for portal_ptr_weak in &bsp_leaf.portals
-		{
-			let portal_ptr = portal_ptr_weak.upgrade().unwrap();
-			draw_portal(
-				rasterizer,
-				camera_matrices,
-				&portal_ptr.borrow(),
-				Color32::from_rgb(255, 255, 255),
-			);
-		}
 	}
 }
 
@@ -300,12 +289,18 @@ fn draw_map_sectors_graph(
 
 	for (_raw_ptr, (sector, depth)) in accessible_sectors
 	{
+		let color = Color32::from_rgb(
+			((depth * 28).min(255)) as u8,
+			((depth * 24).min(255)) as u8,
+			((depth * 24).min(255)) as u8,
+		);
+
 		draw_map_bsp_leaf(
 			rasterizer,
 			camera_matrices,
 			draw_polygon_normals,
 			&sector.borrow(),
-			depth,
+			color,
 		);
 	}
 }
