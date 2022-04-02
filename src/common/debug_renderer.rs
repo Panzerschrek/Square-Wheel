@@ -105,7 +105,7 @@ fn draw_map(
 					draw_portal(
 						&mut rasterizer,
 						camera_matrices,
-						portal,
+						&portal.borrow(),
 						Color32::from_rgb(255, 255, 255),
 					);
 				}

@@ -29,7 +29,7 @@ fn main()
 		let mut num_portal_vertices = 0;
 		for portal in &bsp_tree.portals
 		{
-			num_portal_vertices += portal.vertices.len();
+			num_portal_vertices += portal.borrow().vertices.len();
 		}
 		println!("Initial polygons: {}", map_polygonized[0].polygons.len());
 		println!(

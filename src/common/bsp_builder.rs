@@ -38,13 +38,14 @@ pub enum BSPNodeChild
 pub struct BSPTree
 {
 	pub root: BSPNodeChild,
-	pub portals: Vec<LeafsPortal>,
+	pub portals: Vec<rc::Rc<cell::RefCell<LeafsPortal>>>,
 }
 
 pub fn build_leaf_bsp_tree(entity: &map_polygonizer::Entity) -> BSPTree
 {
 	let root = build_leaf_bsp_tree_r(entity.polygons.clone());
 	let portals = build_protals(&root);
+	set_leafs_portals(&portals);
 	BSPTree { root, portals }
 }
 
@@ -362,7 +363,7 @@ fn get_point_position_relative_plane(point: &Vec3f, plane: &Plane) -> PointPosit
 	}
 }
 
-fn build_protals(node: &BSPNodeChild) -> Vec<LeafsPortal>
+fn build_protals(node: &BSPNodeChild) -> Vec<rc::Rc<cell::RefCell<LeafsPortal>>>
 {
 	let mut splitter_nodes = Vec::new();
 	let mut leaf_portals_by_node = LeafPortalsInitialByNode::new();
@@ -371,7 +372,10 @@ fn build_protals(node: &BSPNodeChild) -> Vec<LeafsPortal>
 	let mut result = Vec::new();
 	for (_node, portals) in leaf_portals_by_node
 	{
-		result.append(&mut build_leafs_portals(&portals));
+		for result_portal in build_leafs_portals(&portals)
+		{
+			result.push(rc::Rc::new(cell::RefCell::new(result_portal)));
+		}
 	}
 	result
 }
@@ -784,4 +788,15 @@ fn build_portals_intersection(plane: &Plane, vertices0: &[Vec3f], vertices1: &[V
 	}
 
 	map_polygonizer::sort_convex_polygon_vertices(vertices_deduplicated, &plane)
+}
+
+fn set_leafs_portals(portals: &[rc::Rc<cell::RefCell<LeafsPortal>>])
+{
+	for portal_ptr in portals
+	{
+		let portal_ptr_weak = rc::Rc::downgrade(portal_ptr);
+		let portal = portal_ptr.borrow();
+		portal.leaf_front.borrow_mut().portals.push(portal_ptr_weak.clone());
+		portal.leaf_back.borrow_mut().portals.push(portal_ptr_weak);
+	}
 }
