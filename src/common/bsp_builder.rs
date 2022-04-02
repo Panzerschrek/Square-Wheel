@@ -712,6 +712,8 @@ fn build_leafs_portals(in_portals: &[LeafPortalInitial]) -> Vec<LeafsPortal>
 // Return < 3 vertices if failed.
 fn build_portals_intersection(plane: &Plane, vertices0: &[Vec3f], vertices1: &[Vec3f]) -> Vec<Vec3f>
 {
+	// TODO - avoid calculations based on polygon edge equations.
+	// SLightly non-convex polygon may ruin portals intersection calculation.
 	let mut clip_planes = Vec::new();
 
 	let mut prev_v = vertices0.last().unwrap();

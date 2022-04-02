@@ -9,6 +9,7 @@ pub struct DrawOptions
 	pub draw_raw_map: bool,
 	pub draw_polygonized_map: bool,
 	pub draw_bsp_map: bool,
+	pub draw_map_sectors_graph: bool,
 	pub draw_all_portals: bool,
 	pub draw_only_first_entity: bool,
 	pub draw_polygon_normals: bool,
@@ -85,9 +86,9 @@ fn draw_map(
 		}
 	}
 
-	if draw_options.draw_bsp_map
+	if let Some(map_bsp_non_opt) = map_bsp
 	{
-		if let Some(map_bsp_non_opt) = map_bsp
+		if draw_options.draw_bsp_map
 		{
 			let mut index = 0;
 			draw_map_bsp_r(
@@ -100,16 +101,26 @@ fn draw_map(
 
 			if draw_options.draw_all_portals
 			{
-				for portal in &map_bsp_non_opt.portals
+				for (index, portal) in map_bsp_non_opt.portals.iter().enumerate()
 				{
 					draw_portal(
 						&mut rasterizer,
 						camera_matrices,
 						&portal.borrow(),
-						Color32::from_rgb(255, 255, 255),
+						// Color32::from_rgb(255, 255, 255),
+						get_pseudo_random_color(index * 4),
 					);
 				}
 			}
+		}
+		if draw_options.draw_map_sectors_graph
+		{
+			draw_map_sectors_graph(
+				&mut rasterizer,
+				camera_matrices,
+				draw_options.draw_polygon_normals,
+				map_bsp_non_opt,
+			);
 		}
 	}
 
@@ -222,7 +233,7 @@ fn draw_map_bsp_r(
 				rasterizer,
 				camera_matrices,
 				draw_polygon_normals,
-				&mut leaf.borrow_mut(),
+				&leaf.borrow(),
 				*index,
 			);
 			*index += 1;
@@ -238,17 +249,17 @@ fn draw_map_bsp_leaf(
 	index: usize,
 )
 {
-	let leaf_ptr_as_int = bsp_leaf as *const bsp_builder::BSPLeaf as usize;
-	let mut color = get_pseudo_random_color(leaf_ptr_as_int / std::mem::size_of::<bsp_builder::BSPLeaf>());
+	// let leaf_ptr_as_int = bsp_leaf as *const bsp_builder::BSPLeaf as usize;
+	// let mut color = get_pseudo_random_color(leaf_ptr_as_int / std::mem::size_of::<bsp_builder::BSPLeaf>());
 	// let color = Color32::from_rgb(
 	// (index * 3 % 511 - 255) as u8,
 	// (index * 5 % 511 - 255) as u8,
 	// (index * 7 % 511 - 255) as u8 );
-	// let color = Color32::from_rgb(
-	// 	((index / 32).min(255)) as u8,
-	// 	((index / 32).min(255)) as u8,
-	// 	((index / 32).min(255)) as u8,
-	//);
+	let mut color = Color32::from_rgb(
+		((index * 28).min(255)) as u8,
+		((index * 24).min(255)) as u8,
+		((index * 24).min(255)) as u8,
+	);
 
 	if index == 0
 	{
@@ -272,6 +283,109 @@ fn draw_map_bsp_leaf(
 				Color32::from_rgb(255, 255, 255),
 			);
 		}
+	}
+}
+
+fn draw_map_sectors_graph(
+	rasterizer: &mut DebugRasterizer,
+	camera_matrices: &CameraMatrices,
+	draw_polygon_normals: bool,
+	bsp_tree: &bsp_builder::BSPTree,
+)
+{
+	let current_sector_ptr = find_current_sector(&bsp_tree.root, &camera_matrices.planes_matrix);
+
+	let mut accessible_sectors = AccessisbleSectorsMap::new();
+	find_accessible_sectors_r(&current_sector_ptr, 0, &mut accessible_sectors);
+
+	for (_raw_ptr, (sector, depth)) in accessible_sectors
+	{
+		draw_map_bsp_leaf(
+			rasterizer,
+			camera_matrices,
+			draw_polygon_normals,
+			&sector.borrow(),
+			depth,
+		);
+	}
+}
+
+fn find_current_sector(
+	bsp_node_child: &bsp_builder::BSPNodeChild,
+	planes_matrix: &Mat4f,
+) -> std::rc::Rc<std::cell::RefCell<bsp_builder::BSPLeaf>>
+{
+	loop
+	{
+		match bsp_node_child
+		{
+			bsp_builder::BSPNodeChild::NodeChild(node_ptr) =>
+			{
+				let node = node_ptr.borrow();
+				let plane_transformed = planes_matrix * node.plane.vec.extend(-node.plane.dist);
+				if plane_transformed.w >= 0.0
+				{
+					return find_current_sector(&node.children[0], planes_matrix);
+				}
+				else
+				{
+					return find_current_sector(&node.children[1], planes_matrix);
+				}
+			},
+			bsp_builder::BSPNodeChild::LeafChild(leaf_ptr) =>
+			{
+				return leaf_ptr.clone();
+			},
+		}
+	}
+}
+
+type AccessisbleSectorsMap = std::collections::HashMap<
+	*const bsp_builder::BSPLeaf,
+	(std::rc::Rc<std::cell::RefCell<bsp_builder::BSPLeaf>>, usize),
+>;
+fn find_accessible_sectors_r(
+	sector_ptr: &std::rc::Rc<std::cell::RefCell<bsp_builder::BSPLeaf>>,
+	depth: usize,
+	accessible_sectors: &mut AccessisbleSectorsMap,
+)
+{
+	let max_depth = 16;
+	if depth > max_depth
+	{
+		return;
+	}
+
+	let sector = sector_ptr.borrow();
+	let sector_raw_ptr = (&*sector) as *const bsp_builder::BSPLeaf;
+	if accessible_sectors.contains_key(&sector_raw_ptr)
+	{
+		let prev_depth = &mut accessible_sectors.get_mut(&sector_raw_ptr).unwrap().1;
+		if *prev_depth <= depth
+		{
+			return;
+		}
+		*prev_depth = depth;
+	}
+	else
+	{
+		accessible_sectors.insert(sector_raw_ptr, (sector_ptr.clone(), depth));
+	}
+
+	for portal_ptr_weak in &sector.portals
+	{
+		let protal_ptr = portal_ptr_weak.upgrade().unwrap();
+		let portal = protal_ptr.borrow();
+		let leaf_front = portal.leaf_front.borrow();
+		let linked_sector_ptr = if (&*leaf_front) as *const bsp_builder::BSPLeaf == sector_raw_ptr
+		{
+			&portal.leaf_back
+		}
+		else
+		{
+			&portal.leaf_front
+		};
+		find_accessible_sectors_r(linked_sector_ptr, depth + 1, accessible_sectors);
 	}
 }
 

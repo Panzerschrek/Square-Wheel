@@ -21,6 +21,9 @@ struct Opt
 	draw_bsp_map: bool,
 
 	#[structopt(long)]
+	draw_map_sectors_graph: bool,
+
+	#[structopt(long)]
 	draw_all_portals: bool,
 
 	#[structopt(long)]
@@ -41,12 +44,12 @@ pub fn main()
 	{
 		let file_contents_str = std::fs::read_to_string(path).unwrap();
 		map_file_parsed_opt = map_file::parse_map_file_content(&file_contents_str).ok();
-		if opt.draw_polygonized_map || opt.draw_bsp_map
+		if opt.draw_polygonized_map || opt.draw_bsp_map || opt.draw_map_sectors_graph
 		{
 			if let Some(map_file) = &map_file_parsed_opt
 			{
 				let map_polygonized = map_polygonizer::polygonize_map(map_file);
-				if opt.draw_bsp_map
+				if opt.draw_bsp_map || opt.draw_map_sectors_graph
 				{
 					map_bsp_tree_opt = Some(bsp_builder::build_leaf_bsp_tree(&map_polygonized[0]));
 				}
@@ -87,6 +90,7 @@ pub fn main()
 					draw_raw_map: opt.draw_raw_map,
 					draw_polygonized_map: opt.draw_polygonized_map,
 					draw_bsp_map: opt.draw_bsp_map,
+					draw_map_sectors_graph: opt.draw_map_sectors_graph,
 					draw_only_first_entity: false,
 					draw_polygon_normals: opt.draw_polygon_normals,
 					draw_all_portals: opt.draw_all_portals,
