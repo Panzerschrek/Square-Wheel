@@ -768,7 +768,7 @@ fn build_portals_intersection(plane: &Plane, vertices0: &[Vec3f], vertices1: &[V
 					continue;
 				}
 				const EPS: f32 = 1.0 / 16.0;
-				if intersection_point.dot(plane_k.vec) > plane_k.dist + plane_k.vec.magnitude() / EPS
+				if intersection_point.dot(plane_k.vec) > plane_k.dist + plane_k.vec.magnitude() * EPS
 				{
 					is_behind_another_plane = true;
 					break;
