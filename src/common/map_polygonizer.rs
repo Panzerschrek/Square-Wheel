@@ -171,13 +171,21 @@ fn get_brush_side_plane(brush_side: &map_file::BrushPlane) -> Option<Plane>
 
 pub fn remove_duplicate_vertices(in_vertices: &[Vec3f]) -> Vec<Vec3f>
 {
-	let mut result = Vec::new();
+	const DIST_EPS : f32 = 1.0 / 16.0;
+	
+	let mut result = Vec::<Vec3f>::new();
 	for in_vertex in in_vertices
 	{
 		let mut duplicate = false;
 		for existing_vertex in &result
 		{
 			if existing_vertex == in_vertex
+			{
+				duplicate = true;
+				break;
+			}
+			let square_dist = (existing_vertex - in_vertex).magnitude2();
+			if square_dist <= DIST_EPS * DIST_EPS
 			{
 				duplicate = true;
 				break;

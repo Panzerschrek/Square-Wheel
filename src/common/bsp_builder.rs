@@ -564,7 +564,7 @@ fn build_leaf_portals(
 			} // for j
 		} // for i
 
-		if portal_vertices.is_empty()
+		if portal_vertices.len() < 3
 		{
 			continue;
 		}
@@ -576,7 +576,7 @@ fn build_leaf_portals(
 		}
 
 		let portal_vertices_sorted =
-			map_polygonizer::sort_convex_polygon_vertices(portal_vertices_deduplicated, &portal_plane);
+			map_polygonizer::sort_convex_polygon_vertices(portal_vertices_deduplicated, &node.plane);
 		if portal_vertices_sorted.len() < 3
 		{
 			continue;
@@ -597,53 +597,46 @@ fn build_leaf_portals(
 fn build_leafs_portals(in_portals: &[LeafPortalInitial]) -> Vec<LeafsPortal>
 {
 	let mut result = Vec::new();
-	for portal_a in in_portals
+	for portal_front in in_portals
 	{
-		let plane = portal_a.node.borrow().plane;
+		if !portal_front.is_front
+		{
+			continue;
+		}
+		
+		let plane = portal_front.node.borrow().plane;
 		let plane_inverted = Plane {
 			vec: -plane.vec,
 			dist: -plane.dist,
 		};
-		for portal_b in in_portals
+
+		for portal_back in in_portals
 		{
-			// Process pairs on different sides of node plane.
-			if portal_a.is_front == portal_b.is_front
+			if portal_back.is_front
 			{
 				continue;
 			}
 
-			let portals_intersection = build_portals_intersection(&plane, &portal_a.vertices, &portal_b.vertices);
+			let portals_intersection =
+				build_portals_intersection(&plane, &portal_back.vertices, &portal_front.vertices);
 			if portals_intersection.len() < 3
 			{
 				continue;
 			}
 
-			if is_portal_fully_covered_by_leaf_polygons(&plane_inverted, &portals_intersection, &portal_a.leaf.borrow()) ||
-				is_portal_fully_covered_by_leaf_polygons(&plane, &portals_intersection, &portal_b.leaf.borrow())
+			// TODO - enable this check.
+			//if is_portal_fully_covered_by_leaf_polygons(&plane_inverted, &portals_intersection, &portal_a.leaf.borrow()) ||
+			//	is_portal_fully_covered_by_leaf_polygons(&plane, &portals_intersection, &portal_b.leaf.borrow())
 			{
-				continue;
+				//continue;
 			}
 
-			let portal_final = if portal_a.is_front
-			{
-				LeafsPortal {
-					leaf_front: portal_a.leaf.clone(),
-					leaf_back: portal_b.leaf.clone(),
-					plane: plane,
-					vertices: portals_intersection,
-				}
-			}
-			else
-			{
-				LeafsPortal {
-					leaf_back: portal_b.leaf.clone(),
-					leaf_front: portal_a.leaf.clone(),
-					plane: plane,
-					vertices: portals_intersection,
-				}
-			};
-
-			result.push(portal_final);
+			result.push(LeafsPortal {
+				leaf_front: portal_front.leaf.clone(),
+				leaf_back: portal_back.leaf.clone(),
+				plane: plane,
+				vertices: portals_intersection,
+			});
 		}
 	}
 
@@ -655,7 +648,6 @@ fn build_portals_intersection(plane: &Plane, vertices0: &[Vec3f], vertices1: &[V
 {
 	let mut clip_planes = Vec::new();
 
-	// Add vertices0 planes.
 	let mut prev_v = vertices0.last().unwrap();
 	for v in vertices0
 	{
@@ -663,56 +655,67 @@ fn build_portals_intersection(plane: &Plane, vertices0: &[Vec3f], vertices1: &[V
 		clip_planes.push(Plane { vec, dist: vec.dot(*v) });
 		prev_v = v;
 	}
-	// Add vertices1 planes using different sign of cross product.
 	let mut prev_v = vertices1.last().unwrap();
 	for v in vertices1
 	{
-		let vec = (v - prev_v).cross(plane.vec);
+		let vec = (prev_v - v).cross(plane.vec);
 		clip_planes.push(Plane { vec, dist: vec.dot(*v) });
 		prev_v = v;
 	}
 
 	// Build set of vertices based on input planes.
 	let mut vertices = Vec::new();
-	for plane_a in &clip_planes
+	for i in 0 .. clip_planes.len()
 	{
-		for plane_b in &clip_planes
+		let plane_i = clip_planes[i];
+		for j in i + 1 .. clip_planes.len()
 		{
-			if plane_a == plane_b
+			let plane_j = clip_planes[j];
+			if plane_j == plane_i
+			{
+				continue;
+			}
+			// Ignore planes almost parallel to each other.
+			if (plane_i.vec.cross(plane_j.vec).magnitude() / plane_i.vec.dot(plane_j.vec)).abs() < 0.0001
 			{
 				continue;
 			}
 
 			// Find intersection point between portal side planes and plane of portal.
-			let mat = Mat3f::from_cols(plane.vec, plane_a.vec, plane_b.vec).transpose();
+			let mat = Mat3f::from_cols(plane.vec, plane_i.vec, plane_j.vec).transpose();
 			let inv_mat_opt = mat.invert();
 			if inv_mat_opt.is_none()
 			{
 				continue; // No solution - some planes are parallel.
 			}
-			let intersection_point = inv_mat_opt.unwrap() * Vec3f::new(plane.dist, plane_a.dist, plane_b.dist);
+			let intersection_point = inv_mat_opt.unwrap() * Vec3f::new(plane.dist, plane_i.dist, plane_j.dist);
 
 			let mut is_behind_another_plane = false;
-			for plane_c in &clip_planes
+			for k in 0 .. clip_planes.len()
 			{
-				if plane_c == plane_a || plane_c == plane_b
+				if k == i || k == j
 				{
 					continue;
 				}
-
-				if intersection_point.dot(plane_c.vec) > plane_c.dist
+				let plane_k = clip_planes[k];
+				if plane_k == plane_i || plane_k == plane_j
+				{
+					continue;
+				}
+				const EPS: f32 = 1.0 / 16.0;
+				if intersection_point.dot(plane_k.vec) > plane_k.dist + plane_k.vec.magnitude() / EPS
 				{
 					is_behind_another_plane = true;
 					break;
 				}
-			} // for plane_c
+			} // for k
 
 			if !is_behind_another_plane
 			{
 				vertices.push(intersection_point);
 			}
-		} // for plane_b
-	} // for plane_a
+		} // for j
+	} // for i
 
 	if vertices.len() < 3
 	{
