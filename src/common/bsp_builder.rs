@@ -589,80 +589,7 @@ fn build_leaf_portals(
 		});
 	} // for portal planes
 
-	// Perform basic portals filtering.
-	// Remove portals that are fully covered by one of leaf polygons.
-	// Generally we should check for coverage by multiple polygons, but not now.
-
-	const PORTAL_POLYGON_COVERAGE_EPS: f32 = 0.25;
-
-	let mut portals_filtered = Vec::new();
-	for portal in portals
-	{
-		let portal_plane = portal.node.borrow().plane;
-		let portal_plane_inverted = if portal.is_front
-		{
-			portal_plane
-		}
-		else
-		{
-			Plane {
-				vec: -portal_plane.vec,
-				dist: -portal_plane.dist,
-			}
-		};
-		let mut is_covered = false;
-		for polygon in &leaf.polygons
-		{
-			// Check only polygons in same plane.
-			if portal_plane_inverted != polygon.plane
-			{
-				continue;
-			}
-
-			let mut prev_polygon_vertex = polygon.vertices.last().unwrap();
-			let mut portal_is_inside_polygon = true;
-			for polygon_vertex in &polygon.vertices
-			{
-				let vec = (prev_polygon_vertex - polygon_vertex).cross(polygon.plane.vec);
-				let eps_scaled = PORTAL_POLYGON_COVERAGE_EPS * vec.magnitude();
-				let cut_plane = Plane {
-					vec: vec,
-					dist: vec.dot(*polygon_vertex),
-				};
-
-				let mut all_vertices_are_inside = true;
-				for portal_vertex in &portal.vertices
-				{
-					if portal_vertex.dot(cut_plane.vec) > cut_plane.dist + eps_scaled
-					{
-						all_vertices_are_inside = false;
-						break;
-					}
-				}
-
-				prev_polygon_vertex = polygon_vertex;
-
-				if !all_vertices_are_inside
-				{
-					portal_is_inside_polygon = false;
-					break;
-				}
-			} // for polygon edges
-
-			if portal_is_inside_polygon
-			{
-				is_covered = true;
-				break;
-			}
-		} // for polygons
-
-		if !is_covered
-		{
-			portals_filtered.push(portal);
-		}
-	} // for portals
-
-	portals_filtered
+	portals
 }
 
 // Iterate over all pairs of portals of same node.
@@ -673,6 +600,10 @@ fn build_leafs_portals(in_portals: &[LeafPortalInitial]) -> Vec<LeafsPortal>
 	for portal_a in in_portals
 	{
 		let plane = portal_a.node.borrow().plane;
+		let plane_inverted = Plane {
+			vec: -plane.vec,
+			dist: -plane.dist,
+		};
 		for portal_b in in_portals
 		{
 			// Process pairs on different sides of node plane.
@@ -683,6 +614,12 @@ fn build_leafs_portals(in_portals: &[LeafPortalInitial]) -> Vec<LeafsPortal>
 
 			let portals_intersection = build_portals_intersection(&plane, &portal_a.vertices, &portal_b.vertices);
 			if portals_intersection.len() < 3
+			{
+				continue;
+			}
+
+			if is_portal_fully_covered_by_leaf_polygons(&plane_inverted, &portals_intersection, &portal_a.leaf.borrow()) ||
+				is_portal_fully_covered_by_leaf_polygons(&plane, &portals_intersection, &portal_b.leaf.borrow())
 			{
 				continue;
 			}
@@ -705,6 +642,7 @@ fn build_leafs_portals(in_portals: &[LeafPortalInitial]) -> Vec<LeafsPortal>
 					vertices: portals_intersection,
 				}
 			};
+
 			result.push(portal_final);
 		}
 	}
@@ -788,6 +726,65 @@ fn build_portals_intersection(plane: &Plane, vertices0: &[Vec3f], vertices1: &[V
 	}
 
 	map_polygonizer::sort_convex_polygon_vertices(vertices_deduplicated, &plane)
+}
+
+fn is_portal_fully_covered_by_leaf_polygons(
+	portal_plane_inverted: &Plane,
+	portal_vertices: &[Vec3f],
+	leaf: &BSPLeaf,
+) -> bool
+{
+	// Perform basic portals filtering.
+	// Remove portals that are fully covered by one of leaf polygons.
+	// Generally we should check for coverage by multiple polygons, but not now.
+
+	const PORTAL_POLYGON_COVERAGE_EPS: f32 = 0.25;
+
+	for polygon in &leaf.polygons
+	{
+		// Check only polygons in same plane.
+		if *portal_plane_inverted != polygon.plane
+		{
+			continue;
+		}
+
+		let mut prev_polygon_vertex = polygon.vertices.last().unwrap();
+		let mut portal_is_inside_polygon = true;
+		for polygon_vertex in &polygon.vertices
+		{
+			let vec = (prev_polygon_vertex - polygon_vertex).cross(polygon.plane.vec);
+			let eps_scaled = PORTAL_POLYGON_COVERAGE_EPS * vec.magnitude();
+			let cut_plane = Plane {
+				vec: vec,
+				dist: vec.dot(*polygon_vertex),
+			};
+
+			let mut all_vertices_are_inside = true;
+			for portal_vertex in portal_vertices
+			{
+				if portal_vertex.dot(cut_plane.vec) > cut_plane.dist + eps_scaled
+				{
+					all_vertices_are_inside = false;
+					break;
+				}
+			}
+
+			prev_polygon_vertex = polygon_vertex;
+
+			if !all_vertices_are_inside
+			{
+				portal_is_inside_polygon = false;
+				break;
+			}
+		} // for polygon edges
+
+		if portal_is_inside_polygon
+		{
+			return true;
+		}
+	} // for polygons
+
+	false
 }
 
 fn set_leafs_portals(portals: &[rc::Rc<cell::RefCell<LeafsPortal>>])
