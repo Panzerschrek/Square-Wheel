@@ -102,20 +102,12 @@ fn draw_map(
 			{
 				for portal in &map_bsp_non_opt.portals
 				{
-					for v0 in &portal.vertices
-					{
-						for v1 in &portal.vertices
-						{
-							if v0 != v1
-							{
-								draw_line(
-									&mut rasterizer,
-									&camera_matrices.view_matrix,
-									&(*v0, *v1, Color32::from_rgb(255, 255, 255)),
-								);
-							}
-						}
-					}
+					draw_portal(
+						&mut rasterizer,
+						camera_matrices,
+						portal,
+						Color32::from_rgb(255, 255, 255),
+					);
 				}
 			}
 		}
@@ -582,6 +574,45 @@ fn draw_basis(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f)
 	for line in &basis_lines
 	{
 		draw_line(rasterizer, &transform_matrix, line);
+	}
+}
+
+fn draw_portal(
+	rasterizer: &mut DebugRasterizer,
+	camera_matrices: &CameraMatrices,
+	portal: &bsp_builder::LeafsPortal,
+	color: Color32,
+)
+{
+	let shift_vec = portal.plane.vec * (2.0 / portal.plane.vec.magnitude());
+	for v0 in &portal.vertices
+	{
+		let v0_sifted_plus = v0 + shift_vec;
+		let v0_hifted_minus = v0 - shift_vec;
+		for v1 in &portal.vertices
+		{
+			let v1_sifted_plus = v1 + shift_vec;
+			let v1_hifted_minus = v1 - shift_vec;
+			if v0 != v1
+			{
+				draw_line(
+					rasterizer,
+					&camera_matrices.view_matrix,
+					&(v0_sifted_plus, v1_sifted_plus, color),
+				);
+				draw_line(
+					rasterizer,
+					&camera_matrices.view_matrix,
+					&(v0_hifted_minus, v1_hifted_minus, color),
+				);
+			}
+		}
+
+		draw_line(
+			rasterizer,
+			&camera_matrices.view_matrix,
+			&(v0_sifted_plus, v0_hifted_minus, color),
+		);
 	}
 }
 
