@@ -24,7 +24,6 @@ pub struct BSPNode
 pub struct BSPLeaf
 {
 	pub polygons: Vec<Polygon>,
-	// TODO - fill this portals list.
 	pub portals: Vec<rc::Weak<cell::RefCell<LeafsPortal>>>,
 }
 
@@ -42,6 +41,15 @@ pub struct BSPTree
 }
 
 pub fn build_leaf_bsp_tree(entity: &map_polygonizer::Entity) -> BSPTree
+{
+	let bbox = build_bounding_box(entity);
+	let tree_root = build_leaf_bsp_tree_r(entity.polygons.clone());
+	let portals = build_protals(&tree_root, &bbox);
+	set_leafs_portals(&portals);
+	BSPTree { root: tree_root, portals }
+}
+
+fn build_bounding_box(entity: &map_polygonizer::Entity) -> MapBBox
 {
 	let inf = 1.0e8;
 	let bbox_extend = 128.0;
@@ -82,10 +90,7 @@ pub fn build_leaf_bsp_tree(entity: &map_polygonizer::Entity) -> BSPTree
 	bbox.min -= Vec3f::new(bbox_extend, bbox_extend, bbox_extend);
 	bbox.max += Vec3f::new(bbox_extend, bbox_extend, bbox_extend);
 
-	let root = build_leaf_bsp_tree_r(entity.polygons.clone());
-	let portals = build_protals(&root, &bbox);
-	set_leafs_portals(&portals);
-	BSPTree { root, portals }
+	bbox
 }
 
 fn build_leaf_bsp_tree_r(mut in_polygons: Vec<Polygon>) -> BSPNodeChild
@@ -434,7 +439,7 @@ struct NodeForPortalsBuild
 struct LeafPortalInitial
 {
 	vertices: Vec<Vec3f>,
-	node: rc::Rc<cell::RefCell<BSPNode>>,
+	plane: Plane,
 	leaf: rc::Rc<cell::RefCell<BSPLeaf>>,
 	is_front: bool,
 }
@@ -478,17 +483,7 @@ fn build_protals_r(
 		},
 		BSPNodeChild::LeafChild(leaf_ptr) =>
 		{
-			// Build list of portals by leaf. Than group portals by node.
-			for leaf_portal in build_leaf_portals(leaf_ptr, &splitter_nodes, map_bbox)
-			{
-				let node = leaf_portal.node.clone();
-				let ptr = (&*node.borrow()) as *const BSPNode;
-				if !leaf_portals_by_node.contains_key(&ptr)
-				{
-					leaf_portals_by_node.insert(ptr, Vec::new());
-				}
-				leaf_portals_by_node.get_mut(&ptr).unwrap().push(leaf_portal);
-			}
+			build_leaf_portals(leaf_ptr, &splitter_nodes, map_bbox, leaf_portals_by_node);
 		},
 	}
 }
@@ -497,7 +492,8 @@ fn build_leaf_portals(
 	leaf_ptr: &rc::Rc<cell::RefCell<BSPLeaf>>,
 	splitter_nodes: &[NodeForPortalsBuild],
 	map_bbox: &MapBBox,
-) -> Vec<LeafPortalInitial>
+	leaf_portals_by_node: &mut LeafPortalsInitialByNode,
+)
 {
 	let leaf = &leaf_ptr.borrow();
 	// For each splitter plane create portal polygon - bounded with all other splitter planes and leaf polygons.
@@ -551,7 +547,6 @@ fn build_leaf_portals(
 		dist: -map_bbox.min.z,
 	});
 
-	let mut portals = Vec::new();
 	for splitter_node in splitter_nodes
 	{
 		let node = splitter_node.node.borrow();
@@ -652,15 +647,21 @@ fn build_leaf_portals(
 		{
 			continue;
 		}
-		portals.push(LeafPortalInitial {
-			vertices: portal_vertices_sorted,
-			node: splitter_node.node.clone(),
-			leaf: leaf_ptr.clone(),
-			is_front: splitter_node.is_front,
-		});
-	} // for portal planes
 
-	portals
+		let portal = LeafPortalInitial {
+			vertices: portal_vertices_sorted,
+			leaf: leaf_ptr.clone(),
+			plane: node.plane,
+			is_front: splitter_node.is_front,
+		};
+
+		let ptr = (&*splitter_node.node.borrow()) as *const BSPNode;
+		if !leaf_portals_by_node.contains_key(&ptr)
+		{
+			leaf_portals_by_node.insert(ptr, Vec::new());
+		}
+		leaf_portals_by_node.get_mut(&ptr).unwrap().push(portal);
+	} // for portal planes
 }
 
 // Iterate over all pairs of portals of same node.
@@ -675,7 +676,7 @@ fn build_leafs_portals(in_portals: &[LeafPortalInitial]) -> Vec<LeafsPortal>
 			continue;
 		}
 
-		let plane = portal_front.node.borrow().plane;
+		let plane = portal_front.plane;
 
 		for portal_back in in_portals
 		{
