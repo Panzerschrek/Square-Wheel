@@ -262,7 +262,16 @@ fn draw_map_bsp_leaf(
 
 	if index == 0
 	{
-		// TODO - draw portals.
+		for portal_ptr_weak in &bsp_leaf.portals
+		{
+			let portal_ptr = portal_ptr_weak.upgrade().unwrap();
+			draw_portal(
+				rasterizer,
+				camera_matrices,
+				&portal_ptr.borrow(),
+				Color32::from_rgb(255, 255, 255),
+			);
+		}
 	}
 }
 
