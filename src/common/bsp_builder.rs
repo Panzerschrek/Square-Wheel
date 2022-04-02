@@ -43,8 +43,47 @@ pub struct BSPTree
 
 pub fn build_leaf_bsp_tree(entity: &map_polygonizer::Entity) -> BSPTree
 {
+	let inf = 1.0e8;
+	let bbox_extend = 128.0;
+	let mut bbox = MapBBox {
+		min: Vec3f::new(inf, inf, inf),
+		max: Vec3f::new(-inf, -inf, -inf),
+	};
+	for polygon in &entity.polygons
+	{
+		for v in &polygon.vertices
+		{
+			if v.x < bbox.min.x
+			{
+				bbox.min.x = v.x;
+			}
+			if v.x > bbox.max.x
+			{
+				bbox.max.x = v.x;
+			}
+			if v.y < bbox.min.y
+			{
+				bbox.min.y = v.y;
+			}
+			if v.y > bbox.max.y
+			{
+				bbox.max.y = v.y;
+			}
+			if v.z < bbox.min.z
+			{
+				bbox.min.z = v.z;
+			}
+			if v.z > bbox.max.z
+			{
+				bbox.max.z = v.z;
+			}
+		}
+	}
+	bbox.min -= Vec3f::new(bbox_extend, bbox_extend, bbox_extend);
+	bbox.max += Vec3f::new(bbox_extend, bbox_extend, bbox_extend);
+
 	let root = build_leaf_bsp_tree_r(entity.polygons.clone());
-	let portals = build_protals(&root);
+	let portals = build_protals(&root, &bbox);
 	set_leafs_portals(&portals);
 	BSPTree { root, portals }
 }
@@ -363,11 +402,11 @@ fn get_point_position_relative_plane(point: &Vec3f, plane: &Plane) -> PointPosit
 	}
 }
 
-fn build_protals(node: &BSPNodeChild) -> Vec<rc::Rc<cell::RefCell<LeafsPortal>>>
+fn build_protals(node: &BSPNodeChild, map_bbox: &MapBBox) -> Vec<rc::Rc<cell::RefCell<LeafsPortal>>>
 {
 	let mut splitter_nodes = Vec::new();
 	let mut leaf_portals_by_node = LeafPortalsInitialByNode::new();
-	build_protals_r(node, &mut splitter_nodes, &mut leaf_portals_by_node);
+	build_protals_r(node, &mut splitter_nodes, &mut leaf_portals_by_node, map_bbox);
 
 	let mut result = Vec::new();
 	for (_node, portals) in leaf_portals_by_node
@@ -378,6 +417,12 @@ fn build_protals(node: &BSPNodeChild) -> Vec<rc::Rc<cell::RefCell<LeafsPortal>>>
 		}
 	}
 	result
+}
+
+struct MapBBox
+{
+	min: Vec3f,
+	max: Vec3f,
 }
 
 struct NodeForPortalsBuild
@@ -400,6 +445,7 @@ fn build_protals_r(
 	node_child: &BSPNodeChild,
 	splitter_nodes: &mut Vec<NodeForPortalsBuild>,
 	leaf_portals_by_node: &mut LeafPortalsInitialByNode,
+	map_bbox: &MapBBox,
 )
 {
 	match node_child
@@ -410,20 +456,30 @@ fn build_protals_r(
 				node: node.clone(),
 				is_front: true,
 			});
-			build_protals_r(&node.borrow().children[0], splitter_nodes, leaf_portals_by_node);
+			build_protals_r(
+				&node.borrow().children[0],
+				splitter_nodes,
+				leaf_portals_by_node,
+				map_bbox,
+			);
 			splitter_nodes.pop();
 
 			splitter_nodes.push(NodeForPortalsBuild {
 				node: node.clone(),
 				is_front: false,
 			});
-			build_protals_r(&node.borrow().children[1], splitter_nodes, leaf_portals_by_node);
+			build_protals_r(
+				&node.borrow().children[1],
+				splitter_nodes,
+				leaf_portals_by_node,
+				map_bbox,
+			);
 			splitter_nodes.pop();
 		},
 		BSPNodeChild::LeafChild(leaf_ptr) =>
 		{
 			// Build list of portals by leaf. Than group portals by node.
-			for leaf_portal in build_leaf_portals(leaf_ptr, &splitter_nodes)
+			for leaf_portal in build_leaf_portals(leaf_ptr, &splitter_nodes, map_bbox)
 			{
 				let node = leaf_portal.node.clone();
 				let ptr = (&*node.borrow()) as *const BSPNode;
@@ -440,6 +496,7 @@ fn build_protals_r(
 fn build_leaf_portals(
 	leaf_ptr: &rc::Rc<cell::RefCell<BSPLeaf>>,
 	splitter_nodes: &[NodeForPortalsBuild],
+	map_bbox: &MapBBox,
 ) -> Vec<LeafPortalInitial>
 {
 	let leaf = &leaf_ptr.borrow();
@@ -469,31 +526,29 @@ fn build_leaf_portals(
 		});
 	}
 
-	// Add extra large bounding box in case of open leafs.
-	let inf = 1.0e8;
 	cut_planes.push(Plane {
 		vec: Vec3f::new(1.0, 0.0, 0.0),
-		dist: inf,
+		dist: map_bbox.max.x,
 	});
 	cut_planes.push(Plane {
 		vec: Vec3f::new(-1.0, 0.0, 0.0),
-		dist: inf,
+		dist: -map_bbox.min.x,
 	});
 	cut_planes.push(Plane {
 		vec: Vec3f::new(0.0, 1.0, 0.0),
-		dist: inf,
+		dist: map_bbox.max.y,
 	});
 	cut_planes.push(Plane {
 		vec: Vec3f::new(0.0, -1.0, 0.0),
-		dist: inf,
+		dist: -map_bbox.min.y,
 	});
 	cut_planes.push(Plane {
 		vec: Vec3f::new(0.0, 0.0, 1.0),
-		dist: inf,
+		dist: map_bbox.max.z,
 	});
 	cut_planes.push(Plane {
 		vec: Vec3f::new(0.0, 0.0, -1.0),
-		dist: inf,
+		dist: -map_bbox.min.z,
 	});
 
 	let mut portals = Vec::new();
@@ -513,7 +568,6 @@ fn build_leaf_portals(
 		};
 
 		let mut portal_vertices = Vec::new();
-		// TODO - ignore cut planes almost parallel to this portal plane.
 		for i in 0 .. cut_planes.len()
 		{
 			let cut_plane_i = cut_planes[i];
@@ -521,10 +575,27 @@ fn build_leaf_portals(
 			{
 				continue;
 			}
+			if are_planes_almost_parallel(&portal_plane, &cut_plane_i)
+			{
+				continue;
+			}
+
 			for j in i + 1 .. cut_planes.len()
 			{
 				let cut_plane_j = cut_planes[j];
 				if cut_plane_j == portal_plane
+				{
+					continue;
+				}
+				if cut_plane_j == cut_plane_i
+				{
+					continue;
+				}
+				if are_planes_almost_parallel(&portal_plane, &cut_plane_j)
+				{
+					continue;
+				}
+				if are_planes_almost_parallel(&cut_plane_i, &cut_plane_j)
 				{
 					continue;
 				}
@@ -603,7 +674,7 @@ fn build_leafs_portals(in_portals: &[LeafPortalInitial]) -> Vec<LeafsPortal>
 		{
 			continue;
 		}
-		
+
 		let plane = portal_front.node.borrow().plane;
 		let plane_inverted = Plane {
 			vec: -plane.vec,
@@ -625,10 +696,10 @@ fn build_leafs_portals(in_portals: &[LeafPortalInitial]) -> Vec<LeafsPortal>
 			}
 
 			// TODO - enable this check.
-			//if is_portal_fully_covered_by_leaf_polygons(&plane_inverted, &portals_intersection, &portal_a.leaf.borrow()) ||
-			//	is_portal_fully_covered_by_leaf_polygons(&plane, &portals_intersection, &portal_b.leaf.borrow())
+			// if is_portal_fully_covered_by_leaf_polygons(&plane_inverted, &portals_intersection, &portal_a.leaf.borrow()) ||
+			// 	is_portal_fully_covered_by_leaf_polygons(&plane, &portals_intersection, &portal_b.leaf.borrow())
 			{
-				//continue;
+				// continue;
 			}
 
 			result.push(LeafsPortal {
@@ -675,8 +746,7 @@ fn build_portals_intersection(plane: &Plane, vertices0: &[Vec3f], vertices1: &[V
 			{
 				continue;
 			}
-			// Ignore planes almost parallel to each other.
-			if (plane_i.vec.cross(plane_j.vec).magnitude() / plane_i.vec.dot(plane_j.vec)).abs() < 0.0001
+			if are_planes_almost_parallel(&plane_i, &plane_j)
 			{
 				continue;
 			}
@@ -788,6 +858,11 @@ fn is_portal_fully_covered_by_leaf_polygons(
 	} // for polygons
 
 	false
+}
+
+fn are_planes_almost_parallel(plane0: &Plane, plane1: &Plane) -> bool
+{
+	(plane0.vec.cross(plane1.vec).magnitude() / plane0.vec.dot(plane1.vec)).abs() < 0.0001
 }
 
 fn set_leafs_portals(portals: &[rc::Rc<cell::RefCell<LeafsPortal>>])

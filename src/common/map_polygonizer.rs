@@ -171,8 +171,8 @@ fn get_brush_side_plane(brush_side: &map_file::BrushPlane) -> Option<Plane>
 
 pub fn remove_duplicate_vertices(in_vertices: &[Vec3f]) -> Vec<Vec3f>
 {
-	const DIST_EPS : f32 = 1.0 / 16.0;
-	
+	const DIST_EPS: f32 = 1.0 / 16.0;
+
 	let mut result = Vec::<Vec3f>::new();
 	for in_vertex in in_vertices
 	{
