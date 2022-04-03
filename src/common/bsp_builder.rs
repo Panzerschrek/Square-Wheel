@@ -27,7 +27,7 @@ pub struct BSPLeaf
 	pub portals: Vec<rc::Weak<cell::RefCell<LeafsPortal>>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BSPNodeChild
 {
 	NodeChild(rc::Rc<cell::RefCell<BSPNode>>),
@@ -44,8 +44,8 @@ pub fn build_leaf_bsp_tree(map_entities: &[map_polygonizer::Entity]) -> BSPTree
 {
 	let world_entity = &map_entities[0];
 	let bbox = build_bounding_box(&world_entity);
-	let tree_root = build_leaf_bsp_tree_r(world_entity.polygons.clone());
-	let portals = build_protals(&tree_root, &bbox);
+	let mut tree_root = build_leaf_bsp_tree_r(world_entity.polygons.clone());
+	let mut portals = build_protals(&tree_root, &bbox);
 	set_leafs_portals(&portals);
 
 	let entities_positions = collect_entities_positions(&map_entities[1 ..]);
@@ -55,6 +55,11 @@ pub fn build_leaf_bsp_tree(map_entities: &[map_polygonizer::Entity]) -> BSPTree
 		entities_positions.len(),
 		reachable_leafs.len()
 	);
+
+	// TODO - what if root is marked as unreachable?
+	remove_unreachable_leafs_r(&mut tree_root, &reachable_leafs);
+	remove_unreachable_portals(&mut portals, &reachable_leafs);
+	remove_expired_portals_from_leafs_r(&mut tree_root);
 
 	BSPTree {
 		root: tree_root,
@@ -928,10 +933,7 @@ fn get_leaf_for_point(node_child: &BSPNodeChild, point: &Vec3f) -> rc::Rc<cell::
 				get_leaf_for_point(&node.children[1], point)
 			}
 		},
-		BSPNodeChild::LeafChild(leaf_ptr) =>
-		{
-			leaf_ptr.clone()
-		},
+		BSPNodeChild::LeafChild(leaf_ptr) => leaf_ptr.clone(),
 	}
 }
 
@@ -950,7 +952,86 @@ fn collect_reachable_leafs_r(leaf_ptr: &rc::Rc<cell::RefCell<BSPLeaf>>, reachabl
 	{
 		let protal_ptr = portal_ptr_weak.upgrade().unwrap();
 		let portal = protal_ptr.borrow();
-		collect_reachable_leafs_r(&portal.leaf_back, reachable_leafs);
 		collect_reachable_leafs_r(&portal.leaf_front, reachable_leafs);
+		collect_reachable_leafs_r(&portal.leaf_back, reachable_leafs);
+	}
+}
+
+// Returns "false" if need to delete this child.
+fn remove_unreachable_leafs_r(node_child: &mut BSPNodeChild, reachable_leafs: &ReachableLeafsMap) -> bool
+{
+	match node_child
+	{
+		BSPNodeChild::NodeChild(node_ptr) =>
+		{
+			let mut node = node_ptr.borrow_mut();
+			let preserve_front = remove_unreachable_leafs_r(&mut node.children[0], reachable_leafs);
+			let preserve_back = remove_unreachable_leafs_r(&mut node.children[1], reachable_leafs);
+			if !preserve_front && !preserve_back
+			{
+				return false;
+			}
+			if preserve_front
+			{
+				let child = node.children[0].clone();
+				drop(node);
+				*node_child = child;
+				return true;
+			}
+			else if preserve_back
+			{
+				let child = node.children[1].clone();
+				drop(node);
+				*node_child = child;
+				return true;
+			}
+
+			return true;
+		},
+		BSPNodeChild::LeafChild(leaf_ptr) =>
+		{
+			let leaf = leaf_ptr.borrow();
+			let leaf_raw_ptr = (&*leaf) as *const BSPLeaf;
+			return reachable_leafs.contains_key(&leaf_raw_ptr);
+		},
+	}
+}
+
+fn remove_unreachable_portals(
+	portals: &mut Vec<rc::Rc<cell::RefCell<LeafsPortal>>>,
+	reachable_leafs: &ReachableLeafsMap,
+)
+{
+	portals.retain(|portal_ptr| {
+		let portal = portal_ptr.borrow();
+		for leaf_ptr in [&portal.leaf_front, &portal.leaf_back]
+		{
+			let leaf = leaf_ptr.borrow();
+			let leaf_raw_ptr = (&*leaf) as *const BSPLeaf;
+			if !reachable_leafs.contains_key(&leaf_raw_ptr)
+			{
+				return false;
+			}
+		}
+		true
+	});
+}
+
+fn remove_expired_portals_from_leafs_r(node_child: &mut BSPNodeChild)
+{
+	match node_child
+	{
+		BSPNodeChild::NodeChild(node_ptr) =>
+		{
+			let mut node = node_ptr.borrow_mut();
+			remove_expired_portals_from_leafs_r(&mut node.children[0]);
+			remove_expired_portals_from_leafs_r(&mut node.children[1]);
+		},
+		BSPNodeChild::LeafChild(leaf_ptr) =>
+		{
+			let mut leaf = leaf_ptr.borrow_mut();
+			leaf.portals
+				.retain(|portal_weak_ptr| portal_weak_ptr.strong_count() > 0);
+		},
 	}
 }
