@@ -18,7 +18,7 @@ impl<'a> DebugRasterizer<'a>
 			width: surface_info.width as i32,
 			height: surface_info.height as i32,
 			row_size: (surface_info.pitch) as i32,
-			depth_buffer: vec![1.0e10; surface_info.width * surface_info.pitch],
+			depth_buffer: vec![0.0; surface_info.width * surface_info.pitch],
 		}
 	}
 
@@ -69,7 +69,7 @@ impl<'a> DebugRasterizer<'a>
 				if y_int >= 0 && y_int < self.height
 				{
 					let pix_address = (x_int + y_int * self.row_size) as usize;
-					if z <= self.depth_buffer[pix_address]
+					if z >= self.depth_buffer[pix_address]
 					{
 						self.color_buffer[pix_address] = color;
 						self.depth_buffer[pix_address] = z;
@@ -103,7 +103,7 @@ impl<'a> DebugRasterizer<'a>
 				if x_int >= 0 && x_int < self.width
 				{
 					let pix_address = (x_int + y_int * self.row_size) as usize;
-					if z <= self.depth_buffer[pix_address]
+					if z >= self.depth_buffer[pix_address]
 					{
 						self.color_buffer[pix_address] = color;
 						self.depth_buffer[pix_address] = z;
@@ -297,7 +297,7 @@ impl<'a> DebugRasterizer<'a>
 			for x_int in x_start_int .. x_end_int
 			{
 				let pix_address = (x_int + y_int * self.row_size) as usize;
-				if inv_z <= self.depth_buffer[pix_address]
+				if inv_z >= self.depth_buffer[pix_address]
 				{
 					self.color_buffer[pix_address] = color;
 					self.depth_buffer[pix_address] = inv_z;
@@ -472,7 +472,7 @@ impl<'a> DebugRasterizer<'a>
 			for x_int in x_start_int .. x_end_int
 			{
 				let pix_address = (x_int + y_int * self.row_size) as usize;
-				if inv_z <= self.depth_buffer[pix_address]
+				if inv_z >= self.depth_buffer[pix_address]
 				{
 					let z = 1.0 / inv_z;
 					let pix_tc = [(z * tc[0]) as i32, (z * tc[1]) as i32];

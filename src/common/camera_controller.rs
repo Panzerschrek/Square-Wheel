@@ -121,7 +121,7 @@ impl CameraController
 		let perspective = Mat4f::from_nonuniform_scale(inv_half_fov_tan / aspect, inv_half_fov_tan, 1.0);
 		// Perform Z and W manipulations only for view matrix, but not for planes equation matrix.
 		let mut perspective_finalization = Mat4f::identity();
-		perspective_finalization.w.z = -1.0;
+		perspective_finalization.w.z = 1.0;
 		perspective_finalization.z.z = 0.0;
 		perspective_finalization.z.w = 1.0;
 		perspective_finalization.w.w = 0.0;

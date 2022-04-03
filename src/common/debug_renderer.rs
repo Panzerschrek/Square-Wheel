@@ -397,12 +397,13 @@ fn draw_polygon(
 	let half_width = width * 0.5;
 	let half_height = height * 0.5;
 
-	let d_inv_z_dx = plane_transformed.x / plane_transformed.w;
-	let d_inv_z_dy = plane_transformed.y / plane_transformed.w;
+	let plane_transformed_w = - plane_transformed.w;
+	let d_inv_z_dx = plane_transformed.x / plane_transformed_w;
+	let d_inv_z_dy = plane_transformed.y / plane_transformed_w;
 	let depth_equation = DepthEquation {
 		d_inv_z_dx,
 		d_inv_z_dy,
-		k: plane_transformed.z / plane_transformed.w - d_inv_z_dx * half_width - d_inv_z_dy * half_height,
+		k: plane_transformed.z / plane_transformed_w - d_inv_z_dx * half_width - d_inv_z_dy * half_height,
 	};
 
 	const MAX_VERTICES: usize = 24;
@@ -508,7 +509,7 @@ fn draw_polygon(
 				tc_basis_transformed[1].x * half_width -
 				tc_basis_transformed[1].y * half_height,
 		],
-		k: [-tc_basis_transformed[0].w, -tc_basis_transformed[1].w],
+		k: [tc_basis_transformed[0].w, tc_basis_transformed[1].w],
 	};
 
 	// Perform rasterization of fully clipped polygon.
@@ -783,12 +784,12 @@ fn draw_line(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, line: &
 		PointProjectedWithZ {
 			x: f32_to_fixed16(v0.x),
 			y: f32_to_fixed16(v0.y),
-			z: -1.0 / z0,
+			z: 1.0 / z0,
 		},
 		PointProjectedWithZ {
 			x: f32_to_fixed16(v1.x),
 			y: f32_to_fixed16(v1.y),
-			z: -1.0 / z1,
+			z: 1.0 / z1,
 		},
 		line.2,
 	);
