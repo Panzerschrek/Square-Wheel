@@ -310,28 +310,25 @@ fn find_current_sector(
 	planes_matrix: &Mat4f,
 ) -> std::rc::Rc<std::cell::RefCell<bsp_builder::BSPLeaf>>
 {
-	loop
+	match bsp_node_child
 	{
-		match bsp_node_child
+		bsp_builder::BSPNodeChild::NodeChild(node_ptr) =>
 		{
-			bsp_builder::BSPNodeChild::NodeChild(node_ptr) =>
+			let node = node_ptr.borrow();
+			let plane_transformed = planes_matrix * node.plane.vec.extend(-node.plane.dist);
+			if plane_transformed.w >= 0.0
 			{
-				let node = node_ptr.borrow();
-				let plane_transformed = planes_matrix * node.plane.vec.extend(-node.plane.dist);
-				if plane_transformed.w >= 0.0
-				{
-					return find_current_sector(&node.children[0], planes_matrix);
-				}
-				else
-				{
-					return find_current_sector(&node.children[1], planes_matrix);
-				}
-			},
-			bsp_builder::BSPNodeChild::LeafChild(leaf_ptr) =>
+				return find_current_sector(&node.children[0], planes_matrix);
+			}
+			else
 			{
-				return leaf_ptr.clone();
-			},
-		}
+				return find_current_sector(&node.children[1], planes_matrix);
+			}
+		},
+		bsp_builder::BSPNodeChild::LeafChild(leaf_ptr) =>
+		{
+			return leaf_ptr.clone();
+		},
 	}
 }
 

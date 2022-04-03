@@ -1,4 +1,4 @@
-use super::{map_polygonizer, math_types::*};
+use super::{map_file, map_polygonizer, math_types::*};
 use std::{cell, rc};
 
 pub use map_polygonizer::{Plane, Polygon};
@@ -40,12 +40,22 @@ pub struct BSPTree
 	pub portals: Vec<rc::Rc<cell::RefCell<LeafsPortal>>>,
 }
 
-pub fn build_leaf_bsp_tree(entity: &map_polygonizer::Entity) -> BSPTree
+pub fn build_leaf_bsp_tree(map_entities: &[map_polygonizer::Entity]) -> BSPTree
 {
-	let bbox = build_bounding_box(entity);
-	let tree_root = build_leaf_bsp_tree_r(entity.polygons.clone());
+	let world_entity = &map_entities[0];
+	let bbox = build_bounding_box(&world_entity);
+	let tree_root = build_leaf_bsp_tree_r(world_entity.polygons.clone());
 	let portals = build_protals(&tree_root, &bbox);
 	set_leafs_portals(&portals);
+
+	let entities_positions = collect_entities_positions(&map_entities[1 ..]);
+	let reachable_leafs = collect_reachable_leafs(&tree_root, &entities_positions);
+	println!(
+		"Collected {} positions. Reachable leafs: {}",
+		entities_positions.len(),
+		reachable_leafs.len()
+	);
+
 	BSPTree {
 		root: tree_root,
 		portals,
@@ -870,5 +880,77 @@ fn set_leafs_portals(portals: &[rc::Rc<cell::RefCell<LeafsPortal>>])
 		let portal = portal_ptr.borrow();
 		portal.leaf_front.borrow_mut().portals.push(portal_ptr_weak.clone());
 		portal.leaf_back.borrow_mut().portals.push(portal_ptr_weak);
+	}
+}
+
+fn collect_entities_positions(map_entities: &[map_polygonizer::Entity]) -> Vec<Vec3f>
+{
+	let mut result = Vec::new();
+	for entity in map_entities
+	{
+		if let Some(origin_str) = entity.keys.get("origin")
+		{
+			if let Ok(origin) = map_file::parse_vec3(origin_str)
+			{
+				result.push(origin);
+			}
+		}
+	}
+	result
+}
+
+type ReachableLeafsMap = std::collections::HashMap<*const BSPLeaf, rc::Rc<cell::RefCell<BSPLeaf>>>;
+
+fn collect_reachable_leafs(tree_root: &BSPNodeChild, start_points: &[Vec3f]) -> ReachableLeafsMap
+{
+	let mut reachable_leafs = ReachableLeafsMap::new();
+	for point in start_points
+	{
+		let leaf = get_leaf_for_point(tree_root, point);
+		collect_reachable_leafs_r(&leaf, &mut reachable_leafs);
+	}
+	reachable_leafs
+}
+
+fn get_leaf_for_point(node_child: &BSPNodeChild, point: &Vec3f) -> rc::Rc<cell::RefCell<BSPLeaf>>
+{
+	match node_child
+	{
+		BSPNodeChild::NodeChild(node_ptr) =>
+		{
+			let node = node_ptr.borrow();
+			if node.plane.vec.dot(*point) >= node.plane.dist
+			{
+				get_leaf_for_point(&node.children[0], point)
+			}
+			else
+			{
+				get_leaf_for_point(&node.children[1], point)
+			}
+		},
+		BSPNodeChild::LeafChild(leaf_ptr) =>
+		{
+			leaf_ptr.clone()
+		},
+	}
+}
+
+fn collect_reachable_leafs_r(leaf_ptr: &rc::Rc<cell::RefCell<BSPLeaf>>, reachable_leafs: &mut ReachableLeafsMap)
+{
+	let leaf = leaf_ptr.borrow();
+	let leaf_raw_ptr = (&*leaf) as *const BSPLeaf;
+	if reachable_leafs.contains_key(&leaf_raw_ptr)
+	{
+		return;
+	}
+
+	reachable_leafs.insert(leaf_raw_ptr, leaf_ptr.clone());
+
+	for portal_ptr_weak in &leaf.portals
+	{
+		let protal_ptr = portal_ptr_weak.upgrade().unwrap();
+		let portal = protal_ptr.borrow();
+		collect_reachable_leafs_r(&portal.leaf_back, reachable_leafs);
+		collect_reachable_leafs_r(&portal.leaf_front, reachable_leafs);
 	}
 }

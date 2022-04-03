@@ -51,7 +51,7 @@ pub fn main()
 				let map_polygonized = map_polygonizer::polygonize_map(map_file);
 				if opt.draw_bsp_map || opt.draw_map_sectors_graph
 				{
-					map_bsp_tree_opt = Some(bsp_builder::build_leaf_bsp_tree(&map_polygonized[0]));
+					map_bsp_tree_opt = Some(bsp_builder::build_leaf_bsp_tree(&map_polygonized));
 				}
 				map_polygonized_opt = Some(map_polygonized);
 			}

@@ -64,6 +64,16 @@ pub fn parse_map_file_content(content: Iterator) -> ParseResult<MapFileParsed>
 	Ok(result)
 }
 
+pub fn parse_vec3(s: Iterator) -> ParseResult<Vec3f>
+{
+	let mut it = s;
+	Ok(Vec3f::new(
+		parse_number(&mut it)?,
+		parse_number(&mut it)?,
+		parse_number(&mut it)?,
+	))
+}
+
 fn parse_entity(it: &mut Iterator) -> ParseResult<Entity>
 {
 	*it = &it[1 ..]; // Skip "{"
