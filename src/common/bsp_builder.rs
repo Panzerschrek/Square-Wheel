@@ -7,11 +7,14 @@ pub use map_polygonizer::{Plane, Polygon};
 #[derive(Debug)]
 pub struct LeafsPortal
 {
-	pub leaf_front: rc::Rc<cell::RefCell<BSPLeaf>>,
-	pub leaf_back: rc::Rc<cell::RefCell<BSPLeaf>>,
+	pub leaf_front: BSPLeafPtr,
+	pub leaf_back: BSPLeafPtr,
 	pub plane: Plane,
 	pub vertices: Vec<Vec3f>,
 }
+
+pub type LeafsPortalPtr = rc::Rc<cell::RefCell<LeafsPortal>>;
+pub type LeafsPortalWeakPtr = rc::Weak<cell::RefCell<LeafsPortal>>;
 
 #[derive(Debug)]
 pub struct BSPNode
@@ -20,24 +23,28 @@ pub struct BSPNode
 	pub children: [BSPNodeChild; 2],
 }
 
+pub type BSPNodePtr = rc::Rc<cell::RefCell<BSPNode>>;
+
 #[derive(Debug)]
 pub struct BSPLeaf
 {
 	pub polygons: Vec<Polygon>,
-	pub portals: Vec<rc::Weak<cell::RefCell<LeafsPortal>>>,
+	pub portals: Vec<LeafsPortalWeakPtr>,
 }
+
+pub type BSPLeafPtr = rc::Rc<cell::RefCell<BSPLeaf>>;
 
 #[derive(Debug, Clone)]
 pub enum BSPNodeChild
 {
-	NodeChild(rc::Rc<cell::RefCell<BSPNode>>),
-	LeafChild(rc::Rc<cell::RefCell<BSPLeaf>>),
+	NodeChild(BSPNodePtr),
+	LeafChild(BSPLeafPtr),
 }
 
 pub struct BSPTree
 {
 	pub root: BSPNodeChild,
-	pub portals: Vec<rc::Rc<cell::RefCell<LeafsPortal>>>,
+	pub portals: Vec<LeafsPortalPtr>,
 }
 
 pub fn build_leaf_bsp_tree(map_entities: &[map_polygonizer::Entity]) -> BSPTree
@@ -437,7 +444,7 @@ fn get_point_position_relative_plane(point: &Vec3f, plane: &Plane) -> PointPosit
 	}
 }
 
-fn build_protals(node: &BSPNodeChild, map_bbox: &MapBBox) -> Vec<rc::Rc<cell::RefCell<LeafsPortal>>>
+fn build_protals(node: &BSPNodeChild, map_bbox: &MapBBox) -> Vec<LeafsPortalPtr>
 {
 	let mut splitter_nodes = Vec::new();
 	let mut leaf_portals_by_node = LeafPortalsInitialByNode::new();
@@ -462,7 +469,7 @@ struct MapBBox
 
 struct NodeForPortalsBuild
 {
-	node: rc::Rc<cell::RefCell<BSPNode>>,
+	node: BSPNodePtr,
 	is_front: bool,
 }
 
@@ -470,7 +477,7 @@ struct LeafPortalInitial
 {
 	vertices: Vec<Vec3f>,
 	plane: Plane,
-	leaf: rc::Rc<cell::RefCell<BSPLeaf>>,
+	leaf: BSPLeafPtr,
 	is_front: bool,
 }
 
@@ -519,7 +526,7 @@ fn build_protals_r(
 }
 
 fn build_leaf_portals(
-	leaf_ptr: &rc::Rc<cell::RefCell<BSPLeaf>>,
+	leaf_ptr: &BSPLeafPtr,
 	splitter_nodes: &[NodeForPortalsBuild],
 	map_bbox: &MapBBox,
 	leaf_portals_by_node: &mut LeafPortalsInitialByNode,
@@ -889,7 +896,7 @@ fn are_planes_almost_parallel(plane0: &Plane, plane1: &Plane) -> bool
 	(plane0.vec.cross(plane1.vec).magnitude() / plane0.vec.dot(plane1.vec)).abs() < 0.0001
 }
 
-fn set_leafs_portals(portals: &[rc::Rc<cell::RefCell<LeafsPortal>>])
+fn set_leafs_portals(portals: &[LeafsPortalPtr])
 {
 	for portal_ptr in portals
 	{
@@ -916,7 +923,7 @@ fn collect_entities_positions(map_entities: &[map_polygonizer::Entity]) -> Vec<V
 	result
 }
 
-type ReachableLeafsMap = std::collections::HashMap<*const BSPLeaf, rc::Rc<cell::RefCell<BSPLeaf>>>;
+type ReachableLeafsMap = std::collections::HashMap<*const BSPLeaf, BSPLeafPtr>;
 
 fn collect_reachable_leafs(tree_root: &BSPNodeChild, start_points: &[Vec3f]) -> ReachableLeafsMap
 {
@@ -929,7 +936,7 @@ fn collect_reachable_leafs(tree_root: &BSPNodeChild, start_points: &[Vec3f]) -> 
 	reachable_leafs
 }
 
-fn get_leaf_for_point(node_child: &BSPNodeChild, point: &Vec3f) -> rc::Rc<cell::RefCell<BSPLeaf>>
+fn get_leaf_for_point(node_child: &BSPNodeChild, point: &Vec3f) -> BSPLeafPtr
 {
 	match node_child
 	{
@@ -949,7 +956,7 @@ fn get_leaf_for_point(node_child: &BSPNodeChild, point: &Vec3f) -> rc::Rc<cell::
 	}
 }
 
-fn collect_reachable_leafs_r(leaf_ptr: &rc::Rc<cell::RefCell<BSPLeaf>>, reachable_leafs: &mut ReachableLeafsMap)
+fn collect_reachable_leafs_r(leaf_ptr: &BSPLeafPtr, reachable_leafs: &mut ReachableLeafsMap)
 {
 	let leaf = leaf_ptr.borrow();
 	let leaf_raw_ptr = (&*leaf) as *const BSPLeaf;
@@ -1007,10 +1014,7 @@ fn remove_unreachable_leafs_r(node_child: &mut BSPNodeChild, reachable_leafs: &R
 	}
 }
 
-fn remove_unreachable_portals(
-	portals: &mut Vec<rc::Rc<cell::RefCell<LeafsPortal>>>,
-	reachable_leafs: &ReachableLeafsMap,
-)
+fn remove_unreachable_portals(portals: &mut Vec<LeafsPortalPtr>, reachable_leafs: &ReachableLeafsMap)
 {
 	portals.retain(|portal_ptr| {
 		let portal = portal_ptr.borrow();

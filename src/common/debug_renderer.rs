@@ -284,10 +284,10 @@ fn draw_map_sectors_graph(
 {
 	let current_sector_ptr = find_current_sector(&bsp_tree.root, &camera_matrices.planes_matrix);
 
-	let mut accessible_sectors = AccessisbleSectorsMap::new();
-	find_accessible_sectors_r(&current_sector_ptr, 0, &mut accessible_sectors);
+	let mut reachable_sectors = ReachablebleSectorsMap::new();
+	find_reachable_sectors_r(&current_sector_ptr, 0, &mut reachable_sectors);
 
-	for (_raw_ptr, (sector, depth)) in accessible_sectors
+	for (_raw_ptr, (sector, depth)) in reachable_sectors
 	{
 		let color = Color32::from_rgb(
 			((depth * 28).min(255)) as u8,
@@ -305,10 +305,7 @@ fn draw_map_sectors_graph(
 	}
 }
 
-fn find_current_sector(
-	bsp_node_child: &bsp_builder::BSPNodeChild,
-	planes_matrix: &Mat4f,
-) -> std::rc::Rc<std::cell::RefCell<bsp_builder::BSPLeaf>>
+fn find_current_sector(bsp_node_child: &bsp_builder::BSPNodeChild, planes_matrix: &Mat4f) -> bsp_builder::BSPLeafPtr
 {
 	match bsp_node_child
 	{
@@ -318,28 +315,22 @@ fn find_current_sector(
 			let plane_transformed = planes_matrix * node.plane.vec.extend(-node.plane.dist);
 			if plane_transformed.w >= 0.0
 			{
-				return find_current_sector(&node.children[0], planes_matrix);
+				find_current_sector(&node.children[0], planes_matrix)
 			}
 			else
 			{
-				return find_current_sector(&node.children[1], planes_matrix);
+				find_current_sector(&node.children[1], planes_matrix)
 			}
 		},
-		bsp_builder::BSPNodeChild::LeafChild(leaf_ptr) =>
-		{
-			return leaf_ptr.clone();
-		},
+		bsp_builder::BSPNodeChild::LeafChild(leaf_ptr) => leaf_ptr.clone(),
 	}
 }
 
-type AccessisbleSectorsMap = std::collections::HashMap<
-	*const bsp_builder::BSPLeaf,
-	(std::rc::Rc<std::cell::RefCell<bsp_builder::BSPLeaf>>, usize),
->;
-fn find_accessible_sectors_r(
-	sector_ptr: &std::rc::Rc<std::cell::RefCell<bsp_builder::BSPLeaf>>,
+type ReachablebleSectorsMap = std::collections::HashMap<*const bsp_builder::BSPLeaf, (bsp_builder::BSPLeafPtr, usize)>;
+fn find_reachable_sectors_r(
+	sector_ptr: &bsp_builder::BSPLeafPtr,
 	depth: usize,
-	accessible_sectors: &mut AccessisbleSectorsMap,
+	reachable_sectors: &mut ReachablebleSectorsMap,
 )
 {
 	let max_depth = 16;
@@ -350,9 +341,9 @@ fn find_accessible_sectors_r(
 
 	let sector = sector_ptr.borrow();
 	let sector_raw_ptr = (&*sector) as *const bsp_builder::BSPLeaf;
-	if accessible_sectors.contains_key(&sector_raw_ptr)
+	if reachable_sectors.contains_key(&sector_raw_ptr)
 	{
-		let prev_depth = &mut accessible_sectors.get_mut(&sector_raw_ptr).unwrap().1;
+		let prev_depth = &mut reachable_sectors.get_mut(&sector_raw_ptr).unwrap().1;
 		if *prev_depth <= depth
 		{
 			return;
@@ -361,7 +352,7 @@ fn find_accessible_sectors_r(
 	}
 	else
 	{
-		accessible_sectors.insert(sector_raw_ptr, (sector_ptr.clone(), depth));
+		reachable_sectors.insert(sector_raw_ptr, (sector_ptr.clone(), depth));
 	}
 
 	for portal_ptr_weak in &sector.portals
@@ -377,7 +368,7 @@ fn find_accessible_sectors_r(
 		{
 			&portal.leaf_front
 		};
-		find_accessible_sectors_r(linked_sector_ptr, depth + 1, accessible_sectors);
+		find_reachable_sectors_r(linked_sector_ptr, depth + 1, reachable_sectors);
 	}
 }
 
