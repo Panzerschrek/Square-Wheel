@@ -18,7 +18,7 @@ impl<'a> DebugRasterizer<'a>
 			width: surface_info.width as i32,
 			height: surface_info.height as i32,
 			row_size: (surface_info.pitch) as i32,
-			depth_buffer: vec![0.0; surface_info.width * surface_info.pitch],
+			depth_buffer: vec![0.0; surface_info.pitch * surface_info.height],
 		}
 	}
 

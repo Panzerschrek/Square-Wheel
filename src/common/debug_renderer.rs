@@ -397,7 +397,7 @@ fn draw_polygon(
 	let half_width = width * 0.5;
 	let half_height = height * 0.5;
 
-	let plane_transformed_w = - plane_transformed.w;
+	let plane_transformed_w = -plane_transformed.w;
 	let d_inv_z_dx = plane_transformed.x / plane_transformed_w;
 	let d_inv_z_dy = plane_transformed.y / plane_transformed_w;
 	let depth_equation = DepthEquation {
