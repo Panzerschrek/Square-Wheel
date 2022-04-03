@@ -21,16 +21,26 @@ fn main()
 	if let Ok(map_file_parsed) = &file_content
 	{
 		let map_polygonized = map_polygonizer::polygonize_map(&map_file_parsed);
-		let bsp_tree = bsp_builder::build_leaf_bsp_tree(&map_polygonized[0]);
+		let bsp_tree = bsp_builder::build_leaf_bsp_tree(&map_polygonized);
 		let mut stats = BSPStats::default();
-		calculate_bsp_tree_stats_r(&bsp_tree, 0, &mut stats);
+		calculate_bsp_tree_stats_r(&bsp_tree.root, 0, &mut stats);
 		stats.average_depth /= stats.num_leafs as f32;
+
+		let mut num_portal_vertices = 0;
+		for portal in &bsp_tree.portals
+		{
+			num_portal_vertices += portal.borrow().vertices.len();
+		}
 		println!("Initial polygons: {}", map_polygonized[0].polygons.len());
 		println!(
-			"BSP Tree stats: {:?}, average polygons in leaf: {}, average vertices in polygon: {}",
+			"BSP Tree stats: {:?}, average polygons in leaf: {}, average vertices in polygon: {}, portals: {}, portal \
+			 vertices: {}, average vertices in portal: {}",
 			stats,
 			(stats.num_polygons as f32) / (stats.num_leafs as f32),
-			(stats.num_polygon_vertices as f32) / (stats.num_polygons as f32)
+			(stats.num_polygon_vertices as f32) / (stats.num_polygons as f32),
+			bsp_tree.portals.len(),
+			num_portal_vertices,
+			(num_portal_vertices as f32) / (bsp_tree.portals.len() as f32),
 		);
 	}
 	else
@@ -60,13 +70,14 @@ fn calculate_bsp_tree_stats_r(node_child: &bsp_builder::BSPNodeChild, depth: usi
 		bsp_builder::BSPNodeChild::NodeChild(node) =>
 		{
 			stats.num_nodes += 1;
-			for child in &node.children
+			for child in &node.borrow().children
 			{
 				calculate_bsp_tree_stats_r(child, depth + 1, stats);
 			}
 		},
-		bsp_builder::BSPNodeChild::LeafChild(leaf) =>
+		bsp_builder::BSPNodeChild::LeafChild(leaf_ptr) =>
 		{
+			let leaf = leaf_ptr.borrow();
 			stats.num_leafs += 1;
 
 			if stats.min_depth == 0

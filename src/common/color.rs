@@ -12,4 +12,9 @@ impl Color32
 	{
 		Color32(!self.0)
 	}
+
+	pub fn get_half_dark(self) -> Self
+	{
+		Color32((self.0 & 0xFEFEFEFE) >> 1)
+	}
 }

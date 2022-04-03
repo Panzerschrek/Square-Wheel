@@ -9,6 +9,8 @@ pub struct DrawOptions
 	pub draw_raw_map: bool,
 	pub draw_polygonized_map: bool,
 	pub draw_bsp_map: bool,
+	pub draw_map_sectors_graph: bool,
+	pub draw_all_portals: bool,
 	pub draw_only_first_entity: bool,
 	pub draw_polygon_normals: bool,
 }
@@ -84,18 +86,40 @@ fn draw_map(
 		}
 	}
 
-	if draw_options.draw_bsp_map
+	if let Some(map_bsp_non_opt) = map_bsp
 	{
-		if let Some(map_bsp_non_opt) = map_bsp
+		if draw_options.draw_bsp_map
 		{
 			let mut index = 0;
 			draw_map_bsp_r(
 				&mut rasterizer,
 				camera_matrices,
 				draw_options.draw_polygon_normals,
-				map_bsp_non_opt,
+				&map_bsp_non_opt.root,
 				&mut index,
 			);
+		}
+		if draw_options.draw_map_sectors_graph
+		{
+			draw_map_sectors_graph(
+				&mut rasterizer,
+				camera_matrices,
+				draw_options.draw_polygon_normals,
+				map_bsp_non_opt,
+			);
+		}
+		if draw_options.draw_all_portals
+		{
+			for (index, portal) in map_bsp_non_opt.portals.iter().enumerate()
+			{
+				draw_portal(
+					&mut rasterizer,
+					camera_matrices,
+					&portal.borrow(),
+					// Color32::from_rgb(255, 255, 255),
+					get_pseudo_random_color(index * 4),
+				);
+			}
 		}
 	}
 
@@ -161,11 +185,11 @@ fn draw_map_bsp_r(
 	index: &mut usize,
 )
 {
-	*index += 1;
 	match bsp_node
 	{
-		bsp_builder::BSPNodeChild::NodeChild(node) =>
+		bsp_builder::BSPNodeChild::NodeChild(node_ptr) =>
 		{
+			let node = node_ptr.borrow();
 			let plane_transformed = camera_matrices.planes_matrix * node.plane.vec.extend(-node.plane.dist);
 			if plane_transformed.w >= 0.0
 			{
@@ -204,7 +228,35 @@ fn draw_map_bsp_r(
 		},
 		bsp_builder::BSPNodeChild::LeafChild(leaf) =>
 		{
-			draw_map_bsp_leaf(rasterizer, camera_matrices, draw_polygon_normals, leaf, *index);
+			let leaf_ptr_as_int = (&*leaf.borrow()) as *const bsp_builder::BSPLeaf as usize;
+			let mut color = get_pseudo_random_color(leaf_ptr_as_int / std::mem::size_of::<bsp_builder::BSPLeaf>());
+			// let mut color = Color32::from_rgb(
+			// (*index * 3 % 511 - 255) as u8,
+			// (*index * 5 % 511 - 255) as u8,
+			// (*index * 7 % 511 - 255) as u8 );
+
+			if *index == 0
+			{
+				color = Color32::from_rgb(8, 8, 8);
+			}
+
+			draw_map_bsp_leaf(rasterizer, camera_matrices, draw_polygon_normals, &leaf.borrow(), color);
+
+			if *index == 0
+			{
+				for portal_ptr_weak in &leaf.borrow().portals
+				{
+					let portal_ptr = portal_ptr_weak.upgrade().unwrap();
+					draw_portal(
+						rasterizer,
+						camera_matrices,
+						&portal_ptr.borrow(),
+						Color32::from_rgb(255, 255, 255),
+					);
+				}
+			}
+
+			*index += 1;
 		},
 	}
 }
@@ -214,23 +266,109 @@ fn draw_map_bsp_leaf(
 	camera_matrices: &CameraMatrices,
 	draw_polygon_normals: bool,
 	bsp_leaf: &bsp_builder::BSPLeaf,
-	_index: usize,
+	color: Color32,
 )
 {
-	let leaf_ptr_as_int = bsp_leaf as *const bsp_builder::BSPLeaf as usize;
-	let color = get_pseudo_random_color(leaf_ptr_as_int / std::mem::size_of::<bsp_builder::BSPLeaf>());
-	// let color = Color32::from_rgb(
-	// (index * 3 % 511 - 255) as u8,
-	// (index * 5 % 511 - 255) as u8,
-	// (index * 7 % 511 - 255) as u8 );
-	// let color = Color32::from_rgb(
-	// ((index / 32).min(255)) as u8,
-	// ((index / 32).min(255)) as u8,
-	// ((index / 32).min(255)) as u8,);
-
 	for polygon in &bsp_leaf.polygons
 	{
 		draw_polygon(rasterizer, camera_matrices, polygon, color, draw_polygon_normals);
+	}
+}
+
+fn draw_map_sectors_graph(
+	rasterizer: &mut DebugRasterizer,
+	camera_matrices: &CameraMatrices,
+	draw_polygon_normals: bool,
+	bsp_tree: &bsp_builder::BSPTree,
+)
+{
+	let current_sector_ptr = find_current_sector(&bsp_tree.root, &camera_matrices.planes_matrix);
+
+	let mut reachable_sectors = ReachablebleSectorsMap::new();
+	find_reachable_sectors_r(&current_sector_ptr, 0, &mut reachable_sectors);
+
+	for (_raw_ptr, (sector, depth)) in reachable_sectors
+	{
+		let color = Color32::from_rgb(
+			((depth * 28).min(255)) as u8,
+			((depth * 24).min(255)) as u8,
+			((depth * 24).min(255)) as u8,
+		);
+
+		draw_map_bsp_leaf(
+			rasterizer,
+			camera_matrices,
+			draw_polygon_normals,
+			&sector.borrow(),
+			color,
+		);
+	}
+}
+
+fn find_current_sector(bsp_node_child: &bsp_builder::BSPNodeChild, planes_matrix: &Mat4f) -> bsp_builder::BSPLeafPtr
+{
+	match bsp_node_child
+	{
+		bsp_builder::BSPNodeChild::NodeChild(node_ptr) =>
+		{
+			let node = node_ptr.borrow();
+			let plane_transformed = planes_matrix * node.plane.vec.extend(-node.plane.dist);
+			if plane_transformed.w >= 0.0
+			{
+				find_current_sector(&node.children[0], planes_matrix)
+			}
+			else
+			{
+				find_current_sector(&node.children[1], planes_matrix)
+			}
+		},
+		bsp_builder::BSPNodeChild::LeafChild(leaf_ptr) => leaf_ptr.clone(),
+	}
+}
+
+type ReachablebleSectorsMap = std::collections::HashMap<*const bsp_builder::BSPLeaf, (bsp_builder::BSPLeafPtr, usize)>;
+fn find_reachable_sectors_r(
+	sector_ptr: &bsp_builder::BSPLeafPtr,
+	depth: usize,
+	reachable_sectors: &mut ReachablebleSectorsMap,
+)
+{
+	let max_depth = 16;
+	if depth > max_depth
+	{
+		return;
+	}
+
+	let sector = sector_ptr.borrow();
+	let sector_raw_ptr = (&*sector) as *const bsp_builder::BSPLeaf;
+	if reachable_sectors.contains_key(&sector_raw_ptr)
+	{
+		let prev_depth = &mut reachable_sectors.get_mut(&sector_raw_ptr).unwrap().1;
+		if *prev_depth <= depth
+		{
+			return;
+		}
+		*prev_depth = depth;
+	}
+	else
+	{
+		reachable_sectors.insert(sector_raw_ptr, (sector_ptr.clone(), depth));
+	}
+
+	for portal_ptr_weak in &sector.portals
+	{
+		let protal_ptr = portal_ptr_weak.upgrade().unwrap();
+		let portal = protal_ptr.borrow();
+		let leaf_front = portal.leaf_front.borrow();
+		let linked_sector_ptr = if (&*leaf_front) as *const bsp_builder::BSPLeaf == sector_raw_ptr
+		{
+			&portal.leaf_back
+		}
+		else
+		{
+			&portal.leaf_front
+		};
+		find_reachable_sectors_r(linked_sector_ptr, depth + 1, reachable_sectors);
 	}
 }
 
@@ -545,6 +683,45 @@ fn draw_basis(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f)
 	}
 }
 
+fn draw_portal(
+	rasterizer: &mut DebugRasterizer,
+	camera_matrices: &CameraMatrices,
+	portal: &bsp_builder::LeafsPortal,
+	color: Color32,
+)
+{
+	let shift_vec = portal.plane.vec * (2.0 / portal.plane.vec.magnitude());
+	for v0 in &portal.vertices
+	{
+		let v0_sifted_plus = v0 + shift_vec;
+		let v0_hifted_minus = v0 - shift_vec;
+		for v1 in &portal.vertices
+		{
+			let v1_sifted_plus = v1 + shift_vec;
+			let v1_hifted_minus = v1 - shift_vec;
+			if v0 != v1
+			{
+				draw_line(
+					rasterizer,
+					&camera_matrices.view_matrix,
+					&(v0_sifted_plus, v1_sifted_plus, color),
+				);
+				draw_line(
+					rasterizer,
+					&camera_matrices.view_matrix,
+					&(v0_hifted_minus, v1_hifted_minus, color),
+				);
+			}
+		}
+
+		draw_line(
+			rasterizer,
+			&camera_matrices.view_matrix,
+			&(v0_sifted_plus, v0_hifted_minus, color),
+		);
+	}
+}
+
 fn get_pseudo_random_color(num: usize) -> Color32
 {
 	Color32::from_rgb(
@@ -558,28 +735,46 @@ type WorldLine = (Vec3f, Vec3f, Color32);
 
 fn draw_line(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, line: &WorldLine)
 {
-	let width = rasterizer.get_width() as f32;
-	let height = rasterizer.get_width() as f32;
-
 	let v0 = transform_matrix * line.0.extend(1.0);
 	let v1 = transform_matrix * line.1.extend(1.0);
 
-	// TODO - perform proper clipping
-	if v0.w <= 0.1 || v1.w <= 0.1
+	let mut v0 = Vec3f::new(v0.x, v0.y, v0.w);
+	let mut v1 = Vec3f::new(v1.x, v1.y, v1.w);
+
+	// Perform z_near clipping.
+	const Z_NEAR: f32 = 1.0;
+	if v0.z < Z_NEAR && v1.z < Z_NEAR
 	{
 		return;
 	}
-	let v0 = v0.truncate() / v0.w;
-	let v1 = v1.truncate() / v1.w;
+	if v0.z >= Z_NEAR && v1.z >= Z_NEAR
+	{
+	}
+	else if v0.z > Z_NEAR && v1.z <= Z_NEAR
+	{
+		v1 = get_line_z_intersection(&v0, &v1, Z_NEAR);
+	}
+	else
+	{
+		v0 = get_line_z_intersection(&v0, &v1, Z_NEAR);
+	}
 
-	if v0.x < 0.0 ||
-		v0.x > width ||
-		v0.y < 0.0 ||
-		v0.y > height ||
-		v1.x < 0.0 ||
-		v1.x > width ||
-		v1.y < 0.0 ||
-		v1.y > height
+	let z0 = v0.z;
+	let z1 = v1.z;
+	let v0 = v0.truncate() / z0;
+	let v1 = v1.truncate() / z1;
+
+	// TODO - perform proper clipping.
+	// Now - just prevent Fixed16 overflow.
+	const MAX_COORD: f32 = 8192.0;
+	if v0.x < -MAX_COORD ||
+		v0.x > MAX_COORD ||
+		v0.y < -MAX_COORD ||
+		v0.y > MAX_COORD ||
+		v1.x < -MAX_COORD ||
+		v1.x > MAX_COORD ||
+		v1.y < -MAX_COORD ||
+		v1.y > MAX_COORD
 	{
 		return;
 	}
@@ -588,12 +783,12 @@ fn draw_line(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, line: &
 		PointProjectedWithZ {
 			x: f32_to_fixed16(v0.x),
 			y: f32_to_fixed16(v0.y),
-			z: v0.z,
+			z: -1.0 / z0,
 		},
 		PointProjectedWithZ {
 			x: f32_to_fixed16(v1.x),
 			y: f32_to_fixed16(v1.y),
-			z: v1.z,
+			z: -1.0 / z1,
 		},
 		line.2,
 	);
