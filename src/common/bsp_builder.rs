@@ -44,21 +44,33 @@ pub fn build_leaf_bsp_tree(map_entities: &[map_polygonizer::Entity]) -> BSPTree
 {
 	let world_entity = &map_entities[0];
 	let bbox = build_bounding_box(&world_entity);
+
+	// Build BSP tree for world entity.
 	let mut tree_root = build_leaf_bsp_tree_r(world_entity.polygons.clone());
+
+	// Build portals as links between BSP leafs.
 	let mut portals = build_protals(&tree_root, &bbox);
 	set_leafs_portals(&portals);
 
+	// Now we have graph of leafs and portals.
+	// We need to remove ubnreachable leafs from this graph.
+	// In order to do this mark each entity's leaf as reachable and mark as reachable all leafs, reachable through portals.
 	let entities_positions = collect_entities_positions(&map_entities[1 ..]);
 	let reachable_leafs = collect_reachable_leafs(&tree_root, &entities_positions);
-	println!(
-		"Collected {} positions. Reachable leafs: {}",
-		entities_positions.len(),
-		reachable_leafs.len()
-	);
 
-	// TODO - what if root is marked as unreachable?
-	remove_unreachable_leafs_r(&mut tree_root, &reachable_leafs);
+	// Now correct BSP tree. Remove unreachable leafs and all nodes with only unreachable children.
+	let root_is_reachable = remove_unreachable_leafs_r(&mut tree_root, &reachable_leafs);
+	if !root_is_reachable
+	{
+		// TODO - what we should do in such case?
+		println!("Warning, root node is unreachable!");
+	}
+
+	// Remove portals between ureachable leafs from global portals list.
 	remove_unreachable_portals(&mut portals, &reachable_leafs);
+
+	// Normally reachable leafs should have no portals to unreachable leafs.
+	// But anyway try to remove removed portals from list of portals for each leaf.
 	remove_expired_portals_from_leafs_r(&mut tree_root);
 
 	BSPTree {
@@ -957,7 +969,7 @@ fn collect_reachable_leafs_r(leaf_ptr: &rc::Rc<cell::RefCell<BSPLeaf>>, reachabl
 	}
 }
 
-// Returns "false" if need to delete this child.
+// Returns "true" if need to preserve this child.
 fn remove_unreachable_leafs_r(node_child: &mut BSPNodeChild, reachable_leafs: &ReachableLeafsMap) -> bool
 {
 	match node_child
@@ -1022,8 +1034,10 @@ fn remove_expired_portals_from_leafs_r(node_child: &mut BSPNodeChild)
 		BSPNodeChild::NodeChild(node_ptr) =>
 		{
 			let mut node = node_ptr.borrow_mut();
-			remove_expired_portals_from_leafs_r(&mut node.children[0]);
-			remove_expired_portals_from_leafs_r(&mut node.children[1]);
+			for child in &mut node.children
+			{
+				remove_expired_portals_from_leafs_r(child);
+			}
 		},
 		BSPNodeChild::LeafChild(leaf_ptr) =>
 		{
