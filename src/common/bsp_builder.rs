@@ -3,18 +3,18 @@ use std::{cell, rc};
 
 pub use map_polygonizer::{Plane, Polygon};
 
-// Portal between two BSP leafs.
-#[derive(Debug)]
-pub struct LeafsPortal
+pub struct BSPTree
 {
-	pub leaf_front: BSPLeafPtr,
-	pub leaf_back: BSPLeafPtr,
-	pub plane: Plane,
-	pub vertices: Vec<Vec3f>,
+	pub root: BSPNodeChild,
+	pub portals: Vec<LeafsPortalPtr>,
 }
 
-pub type LeafsPortalPtr = rc::Rc<cell::RefCell<LeafsPortal>>;
-pub type LeafsPortalWeakPtr = rc::Weak<cell::RefCell<LeafsPortal>>;
+#[derive(Debug, Clone)]
+pub enum BSPNodeChild
+{
+	NodeChild(BSPNodePtr),
+	LeafChild(BSPLeafPtr),
+}
 
 #[derive(Debug)]
 pub struct BSPNode
@@ -34,18 +34,18 @@ pub struct BSPLeaf
 
 pub type BSPLeafPtr = rc::Rc<cell::RefCell<BSPLeaf>>;
 
-#[derive(Debug, Clone)]
-pub enum BSPNodeChild
+// Portal between two BSP leafs.
+#[derive(Debug)]
+pub struct LeafsPortal
 {
-	NodeChild(BSPNodePtr),
-	LeafChild(BSPLeafPtr),
+	pub leaf_front: BSPLeafPtr,
+	pub leaf_back: BSPLeafPtr,
+	pub plane: Plane,
+	pub vertices: Vec<Vec3f>,
 }
 
-pub struct BSPTree
-{
-	pub root: BSPNodeChild,
-	pub portals: Vec<LeafsPortalPtr>,
-}
+pub type LeafsPortalPtr = rc::Rc<cell::RefCell<LeafsPortal>>;
+pub type LeafsPortalWeakPtr = rc::Weak<cell::RefCell<LeafsPortal>>;
 
 pub fn build_leaf_bsp_tree(map_entities: &[map_polygonizer::Entity]) -> BSPTree
 {
