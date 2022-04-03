@@ -971,19 +971,17 @@ fn remove_unreachable_leafs_r(node_child: &mut BSPNodeChild, reachable_leafs: &R
 			{
 				return false;
 			}
-			if preserve_front
+			if !preserve_back
 			{
 				let child = node.children[0].clone();
 				drop(node);
 				*node_child = child;
-				return true;
 			}
-			else if preserve_back
+			else if !preserve_front
 			{
 				let child = node.children[1].clone();
 				drop(node);
 				*node_child = child;
-				return true;
 			}
 
 			return true;
@@ -1029,8 +1027,9 @@ fn remove_expired_portals_from_leafs_r(node_child: &mut BSPNodeChild)
 		},
 		BSPNodeChild::LeafChild(leaf_ptr) =>
 		{
-			let mut leaf = leaf_ptr.borrow_mut();
-			leaf.portals
+			leaf_ptr
+				.borrow_mut()
+				.portals
 				.retain(|portal_weak_ptr| portal_weak_ptr.strong_count() > 0);
 		},
 	}
