@@ -732,7 +732,7 @@ fn build_leafs_portals(in_portals: &[LeafPortalInitial]) -> Vec<LeafsPortal>
 			result.push(LeafsPortal {
 				leaf_front: portal_front.leaf.clone(),
 				leaf_back: portal_back.leaf.clone(),
-				plane: plane,
+				plane,
 				vertices: portals_intersection,
 			});
 		}
@@ -853,7 +853,7 @@ fn portal_is_fully_covered_by_leaf_polygons(portal_plane: &Plane, portal_vertice
 			let vec = (prev_polygon_vertex - polygon_vertex).cross(polygon.plane.vec);
 			let eps_scaled = PORTAL_POLYGON_COVERAGE_EPS * vec.magnitude();
 			let cut_plane = Plane {
-				vec: vec,
+				vec,
 				dist: vec.dot(*polygon_vertex),
 			};
 
@@ -997,13 +997,13 @@ fn remove_unreachable_leafs_r(node_child: &mut BSPNodeChild, reachable_leafs: &R
 				*node_child = child;
 			}
 
-			return true;
+			true
 		},
 		BSPNodeChild::LeafChild(leaf_ptr) =>
 		{
 			let leaf = leaf_ptr.borrow();
 			let leaf_raw_ptr = (&*leaf) as *const BSPLeaf;
-			return reachable_leafs.contains_key(&leaf_raw_ptr);
+			reachable_leafs.contains_key(&leaf_raw_ptr)
 		},
 	}
 }
