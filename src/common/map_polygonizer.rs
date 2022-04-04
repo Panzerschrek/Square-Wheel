@@ -24,7 +24,7 @@ pub struct Entity
 
 pub type MapPolygonized = Vec<Entity>;
 
-pub fn polygonize_map(input_map: &map_file::MapFileParsed) -> MapPolygonized
+pub fn polygonize_map(input_map: &[map_file::Entity]) -> MapPolygonized
 {
 	input_map.iter().map(polygonize_entity).collect()
 }
@@ -43,7 +43,7 @@ fn polygonize_entity(input_entity: &map_file::Entity) -> Entity
 	}
 }
 
-fn polygonize_brush(brush: &map_file::Brush) -> Vec<Polygon>
+fn polygonize_brush(brush: &[map_file::BrushPlane]) -> Vec<Polygon>
 {
 	let mut result = Vec::new();
 
@@ -157,7 +157,7 @@ fn get_brush_side_plane(brush_side: &map_file::BrushPlane) -> Option<Plane>
 	}
 
 	Some(Plane {
-		vec: vec,
+		vec,
 		dist: vec.dot(brush_side.vertices[0]),
 	})
 }
@@ -203,8 +203,7 @@ pub fn sort_convex_polygon_vertices(mut in_vertices: Vec<Vec3f>, plane: &Plane) 
 	let middle_vertex = vertitces_sum / (in_vertices.len() as f32);
 
 	// Select first vertex.
-	let mut result = Vec::new();
-	result.push(in_vertices.pop().unwrap());
+	let mut result = vec![in_vertices.pop().unwrap()];
 
 	while !in_vertices.is_empty()
 	{
@@ -277,9 +276,6 @@ fn get_polygon_texture_info(brush_plane: &map_file::BrushPlane, polygon_normal: 
 // See QBSP/MAP.C: TextureAxisFromPlane
 fn get_texture_basis(polygon_normal: &Vec3f) -> [Vec3f; 2]
 {
-	let mut best_dot = 0.0;
-	let mut best_basis = 0;
-
 	const BASISES: [[Vec3f; 3]; 6] = [
 		[
 			Vec3f::new(0.0, 0.0, 1.0),
@@ -313,15 +309,17 @@ fn get_texture_basis(polygon_normal: &Vec3f) -> [Vec3f; 2]
 		], // north wall
 	];
 
-	for i in 0 .. 6
+	let mut best_dot = 0.0;
+	let mut best_basis : &[Vec3f; 3] = &BASISES[0];
+	for basis in &BASISES
 	{
-		let dot = polygon_normal.dot(BASISES[i][0]);
+		let dot = polygon_normal.dot(basis[0]);
 		if dot > best_dot
 		{
-			best_basis = i;
+			best_basis = basis;
 			best_dot = dot;
 		}
 	}
 
-	[BASISES[best_basis][1], BASISES[best_basis][2]]
+	[best_basis[1], best_basis[2]]
 }
