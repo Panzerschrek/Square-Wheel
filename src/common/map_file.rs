@@ -50,7 +50,7 @@ pub fn parse_map_file_content(content: Iterator) -> ParseResult<MapFileParsed>
 	while !it.is_empty()
 	{
 		skip_whitespaces(&mut it);
-		if it.starts_with("{")
+		if it.starts_with('{')
 		{
 			result.push(parse_entity(&mut it)?);
 		}
@@ -76,18 +76,18 @@ pub fn parse_vec3(s: Iterator) -> ParseResult<Vec3f>
 
 fn parse_entity(it: &mut Iterator) -> ParseResult<Entity>
 {
-	*it = &it[1 ..]; // Skip "{"
+	*it = &it[1 ..]; // Skip '{'
 
 	let mut result = Entity::default();
 
-	while !it.is_empty() && !it.starts_with("}")
+	while !it.is_empty() && !it.starts_with('}')
 	{
 		skip_whitespaces(it);
-		if it.starts_with("{")
+		if it.starts_with('{')
 		{
 			result.brushes.push(parse_brush(it)?);
 		}
-		else if it.starts_with("\"")
+		else if it.starts_with('"')
 		{
 			let kv = parse_key_value_pair(it)?;
 			result.keys.insert(kv.0, kv.1);
@@ -99,7 +99,7 @@ fn parse_entity(it: &mut Iterator) -> ParseResult<Entity>
 		skip_whitespaces(it);
 	}
 
-	if !it.starts_with("}")
+	if !it.starts_with('}')
 	{
 		return Err(ParseError::build(it));
 	}
@@ -110,21 +110,21 @@ fn parse_entity(it: &mut Iterator) -> ParseResult<Entity>
 
 fn parse_brush(it: &mut Iterator) -> ParseResult<Brush>
 {
-	*it = &it[1 ..]; // Skip "{"
+	*it = &it[1 ..]; // Skip '{'
 
 	let mut result = Brush::new();
 
-	while !it.is_empty() && !it.starts_with("}")
+	while !it.is_empty() && !it.starts_with('}')
 	{
 		result.push(parse_brush_plane(it)?);
 		skip_whitespaces(it);
 	}
 
-	if !it.starts_with("}")
+	if !it.starts_with('}')
 	{
 		return Err(ParseError::build(it));
 	}
-	*it = &it[1 ..]; // Skip "}"
+	*it = &it[1 ..]; // Skip '}'
 
 	Ok(result)
 }
@@ -147,7 +147,7 @@ fn parse_brush_plane(it: &mut Iterator) -> ParseResult<BrushPlane>
 fn parse_brush_plane_vertex(it: &mut Iterator) -> ParseResult<Vec3f>
 {
 	skip_whitespaces(it);
-	if !it.starts_with("(")
+	if !it.starts_with('(')
 	{
 		return Err(ParseError::build(it));
 	}
@@ -156,7 +156,7 @@ fn parse_brush_plane_vertex(it: &mut Iterator) -> ParseResult<Vec3f>
 	let result = Vec3f::new(parse_number(it)?, parse_number(it)?, parse_number(it)?);
 
 	skip_whitespaces(it);
-	if !it.starts_with(")")
+	if !it.starts_with(')')
 	{
 		return Err(ParseError::build(it));
 	}
@@ -172,7 +172,7 @@ fn parse_number(it: &mut Iterator) -> ParseResult<f32>
 	skip_whitespaces(it);
 	while let Some(c) = it.chars().next()
 	{
-		if c == '.' || (c >= '0' && c <= '9') || c == '-'
+		if c == '.' || ('0'..='9').contains(&c) || c == '-'
 		{
 			s.push(c);
 			*it = &it[1 ..];
@@ -210,14 +210,13 @@ fn parse_whitespace_separated_string(it: &mut Iterator) -> ParseResult<String>
 	skip_whitespaces(it);
 	while let Some(c) = it.chars().next()
 	{
+		*it = &it[1 ..];
 		if c.is_ascii_whitespace()
 		{
-			*it = &it[1 ..];
 			break;
 		}
 		else
 		{
-			*it = &it[1 ..];
 			result.push(c);
 		}
 	}
@@ -231,13 +230,13 @@ fn parse_quoted_string(it: &mut Iterator) -> ParseResult<String>
 
 	let mut result = String::new();
 
-	while !it.is_empty() && !it.starts_with("\"")
+	while !it.is_empty() && !it.starts_with('"')
 	{
 		result.push_str(&it[0 .. 1]);
 		*it = &it[1 ..];
 	}
 
-	if !it.starts_with("\"")
+	if !it.starts_with('"')
 	{
 		return Err(ParseError::build(it));
 	}
@@ -258,7 +257,7 @@ fn skip_whitespaces(it: &mut Iterator)
 		{
 			// Comments
 			*it = &it[2 ..];
-			while !it.is_empty() && !it.starts_with("\n")
+			while !it.is_empty() && !it.starts_with('\n')
 			{
 				*it = &it[1 ..];
 			}
