@@ -1,4 +1,5 @@
 pub mod bsp_builder;
+pub mod bsp_map_compact;
 pub mod camera_controller;
 pub mod color;
 pub mod debug_rasterizer;
