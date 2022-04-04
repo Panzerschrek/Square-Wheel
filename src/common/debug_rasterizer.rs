@@ -138,7 +138,7 @@ impl<'a> DebugRasterizer<'a>
 			upper_index = 2;
 			lower_index = if vertices[0].y < vertices[1].y { 0 } else { 1 };
 		}
-		middle_index = 0 + 1 + 2 - upper_index - lower_index;
+		middle_index = 3 - upper_index - lower_index;
 
 		let long_edge_dy = vertices[upper_index].y - vertices[lower_index].y;
 		if long_edge_dy < FIXED16_HALF
