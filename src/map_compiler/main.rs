@@ -45,13 +45,15 @@ fn main()
 
 		let map_compact = bsp_map_compact::convert_bsp_map_to_compact_format(&bsp_tree);
 		println!(
-			"Compact map nodes: {}, leafs: {}, polygons: {}, portals: {}, leafs_portals: {}, vertices: {}",
+			"Compact map nodes: {}, leafs: {}, polygons: {}, portals: {}, leafs_portals: {}, vertices: {}, textures: \
+			 {}",
 			map_compact.nodes.len(),
 			map_compact.leafs.len(),
 			map_compact.polygons.len(),
 			map_compact.portals.len(),
 			map_compact.leafs_portals.len(),
-			map_compact.vertices.len()
+			map_compact.vertices.len(),
+			map_compact.textures.len(),
 		);
 	}
 	else
