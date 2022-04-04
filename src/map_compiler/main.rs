@@ -1,4 +1,4 @@
-use common::{bsp_builder, map_file, map_polygonizer};
+use common::{bsp_builder, bsp_map_compact, map_file, map_polygonizer};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -41,6 +41,17 @@ fn main()
 			bsp_tree.portals.len(),
 			num_portal_vertices,
 			(num_portal_vertices as f32) / (bsp_tree.portals.len() as f32),
+		);
+
+		let map_compact = bsp_map_compact::convert_bsp_map_to_compact_format(&bsp_tree);
+		println!(
+			"Compact map nodes: {}, leafs: {}, polygons: {}, portals: {}, leafs_portals: {}, vertices: {}",
+			map_compact.nodes.len(),
+			map_compact.leafs.len(),
+			map_compact.polygons.len(),
+			map_compact.portals.len(),
+			map_compact.leafs_portals.len(),
+			map_compact.vertices.len()
 		);
 	}
 	else

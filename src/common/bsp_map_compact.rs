@@ -53,6 +53,9 @@ pub struct Portal
 	pub num_vertices: u32,
 }
 
+// Conversion functions.
+//
+
 pub fn convert_bsp_map_to_compact_format(bsp_tree: &bsp_builder::BSPTree) -> BSPMap
 {
 	let mut out_map = BSPMap::default();
