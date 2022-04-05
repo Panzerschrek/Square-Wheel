@@ -137,7 +137,6 @@ fn convert_node_child_to_compact_format(
 	{
 		bsp_builder::BSPNodeChild::NodeChild(node_ptr) =>
 		{
-			let node_index = out_map.nodes.len();
 			let node_converted = convert_node_to_compact_format(
 				node_ptr,
 				portal_ptr_to_index_map,
@@ -145,6 +144,7 @@ fn convert_node_child_to_compact_format(
 				leaf_ptr_to_index_map,
 				texture_name_to_index_map,
 			);
+			let node_index = out_map.nodes.len();
 			out_map.nodes.push(node_converted);
 			node_index as u32
 		},

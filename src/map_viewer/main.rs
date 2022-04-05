@@ -1,4 +1,4 @@
-use common::{bsp_builder, debug_renderer, map_file, map_polygonizer, system_window};
+use common::{bsp_builder, bsp_map_compact, debug_renderer, map_file, map_polygonizer, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
 use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
@@ -21,6 +21,9 @@ struct Opt
 	draw_bsp_map: bool,
 
 	#[structopt(long)]
+	draw_bsp_map_compact: bool,
+
+	#[structopt(long)]
 	draw_map_sectors_graph: bool,
 
 	#[structopt(long)]
@@ -40,18 +43,25 @@ pub fn main()
 	let mut map_file_parsed_opt = None;
 	let mut map_polygonized_opt = None;
 	let mut map_bsp_tree_opt = None;
+	let mut map_bsp_compact_opt = None;
 	if let Some(path) = &opt.input
 	{
 		let file_contents_str = std::fs::read_to_string(path).unwrap();
 		map_file_parsed_opt = map_file::parse_map_file_content(&file_contents_str).ok();
-		if opt.draw_polygonized_map || opt.draw_bsp_map || opt.draw_map_sectors_graph
+		if opt.draw_polygonized_map || opt.draw_bsp_map || opt.draw_bsp_map_compact || opt.draw_map_sectors_graph
 		{
 			if let Some(map_file) = &map_file_parsed_opt
 			{
 				let map_polygonized = map_polygonizer::polygonize_map(map_file);
-				if opt.draw_bsp_map || opt.draw_map_sectors_graph
+				if opt.draw_bsp_map || opt.draw_bsp_map_compact || opt.draw_map_sectors_graph
 				{
 					map_bsp_tree_opt = Some(bsp_builder::build_leaf_bsp_tree(&map_polygonized));
+					if opt.draw_bsp_map_compact
+					{
+						map_bsp_compact_opt = Some(bsp_map_compact::convert_bsp_map_to_compact_format(
+							map_bsp_tree_opt.as_ref().unwrap(),
+						));
+					}
 				}
 				map_polygonized_opt = Some(map_polygonized);
 			}
@@ -90,6 +100,7 @@ pub fn main()
 					draw_raw_map: opt.draw_raw_map,
 					draw_polygonized_map: opt.draw_polygonized_map,
 					draw_bsp_map: opt.draw_bsp_map,
+					draw_bsp_map_compact: opt.draw_bsp_map_compact,
 					draw_map_sectors_graph: opt.draw_map_sectors_graph,
 					draw_only_first_entity: false,
 					draw_polygon_normals: opt.draw_polygon_normals,
@@ -99,6 +110,7 @@ pub fn main()
 				map_file_parsed_opt.as_ref(),
 				map_polygonized_opt.as_ref(),
 				map_bsp_tree_opt.as_ref(),
+				map_bsp_compact_opt.as_ref(),
 			)
 		});
 
