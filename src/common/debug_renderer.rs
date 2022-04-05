@@ -11,6 +11,7 @@ pub struct DrawOptions
 	pub draw_bsp_map: bool,
 	pub draw_bsp_map_compact: bool,
 	pub draw_map_sectors_graph: bool,
+	pub draw_map_sectors_graph_compact: bool,
 	pub draw_all_portals: bool,
 	pub draw_only_first_entity: bool,
 	pub draw_polygon_normals: bool,
@@ -138,6 +139,15 @@ fn draw_map(
 				bsp_map_compact_non_opt.nodes.last().unwrap(),
 				&bsp_map_compact_non_opt,
 				&mut index,
+			);
+		}
+		if draw_options.draw_map_sectors_graph_compact
+		{
+			draw_map_sectors_graph_compact(
+				&mut rasterizer,
+				camera_matrices,
+				draw_options.draw_polygon_normals,
+				bsp_map_compact_non_opt,
 			);
 		}
 	}
@@ -342,6 +352,106 @@ fn draw_map_bsp_compact_r(
 				index,
 			);
 		}
+	}
+}
+
+fn draw_map_sectors_graph_compact(
+	rasterizer: &mut DebugRasterizer,
+	camera_matrices: &CameraMatrices,
+	draw_polygon_normals: bool,
+	bsp_map: &bsp_map_compact::BSPMap,
+)
+{
+	let current_sector = find_current_sector_compact(
+		(bsp_map.nodes.len() - 1) as u32,
+		bsp_map,
+		&camera_matrices.planes_matrix,
+	);
+	let mut reachable_sectors = ReachablebleSectorsCompactMap::new();
+	find_reachable_sectors_compact_r(current_sector, bsp_map, 0, &mut reachable_sectors);
+
+	for (sector, depth) in reachable_sectors
+	{
+		let color = Color32::from_rgb(
+			((depth * 28).min(255)) as u8,
+			((depth * 24).min(255)) as u8,
+			((depth * 20).min(255)) as u8,
+		);
+
+		draw_map_bsp_compact_leaf(
+			rasterizer,
+			camera_matrices,
+			draw_polygon_normals,
+			&bsp_map.leafs[sector as usize],
+			bsp_map,
+			color,
+		);
+	}
+}
+
+fn find_current_sector_compact(mut index: u32, bsp_map: &bsp_map_compact::BSPMap, planes_matrix: &Mat4f) -> u32
+{
+	loop
+	{
+		if index >= bsp_map_compact::FIRST_LEAF_INDEX
+		{
+			return index - bsp_map_compact::FIRST_LEAF_INDEX;
+		}
+
+		let node = &bsp_map.nodes[index as usize];
+		let plane_transformed = planes_matrix * node.plane.vec.extend(-node.plane.dist);
+		index = if plane_transformed.w >= 0.0
+		{
+			node.children[0]
+		}
+		else
+		{
+			node.children[1]
+		};
+	}
+}
+
+type ReachablebleSectorsCompactMap = std::collections::HashMap<u32, usize>;
+fn find_reachable_sectors_compact_r(
+	sector: u32,
+	bsp_map: &bsp_map_compact::BSPMap,
+	depth: usize,
+	reachable_sectors: &mut ReachablebleSectorsCompactMap,
+)
+{
+	let max_depth = 16;
+	if depth > max_depth
+	{
+		return;
+	}
+
+	if let Some(prev_depth) = reachable_sectors.get_mut(&sector)
+	{
+		if *prev_depth <= depth
+		{
+			return;
+		}
+		*prev_depth = depth;
+	}
+	else
+	{
+		reachable_sectors.insert(sector, depth);
+	}
+
+	let sector_value = &bsp_map.leafs[sector as usize];
+	for portal in &bsp_map.leafs_portals[(sector_value.first_leaf_portal as usize) ..
+		((sector_value.first_leaf_portal + sector_value.num_leaf_portals) as usize)]
+	{
+		let portal_value = &bsp_map.portals[(*portal) as usize];
+		let next_sector = if portal_value.leafs[0] == sector
+		{
+			portal_value.leafs[1]
+		}
+		else
+		{
+			portal_value.leafs[0]
+		};
+		find_reachable_sectors_compact_r(next_sector, bsp_map, depth + 1, reachable_sectors);
 	}
 }
 
