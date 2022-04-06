@@ -1,4 +1,6 @@
-use common::{bsp_builder, bsp_map_compact, debug_renderer, map_file, map_polygonizer, system_window};
+use common::{
+	bsp_builder, bsp_map_compact, bsp_map_save_load, debug_renderer, map_file, map_polygonizer, system_window,
+};
 use sdl2::{event::Event, keyboard::Keycode};
 use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
@@ -10,6 +12,10 @@ struct Opt
 	/// Input file
 	#[structopt(parse(from_os_str), short = "i")]
 	input: Option<PathBuf>,
+
+	/// Input file (compiled)
+	#[structopt(parse(from_os_str), short = "I")]
+	input_compiled: Option<PathBuf>,
 
 	#[structopt(long)]
 	draw_raw_map: bool,
@@ -76,6 +82,10 @@ pub fn main()
 				map_polygonized_opt = Some(map_polygonized);
 			}
 		}
+	}
+	if let Some(path) = &opt.input_compiled
+	{
+		map_bsp_compact_opt = bsp_map_save_load::load_map(path).unwrap();
 	}
 
 	let mut prev_time = std::time::Instant::now();

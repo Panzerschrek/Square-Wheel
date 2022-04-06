@@ -1,6 +1,6 @@
 use super::bsp_map_compact::*;
 use std::{
-	io::{Seek, Write},
+	io::{Read, Seek, Write},
 	path::Path,
 };
 
@@ -66,7 +66,7 @@ pub fn save_map(bsp_map: &BSPMap, file_path: &Path) -> Result<(), std::io::Error
 		&mut offset,
 	)?;
 
-	// Wtite header again to update lumps headers.
+	// Write header again to update lumps headers.
 	file.seek(std::io::SeekFrom::Start(0))?;
 	file.write(header_bytes)?;
 	file.sync_data()?;
@@ -74,11 +74,36 @@ pub fn save_map(bsp_map: &BSPMap, file_path: &Path) -> Result<(), std::io::Error
 	Ok(())
 }
 
-pub fn load_map(file_path: &Path) -> Result<BSPMap, std::io::Error>
+pub fn load_map(file_path: &Path) -> Result<Option<BSPMap>, std::io::Error>
 {
-	// TODO
-	let map = BSPMap::default();
-	Ok(map)
+	let mut file = std::fs::OpenOptions::new()
+		.read(true)
+		.write(false)
+		.create(false)
+		.open(file_path)?;
+
+	let header_size = std::mem::size_of::<BspMapHeader>();
+	let mut header = unsafe { std::mem::zeroed::<BspMapHeader>() };
+	let header_bytes =
+		unsafe { std::slice::from_raw_parts_mut((&mut header) as *mut BspMapHeader as *mut u8, header_size) };
+
+	if file.read(header_bytes)? != header_size
+	{
+		// TODO - print some message?
+		return Ok(None);
+	}
+
+	let map = BSPMap {
+		nodes: read_lump(&mut file, &header.lumps[LUMP_NODES])?,
+		leafs: read_lump(&mut file, &header.lumps[LUMP_LEAFS])?,
+		polygons: read_lump(&mut file, &header.lumps[LUMP_POLYGONS])?,
+		portals: read_lump(&mut file, &header.lumps[LUMP_PORTALS])?,
+		leafs_portals: read_lump(&mut file, &header.lumps[LUMP_LEAFS_PORTALS])?,
+		vertices: read_lump(&mut file, &header.lumps[LUMP_VERTICES])?,
+		textures: read_lump(&mut file, &header.lumps[LUMP_TEXTURES])?,
+	};
+
+	Ok(Some(map))
 }
 
 #[repr(C)]
@@ -137,4 +162,26 @@ fn write_lump<T>(
 	*offset += bytes.len();
 
 	Ok(())
+}
+
+fn read_lump<T: Copy>(file: &mut std::fs::File, lump: &Lump) -> Result<Vec<T>, std::io::Error>
+{
+	let mut result = vec![unsafe { std::mem::zeroed::<T>() }; lump.element_count as usize];
+	if result.is_empty()
+	{
+		return Ok(result);
+	}
+
+	// TODO - what if seek fails?
+	file.seek(std::io::SeekFrom::Start(lump.offset as u64))?;
+
+	let bytes = unsafe {
+		std::slice::from_raw_parts_mut(
+			(&mut result[0]) as *mut T as *mut u8,
+			std::mem::size_of::<T>() * result.len(),
+		)
+	};
+	file.read_exact(bytes)?;
+
+	Ok(result)
 }

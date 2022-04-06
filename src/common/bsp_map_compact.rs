@@ -21,6 +21,7 @@ pub struct BSPMap
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct BSPNode
 {
 	// If child index is greater or equal than FIRST_LEAF_INDEX - child is leaf.
@@ -31,6 +32,7 @@ pub struct BSPNode
 pub const FIRST_LEAF_INDEX: u32 = 1 << 31;
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct BSPLeaf
 {
 	pub first_polygon: u32,
@@ -40,6 +42,7 @@ pub struct BSPLeaf
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct Polygon
 {
 	pub first_vertex: u32,
@@ -50,6 +53,7 @@ pub struct Polygon
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct Portal
 {
 	pub leafs: [u32; 2],
