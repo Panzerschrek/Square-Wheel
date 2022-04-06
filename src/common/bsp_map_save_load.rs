@@ -143,7 +143,6 @@ const LUMP_VERTICES: usize = 5;
 const LUMP_TEXTURES: usize = 6;
 const LUMP_SUBMODELS: usize = 7;
 
-// Returns number of bytes written.
 fn write_lump<T>(
 	data: &[T],
 	file: &mut std::fs::File,
@@ -156,16 +155,12 @@ fn write_lump<T>(
 		return Ok(());
 	}
 
-	let bytes = unsafe {
-		std::slice::from_raw_parts(
-			(&data[0]) as *const T as *const u8,
-			std::mem::size_of::<T>() * data.len(),
-		)
-	};
+	let element_size = std::mem::size_of::<T>();
+	let bytes = unsafe { std::slice::from_raw_parts((&data[0]) as *const T as *const u8, element_size * data.len()) };
 	file.write_all(bytes)?;
 
 	lump.offset = (*offset) as u32;
-	lump.element_size = std::mem::size_of::<T>() as u32;
+	lump.element_size = element_size as u32;
 	lump.element_count = data.len() as u32;
 	*offset += bytes.len();
 
@@ -174,6 +169,14 @@ fn write_lump<T>(
 
 fn read_lump<T: Copy>(file: &mut std::fs::File, lump: &Lump) -> Result<Vec<T>, std::io::Error>
 {
+	let element_size = std::mem::size_of::<T>();
+	if lump.element_size != (element_size as u32)
+	{
+		// TODO - generate error?
+		println!("Wrong element size: {}, expected {}", lump.element_size, element_size);
+		return Ok(Vec::new());
+	}
+
 	let mut result = vec![unsafe { std::mem::zeroed::<T>() }; lump.element_count as usize];
 	if result.is_empty()
 	{
