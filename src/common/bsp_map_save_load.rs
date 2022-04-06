@@ -65,6 +65,12 @@ pub fn save_map(bsp_map: &BSPMap, file_path: &Path) -> Result<(), std::io::Error
 		&mut header.lumps[LUMP_TEXTURES],
 		&mut offset,
 	)?;
+	write_lump(
+		&bsp_map.submodels,
+		&mut file,
+		&mut header.lumps[LUMP_SUBMODELS],
+		&mut offset,
+	)?;
 
 	// Write header again to update lumps headers.
 	file.seek(std::io::SeekFrom::Start(0))?;
@@ -101,6 +107,7 @@ pub fn load_map(file_path: &Path) -> Result<Option<BSPMap>, std::io::Error>
 		leafs_portals: read_lump(&mut file, &header.lumps[LUMP_LEAFS_PORTALS])?,
 		vertices: read_lump(&mut file, &header.lumps[LUMP_VERTICES])?,
 		textures: read_lump(&mut file, &header.lumps[LUMP_TEXTURES])?,
+		submodels: read_lump(&mut file, &header.lumps[LUMP_SUBMODELS])?,
 	};
 
 	Ok(Some(map))
@@ -134,6 +141,7 @@ const LUMP_PORTALS: usize = 3;
 const LUMP_LEAFS_PORTALS: usize = 4;
 const LUMP_VERTICES: usize = 5;
 const LUMP_TEXTURES: usize = 6;
+const LUMP_SUBMODELS: usize = 7;
 
 // Returns number of bytes written.
 fn write_lump<T>(

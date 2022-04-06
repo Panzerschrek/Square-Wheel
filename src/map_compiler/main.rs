@@ -46,10 +46,10 @@ fn main()
 			(num_portal_vertices as f32) / (bsp_tree.portals.len() as f32),
 		);
 
-		let map_compact = bsp_map_compact::convert_bsp_map_to_compact_format(&bsp_tree);
+		let map_compact = bsp_map_compact::convert_bsp_map_to_compact_format(&bsp_tree, &map_polygonized[1 ..]);
 		println!(
 			"Compact map nodes: {}, leafs: {}, polygons: {}, portals: {}, leafs_portals: {}, vertices: {}, textures: \
-			 {}",
+			 {}, submodels: {}",
 			map_compact.nodes.len(),
 			map_compact.leafs.len(),
 			map_compact.polygons.len(),
@@ -57,6 +57,7 @@ fn main()
 			map_compact.leafs_portals.len(),
 			map_compact.vertices.len(),
 			map_compact.textures.len(),
+			map_compact.submodels.len(),
 		);
 
 		bsp_map_save_load::save_map(&map_compact, &opt.output).unwrap();

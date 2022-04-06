@@ -1,4 +1,4 @@
-use super::{bsp_builder, math_types::*};
+use super::{bsp_builder, map_polygonizer, math_types::*};
 use std::collections::HashMap;
 
 // This file contains declaration of compact BSP map representation.
@@ -18,6 +18,7 @@ pub struct BSPMap
 	// Both polygon and portal vertices.
 	pub vertices: Vec<Vec3f>,
 	pub textures: Vec<Texture>,
+	pub submodels: Vec<Submodel>,
 }
 
 #[repr(C)]
@@ -61,6 +62,15 @@ pub struct Portal
 	pub num_vertices: u32,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Submodel
+{
+	pub first_polygon: u32,
+	pub num_polygons: u32,
+	// TODO - save keys/values?
+}
+
 pub const MAX_TEXTURE_NAME_LEN: usize = 64;
 // UTF-8 values of texture (name, path, or some id). Remaining symbols are filled with nulls.
 pub type Texture = [u8; MAX_TEXTURE_NAME_LEN];
@@ -68,7 +78,10 @@ pub type Texture = [u8; MAX_TEXTURE_NAME_LEN];
 // Conversion functions.
 //
 
-pub fn convert_bsp_map_to_compact_format(bsp_tree: &bsp_builder::BSPTree) -> BSPMap
+pub fn convert_bsp_map_to_compact_format(
+	bsp_tree: &bsp_builder::BSPTree,
+	submodels: &[map_polygonizer::Entity],
+) -> BSPMap
 {
 	let mut out_map = BSPMap::default();
 
@@ -86,6 +99,8 @@ pub fn convert_bsp_map_to_compact_format(bsp_tree: &bsp_builder::BSPTree) -> BSP
 	);
 
 	fill_portals_leafs(&bsp_tree.portals, &leaf_ptr_to_index_map, &mut out_map);
+
+	convert_submodels_to_compact_format(submodels, &mut out_map, &mut texture_name_to_index_map);
 
 	fill_textures(&texture_name_to_index_map, &mut out_map);
 
@@ -298,5 +313,42 @@ fn fill_textures(texture_name_to_index_map: &TextureNameToIndexMap, out_map: &mu
 
 		// ".." operator will panic in case of name overflow.
 		out_texture_bytes[0 .. name_bytes.len()].copy_from_slice(name_bytes);
+	}
+}
+
+fn convert_submodels_to_compact_format(
+	submodels: &[map_polygonizer::Entity],
+	out_map: &mut BSPMap,
+	texture_name_to_index_map: &mut TextureNameToIndexMap,
+)
+{
+	for submodel in submodels
+	{
+		if submodel.polygons.is_empty()
+		{
+			continue;
+		}
+		let submodel_converted = convert_submodel_to_compact_format(submodel, out_map, texture_name_to_index_map);
+		out_map.submodels.push(submodel_converted);
+	}
+}
+
+fn convert_submodel_to_compact_format(
+	submodel: &map_polygonizer::Entity,
+	out_map: &mut BSPMap,
+	texture_name_to_index_map: &mut TextureNameToIndexMap,
+) -> Submodel
+{
+	let first_polygon = out_map.polygons.len() as u32;
+
+	for polygon in &submodel.polygons
+	{
+		let polygon_converted = convert_polygon_to_compact_format(&polygon, out_map, texture_name_to_index_map);
+		out_map.polygons.push(polygon_converted);
+	}
+
+	Submodel {
+		first_polygon,
+		num_polygons: submodel.polygons.len() as u32,
 	}
 }
