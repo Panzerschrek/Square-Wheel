@@ -1,4 +1,4 @@
-use common::{bsp_builder, bsp_map_compact, map_file, map_polygonizer};
+use common::{bsp_builder, bsp_map_compact, bsp_map_save_load, map_file, map_polygonizer};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -9,6 +9,9 @@ struct Opt
 	/// Input file
 	#[structopt(parse(from_os_str), short = "i", required(true))]
 	input: PathBuf,
+
+	#[structopt(parse(from_os_str), short = "o", required(true))]
+	output: PathBuf,
 }
 
 fn main()
@@ -55,6 +58,8 @@ fn main()
 			map_compact.vertices.len(),
 			map_compact.textures.len(),
 		);
+
+		bsp_map_save_load::save_map(&map_compact, &opt.output).unwrap();
 	}
 	else
 	{
