@@ -95,7 +95,21 @@ pub fn load_map(file_path: &Path) -> Result<Option<BSPMap>, std::io::Error>
 
 	if file.read(header_bytes)? != header_size
 	{
-		// TODO - print some message?
+		println!("Can't read BSP map header");
+		return Ok(None);
+	}
+
+	if header.id != BSP_MAP_ID
+	{
+		println!("File is not a valid BSP map");
+		return Ok(None);
+	}
+	if header.version > BSP_MAP_VERSION
+	{
+		println!(
+			"Can't load newer map version: {}, expected {}",
+			header.version, BSP_MAP_VERSION
+		);
 		return Ok(None);
 	}
 
