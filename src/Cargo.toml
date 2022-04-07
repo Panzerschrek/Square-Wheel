@@ -12,14 +12,22 @@ cgmath = "0.18"
 sdl2 = "0.35"
 structopt = "0.3"
 
+# Library with common code.
 [lib]
 name = "common"
 path = "common/lib.rs"
 
+# Map compiler executable.
 [[bin]]
 name = "map_compiler"
 path = "map_compiler/main.rs"
 
+# Helper tool for map visualisation.
 [[bin]]
 name = "map_viewer"
 path = "map_viewer/main.rs"
+
+# Engine itself.
+[[bin]]
+name = "square_wheel"
+path = "square_wheel/main.rs"
