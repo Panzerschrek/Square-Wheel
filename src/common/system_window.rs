@@ -47,7 +47,7 @@ impl SystemWindow
 		self.sdl2_event_pump.keyboard_state()
 	}
 
-	pub fn end_frame<F: FnOnce(&mut [Color32], &SurfaceInfo)>(&mut self, draw_fn: F)
+	pub fn end_frame<F: FnOnce(&mut [Color32], &SurfaceInfo)>(&self, draw_fn: F)
 	{
 		let mut surface = self.sdl2_window.surface(&self.sdl2_event_pump).unwrap();
 
