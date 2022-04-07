@@ -47,22 +47,8 @@ fn draw_map(
 	let mut reachable_sectors = ReachablebleSectorsMap::new();
 	find_reachable_sectors_r(current_sector, map, 0, &mut reachable_sectors);
 
-	for (sector, depth) in reachable_sectors
-	{
-		let color = Color32::from_rgb(
-			((depth * 28).min(255)) as u8,
-			((depth * 24).min(255)) as u8,
-			((depth * 20).min(255)) as u8,
-		);
-
-		draw_sector(
-			&mut rasterizer,
-			camera_matrices,
-			&map.leafs[sector as usize],
-			map,
-			color,
-		);
-	}
+	// Draw BSP tree in order, skip unreachable leafs (sectors).
+	draw_tree_r(&mut rasterizer, camera_matrices, &reachable_sectors, &map, root_node);
 }
 
 fn find_current_sector(mut index: u32, map: &bsp_map_compact::BSPMap, planes_matrix: &Mat4f) -> u32
@@ -128,6 +114,46 @@ fn find_reachable_sectors_r(
 			portal_value.leafs[0]
 		};
 		find_reachable_sectors_r(next_sector, map, depth + 1, reachable_sectors);
+	}
+}
+
+fn draw_tree_r(
+	rasterizer: &mut DebugRasterizer,
+	camera_matrices: &CameraMatrices,
+	reachable_sectors: &ReachablebleSectorsMap,
+	map: &bsp_map_compact::BSPMap,
+	current_index: u32,
+)
+{
+	if current_index >= bsp_map_compact::FIRST_LEAF_INDEX
+	{
+		let sector = current_index - bsp_map_compact::FIRST_LEAF_INDEX;
+		if let Some(depth) = reachable_sectors.get(&sector)
+		{
+			let color = Color32::from_rgb(
+				((depth * 28).min(255)) as u8,
+				((depth * 24).min(255)) as u8,
+				((depth * 20).min(255)) as u8,
+			);
+
+			draw_sector(rasterizer, camera_matrices, &map.leafs[sector as usize], map, color);
+		}
+	}
+	else
+	{
+		let node = &map.nodes[current_index as usize];
+		let plane_transformed = camera_matrices.planes_matrix * node.plane.vec.extend(-node.plane.dist);
+		let mask = if plane_transformed.w >= 0.0 { 0 } else { 1 };
+		for i in 0 .. 2
+		{
+			draw_tree_r(
+				rasterizer,
+				camera_matrices,
+				reachable_sectors,
+				map,
+				node.children[(i ^ mask) as usize],
+			);
+		}
 	}
 }
 
