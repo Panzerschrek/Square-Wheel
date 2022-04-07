@@ -6,66 +6,76 @@ use structopt::StructOpt;
 #[structopt(name = "map_compiler", about = "SquareWheel map compiler.")]
 struct Opt
 {
-	/// Input file
+	/// Input file (.map)
 	#[structopt(parse(from_os_str), short = "i", required(true))]
 	input: PathBuf,
 
+	/// Output file
 	#[structopt(parse(from_os_str), short = "o", required(true))]
 	output: PathBuf,
+
+	/// Print stats of input/result map
+	#[structopt(long)]
+	print_stats: bool,
 }
 
 fn main()
 {
+	// use "unwrap" in this function. It's fine to abort application if something is wrong.
+
 	let opt = Opt::from_args();
-	println!("Input file: {:?}", opt.input);
-
 	let file_contents_str = std::fs::read_to_string(opt.input).unwrap();
-	let file_content = map_file::parse_map_file_content(&file_contents_str);
-	if let Ok(map_file_parsed) = &file_content
+	let map_file_parsed = map_file::parse_map_file_content(&file_contents_str).unwrap();
+	let map_polygonized = map_polygonizer::polygonize_map(&map_file_parsed);
+	let bsp_tree = bsp_builder::build_leaf_bsp_tree(&map_polygonized);
+	let map_compact = bsp_map_compact::convert_bsp_map_to_compact_format(&bsp_tree, &map_polygonized[1 ..]);
+	bsp_map_save_load::save_map(&map_compact, &opt.output).unwrap();
+
+	if opt.print_stats
 	{
-		let map_polygonized = map_polygonizer::polygonize_map(&map_file_parsed);
-		let bsp_tree = bsp_builder::build_leaf_bsp_tree(&map_polygonized);
-		let mut stats = BSPStats::default();
-		calculate_bsp_tree_stats_r(&bsp_tree.root, 0, &mut stats);
-		stats.average_depth /= stats.num_leafs as f32;
-
-		let mut num_portal_vertices = 0;
-		for portal in &bsp_tree.portals
-		{
-			num_portal_vertices += portal.borrow().vertices.len();
-		}
-		println!("Initial polygons: {}", map_polygonized[0].polygons.len());
-		println!(
-			"BSP Tree stats: {:?}, average polygons in leaf: {}, average vertices in polygon: {}, portals: {}, portal \
-			 vertices: {}, average vertices in portal: {}",
-			stats,
-			(stats.num_polygons as f32) / (stats.num_leafs as f32),
-			(stats.num_polygon_vertices as f32) / (stats.num_polygons as f32),
-			bsp_tree.portals.len(),
-			num_portal_vertices,
-			(num_portal_vertices as f32) / (bsp_tree.portals.len() as f32),
-		);
-
-		let map_compact = bsp_map_compact::convert_bsp_map_to_compact_format(&bsp_tree, &map_polygonized[1 ..]);
-		println!(
-			"Compact map nodes: {}, leafs: {}, polygons: {}, portals: {}, leafs_portals: {}, vertices: {}, textures: \
-			 {}, submodels: {}",
-			map_compact.nodes.len(),
-			map_compact.leafs.len(),
-			map_compact.polygons.len(),
-			map_compact.portals.len(),
-			map_compact.leafs_portals.len(),
-			map_compact.vertices.len(),
-			map_compact.textures.len(),
-			map_compact.submodels.len(),
-		);
-
-		bsp_map_save_load::save_map(&map_compact, &opt.output).unwrap();
+		print_stats(&map_polygonized, &bsp_tree, &map_compact);
 	}
-	else
+}
+
+fn print_stats(
+	map_polygonized: &map_polygonizer::MapPolygonized,
+	bsp_tree: &bsp_builder::BSPTree,
+	map_compact: &bsp_map_compact::BSPMap,
+)
+{
+	let mut stats = BSPStats::default();
+	calculate_bsp_tree_stats_r(&bsp_tree.root, 0, &mut stats);
+	stats.average_depth /= stats.num_leafs as f32;
+
+	let mut num_portal_vertices = 0;
+	for portal in &bsp_tree.portals
 	{
-		println!("Failed to parse map file: {:?}", file_content);
+		num_portal_vertices += portal.borrow().vertices.len();
 	}
+	println!("Initial polygons: {}", map_polygonized[0].polygons.len());
+	println!(
+		"BSP Tree stats: {:?}, average polygons in leaf: {}, average vertices in polygon: {}, portals: {}, portal \
+		 vertices: {}, average vertices in portal: {}",
+		stats,
+		(stats.num_polygons as f32) / (stats.num_leafs as f32),
+		(stats.num_polygon_vertices as f32) / (stats.num_polygons as f32),
+		bsp_tree.portals.len(),
+		num_portal_vertices,
+		(num_portal_vertices as f32) / (bsp_tree.portals.len() as f32),
+	);
+
+	println!(
+		"Compact map nodes: {}, leafs: {}, polygons: {}, portals: {}, leafs_portals: {}, vertices: {}, textures: {}, \
+		 submodels: {}",
+		map_compact.nodes.len(),
+		map_compact.leafs.len(),
+		map_compact.polygons.len(),
+		map_compact.portals.len(),
+		map_compact.leafs_portals.len(),
+		map_compact.vertices.len(),
+		map_compact.textures.len(),
+		map_compact.submodels.len(),
+	);
 }
 
 #[derive(Debug, Default)]
