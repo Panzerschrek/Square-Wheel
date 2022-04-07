@@ -9,4 +9,5 @@ pub mod fixed_math;
 pub mod map_file;
 pub mod map_polygonizer;
 pub mod math_types;
+pub mod plane;
 pub mod system_window;

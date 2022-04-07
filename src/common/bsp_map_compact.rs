@@ -1,10 +1,8 @@
-use super::{bsp_builder, map_polygonizer, math_types::*};
+use super::{bsp_builder, map_polygonizer, math_types::*, plane::*};
 use std::collections::HashMap;
 
 // This file contains declaration of compact BSP map representation.
 // Such representation allows to process BSP map in order to draw it or in order to save or load it.
-
-pub use super::map_polygonizer::Plane;
 
 #[derive(Default)]
 pub struct BSPMap

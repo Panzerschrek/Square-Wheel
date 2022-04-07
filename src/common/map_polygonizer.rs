@@ -1,12 +1,4 @@
-use super::{map_file, math_types::*};
-
-#[repr(C)] // Require C representation in order to get stable fileds order for binary serialization.
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct Plane
-{
-	pub vec: Vec3f, // Unnormalized direction
-	pub dist: f32,  // for point on plane dot(vec, point) = dist
-}
+use super::{map_file, math_types::*, plane::Plane};
 
 #[derive(Debug, Clone)]
 pub struct TextureInfo

@@ -1,7 +1,7 @@
-use super::{map_file, map_polygonizer, math_types::*};
+use super::{map_file, map_polygonizer, math_types::*, plane::*};
 use std::{cell, rc};
 
-pub use map_polygonizer::{Plane, Polygon};
+pub use map_polygonizer::Polygon;
 
 pub struct BSPTree
 {
@@ -541,10 +541,7 @@ fn build_leaf_portals(
 		let node = splitter_node.node.borrow();
 		if splitter_node.is_front
 		{
-			cut_planes.push(Plane {
-				vec: -node.plane.vec,
-				dist: -node.plane.dist,
-			});
+			cut_planes.push(node.plane.get_inverted());
 		}
 		else
 		{
@@ -589,10 +586,7 @@ fn build_leaf_portals(
 		let node = splitter_node.node.borrow();
 		let portal_plane = if splitter_node.is_front
 		{
-			Plane {
-				vec: -node.plane.vec,
-				dist: -node.plane.dist,
-			}
+			node.plane.get_inverted()
 		}
 		else
 		{

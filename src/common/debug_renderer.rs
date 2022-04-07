@@ -1,6 +1,6 @@
 use super::{
 	bsp_builder, bsp_map_compact, camera_controller::CameraMatrices, color::*, debug_rasterizer::*, fixed_math::*,
-	map_file, map_polygonizer, map_polygonizer::Plane, math_types::*, system_window,
+	map_file, map_polygonizer, math_types::*, plane::*, system_window,
 };
 
 #[derive(Default)]
