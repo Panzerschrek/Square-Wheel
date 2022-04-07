@@ -1,4 +1,5 @@
 mod host;
+mod rasterizer;
 mod renderer;
 
 use std::path::PathBuf;

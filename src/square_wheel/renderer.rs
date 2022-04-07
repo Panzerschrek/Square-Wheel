@@ -1,6 +1,7 @@
+use super::rasterizer::*;
 use common::{
-	bsp_map_compact, camera_controller::CameraMatrices, clipping::*, color::*, debug_rasterizer::*, fixed_math::*,
-	math_types::*, plane::*, system_window,
+	bsp_map_compact, camera_controller::CameraMatrices, clipping::*, color::*, fixed_math::*, math_types::*, plane::*,
+	system_window,
 };
 
 pub fn draw_frame(
@@ -39,7 +40,7 @@ fn draw_map(
 	map: &bsp_map_compact::BSPMap,
 )
 {
-	let mut rasterizer = DebugRasterizer::new(pixels, surface_info);
+	let mut rasterizer = Rasterizer::new(pixels, surface_info);
 	let root_node = (map.nodes.len() - 1) as u32;
 	let current_sector = find_current_sector(root_node, map, &camera_matrices.planes_matrix);
 
@@ -47,7 +48,7 @@ fn draw_map(
 	let mut reachable_sectors = ReachablebleSectorsMap::new();
 	find_reachable_sectors_r(current_sector, map, 0, &mut reachable_sectors);
 
-	// Draw BSP tree in order, skip unreachable leafs (sectors).
+	// Draw BSP tree in back to front order, skip unreachable leafs (sectors).
 	draw_tree_r(&mut rasterizer, camera_matrices, &reachable_sectors, &map, root_node);
 }
 
@@ -118,7 +119,7 @@ fn find_reachable_sectors_r(
 }
 
 fn draw_tree_r(
-	rasterizer: &mut DebugRasterizer,
+	rasterizer: &mut Rasterizer,
 	camera_matrices: &CameraMatrices,
 	reachable_sectors: &ReachablebleSectorsMap,
 	map: &bsp_map_compact::BSPMap,
@@ -143,7 +144,7 @@ fn draw_tree_r(
 	{
 		let node = &map.nodes[current_index as usize];
 		let plane_transformed = camera_matrices.planes_matrix * node.plane.vec.extend(-node.plane.dist);
-		let mask = if plane_transformed.w >= 0.0 { 0 } else { 1 };
+		let mask = if plane_transformed.w >= 0.0 { 1 } else { 0 };
 		for i in 0 .. 2
 		{
 			draw_tree_r(
@@ -158,7 +159,7 @@ fn draw_tree_r(
 }
 
 fn draw_sector(
-	rasterizer: &mut DebugRasterizer,
+	rasterizer: &mut Rasterizer,
 	camera_matrices: &CameraMatrices,
 	sector: &bsp_map_compact::BSPLeaf,
 	map: &bsp_map_compact::BSPMap,
@@ -180,7 +181,7 @@ fn draw_sector(
 }
 
 fn draw_polygon(
-	rasterizer: &mut DebugRasterizer,
+	rasterizer: &mut Rasterizer,
 	camera_matrices: &CameraMatrices,
 	plane: &Plane,
 	vertices: &[Vec3f],
