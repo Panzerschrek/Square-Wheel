@@ -1,4 +1,4 @@
-use super::{math_types::*};
+use super::math_types::*;
 
 pub fn clip_3d_polygon_by_z_plane(polygon: &[Vec3f], z_dist: f32, out_polygon: &mut [Vec3f]) -> usize
 {

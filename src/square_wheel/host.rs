@@ -47,7 +47,14 @@ impl Host
 		self.camera.update(&self.window.get_keyboard_state(), time_delta_s);
 
 		self.window.end_frame(|pixels, surface_info| {
-			renderer::draw_frame(pixels, surface_info, &self.map);
+			renderer::draw_frame(
+				pixels,
+				surface_info,
+				&self
+					.camera
+					.build_view_matrix(surface_info.width as f32, surface_info.height as f32),
+				&self.map,
+			);
 		});
 
 		let frame_end_time = std::time::Instant::now();
