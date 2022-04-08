@@ -1,5 +1,5 @@
 use super::renderer;
-use common::{bsp_map_compact, bsp_map_save_load, camera_controller, system_window};
+use common::{bsp_map_compact, bsp_map_save_load, camera_controller, color::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
 use std::time::Duration;
 
@@ -54,6 +54,14 @@ impl Host
 					.camera
 					.build_view_matrix(surface_info.width as f32, surface_info.height as f32),
 				&self.map,
+			);
+			common::text_printer::print(
+				pixels,
+				surface_info,
+				"Square Wheel",
+				7,
+				3,
+				Color32::from_rgb(255, 255, 255),
 			);
 		});
 
