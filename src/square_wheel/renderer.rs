@@ -42,17 +42,17 @@ fn draw_map(
 {
 	let mut rasterizer = Rasterizer::new(pixels, surface_info);
 	let root_node = (map.nodes.len() - 1) as u32;
-	let current_sector = find_current_sector(root_node, map, &camera_matrices.planes_matrix);
+	let current_leaf = find_current_leaf(root_node, map, &camera_matrices.planes_matrix);
 
-	// TODO - avoid allocating this HashMap each grame.
-	let mut reachable_sectors = ReachablebleSectorsMap::new();
-	find_reachable_sectors_r(current_sector, map, 0, &mut reachable_sectors);
+	// TODO - avoid allocating this HashMap each frame.
+	let mut reachable_leafs = ReachablebleLeafsMap::new();
+	find_reachable_leafs_r(current_leaf, map, 0, &mut reachable_leafs);
 
-	// Draw BSP tree in back to front order, skip unreachable leafs (sectors).
-	draw_tree_r(&mut rasterizer, camera_matrices, &reachable_sectors, &map, root_node);
+	// Draw BSP tree in back to front order, skip unreachable leafs.
+	draw_tree_r(&mut rasterizer, camera_matrices, &reachable_leafs, map, root_node);
 }
 
-fn find_current_sector(mut index: u32, map: &bsp_map_compact::BSPMap, planes_matrix: &Mat4f) -> u32
+fn find_current_leaf(mut index: u32, map: &bsp_map_compact::BSPMap, planes_matrix: &Mat4f) -> u32
 {
 	loop
 	{
@@ -74,12 +74,12 @@ fn find_current_sector(mut index: u32, map: &bsp_map_compact::BSPMap, planes_mat
 	}
 }
 
-type ReachablebleSectorsMap = std::collections::HashMap<u32, usize>;
-fn find_reachable_sectors_r(
-	sector: u32,
+type ReachablebleLeafsMap = std::collections::HashMap<u32, usize>;
+fn find_reachable_leafs_r(
+	leaf: u32,
 	map: &bsp_map_compact::BSPMap,
 	depth: usize,
-	reachable_sectors: &mut ReachablebleSectorsMap,
+	reachable_leafs: &mut ReachablebleLeafsMap,
 )
 {
 	let max_depth = 16;
@@ -88,7 +88,7 @@ fn find_reachable_sectors_r(
 		return;
 	}
 
-	if let Some(prev_depth) = reachable_sectors.get_mut(&sector)
+	if let Some(prev_depth) = reachable_leafs.get_mut(&leaf)
 	{
 		if *prev_depth <= depth
 		{
@@ -98,15 +98,15 @@ fn find_reachable_sectors_r(
 	}
 	else
 	{
-		reachable_sectors.insert(sector, depth);
+		reachable_leafs.insert(leaf, depth);
 	}
 
-	let sector_value = &map.leafs[sector as usize];
-	for portal in &map.leafs_portals[(sector_value.first_leaf_portal as usize) ..
-		((sector_value.first_leaf_portal + sector_value.num_leaf_portals) as usize)]
+	let leaf_value = &map.leafs[leaf as usize];
+	for portal in &map.leafs_portals[(leaf_value.first_leaf_portal as usize) ..
+		((leaf_value.first_leaf_portal + leaf_value.num_leaf_portals) as usize)]
 	{
 		let portal_value = &map.portals[(*portal) as usize];
-		let next_sector = if portal_value.leafs[0] == sector
+		let next_leaf = if portal_value.leafs[0] == leaf
 		{
 			portal_value.leafs[1]
 		}
@@ -114,22 +114,22 @@ fn find_reachable_sectors_r(
 		{
 			portal_value.leafs[0]
 		};
-		find_reachable_sectors_r(next_sector, map, depth + 1, reachable_sectors);
+		find_reachable_leafs_r(next_leaf, map, depth + 1, reachable_leafs);
 	}
 }
 
 fn draw_tree_r(
 	rasterizer: &mut Rasterizer,
 	camera_matrices: &CameraMatrices,
-	reachable_sectors: &ReachablebleSectorsMap,
+	reachable_leafs: &ReachablebleLeafsMap,
 	map: &bsp_map_compact::BSPMap,
 	current_index: u32,
 )
 {
 	if current_index >= bsp_map_compact::FIRST_LEAF_INDEX
 	{
-		let sector = current_index - bsp_map_compact::FIRST_LEAF_INDEX;
-		if let Some(depth) = reachable_sectors.get(&sector)
+		let leaf = current_index - bsp_map_compact::FIRST_LEAF_INDEX;
+		if let Some(depth) = reachable_leafs.get(&leaf)
 		{
 			let color = Color32::from_rgb(
 				((depth * 28).min(255)) as u8,
@@ -137,7 +137,7 @@ fn draw_tree_r(
 				((depth * 20).min(255)) as u8,
 			);
 
-			draw_sector(rasterizer, camera_matrices, &map.leafs[sector as usize], map, color);
+			draw_leaf(rasterizer, camera_matrices, &map.leafs[leaf as usize], map, color);
 		}
 	}
 	else
@@ -150,7 +150,7 @@ fn draw_tree_r(
 			draw_tree_r(
 				rasterizer,
 				camera_matrices,
-				reachable_sectors,
+				reachable_leafs,
 				map,
 				node.children[(i ^ mask) as usize],
 			);
@@ -158,16 +158,15 @@ fn draw_tree_r(
 	}
 }
 
-fn draw_sector(
+fn draw_leaf(
 	rasterizer: &mut Rasterizer,
 	camera_matrices: &CameraMatrices,
-	sector: &bsp_map_compact::BSPLeaf,
+	leaf: &bsp_map_compact::BSPLeaf,
 	map: &bsp_map_compact::BSPMap,
 	color: Color32,
 )
 {
-	for polygon in
-		&map.polygons[(sector.first_polygon as usize) .. ((sector.first_polygon + sector.num_polygons) as usize)]
+	for polygon in &map.polygons[(leaf.first_polygon as usize) .. ((leaf.first_polygon + leaf.num_polygons) as usize)]
 	{
 		draw_polygon(
 			rasterizer,
