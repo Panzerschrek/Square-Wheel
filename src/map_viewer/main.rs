@@ -6,7 +6,7 @@ use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "map_compiler", about = "SquareWheel map compiler.")]
+#[structopt(name = "map_viewer", about = "SquareWheel map viewer tool.")]
 struct Opt
 {
 	/// Input file

@@ -2,6 +2,7 @@ pub mod bsp_builder;
 pub mod bsp_map_compact;
 pub mod bsp_map_save_load;
 pub mod camera_controller;
+pub mod clipping;
 pub mod color;
 pub mod debug_rasterizer;
 pub mod debug_renderer;
