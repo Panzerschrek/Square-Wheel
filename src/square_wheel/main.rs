@@ -1,3 +1,4 @@
+mod commands_queue;
 mod config;
 mod host;
 mod host_config;

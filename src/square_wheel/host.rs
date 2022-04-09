@@ -1,10 +1,11 @@
-use super::{config, host_config::*, renderer};
+use super::{commands_queue, config, host_config::*, renderer};
 use common::{bsp_map_save_load, camera_controller, color::*, system_window, ticks_counter::*};
 use sdl2::{event::Event, keyboard::Keycode};
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
 pub struct Host
 {
+	commands_queue: commands_queue::CommandsQueuePtr<Host>,
 	config: HostConfig,
 	window: Rc<RefCell<system_window::SystemWindow>>,
 	camera: camera_controller::CameraController,
@@ -17,12 +18,18 @@ impl Host
 {
 	pub fn new(map_path: &std::path::Path) -> Self
 	{
+		let commands_queue = commands_queue::CommandsQueue::new(vec![
+			("get_pos".to_string(), Host::command_get_pos),
+			("set_pos".to_string(), Host::command_set_pos),
+		]);
+
 		let config_file_path = "config.json";
 		let config_json = config::load(std::path::Path::new(config_file_path)).unwrap_or_default();
 
 		let map = bsp_map_save_load::load_map(map_path).unwrap().unwrap();
 
 		Host {
+			commands_queue,
 			config: HostConfig::from_app_config(&config_json),
 			window: Rc::new(RefCell::new(system_window::SystemWindow::new())),
 			camera: camera_controller::CameraController::new(),
@@ -35,6 +42,8 @@ impl Host
 	// Returns true if need to continue.
 	pub fn process_frame(&mut self) -> bool
 	{
+		self.process_commands();
+
 		for event in self.window.borrow_mut().get_events()
 		{
 			match event
@@ -102,5 +111,21 @@ impl Host
 			19,
 			Color32::from_rgb(255, 255, 255),
 		);
+	}
+
+	fn process_commands(&mut self)
+	{
+		let queue_ptr_copy = self.commands_queue.clone();
+		queue_ptr_copy.borrow_mut().process_commands(self);
+	}
+
+	fn command_set_pos(&mut self, _args: commands_queue::CommandArgs)
+	{
+		// TODO
+	}
+
+	fn command_get_pos(&mut self, _args: commands_queue::CommandArgs)
+	{
+		// TODO
 	}
 }
