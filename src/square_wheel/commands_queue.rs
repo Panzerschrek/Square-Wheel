@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 pub type CommandArgs = Vec<String>;
 pub type CommandHandler<HandlerClass> = fn(&mut HandlerClass, CommandArgs);
-pub type NamedCommandHandler<HandlerClass> = (String, CommandHandler<HandlerClass>);
+pub type NamedCommandHandler<HandlerClass> = (&'static str, CommandHandler<HandlerClass>);
 
 pub struct CommandsQueue<HandlerClass>
 {
@@ -26,7 +26,7 @@ impl<HandlerClass> CommandsQueue<HandlerClass>
 	{
 		for (command_name, _) in &self.handlers
 		{
-			if command == command_name
+			if command == *command_name
 			{
 				return true;
 			}
@@ -40,7 +40,7 @@ impl<HandlerClass> CommandsQueue<HandlerClass>
 		// TODO - optimize iteration over two vectors.
 		for (index, (command_name, _)) in self.handlers.iter().enumerate()
 		{
-			if command == command_name
+			if command == *command_name
 			{
 				self.invocations[index].push(args);
 				return;

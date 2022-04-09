@@ -19,8 +19,8 @@ impl Host
 	pub fn new(map_path: &std::path::Path) -> Self
 	{
 		let commands_queue = commands_queue::CommandsQueue::new(vec![
-			("get_pos".to_string(), Host::command_get_pos),
-			("set_pos".to_string(), Host::command_set_pos),
+			("get_pos", Host::command_get_pos),
+			("set_pos", Host::command_set_pos),
 		]);
 
 		let config_file_path = "config.json";
