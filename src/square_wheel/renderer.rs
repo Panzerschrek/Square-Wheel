@@ -6,16 +6,35 @@ use common::{
 
 pub struct Renderer
 {
+	current_frame: FrameNumber,
 	config: RendererConfig,
 	map: bsp_map_compact::BSPMap,
+	leafs_data: Vec<DrawLeafData>,
 }
+
+// Mutable data associated with map BSP Leaf.
+#[derive(Default, Copy, Clone)]
+struct DrawLeafData
+{
+	// Frame last time this leaf was visible.
+	visible_frame: FrameNumber,
+	// Depth for visible leafs search.
+	search_depth: u32,
+}
+
+// 32 bits are enough for frames enumeration.
+// It is more than year at 60FPS.
+#[derive(Default, Copy, Clone, PartialEq, Eq)]
+struct FrameNumber(u32);
 
 impl Renderer
 {
 	pub fn new(app_config: &serde_json::Value, map: bsp_map_compact::BSPMap) -> Self
 	{
 		Renderer {
+			current_frame: FrameNumber(0),
 			config: RendererConfig::from_app_config(app_config),
+			leafs_data: vec![DrawLeafData::default(); map.leafs.len()],
 			map,
 		}
 	}
@@ -27,19 +46,110 @@ impl Renderer
 		camera_matrices: &CameraMatrices,
 	)
 	{
+		self.current_frame.0 += 1;
+
 		if self.config.clear_background
 		{
 			draw_background(pixels);
 		}
 
-		draw_map(pixels, surface_info, camera_matrices, &self.map);
+		self.draw_map(pixels, surface_info, camera_matrices);
 
 		// TODO - remove such temporary fuinction.
 		draw_crosshair(pixels, surface_info);
 	}
-}
 
-// TODO - make these functions self-call?
+	fn draw_map(
+		&mut self,
+		pixels: &mut [Color32],
+		surface_info: &system_window::SurfaceInfo,
+		camera_matrices: &CameraMatrices,
+	)
+	{
+		let mut rasterizer = Rasterizer::new(pixels, surface_info);
+		let root_node = (self.map.nodes.len() - 1) as u32;
+		let current_leaf = self.find_current_leaf(root_node, &camera_matrices.planes_matrix);
+
+		mark_reachable_leafs_r(current_leaf, &self.map, self.current_frame, 0, &mut self.leafs_data);
+
+		// Draw BSP tree in back to front order, skip unreachable leafs.
+		self.draw_tree_r(&mut rasterizer, camera_matrices, root_node);
+	}
+
+	fn find_current_leaf(&self, mut index: u32, planes_matrix: &Mat4f) -> u32
+	{
+		loop
+		{
+			if index >= bsp_map_compact::FIRST_LEAF_INDEX
+			{
+				return index - bsp_map_compact::FIRST_LEAF_INDEX;
+			}
+
+			let node = &self.map.nodes[index as usize];
+			let plane_transformed = planes_matrix * node.plane.vec.extend(-node.plane.dist);
+			index = if plane_transformed.w >= 0.0
+			{
+				node.children[0]
+			}
+			else
+			{
+				node.children[1]
+			};
+		}
+	}
+
+	fn draw_tree_r(&self, rasterizer: &mut Rasterizer, camera_matrices: &CameraMatrices, current_index: u32)
+	{
+		if current_index >= bsp_map_compact::FIRST_LEAF_INDEX
+		{
+			let leaf = current_index - bsp_map_compact::FIRST_LEAF_INDEX;
+			let leaf_data = &self.leafs_data[leaf as usize];
+			if leaf_data.visible_frame == self.current_frame
+			{
+				let color = Color32::from_rgb(
+					((leaf_data.search_depth * 28).min(255)) as u8,
+					((leaf_data.search_depth * 24).min(255)) as u8,
+					((leaf_data.search_depth * 20).min(255)) as u8,
+				);
+
+				self.draw_leaf(rasterizer, camera_matrices, &self.map.leafs[leaf as usize], color);
+			}
+		}
+		else
+		{
+			let node = &self.map.nodes[current_index as usize];
+			let plane_transformed = camera_matrices.planes_matrix * node.plane.vec.extend(-node.plane.dist);
+			let mask = if plane_transformed.w >= 0.0 { 1 } else { 0 };
+			for i in 0 .. 2
+			{
+				self.draw_tree_r(rasterizer, camera_matrices, node.children[(i ^ mask) as usize]);
+			}
+		}
+	}
+
+	fn draw_leaf(
+		&self,
+		rasterizer: &mut Rasterizer,
+		camera_matrices: &CameraMatrices,
+		leaf: &bsp_map_compact::BSPLeaf,
+		color: Color32,
+	)
+	{
+		for polygon in
+			&self.map.polygons[(leaf.first_polygon as usize) .. ((leaf.first_polygon + leaf.num_polygons) as usize)]
+		{
+			draw_polygon(
+				rasterizer,
+				camera_matrices,
+				&polygon.plane,
+				&self.map.vertices
+					[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)],
+				&polygon.tex_coord_equation,
+				color,
+			);
+		}
+	}
+}
 
 fn draw_background(pixels: &mut [Color32])
 {
@@ -54,53 +164,12 @@ fn draw_crosshair(pixels: &mut [Color32], surface_info: &system_window::SurfaceI
 	pixels[surface_info.width / 2 + surface_info.height / 2 * surface_info.pitch] = Color32::from_rgb(255, 255, 255);
 }
 
-fn draw_map(
-	pixels: &mut [Color32],
-	surface_info: &system_window::SurfaceInfo,
-	camera_matrices: &CameraMatrices,
-	map: &bsp_map_compact::BSPMap,
-)
-{
-	let mut rasterizer = Rasterizer::new(pixels, surface_info);
-	let root_node = (map.nodes.len() - 1) as u32;
-	let current_leaf = find_current_leaf(root_node, map, &camera_matrices.planes_matrix);
-
-	// TODO - avoid allocating this HashMap each frame.
-	let mut reachable_leafs = ReachablebleLeafsMap::new();
-	find_reachable_leafs_r(current_leaf, map, 0, &mut reachable_leafs);
-
-	// Draw BSP tree in back to front order, skip unreachable leafs.
-	draw_tree_r(&mut rasterizer, camera_matrices, &reachable_leafs, map, root_node);
-}
-
-fn find_current_leaf(mut index: u32, map: &bsp_map_compact::BSPMap, planes_matrix: &Mat4f) -> u32
-{
-	loop
-	{
-		if index >= bsp_map_compact::FIRST_LEAF_INDEX
-		{
-			return index - bsp_map_compact::FIRST_LEAF_INDEX;
-		}
-
-		let node = &map.nodes[index as usize];
-		let plane_transformed = planes_matrix * node.plane.vec.extend(-node.plane.dist);
-		index = if plane_transformed.w >= 0.0
-		{
-			node.children[0]
-		}
-		else
-		{
-			node.children[1]
-		};
-	}
-}
-
-type ReachablebleLeafsMap = std::collections::HashMap<u32, usize>;
-fn find_reachable_leafs_r(
+fn mark_reachable_leafs_r(
 	leaf: u32,
 	map: &bsp_map_compact::BSPMap,
-	depth: usize,
-	reachable_leafs: &mut ReachablebleLeafsMap,
+	current_frame: FrameNumber,
+	depth: u32,
+	leafs_data: &mut [DrawLeafData],
 )
 {
 	let max_depth = 16;
@@ -109,20 +178,19 @@ fn find_reachable_leafs_r(
 		return;
 	}
 
-	if let Some(prev_depth) = reachable_leafs.get_mut(&leaf)
+	let leaf_data = &mut leafs_data[leaf as usize];
+	if leaf_data.visible_frame != current_frame
 	{
-		if *prev_depth <= depth
-		{
-			return;
-		}
-		*prev_depth = depth;
+		leaf_data.visible_frame = current_frame;
+		leaf_data.search_depth = depth;
 	}
-	else
+	else if leaf_data.search_depth <= depth
 	{
-		reachable_leafs.insert(leaf, depth);
+		return;
 	}
+	leaf_data.search_depth = depth;
 
-	let leaf_value = &map.leafs[leaf as usize];
+	let leaf_value = map.leafs[leaf as usize];
 	for portal in &map.leafs_portals[(leaf_value.first_leaf_portal as usize) ..
 		((leaf_value.first_leaf_portal + leaf_value.num_leaf_portals) as usize)]
 	{
@@ -135,68 +203,7 @@ fn find_reachable_leafs_r(
 		{
 			portal_value.leafs[0]
 		};
-		find_reachable_leafs_r(next_leaf, map, depth + 1, reachable_leafs);
-	}
-}
-
-fn draw_tree_r(
-	rasterizer: &mut Rasterizer,
-	camera_matrices: &CameraMatrices,
-	reachable_leafs: &ReachablebleLeafsMap,
-	map: &bsp_map_compact::BSPMap,
-	current_index: u32,
-)
-{
-	if current_index >= bsp_map_compact::FIRST_LEAF_INDEX
-	{
-		let leaf = current_index - bsp_map_compact::FIRST_LEAF_INDEX;
-		if let Some(depth) = reachable_leafs.get(&leaf)
-		{
-			let color = Color32::from_rgb(
-				((depth * 28).min(255)) as u8,
-				((depth * 24).min(255)) as u8,
-				((depth * 20).min(255)) as u8,
-			);
-
-			draw_leaf(rasterizer, camera_matrices, &map.leafs[leaf as usize], map, color);
-		}
-	}
-	else
-	{
-		let node = &map.nodes[current_index as usize];
-		let plane_transformed = camera_matrices.planes_matrix * node.plane.vec.extend(-node.plane.dist);
-		let mask = if plane_transformed.w >= 0.0 { 1 } else { 0 };
-		for i in 0 .. 2
-		{
-			draw_tree_r(
-				rasterizer,
-				camera_matrices,
-				reachable_leafs,
-				map,
-				node.children[(i ^ mask) as usize],
-			);
-		}
-	}
-}
-
-fn draw_leaf(
-	rasterizer: &mut Rasterizer,
-	camera_matrices: &CameraMatrices,
-	leaf: &bsp_map_compact::BSPLeaf,
-	map: &bsp_map_compact::BSPMap,
-	color: Color32,
-)
-{
-	for polygon in &map.polygons[(leaf.first_polygon as usize) .. ((leaf.first_polygon + leaf.num_polygons) as usize)]
-	{
-		draw_polygon(
-			rasterizer,
-			camera_matrices,
-			&polygon.plane,
-			&map.vertices[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)],
-			&polygon.tex_coord_equation,
-			color,
-		);
+		mark_reachable_leafs_r(next_leaf, map, current_frame, depth + 1, leafs_data);
 	}
 }
 
