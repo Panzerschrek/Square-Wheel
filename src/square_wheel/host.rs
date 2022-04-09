@@ -57,14 +57,21 @@ impl Host
 					.build_view_matrix(surface_info.width as f32, surface_info.height as f32),
 				&self.map,
 			);
-			common::text_printer::print_scaled(
+			common::text_printer::print(
 				pixels,
 				surface_info,
 				&format!("fps {:04.2}", self.fps_counter.get_frequency()),
 				(surface_info.width - 96) as i32,
 				1,
 				Color32::from_rgb(255, 255, 255),
-				1,
+			);
+			common::text_printer::print(
+				pixels,
+				surface_info,
+				&format!("{:04.2} ms", 1000.0 / self.fps_counter.get_frequency()),
+				(surface_info.width - 96) as i32,
+				19,
+				Color32::from_rgb(255, 255, 255),
 			);
 		});
 
