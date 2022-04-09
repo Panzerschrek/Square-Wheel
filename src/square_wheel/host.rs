@@ -55,13 +55,14 @@ impl Host
 					.build_view_matrix(surface_info.width as f32, surface_info.height as f32),
 				&self.map,
 			);
-			common::text_printer::print(
+			common::text_printer::print_scaled(
 				pixels,
 				surface_info,
 				"Square Wheel",
 				7,
 				3,
 				Color32::from_rgb(255, 255, 255),
+				2,
 			);
 		});
 
