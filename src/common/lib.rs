@@ -12,3 +12,4 @@ pub mod map_polygonizer;
 pub mod math_types;
 pub mod plane;
 pub mod system_window;
+pub mod text_printer;
