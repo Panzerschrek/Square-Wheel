@@ -1,5 +1,6 @@
 mod config;
 mod host;
+mod host_config;
 mod rasterizer;
 mod renderer;
 mod renderer_config;

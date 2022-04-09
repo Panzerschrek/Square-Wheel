@@ -1,10 +1,11 @@
-use super::{config, renderer};
+use super::{config, host_config::*, renderer};
 use common::{bsp_map_save_load, camera_controller, color::*, system_window, ticks_counter::*};
 use sdl2::{event::Event, keyboard::Keycode};
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
 pub struct Host
 {
+	config: HostConfig,
 	window: Rc<RefCell<system_window::SystemWindow>>,
 	camera: camera_controller::CameraController,
 	renderer: renderer::Renderer,
@@ -22,6 +23,7 @@ impl Host
 		let map = bsp_map_save_load::load_map(map_path).unwrap().unwrap();
 
 		Host {
+			config: HostConfig::from_app_config(&config_json),
 			window: Rc::new(RefCell::new(system_window::SystemWindow::new())),
 			camera: camera_controller::CameraController::new(),
 			renderer: renderer::Renderer::new(&config_json, map),
@@ -60,12 +62,15 @@ impl Host
 			self.draw_frame(pixels, surface_info);
 		});
 
-		let frame_end_time = std::time::Instant::now();
-		let frame_time_s = (frame_end_time - self.prev_time).as_secs_f32();
-		let min_frame_time = 0.005;
-		if frame_time_s < min_frame_time
+		if self.config.max_fps > 0.0
 		{
-			std::thread::sleep(Duration::from_secs_f32(min_frame_time - frame_time_s));
+			let frame_end_time = std::time::Instant::now();
+			let frame_time_s = (frame_end_time - self.prev_time).as_secs_f32();
+			let min_frame_time = 1.0 / self.config.max_fps;
+			if frame_time_s < min_frame_time
+			{
+				std::thread::sleep(Duration::from_secs_f32(min_frame_time - frame_time_s));
+			}
 		}
 
 		self.fps_counter.tick();
