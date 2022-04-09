@@ -4,24 +4,42 @@ use common::{
 	system_window,
 };
 
-pub fn draw_frame(
-	pixels: &mut [Color32],
-	surface_info: &system_window::SurfaceInfo,
-	camera_matrices: &CameraMatrices,
-	map: &bsp_map_compact::BSPMap,
-	config: &RendererConfig,
-)
+pub struct Renderer
 {
-	if config.clear_background
+	config: RendererConfig,
+	map: bsp_map_compact::BSPMap,
+}
+
+impl Renderer
+{
+	pub fn new(app_config: &serde_json::Value, map: bsp_map_compact::BSPMap) -> Self
 	{
-		draw_background(pixels);
+		Renderer {
+			config: RendererConfig::from_app_config(app_config),
+			map,
+		}
 	}
 
-	draw_map(pixels, surface_info, camera_matrices, map);
+	pub fn draw_frame(
+		&self,
+		pixels: &mut [Color32],
+		surface_info: &system_window::SurfaceInfo,
+		camera_matrices: &CameraMatrices,
+	)
+	{
+		if self.config.clear_background
+		{
+			draw_background(pixels);
+		}
 
-	// TODO - remove such temporary fuinction.
-	draw_crosshair(pixels, surface_info);
+		draw_map(pixels, surface_info, camera_matrices, &self.map);
+
+		// TODO - remove such temporary fuinction.
+		draw_crosshair(pixels, surface_info);
+	}
 }
+
+// TODO - make these functions self-call?
 
 fn draw_background(pixels: &mut [Color32])
 {
