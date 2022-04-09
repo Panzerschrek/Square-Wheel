@@ -21,7 +21,7 @@ impl Renderer
 	}
 
 	pub fn draw_frame(
-		&self,
+		&mut self,
 		pixels: &mut [Color32],
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
