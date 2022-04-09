@@ -1,5 +1,5 @@
 use super::renderer;
-use common::{bsp_map_compact, bsp_map_save_load, camera_controller, color::*, system_window};
+use common::{bsp_map_compact, bsp_map_save_load, camera_controller, color::*, system_window, ticks_counter::*};
 use sdl2::{event::Event, keyboard::Keycode};
 use std::time::Duration;
 
@@ -9,6 +9,7 @@ pub struct Host
 	map: bsp_map_compact::BSPMap,
 	camera: camera_controller::CameraController,
 	prev_time: std::time::Instant,
+	fps_counter: TicksCounter,
 }
 
 impl Host
@@ -20,6 +21,7 @@ impl Host
 			map: bsp_map_save_load::load_map(map_path).unwrap().unwrap(),
 			camera: camera_controller::CameraController::new(),
 			prev_time: std::time::Instant::now(),
+			fps_counter: TicksCounter::new(),
 		}
 	}
 
@@ -58,21 +60,23 @@ impl Host
 			common::text_printer::print_scaled(
 				pixels,
 				surface_info,
-				"Square Wheel",
-				7,
-				3,
+				&format!("fps {:04.2}", self.fps_counter.get_frequency()),
+				(surface_info.width - 96) as i32,
+				1,
 				Color32::from_rgb(255, 255, 255),
-				2,
+				1,
 			);
 		});
 
 		let frame_end_time = std::time::Instant::now();
 		let frame_time_s = (frame_end_time - self.prev_time).as_secs_f32();
-		let min_frame_time = 0.01;
+		let min_frame_time = 0.005;
 		if frame_time_s < min_frame_time
 		{
 			std::thread::sleep(Duration::from_secs_f32(min_frame_time - frame_time_s));
 		}
+
+		self.fps_counter.tick();
 
 		true
 	}
