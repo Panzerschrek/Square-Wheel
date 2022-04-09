@@ -1,4 +1,4 @@
-use super::{commands_queue, config, host_config::*, renderer};
+use super::{commands_queue, config, console, host_config::*, renderer};
 use common::{bsp_map_save_load, camera_controller, color::*, system_window, ticks_counter::*};
 use sdl2::{event::Event, keyboard::Keycode};
 use std::{cell::RefCell, rc::Rc, time::Duration};
@@ -6,6 +6,7 @@ use std::{cell::RefCell, rc::Rc, time::Duration};
 pub struct Host
 {
 	commands_queue: commands_queue::CommandsQueuePtr<Host>,
+	console: console::Console,
 	config: HostConfig,
 	window: Rc<RefCell<system_window::SystemWindow>>,
 	camera: camera_controller::CameraController,
@@ -28,6 +29,9 @@ impl Host
 			.borrow_mut()
 			.add_invocation("set_pos", vec!["suka_blat".to_string()]);
 
+		let mut console = console::Console::new();
+		console.register_command_queue(command_queue_type_erased);
+
 		let config_file_path = "config.json";
 		let config_json = config::load(std::path::Path::new(config_file_path)).unwrap_or_default();
 
@@ -35,6 +39,7 @@ impl Host
 
 		Host {
 			commands_queue,
+			console,
 			config: HostConfig::from_app_config(&config_json),
 			window: Rc::new(RefCell::new(system_window::SystemWindow::new())),
 			camera: camera_controller::CameraController::new(),

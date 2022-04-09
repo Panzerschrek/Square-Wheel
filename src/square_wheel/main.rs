@@ -1,5 +1,6 @@
 mod commands_queue;
 mod config;
+mod console;
 mod host;
 mod host_config;
 mod rasterizer;
