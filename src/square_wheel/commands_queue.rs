@@ -31,11 +31,8 @@ impl<HandlerClass> CommandsQueue<HandlerClass>
 
 	pub fn process_commands(&mut self, handler: &mut HandlerClass)
 	{
-		// TODO - optimize iteration over two vectors.
-		for (index, invocations) in self.invocations.iter_mut().enumerate()
+		for ((_, func), invocations) in self.handlers.iter().zip(self.invocations.iter_mut())
 		{
-			let func = self.handlers[index].1;
-
 			for invocation in invocations.drain(..)
 			{
 				func(handler, invocation);
@@ -61,12 +58,11 @@ impl<HandlerClass> CommandsQueueInterface for CommandsQueue<HandlerClass>
 
 	fn add_invocation(&mut self, command: &str, args: CommandArgs)
 	{
-		// TODO - optimize iteration over two vectors.
-		for (index, (command_name, _)) in self.handlers.iter().enumerate()
+		for ((command_name, _), invocations) in self.handlers.iter().zip(self.invocations.iter_mut())
 		{
 			if command == *command_name
 			{
-				self.invocations[index].push(args);
+				invocations.push(args);
 				return;
 			}
 		}
