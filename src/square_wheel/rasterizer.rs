@@ -183,31 +183,35 @@ impl<'a> Rasterizer<'a>
 		{
 			let x_start_int = fixed16_floor_to_int(x_left).max(0);
 			let x_end_int = fixed16_floor_to_int(x_right).min(self.width);
-			let x_start_f32 = x_start_int as f32 + 0.5;
-			let mut inv_z = x_start_f32 * depth_equation.d_inv_z_dx + line_inv_z;
-			let mut tc = [
-				x_start_f32 * d_tc_dx[0] + line_tc[0],
-				x_start_f32 * d_tc_dx[1] + line_tc[1],
-			];
-			for x_int in x_start_int .. x_end_int
+			if x_start_int < x_end_int
 			{
-				let pix_address = (x_int + y_int * self.row_size) as usize;
-
-				let z = 1.0 / inv_z;
-				let pix_tc = [(z * tc[0]) as i32, (z * tc[1]) as i32];
-
-				if (((pix_tc[0] ^ pix_tc[1]) >> 4) & 1) != 0
+				let x_start_f32 = x_start_int as f32 + 0.5;
+				let mut inv_z = x_start_f32 * depth_equation.d_inv_z_dx + line_inv_z;
+				let mut tc = [
+					x_start_f32 * d_tc_dx[0] + line_tc[0],
+					x_start_f32 * d_tc_dx[1] + line_tc[1],
+				];
+				let line_buffer_offset = y_int * self.row_size;
+				let line_dst = &mut self.color_buffer
+					[(x_start_int + line_buffer_offset) as usize .. (x_end_int + line_buffer_offset) as usize];
+				for dst_pixel in line_dst
 				{
-					self.color_buffer[pix_address] = color;
-				}
-				else
-				{
-					self.color_buffer[pix_address] = color.get_half_dark();
-				}
+					let z = 1.0 / inv_z;
+					let pix_tc = [(z * tc[0]) as i32, (z * tc[1]) as i32];
 
-				inv_z += depth_equation.d_inv_z_dx;
-				tc[0] += d_tc_dx[0];
-				tc[1] += d_tc_dx[1];
+					if (((pix_tc[0] ^ pix_tc[1]) >> 4) & 1) != 0
+					{
+						*dst_pixel = color;
+					}
+					else
+					{
+						*dst_pixel = color.get_half_dark();
+					}
+
+					inv_z += depth_equation.d_inv_z_dx;
+					tc[0] += d_tc_dx[0];
+					tc[1] += d_tc_dx[1];
+				}
 			}
 
 			x_left += left_side.dx_dy;
