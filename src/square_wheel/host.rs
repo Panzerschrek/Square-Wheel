@@ -23,6 +23,11 @@ impl Host
 			("set_pos", Host::command_set_pos),
 		]);
 
+		let command_queue_type_erased = commands_queue.clone() as commands_queue::CommandsQueueDynPtr;
+		command_queue_type_erased
+			.borrow_mut()
+			.add_invocation("set_pos", vec!["suka_blat".to_string()]);
+
 		let config_file_path = "config.json";
 		let config_json = config::load(std::path::Path::new(config_file_path)).unwrap_or_default();
 
@@ -122,6 +127,7 @@ impl Host
 	fn command_set_pos(&mut self, _args: commands_queue::CommandArgs)
 	{
 		// TODO
+		println!("Args: {:?}", _args);
 	}
 
 	fn command_get_pos(&mut self, _args: commands_queue::CommandArgs)
