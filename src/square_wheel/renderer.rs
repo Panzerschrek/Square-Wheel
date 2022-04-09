@@ -1,4 +1,4 @@
-use super::rasterizer::*;
+use super::{rasterizer::*, renderer_config::*};
 use common::{
 	bsp_map_compact, camera_controller::CameraMatrices, clipping::*, color::*, fixed_math::*, math_types::*, plane::*,
 	system_window,
@@ -9,10 +9,13 @@ pub fn draw_frame(
 	surface_info: &system_window::SurfaceInfo,
 	camera_matrices: &CameraMatrices,
 	map: &bsp_map_compact::BSPMap,
+	config: &RendererConfig,
 )
 {
-	// TODO - avoid filling background?
-	draw_background(pixels);
+	if config.clear_background
+	{
+		draw_background(pixels);
+	}
 
 	draw_map(pixels, surface_info, camera_matrices, map);
 

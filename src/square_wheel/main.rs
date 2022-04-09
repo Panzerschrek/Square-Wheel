@@ -1,6 +1,8 @@
+mod config;
 mod host;
 mod rasterizer;
 mod renderer;
+mod renderer_config;
 
 use std::path::PathBuf;
 use structopt::StructOpt;

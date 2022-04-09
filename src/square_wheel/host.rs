@@ -1,10 +1,11 @@
-use super::renderer;
+use super::{config, renderer, renderer_config};
 use common::{bsp_map_compact, bsp_map_save_load, camera_controller, color::*, system_window, ticks_counter::*};
 use sdl2::{event::Event, keyboard::Keycode};
 use std::time::Duration;
 
 pub struct Host
 {
+	config_json: serde_json::Value,
 	window: system_window::SystemWindow,
 	map: bsp_map_compact::BSPMap,
 	camera: camera_controller::CameraController,
@@ -16,7 +17,11 @@ impl Host
 {
 	pub fn new(map_path: &std::path::Path) -> Self
 	{
+		let config_file_path = "config.json";
+		let config_json = config::load(std::path::Path::new(config_file_path)).unwrap_or_default();
+
 		Host {
+			config_json,
 			window: system_window::SystemWindow::new(),
 			map: bsp_map_save_load::load_map(map_path).unwrap().unwrap(),
 			camera: camera_controller::CameraController::new(),
@@ -56,6 +61,7 @@ impl Host
 					.camera
 					.build_view_matrix(surface_info.width as f32, surface_info.height as f32),
 				&self.map,
+				&renderer_config::RendererConfig::from_app_config(&self.config_json),
 			);
 			common::text_printer::print(
 				pixels,
