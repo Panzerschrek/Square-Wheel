@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct HostConfig
 {
-	#[serde(default = "map_fps_default")]
+	#[serde(default = "max_fps_default")]
 	pub max_fps: f32,
 }
 
@@ -15,7 +15,7 @@ impl HostConfig
 	}
 }
 
-fn map_fps_default() -> f32
+fn max_fps_default() -> f32
 {
 	120.0
 }
