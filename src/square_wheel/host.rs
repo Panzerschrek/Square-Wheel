@@ -58,11 +58,21 @@ impl Host
 		{
 			match event
 			{
-				Event::Quit { .. } |
-				Event::KeyDown {
-					keycode: Some(Keycode::Escape),
-					..
-				} => return false,
+				Event::Quit { .. } =>
+				{
+					return false;
+				},
+				Event::KeyDown { keycode, .. } =>
+				{
+					if keycode == Some(Keycode::Escape)
+					{
+						return false;
+					}
+					if keycode == Some(Keycode::Backquote)
+					{
+						self.console.toggle();
+					}
+				},
 				_ =>
 				{},
 			}
@@ -72,8 +82,11 @@ impl Host
 		let time_delta_s = (cur_time - self.prev_time).as_secs_f32();
 		self.prev_time = cur_time;
 
-		self.camera
-			.update(&self.window.borrow_mut().get_keyboard_state(), time_delta_s);
+		if !self.console.is_active()
+		{
+			self.camera
+				.update(&self.window.borrow_mut().get_keyboard_state(), time_delta_s);
+		}
 
 		let witndow_ptr_clone = self.window.clone();
 
