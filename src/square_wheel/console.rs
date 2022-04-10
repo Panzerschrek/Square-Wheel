@@ -41,12 +41,13 @@ impl Console
 	{
 		if key_code == Keycode::Return
 		{
-			self.input_line.clear();
+			self.process_enter();
 		}
 		if key_code == Keycode::Backspace
 		{
 			self.input_line.pop();
 		}
+		// Todo - implement completion.
 	}
 
 	pub fn is_active(&self) -> bool
@@ -92,5 +93,38 @@ impl Console
 			(console_pos - text_printer::GLYPH_HEIGHT) as i32,
 			color,
 		);
+	}
+
+	fn process_enter(&mut self)
+	{
+		let mut command = None;
+		let mut args = Vec::<String>::new();
+		for token in self.input_line.split_ascii_whitespace()
+		{
+			if command.is_none()
+			{
+				command = Some(token.to_string());
+			}
+			else
+			{
+				args.push(token.to_string());
+			}
+		}
+
+		self.input_line.clear();
+
+		if let Some(c) = command
+		{
+			for queue in &self.commands_queues
+			{
+				if queue.borrow().has_handler(&c)
+				{
+					queue.borrow_mut().add_invocation(&c, args);
+					return;
+				}
+			}
+
+			// TODO - try to modify config here if command name is valid config variable.
+		}
 	}
 }
