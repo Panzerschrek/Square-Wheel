@@ -57,6 +57,27 @@ impl Renderer
 
 		// TODO - remove such temporary fuinction.
 		draw_crosshair(pixels, surface_info);
+
+		if self.config.show_stats
+		{
+			let mut num_visible_leafs = 0;
+			for leaf_data in &self.leafs_data
+			{
+				if leaf_data.visible_frame == self.current_frame
+				{
+					num_visible_leafs += 1;
+				}
+			}
+
+			common::text_printer::print(
+				pixels,
+				surface_info,
+				&format!("leafs: {}", num_visible_leafs),
+				0,
+				0,
+				Color32::from_rgb(255, 255, 255),
+			);
+		}
 	}
 
 	fn draw_map(

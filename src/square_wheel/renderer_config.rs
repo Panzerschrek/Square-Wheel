@@ -5,6 +5,9 @@ pub struct RendererConfig
 {
 	#[serde(default)]
 	pub clear_background: bool,
+
+	#[serde(default)]
+	pub show_stats: bool,
 }
 
 impl RendererConfig
