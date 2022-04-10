@@ -54,6 +54,8 @@ impl Host
 	{
 		self.process_commands();
 
+		// Remember if ` was pressed to avoid using it as input for console.
+		let mut has_backquote = false;
 		for event in self.window.borrow_mut().get_events()
 		{
 			match event
@@ -66,11 +68,33 @@ impl Host
 				{
 					if keycode == Some(Keycode::Escape)
 					{
-						return false;
+						if self.console.is_active()
+						{
+							self.console.toggle();
+						}
+						else
+						{
+							return false;
+						}
 					}
 					if keycode == Some(Keycode::Backquote)
 					{
+						has_backquote = true;
 						self.console.toggle();
+					}
+					if self.console.is_active()
+					{
+						if let Some(k) = keycode
+						{
+							self.console.process_key_press(k);
+						}
+					}
+				},
+				Event::TextInput { text, .. } =>
+				{
+					if self.console.is_active() && !has_backquote
+					{
+						self.console.process_text_input(&text);
 					}
 				},
 				_ =>

@@ -1,11 +1,13 @@
 use super::commands_queue;
 use common::{color::*, system_window, text_printer};
+use sdl2::keyboard::Keycode;
 
 pub struct Console
 {
 	commands_queues: Vec<commands_queue::CommandsQueueDynPtr>,
 	is_active: bool,
 	start_time: std::time::Instant,
+	input_line: String,
 }
 
 impl Console
@@ -16,6 +18,7 @@ impl Console
 			commands_queues: Vec::new(),
 			is_active: false,
 			start_time: std::time::Instant::now(),
+			input_line: String::new(),
 		}
 	}
 
@@ -27,6 +30,23 @@ impl Console
 	pub fn toggle(&mut self)
 	{
 		self.is_active = !self.is_active;
+	}
+
+	pub fn process_text_input(&mut self, text: &str)
+	{
+		self.input_line += text;
+	}
+
+	pub fn process_key_press(&mut self, key_code: Keycode)
+	{
+		if key_code == Keycode::Return
+		{
+			self.input_line.clear();
+		}
+		if key_code == Keycode::Backspace
+		{
+			self.input_line.pop();
+		}
 	}
 
 	pub fn is_active(&self) -> bool
@@ -54,6 +74,7 @@ impl Console
 		}
 
 		let mut text = "> ".to_string();
+		text += &self.input_line;
 
 		// Add blinking cursor.
 		if ((self.start_time.elapsed().as_millis() / 500) & 1) != 0
