@@ -1,13 +1,16 @@
 use super::commands_queue;
 use common::{color::*, system_window, text_printer};
 use sdl2::keyboard::Keycode;
+use std::collections::VecDeque;
 
 pub struct Console
 {
 	commands_queues: Vec<commands_queue::CommandsQueueDynPtr>,
 	is_active: bool,
 	start_time: std::time::Instant,
-	lines: std::collections::VecDeque<String>,
+	lines: VecDeque<String>,
+	input_history: VecDeque<String>,
+	current_history_index: usize,
 	input_line: String,
 }
 
@@ -19,7 +22,9 @@ impl Console
 			commands_queues: Vec::new(),
 			is_active: false,
 			start_time: std::time::Instant::now(),
-			lines: std::collections::VecDeque::with_capacity(LINES_BUFFER_LEN),
+			lines: VecDeque::with_capacity(LINES_BUFFER_LEN),
+			input_history: VecDeque::with_capacity(LINES_BUFFER_LEN),
+			current_history_index: 0,
 			input_line: String::new(),
 		}
 	}
@@ -57,6 +62,32 @@ impl Console
 		if key_code == Keycode::Backspace
 		{
 			self.input_line.pop();
+		}
+		if key_code == Keycode::Up
+		{
+			if self.current_history_index > 0
+			{
+				self.current_history_index -= 1;
+				if self.current_history_index < self.input_history.len()
+				{
+					self.input_line = self.input_history[self.current_history_index].clone();
+				}
+			}
+		}
+		if key_code == Keycode::Down
+		{
+			if self.current_history_index < self.input_history.len()
+			{
+				self.current_history_index += 1;
+				if self.current_history_index < self.input_history.len()
+				{
+					self.input_line = self.input_history[self.current_history_index].clone();
+				}
+				else
+				{
+					self.input_line = String::new();
+				}
+			}
 		}
 		// Todo - implement completion.
 	}
@@ -127,11 +158,19 @@ impl Console
 			}
 		}
 
-		self.add_text(self.input_line.clone());
+		let input_line = self.input_line.clone();
+		self.add_text(input_line.clone());
 		self.input_line.clear();
 
 		if let Some(c) = command
 		{
+			if self.input_history.len() >= HISTORY_BUFFER_LEN
+			{
+				self.input_history.pop_front();
+			}
+			self.input_history.push_back(input_line);
+			self.current_history_index = self.input_history.len();
+
 			for queue in &self.commands_queues
 			{
 				if queue.borrow().has_handler(&c)
@@ -148,3 +187,4 @@ impl Console
 }
 
 const LINES_BUFFER_LEN: usize = 128;
+const HISTORY_BUFFER_LEN: usize = 32;
