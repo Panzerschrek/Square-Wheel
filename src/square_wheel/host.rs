@@ -13,6 +13,7 @@ pub struct Host
 	renderer: renderer::Renderer,
 	prev_time: std::time::Instant,
 	fps_counter: TicksCounter,
+	quit_requested: bool,
 }
 
 impl Host
@@ -22,6 +23,7 @@ impl Host
 		let commands_queue = commands_queue::CommandsQueue::new(vec![
 			("get_pos", Host::command_get_pos),
 			("set_pos", Host::command_set_pos),
+			("quit", Host::command_quit),
 		]);
 
 		let mut console = console::Console::new();
@@ -41,61 +43,15 @@ impl Host
 			renderer: renderer::Renderer::new(&config_json, map),
 			prev_time: std::time::Instant::now(),
 			fps_counter: TicksCounter::new(),
+			quit_requested: false,
 		}
 	}
 
 	// Returns true if need to continue.
 	pub fn process_frame(&mut self) -> bool
 	{
+		self.process_events();
 		self.process_commands();
-
-		// Remember if ` was pressed to avoid using it as input for console.
-		let mut has_backquote = false;
-		for event in self.window.borrow_mut().get_events()
-		{
-			match event
-			{
-				Event::Quit { .. } =>
-				{
-					return false;
-				},
-				Event::KeyDown { keycode, .. } =>
-				{
-					if keycode == Some(Keycode::Escape)
-					{
-						if self.console.is_active()
-						{
-							self.console.toggle();
-						}
-						else
-						{
-							return false;
-						}
-					}
-					if keycode == Some(Keycode::Backquote)
-					{
-						has_backquote = true;
-						self.console.toggle();
-					}
-					if self.console.is_active()
-					{
-						if let Some(k) = keycode
-						{
-							self.console.process_key_press(k);
-						}
-					}
-				},
-				Event::TextInput { text, .. } =>
-				{
-					if self.console.is_active() && !has_backquote
-					{
-						self.console.process_text_input(&text);
-					}
-				},
-				_ =>
-				{},
-			}
-		}
 
 		let cur_time = std::time::Instant::now();
 		let time_delta_s = (cur_time - self.prev_time).as_secs_f32();
@@ -126,7 +82,64 @@ impl Host
 
 		self.fps_counter.tick();
 
-		true
+		!self.quit_requested
+	}
+
+	fn process_events(&mut self)
+	{
+		// Remember if ` was pressed to avoid using it as input for console.
+		let mut has_backquote = false;
+		for event in self.window.borrow_mut().get_events()
+		{
+			match event
+			{
+				Event::Quit { .. } =>
+				{
+					self.quit_requested = true;
+				},
+				Event::KeyDown { keycode, .. } =>
+				{
+					if keycode == Some(Keycode::Escape)
+					{
+						if self.console.is_active()
+						{
+							self.console.toggle();
+						}
+						else
+						{
+							self.quit_requested = true;
+						}
+					}
+					if keycode == Some(Keycode::Backquote)
+					{
+						has_backquote = true;
+						self.console.toggle();
+					}
+					if self.console.is_active()
+					{
+						if let Some(k) = keycode
+						{
+							self.console.process_key_press(k);
+						}
+					}
+				},
+				Event::TextInput { text, .. } =>
+				{
+					if self.console.is_active() && !has_backquote
+					{
+						self.console.process_text_input(&text);
+					}
+				},
+				_ =>
+				{},
+			}
+		}
+	}
+
+	fn process_commands(&mut self)
+	{
+		let queue_ptr_copy = self.commands_queue.clone();
+		queue_ptr_copy.borrow_mut().process_commands(self);
 	}
 
 	fn draw_frame(&mut self, pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo)
@@ -156,12 +169,6 @@ impl Host
 		);
 	}
 
-	fn process_commands(&mut self)
-	{
-		let queue_ptr_copy = self.commands_queue.clone();
-		queue_ptr_copy.borrow_mut().process_commands(self);
-	}
-
 	fn command_set_pos(&mut self, _args: commands_queue::CommandArgs)
 	{
 		// TODO
@@ -171,5 +178,10 @@ impl Host
 	fn command_get_pos(&mut self, _args: commands_queue::CommandArgs)
 	{
 		// TODO
+	}
+
+	fn command_quit(&mut self, _args: commands_queue::CommandArgs)
+	{
+		self.quit_requested = true;
 	}
 }
