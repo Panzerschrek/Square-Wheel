@@ -121,8 +121,8 @@ pub fn print_scaled(
 	}
 }
 
-const GLYPH_WIDTH: usize = 8;
-const GLYPH_HEIGHT: usize = 18;
+pub const GLYPH_WIDTH: usize = 8;
+pub const GLYPH_HEIGHT: usize = 18;
 const NUM_GLYPHS: usize = 96;
 const BMP_HEADER_LEN: usize = 62;
 // 1 bit font bitmap.

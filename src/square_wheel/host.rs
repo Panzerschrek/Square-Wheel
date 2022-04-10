@@ -117,6 +117,7 @@ impl Host
 			.build_view_matrix(surface_info.width as f32, surface_info.height as f32);
 
 		self.renderer.draw_frame(pixels, surface_info, view_matrix);
+		self.console.draw(pixels, surface_info);
 
 		common::text_printer::print(
 			pixels,
