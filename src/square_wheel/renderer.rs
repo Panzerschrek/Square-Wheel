@@ -70,7 +70,14 @@ impl Renderer
 		let root_node = (self.map.nodes.len() - 1) as u32;
 		let current_leaf = self.find_current_leaf(root_node, &camera_matrices.planes_matrix);
 
-		mark_reachable_leafs_r(current_leaf, &self.map, self.current_frame, 0, &mut self.leafs_data);
+		mark_reachable_leafs_r(
+			current_leaf,
+			&self.map,
+			self.current_frame,
+			&camera_matrices.planes_matrix,
+			0,
+			&mut self.leafs_data,
+		);
 
 		// Draw BSP tree in back to front order, skip unreachable leafs.
 		self.draw_tree_r(&mut rasterizer, camera_matrices, root_node);
@@ -168,6 +175,7 @@ fn mark_reachable_leafs_r(
 	leaf: u32,
 	map: &bsp_map_compact::BSPMap,
 	current_frame: FrameNumber,
+	planes_matrix: &Mat4f,
 	depth: u32,
 	leafs_data: &mut [DrawLeafData],
 )
@@ -195,15 +203,37 @@ fn mark_reachable_leafs_r(
 		((leaf_value.first_leaf_portal + leaf_value.num_leaf_portals) as usize)]
 	{
 		let portal_value = &map.portals[(*portal) as usize];
-		let next_leaf = if portal_value.leafs[0] == leaf
+
+		// Do not look through portals that are facing from camera.
+		let portal_plane_pos = (planes_matrix * portal_value.plane.vec.extend(-portal_value.plane.dist)).w;
+		if portal_value.leafs[0] == leaf
 		{
-			portal_value.leafs[1]
+			if portal_plane_pos >= 0.0
+			{
+				mark_reachable_leafs_r(
+					portal_value.leafs[1],
+					map,
+					current_frame,
+					planes_matrix,
+					depth + 1,
+					leafs_data,
+				);
+			}
 		}
 		else
 		{
-			portal_value.leafs[0]
+			if portal_plane_pos <= 0.0
+			{
+				mark_reachable_leafs_r(
+					portal_value.leafs[0],
+					map,
+					current_frame,
+					planes_matrix,
+					depth + 1,
+					leafs_data,
+				);
+			}
 		};
-		mark_reachable_leafs_r(next_leaf, map, current_frame, depth + 1, leafs_data);
 	}
 }
 
