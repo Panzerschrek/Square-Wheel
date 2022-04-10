@@ -26,6 +26,8 @@ impl Host
 		let commands_queue = commands_queue::CommandsQueue::new(vec![
 			("get_pos", Host::command_get_pos),
 			("set_pos", Host::command_set_pos),
+			("get_angles", Host::command_get_angles),
+			("set_angles", Host::command_set_angles),
 			("quit", Host::command_quit),
 		]);
 		console.register_command_queue(commands_queue.clone() as commands_queue::CommandsQueueDynPtr);
@@ -183,6 +185,30 @@ impl Host
 		if let (Ok(x), Ok(y), Ok(z)) = (args[0].parse::<f32>(), args[1].parse::<f32>(), args[2].parse::<f32>())
 		{
 			self.camera.set_pos(&Vec3f::new(x, y, z));
+		}
+		else
+		{
+			self.console.add_text("Failed to parse args".to_string());
+		}
+	}
+
+	fn command_get_angles(&mut self, _args: commands_queue::CommandArgs)
+	{
+		let angles = self.camera.get_angles();
+		self.console.add_text(format!("{} {}", angles.0, angles.1));
+	}
+
+	fn command_set_angles(&mut self, args: commands_queue::CommandArgs)
+	{
+		if args.len() < 2
+		{
+			self.console.add_text("Expected 2 args".to_string());
+			return;
+		}
+
+		if let (Ok(azimuth), Ok(elevation)) = (args[0].parse::<f32>(), args[1].parse::<f32>())
+		{
+			self.camera.set_angles(azimuth, elevation);
 		}
 		else
 		{

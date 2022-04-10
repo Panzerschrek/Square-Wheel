@@ -29,6 +29,17 @@ impl CameraController
 		self.pos = *pos;
 	}
 
+	pub fn get_angles(&self) -> (f32, f32)
+	{
+		(self.azimuth.0, self.elevation.0)
+	}
+
+	pub fn set_angles(&mut self, azimuth: f32, elevation: f32)
+	{
+		self.azimuth = Rad(azimuth);
+		self.elevation = Rad(elevation);
+	}
+
 	pub fn update(&mut self, keyboard_state: &sdl2::keyboard::KeyboardState, time_delta_s: f32)
 	{
 		const SPEED: f32 = 256.0;
