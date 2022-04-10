@@ -201,7 +201,7 @@ fn mark_reachable_leafs_r(
 	leafs_data: &mut [DrawLeafData],
 )
 {
-	let max_depth = 16;
+	let max_depth = 1024; // Prevent stack overflow in case of broken graph.
 	if depth > max_depth
 	{
 		return;
