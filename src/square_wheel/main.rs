@@ -1,3 +1,4 @@
+mod clipping_polygon;
 mod commands_queue;
 mod config;
 mod console;
