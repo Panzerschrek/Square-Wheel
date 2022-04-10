@@ -20,18 +20,21 @@ impl Host
 {
 	pub fn new(map_path: &std::path::Path) -> Self
 	{
+		let mut console = console::Console::new();
+		console.add_text("Innitializing host".to_string());
+
 		let commands_queue = commands_queue::CommandsQueue::new(vec![
 			("get_pos", Host::command_get_pos),
 			("set_pos", Host::command_set_pos),
 			("quit", Host::command_quit),
 		]);
-
-		let mut console = console::Console::new();
 		console.register_command_queue(commands_queue.clone() as commands_queue::CommandsQueueDynPtr);
 
 		let config_file_path = "config.json";
+		console.add_text(format!("Loading config from file \"{}\"", config_file_path));
 		let config_json = config::load(std::path::Path::new(config_file_path)).unwrap_or_default();
 
+		console.add_text(format!("Loading map {:?}", map_path));
 		let map = bsp_map_save_load::load_map(map_path).unwrap().unwrap();
 
 		Host {
