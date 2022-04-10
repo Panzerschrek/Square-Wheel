@@ -7,6 +7,7 @@ pub struct Console
 	commands_queues: Vec<commands_queue::CommandsQueueDynPtr>,
 	is_active: bool,
 	start_time: std::time::Instant,
+	lines: std::collections::VecDeque<String>,
 	input_line: String,
 }
 
@@ -18,6 +19,7 @@ impl Console
 			commands_queues: Vec::new(),
 			is_active: false,
 			start_time: std::time::Instant::now(),
+			lines: std::collections::VecDeque::with_capacity(LINES_BUFFER_LEN),
 			input_line: String::new(),
 		}
 	}
@@ -25,6 +27,15 @@ impl Console
 	pub fn register_command_queue(&mut self, queue: commands_queue::CommandsQueueDynPtr)
 	{
 		self.commands_queues.push(queue);
+	}
+
+	pub fn add_text(&mut self, text: String)
+	{
+		if self.lines.len() >= LINES_BUFFER_LEN
+		{
+			self.lines.pop_front();
+		}
+		self.lines.push_back(text);
 	}
 
 	pub fn toggle(&mut self)
@@ -85,14 +96,19 @@ impl Console
 
 		let color = Color32::from_rgb(255, 255, 255);
 
-		text_printer::print(
-			pixels,
-			surface_info,
-			&text,
-			0,
-			(console_pos - text_printer::GLYPH_HEIGHT) as i32,
-			color,
-		);
+		let mut y = (console_pos - text_printer::GLYPH_HEIGHT) as i32;
+		text_printer::print(pixels, surface_info, &text, 0, y, color);
+
+		for line in self.lines.iter().rev()
+		{
+			y -= text_printer::GLYPH_HEIGHT as i32;
+			if y <= -(text_printer::GLYPH_HEIGHT as i32)
+			{
+				break;
+			}
+
+			text_printer::print(pixels, surface_info, &line, 0, y, color);
+		}
 	}
 
 	fn process_enter(&mut self)
@@ -111,6 +127,7 @@ impl Console
 			}
 		}
 
+		self.add_text(self.input_line.clone());
 		self.input_line.clear();
 
 		if let Some(c) = command
@@ -125,6 +142,9 @@ impl Console
 			}
 
 			// TODO - try to modify config here if command name is valid config variable.
+			self.add_text(format!("{}: not found", c));
 		}
 	}
 }
+
+const LINES_BUFFER_LEN: usize = 128;
