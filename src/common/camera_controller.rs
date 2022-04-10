@@ -19,6 +19,16 @@ impl CameraController
 		}
 	}
 
+	pub fn get_pos(&self) -> Vec3f
+	{
+		self.pos
+	}
+
+	pub fn set_pos(&mut self, pos: &Vec3f)
+	{
+		self.pos = *pos;
+	}
+
 	pub fn update(&mut self, keyboard_state: &sdl2::keyboard::KeyboardState, time_delta_s: f32)
 	{
 		const SPEED: f32 = 256.0;

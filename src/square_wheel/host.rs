@@ -1,5 +1,5 @@
 use super::{commands_queue, config, console, host_config::*, renderer};
-use common::{bsp_map_save_load, camera_controller, color::*, system_window, ticks_counter::*};
+use common::{bsp_map_save_load, camera_controller, color::*, math_types::*, system_window, ticks_counter::*};
 use sdl2::{event::Event, keyboard::Keycode};
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
@@ -172,15 +172,28 @@ impl Host
 		);
 	}
 
-	fn command_set_pos(&mut self, _args: commands_queue::CommandArgs)
+	fn command_set_pos(&mut self, args: commands_queue::CommandArgs)
 	{
-		// TODO
-		println!("Args: {:?}", _args);
+		if args.len() < 3
+		{
+			self.console.add_text("Expected 3 args".to_string());
+			return;
+		}
+
+		if let (Ok(x), Ok(y), Ok(z)) = (args[0].parse::<f32>(), args[1].parse::<f32>(), args[2].parse::<f32>())
+		{
+			self.camera.set_pos(&Vec3f::new(x, y, z));
+		}
+		else
+		{
+			self.console.add_text("Failed to parse args".to_string());
+		}
 	}
 
 	fn command_get_pos(&mut self, _args: commands_queue::CommandArgs)
 	{
-		// TODO
+		let pos = self.camera.get_pos();
+		self.console.add_text(format!("{} {} {}", pos.x, pos.y, pos.z));
 	}
 
 	fn command_quit(&mut self, _args: commands_queue::CommandArgs)
