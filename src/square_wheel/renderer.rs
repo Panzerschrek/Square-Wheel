@@ -18,8 +18,6 @@ struct DrawLeafData
 {
 	// Frame last time this leaf was visible.
 	visible_frame: FrameNumber,
-	// Depth for visible leafs search.
-	search_depth: u32,
 	// Bounds, combined from all paths through portals.
 	current_frame_bounds: ClippingPolygon,
 }
@@ -139,12 +137,18 @@ impl Renderer
 			if leaf_data.visible_frame == self.current_frame
 			{
 				let color = Color32::from_rgb(
-					((leaf_data.search_depth * 28).min(255)) as u8,
-					((leaf_data.search_depth * 24).min(255)) as u8,
-					((leaf_data.search_depth * 20).min(255)) as u8,
+					((leaf * 17) & 255) as u8,
+					((leaf * 23) & 255) as u8,
+					((leaf * 29) & 255) as u8,
 				);
 
-				self.draw_leaf(rasterizer, camera_matrices, &self.map.leafs[leaf as usize], color);
+				self.draw_leaf(
+					rasterizer,
+					camera_matrices,
+					&leaf_data.current_frame_bounds,
+					&self.map.leafs[leaf as usize],
+					color,
+				);
 			}
 		}
 		else
@@ -163,6 +167,7 @@ impl Renderer
 		&self,
 		rasterizer: &mut Rasterizer,
 		camera_matrices: &CameraMatrices,
+		bounds: &ClippingPolygon,
 		leaf: &bsp_map_compact::BSPLeaf,
 		color: Color32,
 	)
@@ -173,6 +178,7 @@ impl Renderer
 			draw_polygon(
 				rasterizer,
 				camera_matrices,
+				bounds,
 				&polygon.plane,
 				&self.map.vertices
 					[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)],
@@ -217,12 +223,10 @@ fn mark_reachable_leafs_r(
 	if leaf_data.visible_frame != current_frame
 	{
 		leaf_data.visible_frame = current_frame;
-		leaf_data.search_depth = depth;
 		leaf_data.current_frame_bounds = *bounds;
 	}
 	else
 	{
-		leaf_data.search_depth = std::cmp::min(leaf_data.search_depth, depth);
 		leaf_data.current_frame_bounds.extend(bounds);
 	}
 
@@ -314,6 +318,7 @@ fn mark_reachable_leafs_r(
 fn draw_polygon(
 	rasterizer: &mut Rasterizer,
 	camera_matrices: &CameraMatrices,
+	bounds: &ClippingPolygon,
 	plane: &Plane,
 	vertices: &[Vec3f],
 	tex_coord_equation: &[Plane; 2],
@@ -379,43 +384,29 @@ fn draw_polygon(
 		vertices_2d_0[index] = vertex_transformed.truncate() / vertex_transformed.z;
 	}
 
-	// TODO - optimize this. Perform clipping, using 3 planes (for screen-space triangle), not 4 (for rectangle).
-	let clip_plane_eps = -1.0;
-	vertex_count = clip_2d_polygon(
-		&vertices_2d_0[.. vertex_count],
-		&Vec3f::new(1.0, 0.0, clip_plane_eps),
-		&mut vertices_2d_1[..],
-	);
-	if vertex_count < 3
+	// Perfomr clipping i pairs - use pair of buffers.
+	// TODO - maybe just a little bit extend clipping polygon?
+	let clip_planes = bounds.get_clip_planes();
+	for i in 0 .. clip_planes.len() / 2
 	{
-		return;
-	}
-	vertex_count = clip_2d_polygon(
-		&vertices_2d_1[.. vertex_count],
-		&Vec3f::new(-1.0, 0.0, clip_plane_eps - width),
-		&mut vertices_2d_0[..],
-	);
-	if vertex_count < 3
-	{
-		return;
-	}
-	vertex_count = clip_2d_polygon(
-		&vertices_2d_0[.. vertex_count],
-		&Vec3f::new(0.0, 1.0, clip_plane_eps),
-		&mut vertices_2d_1[..],
-	);
-	if vertex_count < 3
-	{
-		return;
-	}
-	vertex_count = clip_2d_polygon(
-		&vertices_2d_1[.. vertex_count],
-		&Vec3f::new(0.0, -1.0, clip_plane_eps - height),
-		&mut vertices_2d_0[..],
-	);
-	if vertex_count < 3
-	{
-		return;
+		vertex_count = clip_2d_polygon(
+			&vertices_2d_0[.. vertex_count],
+			&clip_planes[i * 2],
+			&mut vertices_2d_1[..],
+		);
+		if vertex_count < 3
+		{
+			return;
+		}
+		vertex_count = clip_2d_polygon(
+			&vertices_2d_1[.. vertex_count],
+			&clip_planes[i * 2 + 1],
+			&mut vertices_2d_0[..],
+		);
+		if vertex_count < 3
+		{
+			return;
+		}
 	}
 
 	// Perform f32 to Fixed16 conversion.
