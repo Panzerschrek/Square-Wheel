@@ -8,6 +8,9 @@ pub struct RendererConfig
 
 	#[serde(default)]
 	pub show_stats: bool,
+
+	#[serde(default)]
+	pub invert_polygons_order: bool,
 }
 
 impl RendererConfig

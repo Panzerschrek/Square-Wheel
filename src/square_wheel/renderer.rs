@@ -155,7 +155,11 @@ impl Renderer
 		{
 			let node = &self.map.nodes[current_index as usize];
 			let plane_transformed = camera_matrices.planes_matrix * node.plane.vec.extend(-node.plane.dist);
-			let mask = if plane_transformed.w >= 0.0 { 1 } else { 0 };
+			let mut mask = if plane_transformed.w >= 0.0 { 1 } else { 0 };
+			if self.config.invert_polygons_order
+			{
+				mask = mask ^ 1;
+			}
 			for i in 0 .. 2
 			{
 				self.draw_tree_r(rasterizer, camera_matrices, node.children[(i ^ mask) as usize]);
