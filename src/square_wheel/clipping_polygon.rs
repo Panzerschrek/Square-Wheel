@@ -11,6 +11,7 @@ pub struct ClippingPolygon
 	x_minus_y: ClipAxis,
 }
 
+#[allow(dead_code)]
 impl ClippingPolygon
 {
 	pub fn from_box(min_x: f32, min_y: f32, max_x: f32, max_y: f32) -> Self
@@ -134,12 +135,13 @@ impl ClippingPolygon
 }
 
 #[derive(Copy, Clone, Default)]
-pub struct ClipAxis
+struct ClipAxis
 {
 	min: f32,
 	max: f32,
 }
 
+#[allow(dead_code)]
 impl ClipAxis
 {
 	pub fn is_empty_or_invalid(&self) -> bool
