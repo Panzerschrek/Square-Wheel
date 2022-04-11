@@ -1,12 +1,14 @@
 use common::math_types::*;
 
-// 2d cLipping polygon. Has small number of fixed sizes.
+// 2d Clipping polygon. Has small number of fixed sizes.
 #[derive(Copy, Clone, Default)]
 pub struct ClippingPolygon
 {
-	// Now it is just an axis-aligned box.
+	// Now it is just an axis-aligned octagon.
 	x: ClipAxis,
 	y: ClipAxis,
+	x_plus_y: ClipAxis,
+	x_minus_y: ClipAxis,
 }
 
 impl ClippingPolygon
@@ -16,6 +18,14 @@ impl ClippingPolygon
 		Self {
 			x: ClipAxis { min: min_x, max: max_x },
 			y: ClipAxis { min: min_y, max: max_y },
+			x_plus_y: ClipAxis {
+				min: min_x + min_y,
+				max: max_x + max_y,
+			},
+			x_minus_y: ClipAxis {
+				min: min_x - max_y,
+				max: max_x - min_y,
+			},
 		}
 	}
 
@@ -30,6 +40,14 @@ impl ClippingPolygon
 				min: point.y,
 				max: point.y,
 			},
+			x_plus_y: ClipAxis {
+				min: point.x + point.y,
+				max: point.x + point.y,
+			},
+			x_minus_y: ClipAxis {
+				min: point.x - point.y,
+				max: point.x - point.y,
+			},
 		}
 	}
 
@@ -40,12 +58,18 @@ impl ClippingPolygon
 
 	pub fn is_valid_and_non_empty(&self) -> bool
 	{
-		self.x.is_valid_and_non_empty() && self.y.is_valid_and_non_empty()
+		self.x.is_valid_and_non_empty() &&
+			self.y.is_valid_and_non_empty() &&
+			self.x_plus_y.is_valid_and_non_empty() &&
+			self.x_minus_y.is_valid_and_non_empty()
 	}
 
 	pub fn contains(&self, other: &ClippingPolygon) -> bool
 	{
-		self.x.contains(&other.x) && self.y.contains(&other.y)
+		self.x.contains(&other.x) &&
+			self.y.contains(&other.y) &&
+			self.x_plus_y.contains(&other.x_plus_y) &&
+			self.x_minus_y.contains(&other.x_minus_y)
 	}
 
 	// Result polygon will contain both "self" and "other".
@@ -53,6 +77,8 @@ impl ClippingPolygon
 	{
 		self.x.extend(&other.x);
 		self.y.extend(&other.y);
+		self.x_plus_y.extend(&other.x_plus_y);
+		self.x_minus_y.extend(&other.x_minus_y);
 	}
 
 	pub fn extend_with_polygon(&mut self, polygon_points: &[Vec2f])
@@ -67,6 +93,8 @@ impl ClippingPolygon
 	{
 		self.x.extend_with_point(point.x);
 		self.y.extend_with_point(point.y);
+		self.x_plus_y.extend_with_point(point.x + point.y);
+		self.x_minus_y.extend_with_point(point.x - point.y);
 	}
 
 	// Both "self" and "other" will contain result polygon.
@@ -74,6 +102,8 @@ impl ClippingPolygon
 	{
 		self.x.intersect(&other.x);
 		self.y.intersect(&other.y);
+		self.x_plus_y.intersect(&other.x_plus_y);
+		self.x_minus_y.intersect(&other.x_minus_y);
 	}
 
 	// Input polygon must be non-empty.
@@ -88,19 +118,23 @@ impl ClippingPolygon
 		self.intersect(&points_bound);
 	}
 
-	pub fn get_clip_planes(&self) -> [Vec3f; 4]
+	pub fn get_clip_planes(&self) -> [Vec3f; 8]
 	{
 		[
 			Vec3f::new(-1.0, 0.0, -self.x.max),
-			Vec3f::new(1.0, 0.0, -self.x.min),
+			Vec3f::new(1.0, 0.0, self.x.min),
 			Vec3f::new(0.0, -1.0, -self.y.max),
-			Vec3f::new(0.0, 1.0, -self.y.min),
+			Vec3f::new(0.0, 1.0, self.y.min),
+			Vec3f::new(-1.0, -1.0, -self.x_plus_y.max),
+			Vec3f::new(1.0, 1.0, self.x_plus_y.min),
+			Vec3f::new(-1.0, 1.0, -self.x_minus_y.max),
+			Vec3f::new(1.0, -1.0, self.x_minus_y.min),
 		]
 	}
 }
 
 #[derive(Copy, Clone, Default)]
-struct ClipAxis
+pub struct ClipAxis
 {
 	min: f32,
 	max: f32,
