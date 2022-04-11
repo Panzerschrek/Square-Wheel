@@ -20,6 +20,7 @@ struct DrawLeafData
 	visible_frame: FrameNumber,
 	// Depth for visible leafs search.
 	search_depth: u32,
+	// Bounds, combined from all paths through portals.
 	current_frame_bounds: ClippingPolygon,
 }
 
@@ -212,17 +213,13 @@ fn mark_reachable_leafs_r(
 	}
 
 	let leaf_data = &mut leafs_data[leaf as usize];
+
 	if leaf_data.visible_frame != current_frame
 	{
 		leaf_data.visible_frame = current_frame;
 		leaf_data.search_depth = depth;
 		leaf_data.current_frame_bounds = *bounds;
 	}
-	// TODO - return this check.
-	// else if leaf_data.current_frame_bounds.contains(bounds)
-	//{
-	// 	return;
-	//}
 	else
 	{
 		leaf_data.search_depth = std::cmp::min(leaf_data.search_depth, depth);
@@ -259,15 +256,14 @@ fn mark_reachable_leafs_r(
 
 		// Project portal, calculate its bounds, calculat intersection with current bounds.
 		const MAX_VERTICES: usize = 24;
-		let mut vertex_count = portal_value.num_vertices as usize;
+		let mut vertex_count = std::cmp::min(portal_value.num_vertices as usize, MAX_VERTICES);
 
 		// Perform initial matrix tranformation, obtain 3d vertices in camera-aligned space.
 		let mut vertices_transformed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
 		for (index, vertex) in map.vertices
-			[(portal_value.first_vertex as usize) .. (portal_value.first_vertex + portal_value.num_vertices) as usize]
+			[(portal_value.first_vertex as usize) .. (portal_value.first_vertex as usize) + vertex_count]
 			.iter()
 			.enumerate()
-			.take(MAX_VERTICES)
 		{
 			let vertex_transformed = camera_matrices.view_matrix * vertex.extend(1.0);
 			vertices_transformed[index] = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
