@@ -1,4 +1,4 @@
-use super::{rasterizer::*, renderer_config::*};
+use super::{clipping_polygon::*, rasterizer::*, renderer_config::*};
 use common::{
 	bsp_map_compact, camera_controller::CameraMatrices, clipping::*, color::*, fixed_math::*, math_types::*, plane::*,
 	system_window,
@@ -20,6 +20,7 @@ struct DrawLeafData
 	visible_frame: FrameNumber,
 	// Depth for visible leafs search.
 	search_depth: u32,
+	current_frame_bounds: ClippingPolygon,
 }
 
 // 32 bits are enough for frames enumeration.
@@ -91,12 +92,14 @@ impl Renderer
 		let root_node = (self.map.nodes.len() - 1) as u32;
 		let current_leaf = self.find_current_leaf(root_node, &camera_matrices.planes_matrix);
 
+		let frame_bounds = ClippingPolygon::from_box(0.0, 0.0, surface_info.width as f32, surface_info.height as f32);
 		mark_reachable_leafs_r(
 			current_leaf,
 			&self.map,
 			self.current_frame,
-			&camera_matrices.planes_matrix,
+			camera_matrices,
 			0,
+			&frame_bounds,
 			&mut self.leafs_data,
 		);
 
@@ -196,8 +199,9 @@ fn mark_reachable_leafs_r(
 	leaf: u32,
 	map: &bsp_map_compact::BSPMap,
 	current_frame: FrameNumber,
-	planes_matrix: &Mat4f,
+	camera_matrices: &CameraMatrices,
 	depth: u32,
+	bounds: &ClippingPolygon,
 	leafs_data: &mut [DrawLeafData],
 )
 {
@@ -212,12 +216,18 @@ fn mark_reachable_leafs_r(
 	{
 		leaf_data.visible_frame = current_frame;
 		leaf_data.search_depth = depth;
+		leaf_data.current_frame_bounds = *bounds;
 	}
-	else if leaf_data.search_depth <= depth
+	// TODO - return this check.
+	// else if leaf_data.current_frame_bounds.contains(bounds)
+	//{
+	// 	return;
+	//}
+	else
 	{
-		return;
+		leaf_data.search_depth = std::cmp::min(leaf_data.search_depth, depth);
+		leaf_data.current_frame_bounds.extend(bounds);
 	}
-	leaf_data.search_depth = depth;
 
 	let leaf_value = map.leafs[leaf as usize];
 	for portal in &map.leafs_portals[(leaf_value.first_leaf_portal as usize) ..
@@ -226,35 +236,82 @@ fn mark_reachable_leafs_r(
 		let portal_value = &map.portals[(*portal) as usize];
 
 		// Do not look through portals that are facing from camera.
-		let portal_plane_pos = (planes_matrix * portal_value.plane.vec.extend(-portal_value.plane.dist)).w;
+		let portal_plane_pos =
+			(camera_matrices.planes_matrix * portal_value.plane.vec.extend(-portal_value.plane.dist)).w;
+
+		let next_leaf;
 		if portal_value.leafs[0] == leaf
 		{
-			if portal_plane_pos >= 0.0
+			if portal_plane_pos < 0.0
 			{
-				mark_reachable_leafs_r(
-					portal_value.leafs[1],
-					map,
-					current_frame,
-					planes_matrix,
-					depth + 1,
-					leafs_data,
-				);
+				continue;
 			}
+			next_leaf = portal_value.leafs[1];
 		}
 		else
 		{
-			if portal_plane_pos <= 0.0
+			if portal_plane_pos > 0.0
 			{
-				mark_reachable_leafs_r(
-					portal_value.leafs[0],
-					map,
-					current_frame,
-					planes_matrix,
-					depth + 1,
-					leafs_data,
-				);
+				continue;
 			}
-		};
+			next_leaf = portal_value.leafs[0];
+		}
+
+		// Project portal, calculate its bounds, calculat intersection with current bounds.
+		const MAX_VERTICES: usize = 24;
+		let mut vertex_count = portal_value.num_vertices as usize;
+
+		// Perform initial matrix tranformation, obtain 3d vertices in camera-aligned space.
+		let mut vertices_transformed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
+		for (index, vertex) in map.vertices
+			[(portal_value.first_vertex as usize) .. (portal_value.first_vertex + portal_value.num_vertices) as usize]
+			.iter()
+			.enumerate()
+			.take(MAX_VERTICES)
+		{
+			let vertex_transformed = camera_matrices.view_matrix * vertex.extend(1.0);
+			vertices_transformed[index] = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
+		}
+
+		// Perform z_near clipping. Use very small z_near to avoid clipping portals.
+		// TODO - add some workaround for really small z_near.
+		let mut vertices_transformed_z_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
+		const Z_NEAR: f32 = 0.01;
+		vertex_count = clip_3d_polygon_by_z_plane(
+			&vertices_transformed[.. vertex_count],
+			Z_NEAR,
+			&mut vertices_transformed_z_clipped,
+		);
+		if vertex_count < 3
+		{
+			continue;
+		}
+
+		let mut portal_polygon_bounds = ClippingPolygon::from_point(
+			&(vertices_transformed_z_clipped[0].truncate() / vertices_transformed_z_clipped[0].z),
+		);
+		for vertex_transformed in &vertices_transformed_z_clipped[1 .. vertex_count]
+		{
+			portal_polygon_bounds.extend_with_point(&(vertex_transformed.truncate() / vertex_transformed.z));
+		}
+
+		let mut bounds_intersection = *bounds;
+		bounds_intersection.intersect(&portal_polygon_bounds);
+
+		if bounds_intersection.is_empty_or_invalid()
+		{
+			continue;
+		}
+
+		mark_reachable_leafs_r(
+			next_leaf,
+			map,
+			current_frame,
+			camera_matrices,
+			depth + 1,
+			&bounds_intersection,
+			leafs_data,
+		);
 	}
 }
 

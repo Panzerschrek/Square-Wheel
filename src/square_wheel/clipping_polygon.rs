@@ -1,7 +1,7 @@
 use common::math_types::*;
 
 // 2d cLipping polygon. Has small number of fixed sizes.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct ClippingPolygon
 {
 	// Now it is just an axis-aligned box.
@@ -40,11 +40,16 @@ impl ClippingPolygon
 
 	pub fn is_valid_and_non_empty(&self) -> bool
 	{
-		self.x.min < self.x.max && self.y.min < self.y.max
+		self.x.is_valid_and_non_empty() && self.y.is_valid_and_non_empty()
+	}
+
+	pub fn contains(&self, other: &ClippingPolygon) -> bool
+	{
+		self.x.contains(&other.x) && self.y.contains(&other.y)
 	}
 
 	// Result polygon will contain both "self" and "other".
-	pub fn extend(&mut self, other: ClippingPolygon)
+	pub fn extend(&mut self, other: &ClippingPolygon)
 	{
 		self.x.extend(&other.x);
 		self.y.extend(&other.y);
@@ -65,7 +70,7 @@ impl ClippingPolygon
 	}
 
 	// Both "self" and "other" will contain result polygon.
-	pub fn intersect(&mut self, other: ClippingPolygon)
+	pub fn intersect(&mut self, other: &ClippingPolygon)
 	{
 		self.x.intersect(&other.x);
 		self.y.intersect(&other.y);
@@ -75,12 +80,12 @@ impl ClippingPolygon
 	pub fn intersect_with_polygon(&mut self, polygon_points: &[Vec2f])
 	{
 		let mut points_bound = Self::from_point(&polygon_points[0]);
-		for point in &polygon_points[ 1 .. ]
+		for point in &polygon_points[1 ..]
 		{
 			points_bound.extend_with_point(point);
 		}
 
-		self.intersect(points_bound);
+		self.intersect(&points_bound);
 	}
 
 	pub fn get_clip_planes(&self) -> [Vec3f; 4]
@@ -94,7 +99,7 @@ impl ClippingPolygon
 	}
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 struct ClipAxis
 {
 	min: f32,
@@ -103,6 +108,21 @@ struct ClipAxis
 
 impl ClipAxis
 {
+	pub fn is_empty_or_invalid(&self) -> bool
+	{
+		!self.is_valid_and_non_empty()
+	}
+
+	pub fn is_valid_and_non_empty(&self) -> bool
+	{
+		self.min < self.max
+	}
+
+	fn contains(&self, other: &ClipAxis) -> bool
+	{
+		other.min >= self.min && other.max <= self.max
+	}
+
 	fn extend(&mut self, other: &ClipAxis)
 	{
 		if other.min < self.min
