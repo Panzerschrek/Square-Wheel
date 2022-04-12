@@ -119,6 +119,14 @@ impl ClippingPolygon
 		self.intersect(&points_bound);
 	}
 
+	pub fn scale_relative_center(&mut self, scale : f32)
+	{
+		self.x.scale_relative_center(scale);
+		self.y.scale_relative_center(scale);
+		self.x_plus_y.scale_relative_center(scale);
+		self.x_minus_y.scale_relative_center(scale);
+	}
+
 	pub fn get_clip_planes(&self) -> [Vec3f; 8]
 	{
 		[
@@ -193,5 +201,13 @@ impl ClipAxis
 		{
 			self.max = other.max;
 		}
+	}
+
+	fn scale_relative_center(&mut self, scale : f32)
+	{
+		let center = (self.min + self.max) * 0.5;
+		let half_size_scaled = (self.max - self.min) * 0.5 * scale;
+		self.min = center - half_size_scaled;
+		self.max = center + half_size_scaled;
 	}
 }
