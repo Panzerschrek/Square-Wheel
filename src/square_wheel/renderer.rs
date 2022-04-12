@@ -78,7 +78,7 @@ impl Renderer
 				pixels,
 				surface_info,
 				&format!(
-					"leafs: {}\n, num reachable leaf search calls: {}\nmax visits: {}",
+					"leafs: {}\nnum reachable leaf search calls: {}\nmax visits: {}",
 					num_visible_leafs, debug_stats.num_reachable_leafs_search_calls, max_search_visits
 				),
 				0,
@@ -244,6 +244,7 @@ fn mark_reachable_leafs_r(
 
 	let leaf_data = &mut leafs_data[leaf as usize];
 
+	let mut bounds_corrected = *bounds;
 	if leaf_data.visible_frame != current_frame
 	{
 		leaf_data.visible_frame = current_frame;
@@ -254,6 +255,21 @@ fn mark_reachable_leafs_r(
 	{
 		leaf_data.num_search_visits += 1;
 		leaf_data.current_frame_bounds.extend(bounds);
+
+		// Worst case complexity of leafs-portals graph search is exponential.
+		// So, if we found that we visit this leaf a lot just process next leafs with almost infinite bounds.
+		// Next time skip its processing.
+		// TODO - try to improve such check. We still need to avoid using large bounds to minimize fillrate.
+		let max_visits = 32;
+		if leaf_data.num_search_visits == max_visits
+		{
+			// TODO - use real screen bounds?
+			bounds_corrected = ClippingPolygon::from_box(0.0, 0.0, 4096.0, 4096.0);
+		}
+		else if leaf_data.num_search_visits > max_visits
+		{
+			return;
+		}
 	}
 
 	let leaf_value = map.leafs[leaf as usize];
@@ -321,7 +337,7 @@ fn mark_reachable_leafs_r(
 			portal_polygon_bounds.extend_with_point(&(vertex_transformed.truncate() / vertex_transformed.z));
 		}
 
-		let mut bounds_intersection = *bounds;
+		let mut bounds_intersection = bounds_corrected;
 		bounds_intersection.intersect(&portal_polygon_bounds);
 
 		if bounds_intersection.is_empty_or_invalid()
