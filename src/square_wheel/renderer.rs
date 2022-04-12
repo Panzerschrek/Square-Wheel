@@ -20,6 +20,7 @@ struct DrawLeafData
 	visible_frame: FrameNumber,
 	// Bounds, combined from all paths through portals.
 	current_frame_bounds: ClippingPolygon,
+	num_search_visits: usize,
 }
 
 // 32 bits are enough for frames enumeration.
@@ -53,7 +54,9 @@ impl Renderer
 			draw_background(pixels);
 		}
 
-		self.draw_map(pixels, surface_info, camera_matrices);
+		let mut debug_stats = DebugStats::default();
+
+		self.draw_map(pixels, surface_info, camera_matrices, &mut debug_stats);
 
 		// TODO - remove such temporary fuinction.
 		draw_crosshair(pixels, surface_info);
@@ -61,18 +64,23 @@ impl Renderer
 		if self.config.show_stats
 		{
 			let mut num_visible_leafs = 0;
+			let mut max_search_visits = 0;
 			for leaf_data in &self.leafs_data
 			{
 				if leaf_data.visible_frame == self.current_frame
 				{
 					num_visible_leafs += 1;
+					max_search_visits = std::cmp::max(max_search_visits, leaf_data.num_search_visits);
 				}
 			}
 
 			common::text_printer::print(
 				pixels,
 				surface_info,
-				&format!("leafs: {}", num_visible_leafs),
+				&format!(
+					"leafs: {}\n, num reachable leaf search calls: {}\nmax visits: {}",
+					num_visible_leafs, debug_stats.num_reachable_leafs_search_calls, max_search_visits
+				),
 				0,
 				0,
 				Color32::from_rgb(255, 255, 255),
@@ -85,6 +93,7 @@ impl Renderer
 		pixels: &mut [Color32],
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
+		debug_stats: &mut DebugStats,
 	)
 	{
 		let mut rasterizer = Rasterizer::new(pixels, surface_info);
@@ -100,6 +109,7 @@ impl Renderer
 			0,
 			&frame_bounds,
 			&mut self.leafs_data,
+			debug_stats,
 		);
 
 		// Draw BSP tree in back to front order, skip unreachable leafs.
@@ -206,6 +216,13 @@ fn draw_crosshair(pixels: &mut [Color32], surface_info: &system_window::SurfaceI
 	pixels[surface_info.width / 2 + surface_info.height / 2 * surface_info.pitch] = Color32::from_rgb(255, 255, 255);
 }
 
+// TODO - get rid of debug code.
+#[derive(Default)]
+struct DebugStats
+{
+	num_reachable_leafs_search_calls: usize,
+}
+
 fn mark_reachable_leafs_r(
 	leaf: u32,
 	map: &bsp_map_compact::BSPMap,
@@ -214,8 +231,11 @@ fn mark_reachable_leafs_r(
 	depth: u32,
 	bounds: &ClippingPolygon,
 	leafs_data: &mut [DrawLeafData],
+	debug_stats: &mut DebugStats,
 )
 {
+	debug_stats.num_reachable_leafs_search_calls += 1;
+
 	let max_depth = 1024; // Prevent stack overflow in case of broken graph.
 	if depth > max_depth
 	{
@@ -228,9 +248,11 @@ fn mark_reachable_leafs_r(
 	{
 		leaf_data.visible_frame = current_frame;
 		leaf_data.current_frame_bounds = *bounds;
+		leaf_data.num_search_visits = 1;
 	}
 	else
 	{
+		leaf_data.num_search_visits += 1;
 		leaf_data.current_frame_bounds.extend(bounds);
 	}
 
@@ -315,6 +337,7 @@ fn mark_reachable_leafs_r(
 			depth + 1,
 			&bounds_intersection,
 			leafs_data,
+			debug_stats,
 		);
 	}
 }
