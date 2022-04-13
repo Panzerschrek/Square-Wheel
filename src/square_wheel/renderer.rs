@@ -10,6 +10,7 @@ pub struct Renderer
 	config: RendererConfig,
 	map: bsp_map_compact::BSPMap,
 	leafs_data: Vec<DrawLeafData>,
+	portals_data: Vec<DrawPortalData>,
 }
 
 // Mutable data associated with map BSP Leaf.
@@ -21,6 +22,16 @@ struct DrawLeafData
 	// Bounds, combined from all paths through portals.
 	current_frame_bounds: ClippingPolygon,
 	num_search_visits: usize,
+}
+
+// Mutable data associated with map portal.
+#[derive(Default, Copy, Clone)]
+struct DrawPortalData
+{
+	// Frame last time this leaf was visible.
+	visible_frame: FrameNumber,
+	// None if behind camera.
+	current_frame_projection: Option<ClippingPolygon>,
 }
 
 // 32 bits are enough for frames enumeration.
@@ -36,6 +47,7 @@ impl Renderer
 			current_frame: FrameNumber(0),
 			config: RendererConfig::from_app_config(app_config),
 			leafs_data: vec![DrawLeafData::default(); map.leafs.len()],
+			portals_data: vec![DrawPortalData::default(); map.portals.len()],
 			map,
 		}
 	}
@@ -109,6 +121,7 @@ impl Renderer
 			0,
 			&frame_bounds,
 			&mut self.leafs_data,
+			&mut self.portals_data,
 			debug_stats,
 		);
 
@@ -231,6 +244,7 @@ fn mark_reachable_leafs_r(
 	depth: u32,
 	bounds: &ClippingPolygon,
 	leafs_data: &mut [DrawLeafData],
+	portals_data: &mut [DrawPortalData],
 	debug_stats: &mut DebugStats,
 )
 {
@@ -278,7 +292,7 @@ fn mark_reachable_leafs_r(
 		let next_leaf;
 		if portal_value.leafs[0] == leaf
 		{
-			if portal_plane_pos < 0.0
+			if portal_plane_pos <= 0.0
 			{
 				continue;
 			}
@@ -286,52 +300,28 @@ fn mark_reachable_leafs_r(
 		}
 		else
 		{
-			if portal_plane_pos > 0.0
+			if portal_plane_pos >= 0.0
 			{
 				continue;
 			}
 			next_leaf = portal_value.leafs[0];
 		}
 
-		// Project portal, calculate its bounds, calculat intersection with current bounds.
-		const MAX_VERTICES: usize = 24;
-		let mut vertex_count = std::cmp::min(portal_value.num_vertices as usize, MAX_VERTICES);
-
-		// Perform initial matrix tranformation, obtain 3d vertices in camera-aligned space.
-		let mut vertices_transformed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-		for (index, vertex) in map.vertices
-			[(portal_value.first_vertex as usize) .. (portal_value.first_vertex as usize) + vertex_count]
-			.iter()
-			.enumerate()
+		// Same portal may be visited multiple times.
+		// So, cache calculation of portal bounds.
+		let portal_data = &mut portals_data[(*portal) as usize];
+		if portal_data.visible_frame != current_frame
 		{
-			let vertex_transformed = camera_matrices.view_matrix * vertex.extend(1.0);
-			vertices_transformed[index] = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
+			portal_data.visible_frame = current_frame;
+			portal_data.current_frame_projection = project_portal(portal_value, map, &camera_matrices.view_matrix);
 		}
 
-		// Perform z_near clipping. Use very small z_near to avoid clipping portals.
-		// TODO - add some workaround for really small z_near.
-		let mut vertices_transformed_z_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-		const Z_NEAR: f32 = 0.01;
-		vertex_count = clip_3d_polygon_by_z_plane(
-			&vertices_transformed[.. vertex_count],
-			Z_NEAR,
-			&mut vertices_transformed_z_clipped,
-		);
-		if vertex_count < 3
+		if portal_data.current_frame_projection.is_none()
 		{
 			continue;
 		}
-
-		let mut portal_polygon_bounds = ClippingPolygon::from_point(
-			&(vertices_transformed_z_clipped[0].truncate() / vertices_transformed_z_clipped[0].z),
-		);
-		for vertex_transformed in &vertices_transformed_z_clipped[1 .. vertex_count]
-		{
-			portal_polygon_bounds.extend_with_point(&(vertex_transformed.truncate() / vertex_transformed.z));
-		}
-
-		let mut bounds_intersection = bound_for_portals_clipping;
-		bounds_intersection.intersect(&portal_polygon_bounds);
+		let mut bounds_intersection = portal_data.current_frame_projection.unwrap();
+		bounds_intersection.intersect(&bound_for_portals_clipping);
 
 		if bounds_intersection.is_empty_or_invalid()
 		{
@@ -346,9 +336,54 @@ fn mark_reachable_leafs_r(
 			depth + 1,
 			&bounds_intersection,
 			leafs_data,
+			portals_data,
 			debug_stats,
 		);
 	}
+}
+
+fn project_portal(
+	portal: &bsp_map_compact::Portal,
+	map: &bsp_map_compact::BSPMap,
+	view_matrix: &Mat4f,
+) -> Option<ClippingPolygon>
+{
+	const MAX_VERTICES: usize = 24;
+	let mut vertex_count = std::cmp::min(portal.num_vertices as usize, MAX_VERTICES);
+
+	// Perform initial matrix tranformation, obtain 3d vertices in camera-aligned space.
+	let mut vertices_transformed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
+	for (index, vertex) in map.vertices[(portal.first_vertex as usize) .. (portal.first_vertex as usize) + vertex_count]
+		.iter()
+		.enumerate()
+	{
+		let vertex_transformed = view_matrix * vertex.extend(1.0);
+		vertices_transformed[index] = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
+	}
+
+	// Perform z_near clipping. Use very small z_near to avoid clipping portals.
+	// TODO - add some workaround for really small z_near.
+	let mut vertices_transformed_z_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
+	const Z_NEAR: f32 = 0.01;
+	vertex_count = clip_3d_polygon_by_z_plane(
+		&vertices_transformed[.. vertex_count],
+		Z_NEAR,
+		&mut vertices_transformed_z_clipped,
+	);
+	if vertex_count < 3
+	{
+		return None;
+	}
+
+	let mut portal_polygon_bounds = ClippingPolygon::from_point(
+		&(vertices_transformed_z_clipped[0].truncate() / vertices_transformed_z_clipped[0].z),
+	);
+	for vertex_transformed in &vertices_transformed_z_clipped[1 .. vertex_count]
+	{
+		portal_polygon_bounds.extend_with_point(&(vertex_transformed.truncate() / vertex_transformed.z));
+	}
+
+	Some(portal_polygon_bounds)
 }
 
 fn draw_polygon(
