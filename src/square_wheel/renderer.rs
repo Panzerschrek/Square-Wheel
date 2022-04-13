@@ -86,12 +86,26 @@ impl Renderer
 				}
 			}
 
+			let mut num_visible_portals = 0;
+			for portal_data in &self.portals_data
+			{
+				if portal_data.visible_frame == self.current_frame
+				{
+					num_visible_portals += 1;
+				}
+			}
+
 			common::text_printer::print(
 				pixels,
 				surface_info,
 				&format!(
-					"leafs: {}\nnum reachable leaf search calls: {}\nmax visits: {}",
-					num_visible_leafs, debug_stats.num_reachable_leafs_search_calls, max_search_visits
+					"leafs: {}/{}\nportals: {}/{}\num reachable leaf search calls: {}\nmax visits: {}",
+					num_visible_leafs,
+					self.leafs_data.len(),
+					num_visible_portals,
+					self.portals_data.len(),
+					debug_stats.num_reachable_leafs_search_calls,
+					max_search_visits
 				),
 				0,
 				0,
