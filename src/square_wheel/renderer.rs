@@ -129,7 +129,21 @@ impl Renderer
 		let current_leaf = self.find_current_leaf(root_node, &camera_matrices.planes_matrix);
 
 		let frame_bounds = ClippingPolygon::from_box(0.0, 0.0, surface_info.width as f32, surface_info.height as f32);
-		if self.config.iterative_visible_leafs_marking
+		if self.config.recursive_visible_leafs_marking
+		{
+			mark_reachable_leafs_recursive(
+				current_leaf,
+				&self.map,
+				self.current_frame,
+				camera_matrices,
+				0,
+				&frame_bounds,
+				&mut self.leafs_data,
+				&mut self.portals_data,
+				debug_stats,
+			);
+		}
+		else
 		{
 			mark_reachable_leafs_iterative(
 				current_leaf,
@@ -140,20 +154,6 @@ impl Renderer
 				&mut self.leafs_data,
 				&mut self.portals_data,
 				&mut self.leafs_search_waves,
-				debug_stats,
-			);
-		}
-		else
-		{
-			mark_reachable_leafs_r(
-				current_leaf,
-				&self.map,
-				self.current_frame,
-				camera_matrices,
-				0,
-				&frame_bounds,
-				&mut self.leafs_data,
-				&mut self.portals_data,
 				debug_stats,
 			);
 		}
@@ -269,7 +269,7 @@ struct DebugStats
 	num_reachable_leafs_search_calls: usize,
 }
 
-fn mark_reachable_leafs_r(
+fn mark_reachable_leafs_recursive(
 	leaf: u32,
 	map: &bsp_map_compact::BSPMap,
 	current_frame: FrameNumber,
@@ -361,7 +361,7 @@ fn mark_reachable_leafs_r(
 			continue;
 		}
 
-		mark_reachable_leafs_r(
+		mark_reachable_leafs_recursive(
 			next_leaf,
 			map,
 			current_frame,

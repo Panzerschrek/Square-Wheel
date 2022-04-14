@@ -12,8 +12,9 @@ pub struct RendererConfig
 	#[serde(default)]
 	pub invert_polygons_order: bool,
 
+	// use alternaive (slow, recursive) search algorithm.
 	#[serde(default)]
-	pub iterative_visible_leafs_marking: bool,
+	pub recursive_visible_leafs_marking: bool,
 }
 
 impl RendererConfig
