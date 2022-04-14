@@ -127,17 +127,33 @@ impl Renderer
 		let current_leaf = self.find_current_leaf(root_node, &camera_matrices.planes_matrix);
 
 		let frame_bounds = ClippingPolygon::from_box(0.0, 0.0, surface_info.width as f32, surface_info.height as f32);
-		mark_reachable_leafs_r(
-			current_leaf,
-			&self.map,
-			self.current_frame,
-			camera_matrices,
-			0,
-			&frame_bounds,
-			&mut self.leafs_data,
-			&mut self.portals_data,
-			debug_stats,
-		);
+		if self.config.iterative_visible_leafs_marking
+		{
+			mark_reachable_leafs_iterative(
+				current_leaf,
+				&self.map,
+				self.current_frame,
+				camera_matrices,
+				&frame_bounds,
+				&mut self.leafs_data,
+				&mut self.portals_data,
+				debug_stats,
+			);
+		}
+		else
+		{
+			mark_reachable_leafs_r(
+				current_leaf,
+				&self.map,
+				self.current_frame,
+				camera_matrices,
+				0,
+				&frame_bounds,
+				&mut self.leafs_data,
+				&mut self.portals_data,
+				debug_stats,
+			);
+		}
 
 		// Draw BSP tree in back to front order, skip unreachable leafs.
 		self.draw_tree_r(&mut rasterizer, camera_matrices, root_node);
@@ -353,6 +369,120 @@ fn mark_reachable_leafs_r(
 			portals_data,
 			debug_stats,
 		);
+	}
+}
+
+fn mark_reachable_leafs_iterative(
+	start_leaf: u32,
+	map: &bsp_map_compact::BSPMap,
+	current_frame: FrameNumber,
+	camera_matrices: &CameraMatrices,
+	start_bounds: &ClippingPolygon,
+	leafs_data: &mut [DrawLeafData],
+	portals_data: &mut [DrawPortalData],
+	debug_stats: &mut DebugStats,
+)
+{
+	let mut cur_wave = Vec::new();
+	let mut next_wave = Vec::new();
+
+	cur_wave.push(start_leaf);
+
+	leafs_data[start_leaf as usize].current_frame_bounds = *start_bounds;
+	leafs_data[start_leaf as usize].visible_frame = current_frame;
+
+	let mut depth = 0;
+	while !cur_wave.is_empty()
+	{
+		for &leaf in &cur_wave
+		{
+			debug_stats.num_reachable_leafs_search_calls += 1;
+
+			let leaf_bounds = leafs_data[leaf as usize].current_frame_bounds;
+
+			let leaf_value = map.leafs[leaf as usize];
+			for portal in &map.leafs_portals[(leaf_value.first_leaf_portal as usize) ..
+				((leaf_value.first_leaf_portal + leaf_value.num_leaf_portals) as usize)]
+			{
+				let portal_value = &map.portals[(*portal) as usize];
+
+				// Do not look through portals that are facing from camera.
+				let portal_plane_pos =
+					(camera_matrices.planes_matrix * portal_value.plane.vec.extend(-portal_value.plane.dist)).w;
+
+				let next_leaf;
+				if portal_value.leafs[0] == leaf
+				{
+					if portal_plane_pos <= 0.0
+					{
+						continue;
+					}
+					next_leaf = portal_value.leafs[1];
+				}
+				else
+				{
+					if portal_plane_pos >= 0.0
+					{
+						continue;
+					}
+					next_leaf = portal_value.leafs[0];
+				}
+
+				// Same portal may be visited multiple times.
+				// So, cache calculation of portal bounds.
+				let portal_data = &mut portals_data[(*portal) as usize];
+				if portal_data.visible_frame != current_frame
+				{
+					portal_data.visible_frame = current_frame;
+					portal_data.current_frame_projection =
+						project_portal(portal_value, map, &camera_matrices.view_matrix);
+				}
+
+				if portal_data.current_frame_projection.is_none()
+				{
+					continue;
+				}
+				let mut bounds_intersection = portal_data.current_frame_projection.unwrap();
+				bounds_intersection.intersect(&leaf_bounds);
+
+				if bounds_intersection.is_empty_or_invalid()
+				{
+					continue;
+				}
+
+				let next_leaf_data = &mut leafs_data[next_leaf as usize];
+				if next_leaf_data.visible_frame != current_frame
+				{
+					next_leaf_data.visible_frame = current_frame;
+					next_leaf_data.current_frame_bounds = bounds_intersection;
+					next_leaf_data.num_search_visits = 1;
+				}
+				else
+				{
+					next_leaf_data.num_search_visits += 1;
+
+					// If we visit this leaf not first time, check if bounds is inside current.
+					// If so - we can skip it.
+					if next_leaf_data.current_frame_bounds.contains(&bounds_intersection)
+					{
+						continue;
+					}
+					// Perform clipping of portals of this leaf using combined bounds to ensure that we visit all possible paths with such bounds.
+					next_leaf_data.current_frame_bounds.extend(&bounds_intersection);
+				}
+
+				next_wave.push(next_leaf);
+			} // For leaf portals.
+		} // For wave elements.
+
+		cur_wave.clear();
+		std::mem::swap(&mut cur_wave, &mut next_wave);
+
+		depth += 1;
+		if depth > 1024
+		{
+			break;
+		}
 	}
 }
 

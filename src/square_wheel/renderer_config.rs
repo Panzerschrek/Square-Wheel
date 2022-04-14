@@ -11,6 +11,9 @@ pub struct RendererConfig
 
 	#[serde(default)]
 	pub invert_polygons_order: bool,
+
+	#[serde(default)]
+	pub iterative_visible_leafs_marking: bool,
 }
 
 impl RendererConfig
