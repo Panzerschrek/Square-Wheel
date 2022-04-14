@@ -350,13 +350,16 @@ impl Renderer
 		color: Color32,
 	)
 	{
+		// TODO - maybe just a little bit extend clipping polygon?
+		let clip_planes = bounds.get_clip_planes();
+
 		for polygon in
 			&self.map.polygons[(leaf.first_polygon as usize) .. ((leaf.first_polygon + leaf.num_polygons) as usize)]
 		{
 			draw_polygon(
 				rasterizer,
 				camera_matrices,
-				bounds,
+				&clip_planes,
 				&polygon.plane,
 				&self.map.vertices
 					[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)],
@@ -542,7 +545,7 @@ fn project_portal(
 fn draw_polygon(
 	rasterizer: &mut Rasterizer,
 	camera_matrices: &CameraMatrices,
-	bounds: &ClippingPolygon,
+	clip_planes: &ClippingPolygonPlanes,
 	plane: &Plane,
 	vertices: &[Vec3f],
 	tex_coord_equation: &[Plane; 2],
@@ -608,9 +611,7 @@ fn draw_polygon(
 		vertices_2d_0[index] = vertex_transformed.truncate() / vertex_transformed.z;
 	}
 
-	// Perfomr clipping i pairs - use pair of buffers.
-	// TODO - maybe just a little bit extend clipping polygon?
-	let clip_planes = bounds.get_clip_planes();
+	// Perform clipping in pairs - use pair of buffers.
 	for i in 0 .. clip_planes.len() / 2
 	{
 		vertex_count = clip_2d_polygon(

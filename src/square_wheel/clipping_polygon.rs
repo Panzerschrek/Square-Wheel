@@ -11,6 +11,8 @@ pub struct ClippingPolygon
 	x_minus_y: ClipAxis,
 }
 
+pub type ClippingPolygonPlanes = [Vec3f; 8];
+
 #[allow(dead_code)]
 impl ClippingPolygon
 {
@@ -127,7 +129,7 @@ impl ClippingPolygon
 		self.x_minus_y.scale_relative_center(scale);
 	}
 
-	pub fn get_clip_planes(&self) -> [Vec3f; 8]
+	pub fn get_clip_planes(&self) -> ClippingPolygonPlanes
 	{
 		[
 			Vec3f::new(-1.0, 0.0, -self.x.max),
