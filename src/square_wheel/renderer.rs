@@ -40,6 +40,11 @@ struct DrawPortalData
 #[derive(Default, Copy, Clone, PartialEq, Eq)]
 struct FrameNumber(u32);
 
+type LeafsSearchWaveElement = u32; // Leaf index
+type LeafsSearchWave = Vec<LeafsSearchWaveElement>;
+#[derive(Default)]
+struct LeafsSearchWavesPair(LeafsSearchWave, LeafsSearchWave);
+
 impl Renderer
 {
 	pub fn new(app_config: &serde_json::Value, map: bsp_map_compact::BSPMap) -> Self
@@ -148,17 +153,7 @@ impl Renderer
 		}
 		else
 		{
-			mark_reachable_leafs_iterative(
-				current_leaf,
-				&self.map,
-				self.current_frame,
-				camera_matrices,
-				&frame_bounds,
-				&mut self.leafs_data,
-				&mut self.portals_data,
-				&mut self.leafs_search_waves,
-				debug_stats,
-			);
+			self.mark_reachable_leafs_iterative(current_leaf, camera_matrices, &frame_bounds, debug_stats);
 		}
 
 		// Draw BSP tree in back to front order, skip unreachable leafs.
@@ -185,6 +180,126 @@ impl Renderer
 				node.children[1]
 			};
 		}
+	}
+
+	fn mark_reachable_leafs_iterative(
+		&mut self,
+		start_leaf: u32,
+		camera_matrices: &CameraMatrices,
+		start_bounds: &ClippingPolygon,
+		debug_stats: &mut DebugStats,
+	)
+	{
+		debug_stats.reachable_leafs_search_max_wave_size = 0;
+
+		let cur_wave = &mut self.leafs_search_waves.0;
+		let next_wave = &mut self.leafs_search_waves.1;
+
+		cur_wave.clear();
+		next_wave.clear();
+
+		cur_wave.push(start_leaf);
+		self.leafs_data[start_leaf as usize].current_frame_bounds = *start_bounds;
+		self.leafs_data[start_leaf as usize].visible_frame = self.current_frame;
+
+		let mut depth = 0;
+		while !cur_wave.is_empty()
+		{
+			for &leaf in cur_wave.iter()
+			{
+				debug_stats.num_reachable_leafs_search_calls += 1;
+
+				let leaf_bounds = self.leafs_data[leaf as usize].current_frame_bounds;
+
+				let leaf_value = self.map.leafs[leaf as usize];
+				for &portal in &self.map.leafs_portals[(leaf_value.first_leaf_portal as usize) ..
+					((leaf_value.first_leaf_portal + leaf_value.num_leaf_portals) as usize)]
+				{
+					let portal_value = &self.map.portals[portal as usize];
+
+					// Do not look through portals that are facing from camera.
+					let portal_plane_pos =
+						(camera_matrices.planes_matrix * portal_value.plane.vec.extend(-portal_value.plane.dist)).w;
+
+					let next_leaf;
+					if portal_value.leafs[0] == leaf
+					{
+						if portal_plane_pos <= 0.0
+						{
+							continue;
+						}
+						next_leaf = portal_value.leafs[1];
+					}
+					else
+					{
+						if portal_plane_pos >= 0.0
+						{
+							continue;
+						}
+						next_leaf = portal_value.leafs[0];
+					}
+
+					// Same portal may be visited multiple times.
+					// So, cache calculation of portal bounds.
+					let portal_data = &mut self.portals_data[portal as usize];
+					if portal_data.visible_frame != self.current_frame
+					{
+						portal_data.visible_frame = self.current_frame;
+						portal_data.current_frame_projection =
+							project_portal(portal_value, &self.map, &camera_matrices.view_matrix);
+					}
+
+					if portal_data.current_frame_projection.is_none()
+					{
+						continue;
+					}
+					let mut bounds_intersection = portal_data.current_frame_projection.unwrap();
+					bounds_intersection.intersect(&leaf_bounds);
+
+					if bounds_intersection.is_empty_or_invalid()
+					{
+						continue;
+					}
+
+					let next_leaf_data = &mut self.leafs_data[next_leaf as usize];
+					if next_leaf_data.visible_frame != self.current_frame
+					{
+						next_leaf_data.visible_frame = self.current_frame;
+						next_leaf_data.current_frame_bounds = bounds_intersection;
+						next_leaf_data.num_search_visits = 1;
+					}
+					else
+					{
+						next_leaf_data.num_search_visits += 1;
+
+						// If we visit this leaf not first time, check if bounds is inside current.
+						// If so - we can skip it.
+						if next_leaf_data.current_frame_bounds.contains(&bounds_intersection)
+						{
+							continue;
+						}
+						// Perform clipping of portals of this leaf using combined bounds to ensure that we visit all possible paths with such bounds.
+						next_leaf_data.current_frame_bounds.extend(&bounds_intersection);
+					}
+
+					next_wave.push(next_leaf);
+				} // For leaf portals.
+			} // For wave elements.
+
+			debug_stats.reachable_leafs_search_max_wave_size =
+				std::cmp::max(debug_stats.reachable_leafs_search_max_wave_size, next_wave.len());
+
+			cur_wave.clear();
+			std::mem::swap(cur_wave, next_wave);
+
+			depth += 1;
+			if depth > 1024
+			{
+				// Prevent infinite loop in case of broken graph.
+				break;
+			}
+		}
+		debug_stats.reachable_leafs_search_calls_depth = depth;
 	}
 
 	fn draw_tree_r(&self, rasterizer: &mut Rasterizer, camera_matrices: &CameraMatrices, current_index: u32)
@@ -378,136 +493,6 @@ fn mark_reachable_leafs_recursive(
 			debug_stats,
 		);
 	}
-}
-
-type LeafsSearchWaveElement = u32; // Leaf index
-type LeafsSearchWave = Vec<LeafsSearchWaveElement>;
-#[derive(Default)]
-struct LeafsSearchWavesPair(LeafsSearchWave, LeafsSearchWave);
-
-// Pass "waves" in order to reuse vectors across frames (avoid unnecessary allocations).
-fn mark_reachable_leafs_iterative(
-	start_leaf: u32,
-	map: &bsp_map_compact::BSPMap,
-	current_frame: FrameNumber,
-	camera_matrices: &CameraMatrices,
-	start_bounds: &ClippingPolygon,
-	leafs_data: &mut [DrawLeafData],
-	portals_data: &mut [DrawPortalData],
-	waves: &mut LeafsSearchWavesPair,
-	debug_stats: &mut DebugStats,
-)
-{
-	debug_stats.reachable_leafs_search_max_wave_size = 0;
-
-	let cur_wave = &mut waves.0;
-	let next_wave = &mut waves.1;
-
-	cur_wave.clear();
-	next_wave.clear();
-
-	cur_wave.push(start_leaf);
-
-	leafs_data[start_leaf as usize].current_frame_bounds = *start_bounds;
-	leafs_data[start_leaf as usize].visible_frame = current_frame;
-
-	let mut depth = 0;
-	while !cur_wave.is_empty()
-	{
-		for &leaf in cur_wave.iter()
-		{
-			debug_stats.num_reachable_leafs_search_calls += 1;
-
-			let leaf_bounds = leafs_data[leaf as usize].current_frame_bounds;
-
-			let leaf_value = map.leafs[leaf as usize];
-			for portal in &map.leafs_portals[(leaf_value.first_leaf_portal as usize) ..
-				((leaf_value.first_leaf_portal + leaf_value.num_leaf_portals) as usize)]
-			{
-				let portal_value = &map.portals[(*portal) as usize];
-
-				// Do not look through portals that are facing from camera.
-				let portal_plane_pos =
-					(camera_matrices.planes_matrix * portal_value.plane.vec.extend(-portal_value.plane.dist)).w;
-
-				let next_leaf;
-				if portal_value.leafs[0] == leaf
-				{
-					if portal_plane_pos <= 0.0
-					{
-						continue;
-					}
-					next_leaf = portal_value.leafs[1];
-				}
-				else
-				{
-					if portal_plane_pos >= 0.0
-					{
-						continue;
-					}
-					next_leaf = portal_value.leafs[0];
-				}
-
-				// Same portal may be visited multiple times.
-				// So, cache calculation of portal bounds.
-				let portal_data = &mut portals_data[(*portal) as usize];
-				if portal_data.visible_frame != current_frame
-				{
-					portal_data.visible_frame = current_frame;
-					portal_data.current_frame_projection =
-						project_portal(portal_value, map, &camera_matrices.view_matrix);
-				}
-
-				if portal_data.current_frame_projection.is_none()
-				{
-					continue;
-				}
-				let mut bounds_intersection = portal_data.current_frame_projection.unwrap();
-				bounds_intersection.intersect(&leaf_bounds);
-
-				if bounds_intersection.is_empty_or_invalid()
-				{
-					continue;
-				}
-
-				let next_leaf_data = &mut leafs_data[next_leaf as usize];
-				if next_leaf_data.visible_frame != current_frame
-				{
-					next_leaf_data.visible_frame = current_frame;
-					next_leaf_data.current_frame_bounds = bounds_intersection;
-					next_leaf_data.num_search_visits = 1;
-				}
-				else
-				{
-					next_leaf_data.num_search_visits += 1;
-
-					// If we visit this leaf not first time, check if bounds is inside current.
-					// If so - we can skip it.
-					if next_leaf_data.current_frame_bounds.contains(&bounds_intersection)
-					{
-						continue;
-					}
-					// Perform clipping of portals of this leaf using combined bounds to ensure that we visit all possible paths with such bounds.
-					next_leaf_data.current_frame_bounds.extend(&bounds_intersection);
-				}
-
-				next_wave.push(next_leaf);
-			} // For leaf portals.
-		} // For wave elements.
-
-		debug_stats.reachable_leafs_search_max_wave_size =
-			std::cmp::max(debug_stats.reachable_leafs_search_max_wave_size, next_wave.len());
-
-		cur_wave.clear();
-		std::mem::swap(cur_wave, next_wave);
-
-		depth += 1;
-		if depth > 1024
-		{
-			break;
-		}
-	}
-	debug_stats.reachable_leafs_search_calls_depth = depth;
 }
 
 fn project_portal(
