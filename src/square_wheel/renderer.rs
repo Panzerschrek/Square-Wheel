@@ -101,13 +101,16 @@ impl Renderer
 				pixels,
 				surface_info,
 				&format!(
-					"leafs: {}/{}\nportals: {}/{}\num reachable leaf search calls: {}\nmax visits: {}",
+					"leafs: {}/{}\nportals: {}/{}\nnum reachable leaf search calls: {}\nmax visits: {}\nmax reachable \
+					 leaf search depth: {}\nmax reqachable leafs search wave size: {}",
 					num_visible_leafs,
 					self.leafs_data.len(),
 					num_visible_portals,
 					self.portals_data.len(),
 					debug_stats.num_reachable_leafs_search_calls,
-					max_search_visits
+					max_search_visits,
+					debug_stats.reachable_leafs_search_calls_depth,
+					debug_stats.reachable_leafs_search_max_wave_size,
 				),
 				0,
 				0,
@@ -267,6 +270,8 @@ fn draw_crosshair(pixels: &mut [Color32], surface_info: &system_window::SurfaceI
 struct DebugStats
 {
 	num_reachable_leafs_search_calls: usize,
+	reachable_leafs_search_calls_depth: usize,
+	reachable_leafs_search_max_wave_size: usize,
 }
 
 fn mark_reachable_leafs_recursive(
@@ -393,6 +398,8 @@ fn mark_reachable_leafs_iterative(
 	debug_stats: &mut DebugStats,
 )
 {
+	debug_stats.reachable_leafs_search_max_wave_size = 0;
+
 	let cur_wave = &mut waves.0;
 	let next_wave = &mut waves.1;
 
@@ -488,6 +495,9 @@ fn mark_reachable_leafs_iterative(
 			} // For leaf portals.
 		} // For wave elements.
 
+		debug_stats.reachable_leafs_search_max_wave_size =
+			std::cmp::max(debug_stats.reachable_leafs_search_max_wave_size, next_wave.len());
+
 		cur_wave.clear();
 		std::mem::swap(cur_wave, next_wave);
 
@@ -497,6 +507,7 @@ fn mark_reachable_leafs_iterative(
 			break;
 		}
 	}
+	debug_stats.reachable_leafs_search_calls_depth = depth;
 }
 
 fn project_portal(
