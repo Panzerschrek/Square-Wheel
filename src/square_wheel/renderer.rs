@@ -11,6 +11,7 @@ pub struct Renderer
 	map: bsp_map_compact::BSPMap,
 	leafs_data: Vec<DrawLeafData>,
 	portals_data: Vec<DrawPortalData>,
+	leafs_search_waves: LeafsSearchWavesPair,
 }
 
 // Mutable data associated with map BSP Leaf.
@@ -48,6 +49,7 @@ impl Renderer
 			config: RendererConfig::from_app_config(app_config),
 			leafs_data: vec![DrawLeafData::default(); map.leafs.len()],
 			portals_data: vec![DrawPortalData::default(); map.portals.len()],
+			leafs_search_waves: LeafsSearchWavesPair::default(),
 			map,
 		}
 	}
@@ -137,6 +139,7 @@ impl Renderer
 				&frame_bounds,
 				&mut self.leafs_data,
 				&mut self.portals_data,
+				&mut self.leafs_search_waves,
 				debug_stats,
 			);
 		}
@@ -372,6 +375,12 @@ fn mark_reachable_leafs_r(
 	}
 }
 
+type LeafsSearchWaveElement = u32; // Leaf index
+type LeafsSearchWave = Vec<LeafsSearchWaveElement>;
+#[derive(Default)]
+struct LeafsSearchWavesPair(LeafsSearchWave, LeafsSearchWave);
+
+// Pass "waves" in order to reuse vectors across frames (avoid unnecessary allocations).
 fn mark_reachable_leafs_iterative(
 	start_leaf: u32,
 	map: &bsp_map_compact::BSPMap,
@@ -380,11 +389,15 @@ fn mark_reachable_leafs_iterative(
 	start_bounds: &ClippingPolygon,
 	leafs_data: &mut [DrawLeafData],
 	portals_data: &mut [DrawPortalData],
+	waves: &mut LeafsSearchWavesPair,
 	debug_stats: &mut DebugStats,
 )
 {
-	let mut cur_wave = Vec::new();
-	let mut next_wave = Vec::new();
+	let cur_wave = &mut waves.0;
+	let next_wave = &mut waves.1;
+
+	cur_wave.clear();
+	next_wave.clear();
 
 	cur_wave.push(start_leaf);
 
@@ -394,7 +407,7 @@ fn mark_reachable_leafs_iterative(
 	let mut depth = 0;
 	while !cur_wave.is_empty()
 	{
-		for &leaf in &cur_wave
+		for &leaf in cur_wave.iter()
 		{
 			debug_stats.num_reachable_leafs_search_calls += 1;
 
@@ -476,7 +489,7 @@ fn mark_reachable_leafs_iterative(
 		} // For wave elements.
 
 		cur_wave.clear();
-		std::mem::swap(&mut cur_wave, &mut next_wave);
+		std::mem::swap(cur_wave, next_wave);
 
 		depth += 1;
 		if depth > 1024
