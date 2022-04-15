@@ -509,12 +509,10 @@ fn project_portal(
 
 	// Perform initial matrix tranformation, obtain 3d vertices in camera-aligned space.
 	let mut vertices_transformed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-	for (index, vertex) in map.vertices[(portal.first_vertex as usize) .. (portal.first_vertex as usize) + vertex_count]
-		.iter()
-		.enumerate()
+	for (in_vertex, out_vertex) in map.vertices[(portal.first_vertex as usize) .. (portal.first_vertex as usize) + vertex_count].iter().zip(vertices_transformed.iter_mut())
 	{
-		let vertex_transformed = view_matrix * vertex.extend(1.0);
-		vertices_transformed[index] = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
+		let vertex_transformed = view_matrix * in_vertex.extend(1.0);
+		*out_vertex = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
 	}
 
 	// Perform z_near clipping. Use very small z_near to avoid clipping portals.
