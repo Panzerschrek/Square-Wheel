@@ -44,7 +44,7 @@ impl CameraController
 	{
 		const SPEED: f32 = 256.0;
 		const JUMP_SPEED: f32 = 0.8 * SPEED;
-		const ANGLE_SPEED: RadiansF = Rad(1.0);
+		const ANGLE_SPEED: RadiansF = Rad(2.0);
 		const PI: RadiansF = Rad(std::f32::consts::PI);
 		let half_pi = PI / 2.0;
 		let two_pi = PI * 2.0;
