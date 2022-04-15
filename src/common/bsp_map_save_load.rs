@@ -29,7 +29,7 @@ pub fn save_map(bsp_map: &BSPMap, file_path: &Path) -> Result<(), std::io::Error
 			std::mem::size_of::<BspMapHeader>(),
 		)
 	};
-	file.write(header_bytes)?;
+	file.write_all(header_bytes)?;
 
 	let mut offset = header_bytes.len();
 
@@ -74,7 +74,7 @@ pub fn save_map(bsp_map: &BSPMap, file_path: &Path) -> Result<(), std::io::Error
 
 	// Write header again to update lumps headers.
 	file.seek(std::io::SeekFrom::Start(0))?;
-	file.write(header_bytes)?;
+	file.write_all(header_bytes)?;
 	file.sync_data()?;
 
 	Ok(())
