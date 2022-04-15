@@ -56,6 +56,7 @@ pub struct Polygon
 pub struct Portal
 {
 	pub leafs: [u32; 2],
+	pub plane: Plane,
 	pub first_vertex: u32,
 	pub num_vertices: u32,
 }
@@ -135,6 +136,7 @@ fn convert_portal_to_compact_format(portal_ptr: &bsp_builder::LeafsPortalPtr, ou
 		num_vertices: portal.vertices.len() as u32,
 		// Fill leafs later.
 		leafs: [0, 0],
+		plane: portal.plane,
 	}
 }
 

@@ -5,6 +5,16 @@ pub struct RendererConfig
 {
 	#[serde(default)]
 	pub clear_background: bool,
+
+	#[serde(default)]
+	pub show_stats: bool,
+
+	#[serde(default)]
+	pub invert_polygons_order: bool,
+
+	// use alternaive (slow, recursive) search algorithm.
+	#[serde(default)]
+	pub recursive_visible_leafs_marking: bool,
 }
 
 impl RendererConfig
