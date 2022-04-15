@@ -1,11 +1,11 @@
-use super::commands_queue;
+use super::commands_processor;
 use common::{color::*, system_window, text_printer};
 use sdl2::keyboard::Keycode;
 use std::collections::VecDeque;
 
 pub struct Console
 {
-	commands_queues: Vec<commands_queue::CommandsQueueDynPtr>,
+	commands_processor: commands_processor::CommandsProcessorPtr,
 	is_active: bool,
 	start_time: std::time::Instant,
 	lines: VecDeque<String>,
@@ -16,10 +16,10 @@ pub struct Console
 
 impl Console
 {
-	pub fn new() -> Self
+	pub fn new(commands_processor: commands_processor::CommandsProcessorPtr) -> Self
 	{
 		Console {
-			commands_queues: Vec::new(),
+			commands_processor,
 			is_active: false,
 			start_time: std::time::Instant::now(),
 			lines: VecDeque::with_capacity(LINES_BUFFER_LEN),
@@ -27,11 +27,6 @@ impl Console
 			current_history_index: 0,
 			input_line: String::new(),
 		}
-	}
-
-	pub fn register_command_queue(&mut self, queue: commands_queue::CommandsQueueDynPtr)
-	{
-		self.commands_queues.push(queue);
 	}
 
 	pub fn add_text(&mut self, text: String)
@@ -144,44 +139,20 @@ impl Console
 
 	fn process_enter(&mut self)
 	{
-		let mut command = None;
-		let mut args = Vec::<String>::new();
-		for token in self.input_line.split_ascii_whitespace()
+		if self.input_history.len() >= HISTORY_BUFFER_LEN
 		{
-			if command.is_none()
-			{
-				command = Some(token.to_string());
-			}
-			else
-			{
-				args.push(token.to_string());
-			}
+			self.input_history.pop_front();
 		}
+		self.input_history.push_back(self.input_line.clone());
+		self.current_history_index = self.input_history.len();
 
-		let input_line = self.input_line.clone();
-		self.add_text(input_line.clone());
+		let command_processed = self.commands_processor.borrow_mut().process_command(&self.input_line);
+		self.add_text(self.input_line.clone());
 		self.input_line.clear();
 
-		if let Some(c) = command
+		if !command_processed
 		{
-			if self.input_history.len() >= HISTORY_BUFFER_LEN
-			{
-				self.input_history.pop_front();
-			}
-			self.input_history.push_back(input_line);
-			self.current_history_index = self.input_history.len();
-
-			for queue in &self.commands_queues
-			{
-				if queue.borrow().has_handler(&c)
-				{
-					queue.borrow_mut().add_invocation(&c, args);
-					return;
-				}
-			}
-
-			// TODO - try to modify config here if command name is valid config variable.
-			self.add_text(format!("{}: not found", c));
+			self.add_text("command not found".to_string());
 		}
 	}
 }

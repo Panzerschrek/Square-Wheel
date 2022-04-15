@@ -1,4 +1,4 @@
-use super::{commands_queue, config, console, host_config::*, renderer};
+use super::{commands_processor, commands_queue, config, console, host_config::*, renderer};
 use common::{bsp_map_save_load, camera_controller, color::*, math_types::*, system_window, ticks_counter::*};
 use sdl2::{event::Event, keyboard::Keycode};
 use std::{cell::RefCell, rc::Rc, time::Duration};
@@ -19,9 +19,10 @@ pub struct Host
 
 impl Host
 {
-	pub fn new(map_path: &std::path::Path) -> Self
+	pub fn new(startup_commands: Vec<String>) -> Self
 	{
-		let mut console = console::Console::new();
+		let commands_processor = commands_processor::CommandsProcessor::new();
+		let mut console = console::Console::new(commands_processor.clone());
 		console.add_text("Innitializing host".to_string());
 
 		let commands_queue = commands_queue::CommandsQueue::new(vec![
@@ -32,7 +33,18 @@ impl Host
 			("map", Host::command_map),
 			("quit", Host::command_quit),
 		]);
-		console.register_command_queue(commands_queue.clone() as commands_queue::CommandsQueueDynPtr);
+
+		commands_processor
+			.borrow_mut()
+			.register_command_queue(commands_queue.clone() as commands_queue::CommandsQueueDynPtr);
+
+		// Process startup commands.
+		// Atually such commands will be processed later (commands will be added to queue).
+		for command_line in &startup_commands
+		{
+			console.add_text(format!("Executing \"{}\"", command_line));
+			commands_processor.borrow_mut().process_command(&command_line);
+		}
 
 		let config_file_path = "config.json";
 		console.add_text(format!("Loading config from file \"{}\"", config_file_path));
@@ -45,17 +57,13 @@ impl Host
 			console.add_text("Failed to load config file".to_string());
 			serde_json::Value::Object(serde_json::Map::new())
 		};
-
-		console.add_text(format!("Loading map {:?}", map_path));
-		let map = bsp_map_save_load::load_map(map_path).unwrap().unwrap();
-
 		Host {
 			commands_queue,
 			console,
 			config: HostConfig::from_app_config(&config_json),
 			window: Rc::new(RefCell::new(system_window::SystemWindow::new())),
 			camera: camera_controller::CameraController::new(),
-			renderer: Some(renderer::Renderer::new(&config_json, map)),
+			renderer: None,
 			config_json,
 			prev_time: std::time::Instant::now(),
 			fps_counter: TicksCounter::new(),
