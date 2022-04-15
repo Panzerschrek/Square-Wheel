@@ -136,6 +136,9 @@ impl Renderer
 		let root_node = (self.map.nodes.len() - 1) as u32;
 		let current_leaf = self.find_current_leaf(root_node, &camera_matrices.planes_matrix);
 
+		// TODO - before preparing frame try to shift camera a little bit away from all planes of BSP nodes before current leaf.
+		// This is needed to fix possible z_near clipping of current leaf portals.
+
 		let frame_bounds = ClippingPolygon::from_box(0.0, 0.0, surface_info.width as f32, surface_info.height as f32);
 		if self.config.recursive_visible_leafs_marking
 		{
@@ -509,16 +512,18 @@ fn project_portal(
 
 	// Perform initial matrix tranformation, obtain 3d vertices in camera-aligned space.
 	let mut vertices_transformed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-	for (in_vertex, out_vertex) in map.vertices[(portal.first_vertex as usize) .. (portal.first_vertex as usize) + vertex_count].iter().zip(vertices_transformed.iter_mut())
+	for (in_vertex, out_vertex) in map.vertices
+		[(portal.first_vertex as usize) .. (portal.first_vertex as usize) + vertex_count]
+		.iter()
+		.zip(vertices_transformed.iter_mut())
 	{
 		let vertex_transformed = view_matrix * in_vertex.extend(1.0);
 		*out_vertex = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
 	}
 
 	// Perform z_near clipping. Use very small z_near to avoid clipping portals.
-	// TODO - add some workaround for really small z_near.
 	let mut vertices_transformed_z_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-	const Z_NEAR: f32 = 0.01;
+	const Z_NEAR: f32 = 1.0 / 4096.0;
 	vertex_count = clip_3d_polygon_by_z_plane(
 		&vertices_transformed[.. vertex_count],
 		Z_NEAR,
