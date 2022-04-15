@@ -337,7 +337,7 @@ impl Renderer
 			let mut mask = if plane_transformed.w >= 0.0 { 1 } else { 0 };
 			if self.config.invert_polygons_order
 			{
-				mask = mask ^ 1;
+				mask^= 1;
 			}
 			for i in 0 .. 2
 			{
