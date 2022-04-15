@@ -34,7 +34,15 @@ impl Host
 
 		let config_file_path = "config.json";
 		console.add_text(format!("Loading config from file \"{}\"", config_file_path));
-		let config_json = config::load(std::path::Path::new(config_file_path)).unwrap_or_default();
+		let config_json = if let Some(json) = config::load(std::path::Path::new(config_file_path))
+		{
+			json
+		}
+		else
+		{
+			console.add_text("Failed to load config file".to_string());
+			serde_json::Value::Object(serde_json::Map::new())
+		};
 
 		console.add_text(format!("Loading map {:?}", map_path));
 		let map = bsp_map_save_load::load_map(map_path).unwrap().unwrap();
