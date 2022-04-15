@@ -252,13 +252,15 @@ impl Renderer
 							project_portal(portal_value, &self.map, &camera_matrices.view_matrix);
 					}
 
-					if portal_data.current_frame_projection.is_none()
+					let mut bounds_intersection = if let Some(b) = portal_data.current_frame_projection
+					{
+						b
+					}
+					else
 					{
 						continue;
-					}
-					let mut bounds_intersection = portal_data.current_frame_projection.unwrap();
+					};
 					bounds_intersection.intersect(&leaf_bounds);
-
 					if bounds_intersection.is_empty_or_invalid()
 					{
 						continue;
@@ -475,13 +477,15 @@ fn mark_reachable_leafs_recursive(
 			portal_data.current_frame_projection = project_portal(portal_value, map, &camera_matrices.view_matrix);
 		}
 
-		if portal_data.current_frame_projection.is_none()
+		let mut bounds_intersection = if let Some(b) = portal_data.current_frame_projection
+		{
+			b
+		}
+		else
 		{
 			continue;
-		}
-		let mut bounds_intersection = portal_data.current_frame_projection.unwrap();
+		};
 		bounds_intersection.intersect(&bound_for_portals_clipping);
-
 		if bounds_intersection.is_empty_or_invalid()
 		{
 			continue;
