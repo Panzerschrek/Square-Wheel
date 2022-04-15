@@ -7,10 +7,11 @@ pub struct Host
 {
 	commands_queue: commands_queue::CommandsQueuePtr<Host>,
 	console: console::Console,
+	config_json: serde_json::Value,
 	config: HostConfig,
 	window: Rc<RefCell<system_window::SystemWindow>>,
 	camera: camera_controller::CameraController,
-	renderer: renderer::Renderer,
+	renderer: Option<renderer::Renderer>,
 	prev_time: std::time::Instant,
 	fps_counter: TicksCounter,
 	quit_requested: bool,
@@ -28,6 +29,7 @@ impl Host
 			("set_pos", Host::command_set_pos),
 			("get_angles", Host::command_get_angles),
 			("set_angles", Host::command_set_angles),
+			("map", Host::command_map),
 			("quit", Host::command_quit),
 		]);
 		console.register_command_queue(commands_queue.clone() as commands_queue::CommandsQueueDynPtr);
@@ -53,7 +55,8 @@ impl Host
 			config: HostConfig::from_app_config(&config_json),
 			window: Rc::new(RefCell::new(system_window::SystemWindow::new())),
 			camera: camera_controller::CameraController::new(),
-			renderer: renderer::Renderer::new(&config_json, map),
+			renderer: Some(renderer::Renderer::new(&config_json, map)),
+			config_json,
 			prev_time: std::time::Instant::now(),
 			fps_counter: TicksCounter::new(),
 			quit_requested: false,
@@ -161,7 +164,10 @@ impl Host
 			.camera
 			.build_view_matrix(surface_info.width as f32, surface_info.height as f32);
 
-		self.renderer.draw_frame(pixels, surface_info, view_matrix);
+		if let Some(renderer) = &mut self.renderer
+		{
+			renderer.draw_frame(pixels, surface_info, view_matrix);
+		}
 		self.console.draw(pixels, surface_info);
 
 		common::text_printer::print(
@@ -228,6 +234,34 @@ impl Host
 	{
 		let pos = self.camera.get_pos();
 		self.console.add_text(format!("{} {} {}", pos.x, pos.y, pos.z));
+	}
+
+	fn command_map(&mut self, args: commands_queue::CommandArgs)
+	{
+		if args.is_empty()
+		{
+			self.console.add_text("Expected map file name".to_string());
+			return;
+		}
+		self.renderer = None;
+
+		// TODO - reset camera?
+
+		match bsp_map_save_load::load_map(&std::path::PathBuf::from(args[0].clone()))
+		{
+			Ok(Some(map)) =>
+			{
+				self.renderer = Some(renderer::Renderer::new(&self.config_json, map));
+			},
+			Ok(None) =>
+			{
+				self.console.add_text("Failed to load map".to_string());
+			},
+			Err(e) =>
+			{
+				self.console.add_text(format!("Failed to load map: {}", e));
+			},
+		}
 	}
 
 	fn command_quit(&mut self, _args: commands_queue::CommandArgs)
