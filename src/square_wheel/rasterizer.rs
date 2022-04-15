@@ -166,17 +166,9 @@ impl<'a> Rasterizer<'a>
 		let mut x_right = right_side.x_start + fixed16_mul(y_start_delta, right_side.dx_dy) + FIXED16_HALF;
 		let y_start_f32 = y_start_int as f32 + 0.5;
 		let mut line_inv_z = y_start_f32 * depth_equation.d_inv_z_dy + depth_equation.k;
-		let d_tc_dx = [
-			tex_coord_equation.d_tc_dx[0] + tex_coord_equation.k[0] * depth_equation.d_inv_z_dx,
-			tex_coord_equation.d_tc_dx[1] + tex_coord_equation.k[1] * depth_equation.d_inv_z_dx,
-		];
-		let d_tc_dy = [
-			tex_coord_equation.d_tc_dy[0] + tex_coord_equation.k[0] * depth_equation.d_inv_z_dy,
-			tex_coord_equation.d_tc_dy[1] + tex_coord_equation.k[1] * depth_equation.d_inv_z_dy,
-		];
 		let mut line_tc = [
-			y_start_f32 * d_tc_dy[0] + tex_coord_equation.d_tc_dz[0] + tex_coord_equation.k[0] * depth_equation.k,
-			y_start_f32 * d_tc_dy[1] + tex_coord_equation.d_tc_dz[1] + tex_coord_equation.k[1] * depth_equation.k,
+			y_start_f32 * tex_coord_equation.d_tc_dy[0] + tex_coord_equation.k[0],
+			y_start_f32 * tex_coord_equation.d_tc_dy[1] + tex_coord_equation.k[1],
 		];
 
 		for y_int in y_start_int .. y_end_int
@@ -188,8 +180,8 @@ impl<'a> Rasterizer<'a>
 				let x_start_f32 = x_start_int as f32 + 0.5;
 				let mut inv_z = x_start_f32 * depth_equation.d_inv_z_dx + line_inv_z;
 				let mut tc = [
-					x_start_f32 * d_tc_dx[0] + line_tc[0],
-					x_start_f32 * d_tc_dx[1] + line_tc[1],
+					x_start_f32 * tex_coord_equation.d_tc_dx[0] + line_tc[0],
+					x_start_f32 * tex_coord_equation.d_tc_dx[1] + line_tc[1],
 				];
 				let line_buffer_offset = y_int * self.row_size;
 				let line_dst = &mut self.color_buffer
@@ -209,16 +201,16 @@ impl<'a> Rasterizer<'a>
 					}
 
 					inv_z += depth_equation.d_inv_z_dx;
-					tc[0] += d_tc_dx[0];
-					tc[1] += d_tc_dx[1];
+					tc[0] += tex_coord_equation.d_tc_dx[0];
+					tc[1] += tex_coord_equation.d_tc_dx[1];
 				}
 			}
 
 			x_left += left_side.dx_dy;
 			x_right += right_side.dx_dy;
 			line_inv_z += depth_equation.d_inv_z_dy;
-			line_tc[0] += d_tc_dy[0];
-			line_tc[1] += d_tc_dy[1];
+			line_tc[0] += tex_coord_equation.d_tc_dy[0];
+			line_tc[1] += tex_coord_equation.d_tc_dy[1];
 		}
 	}
 }
@@ -241,7 +233,6 @@ pub struct TexCoordEquation
 {
 	pub d_tc_dx: [f32; 2],
 	pub d_tc_dy: [f32; 2],
-	pub d_tc_dz: [f32; 2],
 	pub k: [f32; 2],
 }
 

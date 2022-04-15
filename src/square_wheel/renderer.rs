@@ -651,22 +651,29 @@ fn draw_polygon(
 		};
 	}
 
+	// Calculate texture coordinates equations.
 	let tc_basis_transformed = [
 		camera_matrices.planes_matrix * tex_coord_equation[0].vec.extend(tex_coord_equation[0].dist),
 		camera_matrices.planes_matrix * tex_coord_equation[1].vec.extend(tex_coord_equation[1].dist),
 	];
+	// Equation projeted to polygon plane.
 	let tc_equation = TexCoordEquation {
-		d_tc_dx: [tc_basis_transformed[0].x, tc_basis_transformed[1].x],
-		d_tc_dy: [tc_basis_transformed[0].y, tc_basis_transformed[1].y],
-		d_tc_dz: [
-			tc_basis_transformed[0].z -
+		d_tc_dx: [
+			tc_basis_transformed[0].x + tc_basis_transformed[0].w * depth_equation.d_inv_z_dx,
+			tc_basis_transformed[1].x + tc_basis_transformed[1].w * depth_equation.d_inv_z_dx,
+		],
+		d_tc_dy: [
+			tc_basis_transformed[0].y + tc_basis_transformed[0].w * depth_equation.d_inv_z_dy,
+			tc_basis_transformed[1].y + tc_basis_transformed[1].w * depth_equation.d_inv_z_dy,
+		],
+		k: [
+			tc_basis_transformed[0].z + tc_basis_transformed[0].w * depth_equation.k -
 				tc_basis_transformed[0].x * half_width -
 				tc_basis_transformed[0].y * half_height,
-			tc_basis_transformed[1].z -
+			tc_basis_transformed[1].z + tc_basis_transformed[1].w * depth_equation.k -
 				tc_basis_transformed[1].x * half_width -
 				tc_basis_transformed[1].y * half_height,
 		],
-		k: [tc_basis_transformed[0].w, tc_basis_transformed[1].w],
 	};
 
 	// Perform rasterization of fully clipped polygon.
