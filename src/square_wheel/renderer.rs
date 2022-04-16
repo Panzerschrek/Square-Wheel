@@ -126,17 +126,6 @@ impl Renderer
 				Color32::from_rgb(255, 255, 255),
 			);
 		}
-
-		if let Some(texture) = &self.test_texture
-		{
-			for y in 0 .. texture.size[1] as usize
-			{
-				for x in 0 .. texture.size[0] as usize
-				{
-					pixels[x + y * surface_info.pitch] = texture.pixels[x + y * (texture.size[0] as usize)];
-				}
-			}
-		}
 	}
 
 	fn draw_map(
@@ -330,18 +319,11 @@ impl Renderer
 			let leaf_data = &self.leafs_data[leaf as usize];
 			if leaf_data.visible_frame == self.current_frame
 			{
-				let color = Color32::from_rgb(
-					((leaf * 17) & 255) as u8,
-					((leaf * 23) & 255) as u8,
-					((leaf * 29) & 255) as u8,
-				);
-
 				self.draw_leaf(
 					rasterizer,
 					camera_matrices,
 					&leaf_data.current_frame_bounds,
 					&self.map.leafs[leaf as usize],
-					color,
 				);
 			}
 		}
@@ -367,7 +349,6 @@ impl Renderer
 		camera_matrices: &CameraMatrices,
 		bounds: &ClippingPolygon,
 		leaf: &bsp_map_compact::BSPLeaf,
-		color: Color32,
 	)
 	{
 		// TODO - maybe just a little bit extend clipping polygon?
@@ -384,7 +365,7 @@ impl Renderer
 				&self.map.vertices
 					[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)],
 				&polygon.tex_coord_equation,
-				color,
+				self.test_texture.as_ref().unwrap(),
 			);
 		}
 	}
@@ -571,7 +552,7 @@ fn draw_polygon(
 	plane: &Plane,
 	vertices: &[Vec3f],
 	tex_coord_equation: &[Plane; 2],
-	color: Color32,
+	texture: &image::Image,
 )
 {
 	if vertices.len() < 3
@@ -696,6 +677,9 @@ fn draw_polygon(
 		&vertices_for_rasterizer[0 .. vertex_count],
 		&depth_equation,
 		&tc_equation,
-		color,
+		&TextureInfo {
+			size: [texture.size[0] as i32, texture.size[1] as i32],
+		},
+		&texture.pixels,
 	);
 }

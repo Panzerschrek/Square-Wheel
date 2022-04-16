@@ -36,7 +36,8 @@ impl<'a> Rasterizer<'a>
 		vertices: &[PolygonPointProjected],
 		depth_equation: &DepthEquation,
 		tex_coord_equation: &TexCoordEquation,
-		color: Color32,
+		texture_info: &TextureInfo,
+		texture_data: &[Color32],
 	)
 	{
 		// Search for start vertex (with min y).
@@ -88,7 +89,8 @@ impl<'a> Rasterizer<'a>
 					},
 					depth_equation,
 					tex_coord_equation,
-					color,
+					texture_info,
+					texture_data,
 				);
 			}
 			else if dy_left > 0 && dy_right > 0
@@ -124,7 +126,8 @@ impl<'a> Rasterizer<'a>
 						},
 						depth_equation,
 						tex_coord_equation,
-						color,
+						texture_info,
+						texture_data,
 					);
 				}
 			}
@@ -154,9 +157,11 @@ impl<'a> Rasterizer<'a>
 		right_side: PolygonSide,
 		depth_equation: &DepthEquation,
 		tex_coord_equation: &TexCoordEquation,
-		color: Color32,
+		texture_info: &TextureInfo,
+		texture_data: &[Color32],
 	)
 	{
+		let tc_mask = [texture_info.size[0] - 1, texture_info.size[1] - 1];
 		// TODO replace "F32" with Fixed16 for Z calculation.
 		// TODO - avoid adding "0.5" for some calculations.
 		let y_start_int = fixed16_round_to_int(y_start).max(0);
@@ -189,16 +194,12 @@ impl<'a> Rasterizer<'a>
 				for dst_pixel in line_dst
 				{
 					let z = 1.0 / inv_z;
-					let pix_tc = [(z * tc[0]) as i32, (z * tc[1]) as i32];
+					let pix_tc = [
+						(z * tc[0]).floor() as i32 & tc_mask[0],
+						(z * tc[1]).floor() as i32 & tc_mask[1],
+					];
 
-					if (((pix_tc[0] ^ pix_tc[1]) >> 4) & 1) != 0
-					{
-						*dst_pixel = color;
-					}
-					else
-					{
-						*dst_pixel = color.get_half_dark();
-					}
+					*dst_pixel = texture_data[(pix_tc[0] + pix_tc[1] * texture_info.size[0]) as usize];
 
 					inv_z += depth_equation.d_inv_z_dx;
 					tc[0] += tex_coord_equation.d_tc_dx[0];
@@ -234,6 +235,11 @@ pub struct TexCoordEquation
 	pub d_tc_dx: [f32; 2],
 	pub d_tc_dy: [f32; 2],
 	pub k: [f32; 2],
+}
+
+pub struct TextureInfo
+{
+	pub size: [i32; 2],
 }
 
 struct PolygonSide
