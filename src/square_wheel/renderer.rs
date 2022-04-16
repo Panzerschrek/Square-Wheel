@@ -12,7 +12,7 @@ pub struct Renderer
 	leafs_data: Vec<DrawLeafData>,
 	portals_data: Vec<DrawPortalData>,
 	leafs_search_waves: LeafsSearchWavesPair,
-	test_texture: Option<image::Image>,
+	textures: Vec<image::Image>,
 }
 
 // Mutable data associated with map BSP Leaf.
@@ -50,7 +50,7 @@ impl Renderer
 {
 	pub fn new(app_config: &serde_json::Value, map: bsp_map_compact::BSPMap) -> Self
 	{
-		let test_texture = image::load(&std::path::PathBuf::from("CITY4_1.tga"));
+		let textures = load_textures(&map.textures);
 
 		Renderer {
 			current_frame: FrameNumber(0),
@@ -59,7 +59,7 @@ impl Renderer
 			portals_data: vec![DrawPortalData::default(); map.portals.len()],
 			leafs_search_waves: LeafsSearchWavesPair::default(),
 			map,
-			test_texture,
+			textures,
 		}
 	}
 
@@ -365,7 +365,7 @@ impl Renderer
 				&self.map.vertices
 					[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)],
 				&polygon.tex_coord_equation,
-				self.test_texture.as_ref().unwrap(),
+				&self.textures[polygon.texture as usize],
 			);
 		}
 	}
@@ -382,6 +382,67 @@ fn draw_background(pixels: &mut [Color32])
 fn draw_crosshair(pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo)
 {
 	pixels[surface_info.width / 2 + surface_info.height / 2 * surface_info.pitch] = Color32::from_rgb(255, 255, 255);
+}
+
+fn load_textures(in_textures: &[bsp_map_compact::Texture]) -> Vec<image::Image>
+{
+	let textures_dir = std::path::PathBuf::from("textures");
+	let extension = ".tga";
+
+	let mut result = Vec::new();
+
+	for texture_name in in_textures
+	{
+		let null_pos = texture_name
+			.iter()
+			.position(|x| *x == 0_u8)
+			.unwrap_or(texture_name.len());
+		let range = &texture_name[0 .. null_pos];
+
+		let texture_name_string = std::str::from_utf8(range).unwrap_or("").to_string();
+		let texture_name_with_extension = texture_name_string + extension;
+
+		let mut texture_path = textures_dir.clone();
+		texture_path.push(texture_name_with_extension);
+
+		if let Some(image) = image::load(&texture_path)
+		{
+			result.push(image);
+		}
+		else
+		{
+			println!("Failed to load texture {:?}", texture_path);
+			result.push(make_stub_texture());
+		}
+	}
+
+	result
+}
+
+fn make_stub_texture() -> image::Image
+{
+	let mut result = image::Image {
+		size: [16, 16],
+		pixels: vec![Color32::from_rgb(255, 0, 255); 16 * 16],
+	};
+
+	for y in 0 .. result.size[1]
+	{
+		for x in 0 .. result.size[0]
+		{
+			let color = if (((x >> 3) ^ (y >> 3)) & 1) != 0
+			{
+				Color32::from_rgb(255, 0, 255)
+			}
+			else
+			{
+				Color32::from_rgb(128, 128, 128)
+			};
+			result.pixels[(x + y * result.size[0]) as usize] = color;
+		}
+	}
+
+	result
 }
 
 // TODO - get rid of debug code.
