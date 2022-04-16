@@ -172,7 +172,7 @@ fn parse_number(it: &mut Iterator) -> ParseResult<f32>
 	skip_whitespaces(it);
 	while let Some(c) = it.chars().next()
 	{
-		if c == '.' || ('0'..='9').contains(&c) || c == '-'
+		if c == '.' || ('0' ..= '9').contains(&c) || c == '-'
 		{
 			s.push(c);
 			*it = &it[1 ..];

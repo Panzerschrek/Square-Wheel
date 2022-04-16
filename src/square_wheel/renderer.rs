@@ -1,7 +1,7 @@
 use super::{clipping_polygon::*, rasterizer::*, renderer_config::*};
 use common::{
-	bsp_map_compact, camera_controller::CameraMatrices, clipping::*, color::*, fixed_math::*, math_types::*, plane::*,
-	system_window,
+	bsp_map_compact, camera_controller::CameraMatrices, clipping::*, color::*, fixed_math::*, image, math_types::*,
+	plane::*, system_window,
 };
 
 pub struct Renderer
@@ -12,6 +12,7 @@ pub struct Renderer
 	leafs_data: Vec<DrawLeafData>,
 	portals_data: Vec<DrawPortalData>,
 	leafs_search_waves: LeafsSearchWavesPair,
+	test_texture: Option<image::Image>,
 }
 
 // Mutable data associated with map BSP Leaf.
@@ -49,6 +50,8 @@ impl Renderer
 {
 	pub fn new(app_config: &serde_json::Value, map: bsp_map_compact::BSPMap) -> Self
 	{
+		let test_texture = image::load(&std::path::PathBuf::from("CITY4_1.tga"));
+
 		Renderer {
 			current_frame: FrameNumber(0),
 			config: RendererConfig::from_app_config(app_config),
@@ -56,6 +59,7 @@ impl Renderer
 			portals_data: vec![DrawPortalData::default(); map.portals.len()],
 			leafs_search_waves: LeafsSearchWavesPair::default(),
 			map,
+			test_texture,
 		}
 	}
 
@@ -121,6 +125,17 @@ impl Renderer
 				0,
 				Color32::from_rgb(255, 255, 255),
 			);
+		}
+
+		if let Some(texture) = &self.test_texture
+		{
+			for y in 0 .. texture.size[1] as usize
+			{
+				for x in 0 .. texture.size[0] as usize
+				{
+					pixels[x + y * surface_info.pitch] = texture.pixels[x + y * (texture.size[0] as usize)];
+				}
+			}
 		}
 	}
 
@@ -337,7 +352,7 @@ impl Renderer
 			let mut mask = if plane_transformed.w >= 0.0 { 1 } else { 0 };
 			if self.config.invert_polygons_order
 			{
-				mask^= 1;
+				mask ^= 1;
 			}
 			for i in 0 .. 2
 			{
