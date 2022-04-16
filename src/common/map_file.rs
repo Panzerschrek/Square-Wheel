@@ -139,8 +139,8 @@ fn parse_brush_plane(it: &mut Iterator) -> ParseResult<BrushPlane>
 		],
 		texture: parse_whitespace_separated_string(it)?,
 		tc_offset: Vec2f::new(parse_number(it)?, parse_number(it)?),
-		tc_scale: Vec2f::new(parse_number(it)?, parse_number(it)?),
 		tc_angle: parse_number(it)?,
+		tc_scale: Vec2f::new(parse_number(it)?, parse_number(it)?),
 	})
 }
 

@@ -257,16 +257,23 @@ pub fn sort_convex_polygon_vertices(mut in_vertices: Vec<Vec3f>, plane: &Plane) 
 fn get_polygon_texture_info(brush_plane: &map_file::BrushPlane, polygon_normal: &Vec3f) -> TextureInfo
 {
 	let basis = get_texture_basis(polygon_normal);
-	// TODO - apply scale, shift, angle.
+
+	let angle_cos = brush_plane.tc_angle.cos();
+	let angle_sin = brush_plane.tc_angle.sin();
+	let basis_rotated = [
+		basis[0] * angle_cos - basis[1] * angle_sin,
+		basis[0] * angle_sin + basis[1] * angle_cos,
+	];
+
 	TextureInfo {
 		tex_coord_equation: [
 			Plane {
-				vec: basis[0],
-				dist: 0.0,
+				vec: basis_rotated[0] / brush_plane.tc_scale[0],
+				dist: brush_plane.tc_offset[0],
 			},
 			Plane {
-				vec: basis[1],
-				dist: 0.0,
+				vec: basis_rotated[1] / brush_plane.tc_scale[1],
+				dist: brush_plane.tc_offset[1],
 			},
 		],
 		texture: brush_plane.texture.clone(),
