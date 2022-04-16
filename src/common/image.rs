@@ -1,6 +1,7 @@
 use super::color::*;
 use sdl2::image::LoadSurface;
 
+#[derive(Default, Clone)]
 pub struct Image
 {
 	pub size: [u32; 2],

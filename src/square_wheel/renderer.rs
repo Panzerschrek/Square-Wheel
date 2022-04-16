@@ -12,7 +12,7 @@ pub struct Renderer
 	leafs_data: Vec<DrawLeafData>,
 	portals_data: Vec<DrawPortalData>,
 	leafs_search_waves: LeafsSearchWavesPair,
-	textures: Vec<image::Image>,
+	textures: Vec<TextureWithMips>,
 }
 
 // Mutable data associated with map BSP Leaf.
@@ -45,6 +45,10 @@ type LeafsSearchWaveElement = u32; // Leaf index
 type LeafsSearchWave = Vec<LeafsSearchWaveElement>;
 #[derive(Default)]
 struct LeafsSearchWavesPair(LeafsSearchWave, LeafsSearchWave);
+
+const MAX_MIP: usize = 3;
+const NUM_MIPS: usize = MAX_MIP + 1;
+type TextureWithMips = [image::Image; NUM_MIPS];
 
 impl Renderer
 {
@@ -384,7 +388,7 @@ fn draw_crosshair(pixels: &mut [Color32], surface_info: &system_window::SurfaceI
 	pixels[surface_info.width / 2 + surface_info.height / 2 * surface_info.pitch] = Color32::from_rgb(255, 255, 255);
 }
 
-fn load_textures(in_textures: &[bsp_map_compact::Texture]) -> Vec<image::Image>
+fn load_textures(in_textures: &[bsp_map_compact::Texture]) -> Vec<TextureWithMips>
 {
 	let textures_dir = std::path::PathBuf::from("textures");
 	let extension = ".tga";
@@ -405,15 +409,17 @@ fn load_textures(in_textures: &[bsp_map_compact::Texture]) -> Vec<image::Image>
 		let mut texture_path = textures_dir.clone();
 		texture_path.push(texture_name_with_extension);
 
-		if let Some(image) = image::load(&texture_path)
+		let mip0 = if let Some(image) = image::load(&texture_path)
 		{
-			result.push(image);
+			image
 		}
 		else
 		{
 			println!("Failed to load texture {:?}", texture_path);
-			result.push(make_stub_texture());
-		}
+			make_stub_texture()
+		};
+
+		result.push(build_mips(mip0));
 	}
 
 	result
@@ -440,6 +446,40 @@ fn make_stub_texture() -> image::Image
 			};
 			result.pixels[(x + y * result.size[0]) as usize] = color;
 		}
+	}
+
+	result
+}
+
+fn build_mips(mip0: image::Image) -> TextureWithMips
+{
+	// This function requires input texture with size multiple of ( 1 << MAX_MIP ).
+
+	let mut result = TextureWithMips::default();
+
+	result[0] = mip0;
+	for i in 1 .. NUM_MIPS
+	{
+		let prev_mip = &mut result[i - 1];
+		let mut mip = image::Image {
+			size: [prev_mip.size[0] >> 1, prev_mip.size[1] >> 1],
+			pixels: Vec::new(),
+		};
+
+		mip.pixels = vec![Color32::from_rgb(0, 0, 0); (mip.size[0] * mip.size[1]) as usize];
+		for y in 0 .. mip.size[1] as usize
+		{
+			for x in 0 .. mip.size[0] as usize
+			{
+				mip.pixels[x + y * (mip.size[0] as usize)] = Color32::get_average_4([
+					prev_mip.pixels[(x * 2) + (y * 2) * (prev_mip.size[0] as usize)],
+					prev_mip.pixels[(x * 2) + (y * 2 + 1) * (prev_mip.size[0] as usize)],
+					prev_mip.pixels[(x * 2 + 1) + (y * 2) * (prev_mip.size[0] as usize)],
+					prev_mip.pixels[(x * 2 + 1) + (y * 2 + 1) * (prev_mip.size[0] as usize)],
+				]);
+			}
+		}
+		result[i] = mip;
 	}
 
 	result
@@ -613,7 +653,7 @@ fn draw_polygon(
 	plane: &Plane,
 	vertices: &[Vec3f],
 	tex_coord_equation: &[Plane; 2],
-	texture: &image::Image,
+	texture: &TextureWithMips,
 )
 {
 	if vertices.len() < 3
@@ -733,14 +773,17 @@ fn draw_polygon(
 		],
 	};
 
+	// TODO - select proper mip-level.
+	let mip_texture = &texture[0];
+
 	// Perform rasterization of fully clipped polygon.
 	rasterizer.fill_polygon(
 		&vertices_for_rasterizer[0 .. vertex_count],
 		&depth_equation,
 		&tc_equation,
 		&TextureInfo {
-			size: [texture.size[0] as i32, texture.size[1] as i32],
+			size: [mip_texture.size[0] as i32, mip_texture.size[1] as i32],
 		},
-		&texture.pixels,
+		&mip_texture.pixels,
 	);
 }
