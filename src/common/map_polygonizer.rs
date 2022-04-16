@@ -258,8 +258,9 @@ fn get_polygon_texture_info(brush_plane: &map_file::BrushPlane, polygon_normal: 
 {
 	let basis = get_texture_basis(polygon_normal);
 
-	let angle_cos = brush_plane.tc_angle.cos();
-	let angle_sin = brush_plane.tc_angle.sin();
+	let angle_rad = brush_plane.tc_angle * (3.1415926535 / 180.0);
+	let angle_cos = angle_rad.cos();
+	let angle_sin = angle_rad.sin();
 	let basis_rotated = [
 		basis[0] * angle_cos - basis[1] * angle_sin,
 		basis[0] * angle_sin + basis[1] * angle_cos,
