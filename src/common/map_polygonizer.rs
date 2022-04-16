@@ -310,7 +310,7 @@ fn get_texture_basis(polygon_normal: &Vec3f) -> [Vec3f; 2]
 	];
 
 	let mut best_dot = 0.0;
-	let mut best_basis : &[Vec3f; 3] = &BASISES[0];
+	let mut best_basis: &[Vec3f; 3] = &BASISES[0];
 	for basis in &BASISES
 	{
 		let dot = polygon_normal.dot(basis[0]);
