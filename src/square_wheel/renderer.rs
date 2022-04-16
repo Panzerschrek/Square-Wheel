@@ -773,17 +773,73 @@ fn draw_polygon(
 		],
 	};
 
-	// TODO - select proper mip-level.
-	let mip_texture = &texture[0];
+	let mip = calculate_mip(&vertices_2d_0[.. vertex_count], &depth_equation, &tc_equation);
+	let tc_equation_scale = 1.0 / ((1 << mip) as f32);
+
+	let tc_equation_scaled = TexCoordEquation {
+		d_tc_dx: [
+			tc_equation.d_tc_dx[0] * tc_equation_scale,
+			tc_equation.d_tc_dx[1] * tc_equation_scale,
+		],
+		d_tc_dy: [
+			tc_equation.d_tc_dy[0] * tc_equation_scale,
+			tc_equation.d_tc_dy[1] * tc_equation_scale,
+		],
+		k: [
+			tc_equation.k[0] * tc_equation_scale,
+			tc_equation.k[1] * tc_equation_scale,
+		],
+	};
+
+	let mip_texture = &texture[mip];
 
 	// Perform rasterization of fully clipped polygon.
 	rasterizer.fill_polygon(
 		&vertices_for_rasterizer[0 .. vertex_count],
 		&depth_equation,
-		&tc_equation,
+		&tc_equation_scaled,
 		&TextureInfo {
 			size: [mip_texture.size[0] as i32, mip_texture.size[1] as i32],
 		},
 		&mip_texture.pixels,
 	);
+}
+
+fn calculate_mip(points: &[Vec2f], depth_equation: &DepthEquation, tc_equation: &TexCoordEquation) -> usize
+{
+	// Calculate screen-space derivatives of texture coordinates for closest polygon point.
+	// Calculate mip-level as logarithm of maximim texture coordinate component derivative.
+
+	let mut mip_point = points[0];
+	let mut mip_point_inv_z = 0.0;
+	for &p in points
+	{
+		let inv_z = depth_equation.d_inv_z_dx * p.x + depth_equation.d_inv_z_dy * p.y + depth_equation.k;
+		if inv_z > mip_point_inv_z
+		{
+			mip_point_inv_z = inv_z;
+			mip_point = p;
+		}
+	}
+
+	let z_2 = 1.0 / (mip_point_inv_z * mip_point_inv_z);
+	let z_4 = z_2 * z_2;
+
+	let mut d_tc_2: [f32; 2] = [0.0, 0.0];
+	for i in 0 .. 2
+	{
+		let d_tc_dx = tc_equation.d_tc_dx[i] * (depth_equation.k + depth_equation.d_inv_z_dy * mip_point.y) -
+			(tc_equation.k[i] + tc_equation.d_tc_dy[i] * mip_point.y) * depth_equation.d_inv_z_dx;
+		let d_tc_dy = tc_equation.d_tc_dy[i] * (depth_equation.k + depth_equation.d_inv_z_dx * mip_point.x) -
+			(tc_equation.k[i] + tc_equation.d_tc_dx[i] * mip_point.x) * depth_equation.d_inv_z_dy;
+
+		d_tc_2[i] = (d_tc_dx * d_tc_dx + d_tc_dy * d_tc_dy) * z_4;
+	}
+
+	let max_d_tc_2 = d_tc_2[0].max(d_tc_2[1]);
+	let mip_bias = 0.0;
+	let mip_f = max_d_tc_2.log2() * 0.5 + mip_bias; // log(sqrt(x)) = log(x) * 0.5
+	let mip = std::cmp::max(0, std::cmp::min(mip_f.round() as i32, MAX_MIP as i32));
+
+	mip as usize
 }
