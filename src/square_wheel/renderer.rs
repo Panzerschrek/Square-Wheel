@@ -682,65 +682,21 @@ fn draw_polygon(
 		k: plane_transformed.z / plane_transformed_w - d_inv_z_dx * half_width - d_inv_z_dy * half_height,
 	};
 
-	const MAX_VERTICES: usize = 24;
-	let mut vertex_count = vertices.len();
-
-	// Perform initial matrix tranformation, obtain 3d vertices in camera-aligned space.
-	let mut vertices_transformed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-	for (index, vertex) in vertices.iter().enumerate().take(MAX_VERTICES)
-	{
-		let vertex_transformed = camera_matrices.view_matrix * vertex.extend(1.0);
-		vertices_transformed[index] = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
-	}
-
-	// Perform z_near clipping.
-	let mut vertices_transformed_z_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-	const Z_NEAR: f32 = 1.0;
-	vertex_count = clip_3d_polygon_by_z_plane(
-		&vertices_transformed[.. vertex_count],
-		Z_NEAR,
-		&mut vertices_transformed_z_clipped,
+	let mut vertices_2d = [Vec2f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
+	let vertex_count = project_and_clip_polygon(
+		&camera_matrices.view_matrix,
+		clip_planes,
+		vertices,
+		&mut vertices_2d[..],
 	);
 	if vertex_count < 3
 	{
 		return;
 	}
 
-	// Make 2d vertices, then perform clipping in 2d space.
-	// This is needed to avoid later overflows for Fixed16 vertex coords in rasterizer.
-	let mut vertices_2d_0 = [Vec2f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-	let mut vertices_2d_1 = [Vec2f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-	for (index, vertex_transformed) in vertices_transformed_z_clipped.iter().enumerate().take(vertex_count)
-	{
-		vertices_2d_0[index] = vertex_transformed.truncate() / vertex_transformed.z;
-	}
-
-	// Perform clipping in pairs - use pair of buffers.
-	for i in 0 .. clip_planes.len() / 2
-	{
-		vertex_count = clip_2d_polygon(
-			&vertices_2d_0[.. vertex_count],
-			&clip_planes[i * 2],
-			&mut vertices_2d_1[..],
-		);
-		if vertex_count < 3
-		{
-			return;
-		}
-		vertex_count = clip_2d_polygon(
-			&vertices_2d_1[.. vertex_count],
-			&clip_planes[i * 2 + 1],
-			&mut vertices_2d_0[..],
-		);
-		if vertex_count < 3
-		{
-			return;
-		}
-	}
-
 	// Perform f32 to Fixed16 conversion.
 	let mut vertices_for_rasterizer = [PolygonPointProjected { x: 0, y: 0 }; MAX_VERTICES]; // TODO - use uninitialized memory
-	for (index, vertex_2d) in vertices_2d_0.iter().enumerate().take(vertex_count)
+	for (index, vertex_2d) in vertices_2d.iter().enumerate().take(vertex_count)
 	{
 		vertices_for_rasterizer[index] = PolygonPointProjected {
 			x: f32_to_fixed16(vertex_2d.x),
@@ -773,7 +729,7 @@ fn draw_polygon(
 		],
 	};
 
-	let mip = calculate_mip(&vertices_2d_0[.. vertex_count], &depth_equation, &tc_equation);
+	let mip = calculate_mip(&vertices_2d[.. vertex_count], &depth_equation, &tc_equation);
 	let tc_equation_scale = 1.0 / ((1 << mip) as f32);
 
 	let tc_equation_scaled = TexCoordEquation {
@@ -803,6 +759,76 @@ fn draw_polygon(
 		},
 		&mip_texture.pixels,
 	);
+}
+
+const MAX_VERTICES: usize = 24;
+
+// Returns number of result vertices. < 3 if polygon is clipped.
+fn project_and_clip_polygon(
+	view_matrix: &Mat4f,
+	clip_planes: &ClippingPolygonPlanes,
+	vertices: &[Vec3f],
+	out_vertices: &mut [Vec2f],
+) -> usize
+{
+	let mut vertex_count = vertices.len();
+
+	// Perform initial matrix tranformation, obtain 3d vertices in camera-aligned space.
+	let mut vertices_transformed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
+															  // TODO - use "zip"?
+	for (index, vertex) in vertices.iter().enumerate().take(MAX_VERTICES)
+	{
+		let vertex_transformed = view_matrix * vertex.extend(1.0);
+		vertices_transformed[index] = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
+	}
+
+	// Perform z_near clipping.
+	let mut vertices_transformed_z_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
+	const Z_NEAR: f32 = 1.0;
+	vertex_count = clip_3d_polygon_by_z_plane(
+		&vertices_transformed[.. vertex_count],
+		Z_NEAR,
+		&mut vertices_transformed_z_clipped,
+	);
+	if vertex_count < 3
+	{
+		return vertex_count;
+	}
+
+	// Make 2d vertices, then perform clipping in 2d space.
+	// This is needed to avoid later overflows for Fixed16 vertex coords in rasterizer.
+	// TODO - check for "out_vertices" bufer len.
+	for (index, vertex_transformed) in vertices_transformed_z_clipped.iter().enumerate().take(vertex_count)
+	{
+		out_vertices[index] = vertex_transformed.truncate() / vertex_transformed.z;
+	}
+
+	let mut vertices_temp = [Vec2f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
+
+	// Perform clipping in pairs - use pair of buffers.
+	for i in 0 .. clip_planes.len() / 2
+	{
+		vertex_count = clip_2d_polygon(
+			&out_vertices[.. vertex_count],
+			&clip_planes[i * 2],
+			&mut vertices_temp[..],
+		);
+		if vertex_count < 3
+		{
+			return vertex_count;
+		}
+		vertex_count = clip_2d_polygon(
+			&vertices_temp[.. vertex_count],
+			&clip_planes[i * 2 + 1],
+			&mut out_vertices[..],
+		);
+		if vertex_count < 3
+		{
+			return vertex_count;
+		}
+	}
+
+	vertex_count
 }
 
 fn calculate_mip(points: &[Vec2f], depth_equation: &DepthEquation, tc_equation: &TexCoordEquation) -> usize
