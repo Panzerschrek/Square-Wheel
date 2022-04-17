@@ -126,16 +126,28 @@ impl Renderer
 				}
 			}
 
+			let mut num_visible_polygons = 0;
+			for polygon_data in &self.polygons_data
+			{
+				if polygon_data.visible_frame == self.current_frame
+				{
+					num_visible_polygons += 1;
+				}
+			}
+
 			common::text_printer::print(
 				pixels,
 				surface_info,
 				&format!(
-					"leafs: {}/{}\nportals: {}/{}\nnum reachable leaf search calls: {}\nmax visits: {}\nmax reachable \
-					 leaf search depth: {}\nmax reqachable leafs search wave size: {}",
+					"leafs: {}/{}\nportals: {}/{}\npolygons: {}\nsurfaces pixels: {}k\nnum reachable leaf search  \
+					 calls: {}\nmax visits: {}\nmax reachable leaf search depth: {}\nmax reqachable leafs search wave \
+					 size: {}",
 					num_visible_leafs,
 					self.leafs_data.len(),
 					num_visible_portals,
 					self.portals_data.len(),
+					num_visible_polygons,
+					(self.surfaces_pixels.len() + 1023) / 1024,
 					debug_stats.num_reachable_leafs_search_calls,
 					max_search_visits,
 					debug_stats.reachable_leafs_search_calls_depth,
@@ -500,7 +512,7 @@ impl Renderer
 		{
 			let dst_line_start = surface_pixels_offset + ((dst_y * surface_size[0]) as usize);
 			let dst_line = &mut self.surfaces_pixels[dst_line_start .. dst_line_start + (surface_size[0] as usize)];
-			
+
 			let src_y = (tc_min_int[1] + dst_y).rem_euclid(mip_texture.size[1] as i32);
 			let src_line_start = ((src_y as u32) * mip_texture.size[0]) as usize;
 			let src_line = &mip_texture.pixels[src_line_start .. src_line_start + (mip_texture.size[0] as usize)];
