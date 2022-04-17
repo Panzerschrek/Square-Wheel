@@ -959,15 +959,14 @@ fn project_and_clip_polygon(
 	out_vertices: &mut [Vec2f],
 ) -> usize
 {
-	let mut vertex_count = vertices.len();
+	let mut vertex_count = std::cmp::min(vertices.len(), MAX_VERTICES);
 
 	// Perform initial matrix tranformation, obtain 3d vertices in camera-aligned space.
 	let mut vertices_transformed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-															  // TODO - use "zip"?
-	for (index, vertex) in vertices.iter().enumerate().take(MAX_VERTICES)
+	for (vertex, out_vertex) in vertices.iter().zip(vertices_transformed.iter_mut())
 	{
 		let vertex_transformed = view_matrix * vertex.extend(1.0);
-		vertices_transformed[index] = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
+		*out_vertex = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
 	}
 
 	// Perform z_near clipping.
@@ -985,10 +984,12 @@ fn project_and_clip_polygon(
 
 	// Make 2d vertices, then perform clipping in 2d space.
 	// This is needed to avoid later overflows for Fixed16 vertex coords in rasterizer.
-	// TODO - check for "out_vertices" bufer len.
-	for (index, vertex_transformed) in vertices_transformed_z_clipped.iter().enumerate().take(vertex_count)
+	for (vertex_transformed, out_vertex) in vertices_transformed_z_clipped
+		.iter()
+		.take(vertex_count)
+		.zip(out_vertices.iter_mut())
 	{
-		out_vertices[index] = vertex_transformed.truncate() / vertex_transformed.z;
+		*out_vertex = vertex_transformed.truncate() / vertex_transformed.z;
 	}
 
 	let mut vertices_temp = [Vec2f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
