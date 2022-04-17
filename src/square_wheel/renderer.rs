@@ -447,7 +447,12 @@ impl Renderer
 			],
 		};
 
-		let mip = calculate_mip(&vertices_2d[.. vertex_count], &depth_equation, &tc_equation);
+		let mip = calculate_mip(
+			&vertices_2d[.. vertex_count],
+			&depth_equation,
+			&tc_equation,
+			self.config.textures_mip_bias,
+		);
 		let tc_equation_scale = 1.0 / ((1 << mip) as f32);
 
 		let tc_equation_scaled = TexCoordEquation {
@@ -1005,7 +1010,8 @@ fn project_and_clip_polygon(
 	vertex_count
 }
 
-fn calculate_mip(points: &[Vec2f], depth_equation: &DepthEquation, tc_equation: &TexCoordEquation) -> u32
+fn calculate_mip(points: &[Vec2f], depth_equation: &DepthEquation, tc_equation: &TexCoordEquation, mip_bias: f32)
+	-> u32
 {
 	// Calculate screen-space derivatives of texture coordinates for closest polygon point.
 	// Calculate mip-level as logarithm of maximim texture coordinate component derivative.
@@ -1037,7 +1043,6 @@ fn calculate_mip(points: &[Vec2f], depth_equation: &DepthEquation, tc_equation: 
 	}
 
 	let max_d_tc_2 = d_tc_2[0].max(d_tc_2[1]);
-	let mip_bias = 0.0;
 	let mip_f = max_d_tc_2.log2() * 0.5 + mip_bias; // log(sqrt(x)) = log(x) * 0.5
 	let mip = std::cmp::max(0, std::cmp::min(mip_f.ceil() as i32, MAX_MIP as i32));
 

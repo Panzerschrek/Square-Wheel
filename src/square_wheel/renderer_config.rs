@@ -15,6 +15,9 @@ pub struct RendererConfig
 	// use alternaive (slow, recursive) search algorithm.
 	#[serde(default)]
 	pub recursive_visible_leafs_marking: bool,
+
+	#[serde(default)]
+	pub textures_mip_bias: f32,
 }
 
 impl RendererConfig
