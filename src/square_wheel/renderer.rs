@@ -1,7 +1,7 @@
 use super::{clipping_polygon::*, rasterizer::*, renderer_config::*};
 use common::{
 	bsp_map_compact, camera_controller::CameraMatrices, clipping::*, color::*, fixed_math::*, image, math_types::*,
-	plane::*, system_window,
+	system_window,
 };
 
 pub struct Renderer
@@ -11,6 +11,7 @@ pub struct Renderer
 	map: bsp_map_compact::BSPMap,
 	leafs_data: Vec<DrawLeafData>,
 	portals_data: Vec<DrawPortalData>,
+	polygons_data: Vec<DrawPolygonData>,
 	leafs_search_waves: LeafsSearchWavesPair,
 	textures: Vec<TextureWithMips>,
 }
@@ -34,6 +35,17 @@ struct DrawPortalData
 	visible_frame: FrameNumber,
 	// None if behind camera.
 	current_frame_projection: Option<ClippingPolygon>,
+}
+
+// Mutable data associated with map polygon.
+#[derive(Default, Copy, Clone)]
+struct DrawPolygonData
+{
+	// Frame last time this polygon was visible.
+	visible_frame: FrameNumber,
+	mip: u32,
+	depth_equation: DepthEquation,
+	tex_coord_equation: TexCoordEquation,
 }
 
 // 32 bits are enough for frames enumeration.
@@ -61,6 +73,7 @@ impl Renderer
 			config: RendererConfig::from_app_config(app_config),
 			leafs_data: vec![DrawLeafData::default(); map.leafs.len()],
 			portals_data: vec![DrawPortalData::default(); map.portals.len()],
+			polygons_data: vec![DrawPolygonData::default(); map.polygons.len()],
 			leafs_search_waves: LeafsSearchWavesPair::default(),
 			map,
 			textures,
@@ -166,6 +179,14 @@ impl Renderer
 		{
 			self.mark_reachable_leafs_iterative(current_leaf, camera_matrices, &frame_bounds, debug_stats);
 		}
+
+		self.prepare_polygons_surfaces(
+			camera_matrices,
+			&[
+				rasterizer.get_width() as f32 * 0.5,
+				rasterizer.get_height() as f32 * 0.5,
+			],
+		);
 
 		// Draw BSP tree in back to front order, skip unreachable leafs.
 		self.draw_tree_r(&mut rasterizer, camera_matrices, root_node);
@@ -315,6 +336,127 @@ impl Renderer
 		debug_stats.reachable_leafs_search_calls_depth = depth;
 	}
 
+	fn prepare_polygons_surfaces(&mut self, camera_matrices: &CameraMatrices, viewport_half_size: &[f32; 2])
+	{
+		// TODO - try to speed-up iteration, do not scan all leafs.
+		for i in 0 .. self.map.leafs.len()
+		{
+			let leaf_data = &self.leafs_data[i];
+			if leaf_data.visible_frame == self.current_frame
+			{
+				let leaf = &self.map.leafs[i];
+				// TODO - maybe just a little bit extend clipping polygon?
+				let clip_planes = leaf_data.current_frame_bounds.get_clip_planes();
+				for polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
+				{
+					self.prepare_polygon_surface(
+						camera_matrices,
+						&clip_planes,
+						viewport_half_size,
+						polygon_index as usize,
+					);
+				}
+			}
+		}
+	}
+
+	fn prepare_polygon_surface(
+		&mut self,
+		camera_matrices: &CameraMatrices,
+		clip_planes: &ClippingPolygonPlanes,
+		viewport_half_size: &[f32; 2],
+		polygon_index: usize,
+	)
+	{
+		let polygon = &self.map.polygons[polygon_index];
+		let polygon_vertices = &self.map.vertices
+			[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)];
+
+		let plane_transformed = camera_matrices.planes_matrix * polygon.plane.vec.extend(-polygon.plane.dist);
+		// Cull back faces.
+		if plane_transformed.w <= 0.0
+		{
+			return;
+		}
+
+		// TODO - cache projected vertices and use them in rasterization.
+		let mut vertices_2d = [Vec2f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
+		let vertex_count = project_and_clip_polygon(
+			&camera_matrices.view_matrix,
+			clip_planes,
+			polygon_vertices,
+			&mut vertices_2d[..],
+		);
+		if vertex_count < 3
+		{
+			return;
+		}
+
+		let plane_transformed_w = -plane_transformed.w;
+		let d_inv_z_dx = plane_transformed.x / plane_transformed_w;
+		let d_inv_z_dy = plane_transformed.y / plane_transformed_w;
+		let depth_equation = DepthEquation {
+			d_inv_z_dx,
+			d_inv_z_dy,
+			k: plane_transformed.z / plane_transformed_w -
+				d_inv_z_dx * viewport_half_size[0] -
+				d_inv_z_dy * viewport_half_size[1],
+		};
+
+		let tex_coord_equation = &polygon.tex_coord_equation;
+
+		// Calculate texture coordinates equations.
+		let tc_basis_transformed = [
+			camera_matrices.planes_matrix * tex_coord_equation[0].vec.extend(tex_coord_equation[0].dist),
+			camera_matrices.planes_matrix * tex_coord_equation[1].vec.extend(tex_coord_equation[1].dist),
+		];
+		// Equation projeted to polygon plane.
+		let tc_equation = TexCoordEquation {
+			d_tc_dx: [
+				tc_basis_transformed[0].x + tc_basis_transformed[0].w * depth_equation.d_inv_z_dx,
+				tc_basis_transformed[1].x + tc_basis_transformed[1].w * depth_equation.d_inv_z_dx,
+			],
+			d_tc_dy: [
+				tc_basis_transformed[0].y + tc_basis_transformed[0].w * depth_equation.d_inv_z_dy,
+				tc_basis_transformed[1].y + tc_basis_transformed[1].w * depth_equation.d_inv_z_dy,
+			],
+			k: [
+				tc_basis_transformed[0].z + tc_basis_transformed[0].w * depth_equation.k -
+					tc_basis_transformed[0].x * viewport_half_size[0] -
+					tc_basis_transformed[0].y * viewport_half_size[1],
+				tc_basis_transformed[1].z + tc_basis_transformed[1].w * depth_equation.k -
+					tc_basis_transformed[1].x * viewport_half_size[0] -
+					tc_basis_transformed[1].y * viewport_half_size[1],
+			],
+		};
+
+		let mip = calculate_mip(&vertices_2d[.. vertex_count], &depth_equation, &tc_equation);
+		let tc_equation_scale = 1.0 / ((1 << mip) as f32);
+
+		let tc_equation_scaled = TexCoordEquation {
+			d_tc_dx: [
+				tc_equation.d_tc_dx[0] * tc_equation_scale,
+				tc_equation.d_tc_dx[1] * tc_equation_scale,
+			],
+			d_tc_dy: [
+				tc_equation.d_tc_dy[0] * tc_equation_scale,
+				tc_equation.d_tc_dy[1] * tc_equation_scale,
+			],
+			k: [
+				tc_equation.k[0] * tc_equation_scale,
+				tc_equation.k[1] * tc_equation_scale,
+			],
+		};
+
+		let polygon_data = &mut self.polygons_data[polygon_index];
+		polygon_data.visible_frame = self.current_frame;
+		polygon_data.mip = mip;
+		polygon_data.depth_equation = depth_equation;
+		polygon_data.tex_coord_equation = tc_equation_scaled;
+
+		// TODO - prepare surface data itself.
+	}
+
 	fn draw_tree_r(&self, rasterizer: &mut Rasterizer, camera_matrices: &CameraMatrices, current_index: u32)
 	{
 		if current_index >= bsp_map_compact::FIRST_LEAF_INDEX
@@ -358,18 +500,24 @@ impl Renderer
 		// TODO - maybe just a little bit extend clipping polygon?
 		let clip_planes = bounds.get_clip_planes();
 
-		for polygon in
-			&self.map.polygons[(leaf.first_polygon as usize) .. ((leaf.first_polygon + leaf.num_polygons) as usize)]
+		for polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
 		{
+			let polygon = &self.map.polygons[polygon_index as usize];
+			let polygon_data = &self.polygons_data[polygon_index as usize];
+			if polygon_data.visible_frame != self.current_frame
+			{
+				continue;
+			}
+
 			draw_polygon(
 				rasterizer,
 				camera_matrices,
 				&clip_planes,
-				&polygon.plane,
 				&self.map.vertices
 					[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)],
-				&polygon.tex_coord_equation,
-				&self.textures[polygon.texture as usize],
+				&polygon_data.depth_equation,
+				&polygon_data.tex_coord_equation,
+				&self.textures[polygon.texture as usize][polygon_data.mip as usize],
 			);
 		}
 	}
@@ -650,37 +798,16 @@ fn draw_polygon(
 	rasterizer: &mut Rasterizer,
 	camera_matrices: &CameraMatrices,
 	clip_planes: &ClippingPolygonPlanes,
-	plane: &Plane,
 	vertices: &[Vec3f],
-	tex_coord_equation: &[Plane; 2],
-	texture: &TextureWithMips,
+	depth_equation: &DepthEquation,
+	tex_coord_equation: &TexCoordEquation,
+	texture: &image::Image,
 )
 {
 	if vertices.len() < 3
 	{
 		return;
 	}
-
-	let plane_transformed = camera_matrices.planes_matrix * plane.vec.extend(-plane.dist);
-	// Cull back faces.
-	if plane_transformed.w <= 0.0
-	{
-		return;
-	}
-
-	let width = rasterizer.get_width() as f32;
-	let height = rasterizer.get_height() as f32;
-	let half_width = width * 0.5;
-	let half_height = height * 0.5;
-
-	let plane_transformed_w = -plane_transformed.w;
-	let d_inv_z_dx = plane_transformed.x / plane_transformed_w;
-	let d_inv_z_dy = plane_transformed.y / plane_transformed_w;
-	let depth_equation = DepthEquation {
-		d_inv_z_dx,
-		d_inv_z_dy,
-		k: plane_transformed.z / plane_transformed_w - d_inv_z_dx * half_width - d_inv_z_dy * half_height,
-	};
 
 	let mut vertices_2d = [Vec2f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
 	let vertex_count = project_and_clip_polygon(
@@ -704,60 +831,15 @@ fn draw_polygon(
 		};
 	}
 
-	// Calculate texture coordinates equations.
-	let tc_basis_transformed = [
-		camera_matrices.planes_matrix * tex_coord_equation[0].vec.extend(tex_coord_equation[0].dist),
-		camera_matrices.planes_matrix * tex_coord_equation[1].vec.extend(tex_coord_equation[1].dist),
-	];
-	// Equation projeted to polygon plane.
-	let tc_equation = TexCoordEquation {
-		d_tc_dx: [
-			tc_basis_transformed[0].x + tc_basis_transformed[0].w * depth_equation.d_inv_z_dx,
-			tc_basis_transformed[1].x + tc_basis_transformed[1].w * depth_equation.d_inv_z_dx,
-		],
-		d_tc_dy: [
-			tc_basis_transformed[0].y + tc_basis_transformed[0].w * depth_equation.d_inv_z_dy,
-			tc_basis_transformed[1].y + tc_basis_transformed[1].w * depth_equation.d_inv_z_dy,
-		],
-		k: [
-			tc_basis_transformed[0].z + tc_basis_transformed[0].w * depth_equation.k -
-				tc_basis_transformed[0].x * half_width -
-				tc_basis_transformed[0].y * half_height,
-			tc_basis_transformed[1].z + tc_basis_transformed[1].w * depth_equation.k -
-				tc_basis_transformed[1].x * half_width -
-				tc_basis_transformed[1].y * half_height,
-		],
-	};
-
-	let mip = calculate_mip(&vertices_2d[.. vertex_count], &depth_equation, &tc_equation);
-	let tc_equation_scale = 1.0 / ((1 << mip) as f32);
-
-	let tc_equation_scaled = TexCoordEquation {
-		d_tc_dx: [
-			tc_equation.d_tc_dx[0] * tc_equation_scale,
-			tc_equation.d_tc_dx[1] * tc_equation_scale,
-		],
-		d_tc_dy: [
-			tc_equation.d_tc_dy[0] * tc_equation_scale,
-			tc_equation.d_tc_dy[1] * tc_equation_scale,
-		],
-		k: [
-			tc_equation.k[0] * tc_equation_scale,
-			tc_equation.k[1] * tc_equation_scale,
-		],
-	};
-
-	let mip_texture = &texture[mip];
-
 	// Perform rasterization of fully clipped polygon.
 	rasterizer.fill_polygon(
 		&vertices_for_rasterizer[0 .. vertex_count],
 		&depth_equation,
-		&tc_equation_scaled,
+		&tex_coord_equation,
 		&TextureInfo {
-			size: [mip_texture.size[0] as i32, mip_texture.size[1] as i32],
+			size: [texture.size[0] as i32, texture.size[1] as i32],
 		},
-		&mip_texture.pixels,
+		&texture.pixels,
 	);
 }
 
@@ -831,7 +913,7 @@ fn project_and_clip_polygon(
 	vertex_count
 }
 
-fn calculate_mip(points: &[Vec2f], depth_equation: &DepthEquation, tc_equation: &TexCoordEquation) -> usize
+fn calculate_mip(points: &[Vec2f], depth_equation: &DepthEquation, tc_equation: &TexCoordEquation) -> u32
 {
 	// Calculate screen-space derivatives of texture coordinates for closest polygon point.
 	// Calculate mip-level as logarithm of maximim texture coordinate component derivative.
@@ -867,5 +949,5 @@ fn calculate_mip(points: &[Vec2f], depth_equation: &DepthEquation, tc_equation: 
 	let mip_f = max_d_tc_2.log2() * 0.5 + mip_bias; // log(sqrt(x)) = log(x) * 0.5
 	let mip = std::cmp::max(0, std::cmp::min(mip_f.round() as i32, MAX_MIP as i32));
 
-	mip as usize
+	mip as u32
 }

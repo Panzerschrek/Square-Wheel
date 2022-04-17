@@ -223,6 +223,7 @@ pub struct PolygonPointProjected
 	pub y: Fixed16,
 }
 
+#[derive(Copy, Clone, Default)]
 pub struct DepthEquation
 {
 	pub d_inv_z_dx: f32,
@@ -230,6 +231,7 @@ pub struct DepthEquation
 	pub k: f32,
 }
 
+#[derive(Copy, Clone, Default)]
 pub struct TexCoordEquation
 {
 	pub d_tc_dx: [f32; 2],
