@@ -496,6 +496,15 @@ impl Renderer
 			}
 		}
 
+		// Reduce min/max texture coordinates slightly to avoid adding extra pixels
+		// in case if min/max tex coord is exact integer, but slightly changed due to computational errors.
+		let tc_reduce_eps = 1.0 / 32.0;
+		for i in 0 .. 2
+		{
+			tc_min[i] += tc_reduce_eps;
+			tc_max[i] -= tc_reduce_eps;
+		}
+
 		let tc_min_int = [tc_min[0].floor() as i32, tc_min[1].floor() as i32];
 		let tc_max_int = [tc_max[0].ceil() as i32, tc_max[1].ceil() as i32];
 		let surface_size = [
