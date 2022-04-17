@@ -161,7 +161,6 @@ impl<'a> Rasterizer<'a>
 		texture_data: &[Color32],
 	)
 	{
-		let tc_mask = [texture_info.size[0] - 1, texture_info.size[1] - 1];
 		// TODO replace "F32" with Fixed16 for Z calculation.
 		// TODO - avoid adding "0.5" for some calculations.
 		let y_start_int = fixed16_round_to_int(y_start).max(0);
@@ -194,10 +193,19 @@ impl<'a> Rasterizer<'a>
 				for dst_pixel in line_dst
 				{
 					let z = 1.0 / inv_z;
-					let pix_tc = [
-						(z * tc[0]).floor() as i32 & tc_mask[0],
-						(z * tc[1]).floor() as i32 & tc_mask[1],
-					];
+					let mut pix_tc = [(z * tc[0]).floor() as i32, (z * tc[1]).floor() as i32];
+
+					for i in 0 .. 2
+					{
+						if pix_tc[i] < 0
+						{
+							pix_tc[i] = 0;
+						}
+						if pix_tc[i] >= texture_info.size[i]
+						{
+							pix_tc[i] = texture_info.size[i] - 1;
+						}
+					}
 
 					*dst_pixel = texture_data[(pix_tc[0] + pix_tc[1] * texture_info.size[0]) as usize];
 

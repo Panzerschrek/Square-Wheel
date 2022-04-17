@@ -12,6 +12,7 @@ pub struct Renderer
 	leafs_data: Vec<DrawLeafData>,
 	portals_data: Vec<DrawPortalData>,
 	polygons_data: Vec<DrawPolygonData>,
+	surfaces_pixels: Vec<Color32>,
 	leafs_search_waves: LeafsSearchWavesPair,
 	textures: Vec<TextureWithMips>,
 }
@@ -43,9 +44,10 @@ struct DrawPolygonData
 {
 	// Frame last time this polygon was visible.
 	visible_frame: FrameNumber,
-	mip: u32,
 	depth_equation: DepthEquation,
 	tex_coord_equation: TexCoordEquation,
+	surface_pixels_offset: usize,
+	surface_size: [u32; 2],
 }
 
 // 32 bits are enough for frames enumeration.
@@ -74,6 +76,7 @@ impl Renderer
 			leafs_data: vec![DrawLeafData::default(); map.leafs.len()],
 			portals_data: vec![DrawPortalData::default(); map.portals.len()],
 			polygons_data: vec![DrawPolygonData::default(); map.polygons.len()],
+			surfaces_pixels: Vec::new(),
 			leafs_search_waves: LeafsSearchWavesPair::default(),
 			map,
 			textures,
@@ -338,6 +341,8 @@ impl Renderer
 
 	fn prepare_polygons_surfaces(&mut self, camera_matrices: &CameraMatrices, viewport_half_size: &[f32; 2])
 	{
+		self.surfaces_pixels.clear();
+
 		// TODO - try to speed-up iteration, do not scan all leafs.
 		for i in 0 .. self.map.leafs.len()
 		{
@@ -447,14 +452,78 @@ impl Renderer
 				tc_equation.k[1] * tc_equation_scale,
 			],
 		};
+		// TODO - prepare surface data itself.
+
+		// Calculate minimum/maximum texture coordinates.
+		// Use clipped vertices for this.
+		// With such approach we can allocate data only for visible part of surface, not whole polygon.
+		let inf = 1.0e20;
+		let mut tc_min = [inf, inf];
+		let mut tc_max = [-inf, -inf];
+		for p in &vertices_2d[.. vertex_count]
+		{
+			let z = 1.0 / (depth_equation.d_inv_z_dx * p.x + depth_equation.d_inv_z_dy * p.y + depth_equation.k);
+			for i in 0 .. 2
+			{
+				let tc = z *
+					(tc_equation_scaled.d_tc_dx[i] * p.x +
+						tc_equation_scaled.d_tc_dy[i] * p.y +
+						tc_equation_scaled.k[i]);
+				if tc < tc_min[i]
+				{
+					tc_min[i] = tc;
+				}
+				if tc > tc_max[i]
+				{
+					tc_max[i] = tc;
+				}
+			}
+		}
+
+		let tc_min_int = [tc_min[0].floor() as i32, tc_min[1].floor() as i32];
+		let tc_max_int = [tc_max[0].ceil() as i32, tc_max[1].ceil() as i32];
+		let surface_size = [
+			(tc_max_int[0] - tc_min_int[0]).max(1),
+			(tc_max_int[1] - tc_min_int[1]).max(1),
+		];
+
+		let surface_pixels_offset = self.surfaces_pixels.len();
+		// TODO - avoid filling buffer with zeros.
+		self.surfaces_pixels.resize(
+			self.surfaces_pixels.len() + ((surface_size[0] * surface_size[1]) as usize),
+			Color32::from_rgb(0, 0, 0),
+		);
+
+		let mip_texture = &self.textures[polygon.texture as usize][mip as usize];
+
+		// TODO - optimize this.
+		for dst_y in 0 .. surface_size[1]
+		{
+			let src_y = ((tc_min_int[1] + dst_y) as u32) % mip_texture.size[1];
+			for dst_x in 0 .. surface_size[0]
+			{
+				let src_x = ((tc_min_int[0] + dst_x) as u32) % mip_texture.size[0];
+
+				self.surfaces_pixels[surface_pixels_offset + ((dst_x + dst_y * surface_size[0]) as usize)] =
+					mip_texture.pixels[(src_x + src_y * mip_texture.size[0]) as usize];
+			}
+		}
 
 		let polygon_data = &mut self.polygons_data[polygon_index];
 		polygon_data.visible_frame = self.current_frame;
-		polygon_data.mip = mip;
 		polygon_data.depth_equation = depth_equation;
 		polygon_data.tex_coord_equation = tc_equation_scaled;
+		polygon_data.surface_pixels_offset = surface_pixels_offset;
+		polygon_data.surface_size = [surface_size[0] as u32, surface_size[1] as u32];
 
-		// TODO - prepare surface data itself.
+		// Correct texture coordinates equation to compensafe shift to surface rect.
+		for i in 0 .. 2
+		{
+			let tc_min = tc_min_int[i] as f32;
+			polygon_data.tex_coord_equation.d_tc_dx[i] -= tc_min * depth_equation.d_inv_z_dx;
+			polygon_data.tex_coord_equation.d_tc_dy[i] -= tc_min * depth_equation.d_inv_z_dy;
+			polygon_data.tex_coord_equation.k[i] -= tc_min * depth_equation.k;
+		}
 	}
 
 	fn draw_tree_r(&self, rasterizer: &mut Rasterizer, camera_matrices: &CameraMatrices, current_index: u32)
@@ -517,7 +586,10 @@ impl Renderer
 					[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)],
 				&polygon_data.depth_equation,
 				&polygon_data.tex_coord_equation,
-				&self.textures[polygon.texture as usize][polygon_data.mip as usize],
+				&polygon_data.surface_size,
+				&self.surfaces_pixels[polygon_data.surface_pixels_offset ..
+					polygon_data.surface_pixels_offset +
+						((polygon_data.surface_size[0] * polygon_data.surface_size[1]) as usize)],
 			);
 		}
 	}
@@ -801,7 +873,8 @@ fn draw_polygon(
 	vertices: &[Vec3f],
 	depth_equation: &DepthEquation,
 	tex_coord_equation: &TexCoordEquation,
-	texture: &image::Image,
+	texture_size: &[u32; 2],
+	texture_data: &[Color32],
 )
 {
 	if vertices.len() < 3
@@ -837,9 +910,9 @@ fn draw_polygon(
 		&depth_equation,
 		&tex_coord_equation,
 		&TextureInfo {
-			size: [texture.size[0] as i32, texture.size[1] as i32],
+			size: [texture_size[0] as i32, texture_size[1] as i32],
 		},
-		&texture.pixels,
+		texture_data,
 	);
 }
 
