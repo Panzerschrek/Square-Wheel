@@ -1039,7 +1039,7 @@ fn calculate_mip(points: &[Vec2f], depth_equation: &DepthEquation, tc_equation: 
 	let max_d_tc_2 = d_tc_2[0].max(d_tc_2[1]);
 	let mip_bias = 0.0;
 	let mip_f = max_d_tc_2.log2() * 0.5 + mip_bias; // log(sqrt(x)) = log(x) * 0.5
-	let mip = std::cmp::max(0, std::cmp::min(mip_f.round() as i32, MAX_MIP as i32));
+	let mip = std::cmp::max(0, std::cmp::min(mip_f.ceil() as i32, MAX_MIP as i32));
 
 	mip as u32
 }
