@@ -139,8 +139,8 @@ fn parse_brush_plane(it: &mut Iterator) -> ParseResult<BrushPlane>
 		],
 		texture: parse_whitespace_separated_string(it)?,
 		tc_offset: Vec2f::new(parse_number(it)?, parse_number(it)?),
-		tc_scale: Vec2f::new(parse_number(it)?, parse_number(it)?),
 		tc_angle: parse_number(it)?,
+		tc_scale: Vec2f::new(parse_number(it)?, parse_number(it)?),
 	})
 }
 
@@ -172,7 +172,7 @@ fn parse_number(it: &mut Iterator) -> ParseResult<f32>
 	skip_whitespaces(it);
 	while let Some(c) = it.chars().next()
 	{
-		if c == '.' || ('0'..='9').contains(&c) || c == '-'
+		if c == '.' || ('0' ..= '9').contains(&c) || c == '-'
 		{
 			s.push(c);
 			*it = &it[1 ..];

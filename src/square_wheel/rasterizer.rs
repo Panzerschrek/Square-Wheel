@@ -36,7 +36,8 @@ impl<'a> Rasterizer<'a>
 		vertices: &[PolygonPointProjected],
 		depth_equation: &DepthEquation,
 		tex_coord_equation: &TexCoordEquation,
-		color: Color32,
+		texture_info: &TextureInfo,
+		texture_data: &[Color32],
 	)
 	{
 		// Search for start vertex (with min y).
@@ -88,7 +89,8 @@ impl<'a> Rasterizer<'a>
 					},
 					depth_equation,
 					tex_coord_equation,
-					color,
+					texture_info,
+					texture_data,
 				);
 			}
 			else if dy_left > 0 && dy_right > 0
@@ -124,7 +126,8 @@ impl<'a> Rasterizer<'a>
 						},
 						depth_equation,
 						tex_coord_equation,
-						color,
+						texture_info,
+						texture_data,
 					);
 				}
 			}
@@ -154,7 +157,8 @@ impl<'a> Rasterizer<'a>
 		right_side: PolygonSide,
 		depth_equation: &DepthEquation,
 		tex_coord_equation: &TexCoordEquation,
-		color: Color32,
+		texture_info: &TextureInfo,
+		texture_data: &[Color32],
 	)
 	{
 		// TODO replace "F32" with Fixed16 for Z calculation.
@@ -189,16 +193,21 @@ impl<'a> Rasterizer<'a>
 				for dst_pixel in line_dst
 				{
 					let z = 1.0 / inv_z;
-					let pix_tc = [(z * tc[0]) as i32, (z * tc[1]) as i32];
+					let mut pix_tc = [(z * tc[0]).floor() as i32, (z * tc[1]).floor() as i32];
 
-					if (((pix_tc[0] ^ pix_tc[1]) >> 4) & 1) != 0
+					for i in 0 .. 2
 					{
-						*dst_pixel = color;
+						if pix_tc[i] < 0
+						{
+							pix_tc[i] = 0;
+						}
+						if pix_tc[i] >= texture_info.size[i]
+						{
+							pix_tc[i] = texture_info.size[i] - 1;
+						}
 					}
-					else
-					{
-						*dst_pixel = color.get_half_dark();
-					}
+
+					*dst_pixel = texture_data[(pix_tc[0] + pix_tc[1] * texture_info.size[0]) as usize];
 
 					inv_z += depth_equation.d_inv_z_dx;
 					tc[0] += tex_coord_equation.d_tc_dx[0];
@@ -222,6 +231,7 @@ pub struct PolygonPointProjected
 	pub y: Fixed16,
 }
 
+#[derive(Copy, Clone, Default)]
 pub struct DepthEquation
 {
 	pub d_inv_z_dx: f32,
@@ -229,11 +239,17 @@ pub struct DepthEquation
 	pub k: f32,
 }
 
+#[derive(Copy, Clone, Default)]
 pub struct TexCoordEquation
 {
 	pub d_tc_dx: [f32; 2],
 	pub d_tc_dy: [f32; 2],
 	pub k: [f32; 2],
+}
+
+pub struct TextureInfo
+{
+	pub size: [i32; 2],
 }
 
 struct PolygonSide
