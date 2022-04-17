@@ -496,16 +496,18 @@ impl Renderer
 
 		let mip_texture = &self.textures[polygon.texture as usize][mip as usize];
 
-		// TODO - optimize this.
+		// TODO - perform surface data generation in separate step.
 		for dst_y in 0 .. surface_size[1]
 		{
+			let dst_line_start = surface_pixels_offset + ((dst_y * surface_size[0]) as usize);
+			let dst_line = &mut self.surfaces_pixels[dst_line_start .. dst_line_start + (surface_size[0] as usize)];
 			let src_y = ((tc_min_int[1] + dst_y) as u32) % mip_texture.size[1];
+			let src_line_start = (src_y * mip_texture.size[0]) as usize;
+			let src_line = &mip_texture.pixels[src_line_start .. src_line_start + (mip_texture.size[0] as usize)];
 			for dst_x in 0 .. surface_size[0]
 			{
 				let src_x = ((tc_min_int[0] + dst_x) as u32) % mip_texture.size[0];
-
-				self.surfaces_pixels[surface_pixels_offset + ((dst_x + dst_y * surface_size[0]) as usize)] =
-					mip_texture.pixels[(src_x + src_y * mip_texture.size[0]) as usize];
+				dst_line[dst_x as usize] = src_line[src_x as usize];
 			}
 		}
 
