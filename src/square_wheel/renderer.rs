@@ -473,12 +473,15 @@ impl Renderer
 		// Calculate minimum/maximum texture coordinates.
 		// Use clipped vertices for this.
 		// With such approach we can allocate data only for visible part of surface, not whole polygon.
-		let inf = 1.0e20;
+		let inf = (1 << 29) as f32; // Maximum value without integer overflow in subtraction.
+		let max_z = (1 << 16) as f32;
 		let mut tc_min = [inf, inf];
 		let mut tc_max = [-inf, -inf];
 		for p in &vertices_2d[.. vertex_count]
 		{
-			let z = 1.0 / (depth_equation.d_inv_z_dx * p.x + depth_equation.d_inv_z_dy * p.y + depth_equation.k);
+			// Limit inv_z in case of computational errors (if it is 0 or negative).
+			let inv_z = (depth_equation.d_inv_z_dx * p.x + depth_equation.d_inv_z_dy * p.y + depth_equation.k).max(1.0 / max_z);
+			let z = 1.0 / inv_z;
 			for i in 0 .. 2
 			{
 				let tc = z *
@@ -498,18 +501,30 @@ impl Renderer
 
 		// Reduce min/max texture coordinates slightly to avoid adding extra pixels
 		// in case if min/max tex coord is exact integer, but slightly changed due to computational errors.
+		// Clamp also coordinates to min/max in order to avoid overflows.
+		// TODO - clamp texture coordinates, using precalculated values, based on world-space calculations.
 		let tc_reduce_eps = 1.0 / 32.0;
 		for i in 0 .. 2
 		{
 			tc_min[i] += tc_reduce_eps;
 			tc_max[i] -= tc_reduce_eps;
+			if tc_min[i] < -inf
+			{
+				tc_min[i] = -inf;
+			}
+			if tc_max[i] > inf
+			{
+				tc_max[i] = inf;
+			}
 		}
 
+		let max_surface_size = 2048; // Limit max size in case of computational errors.
+		// TODO - split long polygons during export to avoid reducing size for such polygons.
 		let tc_min_int = [tc_min[0].floor() as i32, tc_min[1].floor() as i32];
 		let tc_max_int = [tc_max[0].ceil() as i32, tc_max[1].ceil() as i32];
 		let surface_size = [
-			(tc_max_int[0] - tc_min_int[0]).max(1),
-			(tc_max_int[1] - tc_min_int[1]).max(1),
+			(tc_max_int[0] - tc_min_int[0]).max(1).min(max_surface_size),
+			(tc_max_int[1] - tc_min_int[1]).max(1).min(max_surface_size),
 		];
 
 		let surface_pixels_offset = self.surfaces_pixels.len();
