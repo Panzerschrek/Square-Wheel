@@ -488,7 +488,8 @@ impl Renderer
 		for p in &vertices_2d[.. vertex_count]
 		{
 			// Limit inv_z in case of computational errors (if it is 0 or negative).
-			let inv_z = (depth_equation.d_inv_z_dx * p.x + depth_equation.d_inv_z_dy * p.y + depth_equation.k).max(1.0 / max_z);
+			let inv_z =
+				(depth_equation.d_inv_z_dx * p.x + depth_equation.d_inv_z_dy * p.y + depth_equation.k).max(1.0 / max_z);
 			let z = 1.0 / inv_z;
 			for i in 0 .. 2
 			{
@@ -528,7 +529,7 @@ impl Renderer
 		}
 
 		let max_surface_size = 2048; // Limit max size in case of computational errors.
-		// TODO - split long polygons during export to avoid reducing size for such polygons.
+							 // TODO - split long polygons during export to avoid reducing size for such polygons.
 		let tc_min_int = [tc_min[0].floor() as i32, tc_min[1].floor() as i32];
 		let tc_max_int = [tc_max[0].ceil() as i32, tc_max[1].ceil() as i32];
 		let surface_size = [
@@ -763,13 +764,14 @@ fn build_mips(mip0: image::Image) -> TextureWithMips
 
 fn precalculate_polygons_tex_coords_bounds(map: &bsp_map_compact::BSPMap, polygons_data: &mut [DrawPolygonData])
 {
-	for(polygon, polygon_data) in map.polygons.iter().zip(polygons_data.iter_mut())
+	for (polygon, polygon_data) in map.polygons.iter().zip(polygons_data.iter_mut())
 	{
 		let inf = (1 << 29) as f32;
-		let mut tc_min = [ inf, inf ];
-		let mut tc_max = [ -inf, -inf ];
+		let mut tc_min = [inf, inf];
+		let mut tc_max = [-inf, -inf];
 
-		for vertex in &map.vertices[ (polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize) ]
+		for vertex in
+			&map.vertices[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)]
 		{
 			for i in 0 .. 2
 			{
