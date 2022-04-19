@@ -42,6 +42,9 @@ struct DrawPortalData
 #[derive(Default, Copy, Clone)]
 struct DrawPolygonData
 {
+	// Precalculated during map loading min/max texture coordinates
+	tc_min: [f32; 2],
+	tc_max: [f32; 2],
 	// Frame last time this polygon was visible.
 	visible_frame: FrameNumber,
 	depth_equation: DepthEquation,
@@ -70,12 +73,15 @@ impl Renderer
 	{
 		let textures = load_textures(&map.textures);
 
+		let mut polygons_data = vec![DrawPolygonData::default(); map.polygons.len()];
+		precalculate_polygons_tex_coords_bounds(&map, &mut polygons_data);
+
 		Renderer {
 			current_frame: FrameNumber(0),
 			config: RendererConfig::from_app_config(app_config),
 			leafs_data: vec![DrawLeafData::default(); map.leafs.len()],
 			portals_data: vec![DrawPortalData::default(); map.portals.len()],
-			polygons_data: vec![DrawPolygonData::default(); map.polygons.len()],
+			polygons_data,
 			surfaces_pixels: Vec::new(),
 			leafs_search_waves: LeafsSearchWavesPair::default(),
 			map,
@@ -385,6 +391,8 @@ impl Renderer
 		polygon_index: usize,
 	)
 	{
+		let polygon_data = &mut self.polygons_data[polygon_index];
+
 		let polygon = &self.map.polygons[polygon_index];
 		let polygon_vertices = &self.map.vertices
 			[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)];
@@ -501,20 +509,21 @@ impl Renderer
 
 		// Reduce min/max texture coordinates slightly to avoid adding extra pixels
 		// in case if min/max tex coord is exact integer, but slightly changed due to computational errors.
-		// Clamp also coordinates to min/max in order to avoid overflows.
-		// TODO - clamp texture coordinates, using precalculated values, based on world-space calculations.
+		// Clamp also coordinates to min/max polygon coordinates (they may be out of range because of computational errors).
 		let tc_reduce_eps = 1.0 / 32.0;
 		for i in 0 .. 2
 		{
 			tc_min[i] += tc_reduce_eps;
 			tc_max[i] -= tc_reduce_eps;
-			if tc_min[i] < -inf
+			let polygon_tc_min = polygon_data.tc_min[i] * tc_equation_scale;
+			let polygon_tc_max = polygon_data.tc_max[i] * tc_equation_scale;
+			if tc_min[i] < polygon_tc_min
 			{
-				tc_min[i] = -inf;
+				tc_min[i] = polygon_tc_min;
 			}
-			if tc_max[i] > inf
+			if tc_max[i] > polygon_tc_max
 			{
-				tc_max[i] = inf;
+				tc_max[i] = polygon_tc_max;
 			}
 		}
 
@@ -557,7 +566,6 @@ impl Renderer
 			}
 		}
 
-		let polygon_data = &mut self.polygons_data[polygon_index];
 		polygon_data.visible_frame = self.current_frame;
 		polygon_data.depth_equation = depth_equation;
 		polygon_data.tex_coord_equation = tc_equation_scaled;
@@ -751,6 +759,49 @@ fn build_mips(mip0: image::Image) -> TextureWithMips
 	}
 
 	result
+}
+
+fn precalculate_polygons_tex_coords_bounds(map: &bsp_map_compact::BSPMap, polygons_data: &mut [DrawPolygonData])
+{
+	for(polygon, polygon_data) in map.polygons.iter().zip(polygons_data.iter_mut())
+	{
+		let inf = (1 << 29) as f32;
+		let mut tc_min = [ inf, inf ];
+		let mut tc_max = [ -inf, -inf ];
+
+		for vertex in &map.vertices[ (polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize) ]
+		{
+			for i in 0 .. 2
+			{
+				let tc = polygon.tex_coord_equation[i].vec.dot(*vertex) + polygon.tex_coord_equation[i].dist;
+				if tc < tc_min[i]
+				{
+					tc_min[i] = tc;
+				}
+				if tc > tc_max[i]
+				{
+					tc_max[i] = tc;
+				}
+			}
+		}
+
+		// Limit result by very large values that still fits inside integer.
+		// Thisi is needed to avoid integer overflows if something is wrong with texture coordinates.
+		for i in 0 .. 2
+		{
+			if tc_min[i] < -inf
+			{
+				tc_min[i] = inf;
+			}
+			if tc_max[i] > inf
+			{
+				tc_max[i] = inf;
+			}
+		}
+
+		polygon_data.tc_min = tc_min;
+		polygon_data.tc_max = tc_max;
+	}
 }
 
 // TODO - get rid of debug code.
