@@ -163,7 +163,7 @@ impl<'a> Rasterizer<'a>
 	{
 		const FIXED_SHIFT: i32 = 24;
 		const FIXED_SCALE: f32 = (1 << FIXED_SHIFT) as f32;
-		const INV_Z_SHIFT: i32 = 28;
+		const INV_Z_SHIFT: i32 = 29;
 		const INV_Z_SCALE: f32 = (1 << INV_Z_SHIFT) as f32;
 		// let d_inv_z_dx = (INV_Z_SCALE * depth_equation.d_inv_z_dx) as i32;
 		// let d_inv_z_dy = (INV_Z_SCALE * depth_equation.d_inv_z_dy) as i32;
@@ -220,16 +220,20 @@ impl<'a> Rasterizer<'a>
 				for dst_pixel in line_dst
 				{
 					// TODO - correct inv_z start and step to avoid zero checks.
-					// Use unsigned integer division which is slightly faster than signed.
-					// let inv_z_shifted = inv_z >> (INV_Z_SHIFT / 2);
+					// const INV_Z_PRE_SHIFT : i32 = 12;
+					// let inv_z_shifted = inv_z >> INV_Z_PRE_SHIFT;
 					// let z = if inv_z_shifted <= 0
 					// {
 					// 0
 					// }
 					// else
 					// {
-					// (1 << 29) / ((inv_z as u32) >> ((INV_Z_SHIFT / 2) as u32))
+					// (1 << 31) / ((inv_z as u32) >> (INV_Z_PRE_SHIFT as u32))
 					// };
+					// let mut pix_tc = [
+					// 	(((z as i64) * (tc[0] as i64)) >> ((FIXED_SHIFT + 31 - INV_Z_SHIFT + INV_Z_PRE_SHIFT)) as i64) as i32,
+					// 	(((z as i64) * (tc[1] as i64)) >> ((FIXED_SHIFT + 31 - INV_Z_SHIFT + INV_Z_PRE_SHIFT)) as i64) as i32,
+					// ];
 					let z = INV_Z_SCALE / inv_z;
 					let mut pix_tc = [
 						(((z as i64) * (tc[0] as i64)) >> (FIXED_SHIFT + INV_Z_SHIFT)) as i32,
