@@ -186,14 +186,6 @@ impl Host
 			1,
 			Color32::from_rgb(255, 255, 255),
 		);
-		common::text_printer::print(
-			pixels,
-			surface_info,
-			&format!("{:04.2} ms", 1000.0 / self.fps_counter.get_frequency()),
-			(surface_info.width - 96) as i32,
-			19,
-			Color32::from_rgb(255, 255, 255),
-		);
 	}
 
 	fn command_set_pos(&mut self, args: commands_queue::CommandArgs)
