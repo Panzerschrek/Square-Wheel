@@ -193,7 +193,8 @@ impl<'a> Rasterizer<'a>
 				for dst_pixel in line_dst
 				{
 					let z = 1.0 / inv_z;
-					let mut pix_tc = [(z * tc[0]).floor() as i32, (z * tc[1]).floor() as i32];
+					// Just truncate float to integer. This is fine sice we clamp negative coordinates to zero.
+					let mut pix_tc = [(z * tc[0]) as i32, (z * tc[1]) as i32];
 
 					for i in 0 .. 2
 					{
