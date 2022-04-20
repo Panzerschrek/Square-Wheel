@@ -161,20 +161,22 @@ impl<'a> Rasterizer<'a>
 		texture_data: &[Color32],
 	)
 	{
-		const FIXED_SHIFT: i64 = 24;
+		const FIXED_SHIFT: i32 = 24;
 		const FIXED_SCALE: f32 = (1 << FIXED_SHIFT) as f32;
-		let d_inv_z_dx = (FIXED_SCALE * depth_equation.d_inv_z_dx) as i64;
-		let d_inv_z_dy = (FIXED_SCALE * depth_equation.d_inv_z_dy) as i64;
+		const INV_Z_SHIFT: i32 = 28;
+		const INV_Z_SCALE: f32 = (1 << INV_Z_SHIFT) as f32;
+		let d_inv_z_dx = (INV_Z_SCALE * depth_equation.d_inv_z_dx) as i32;
+		let d_inv_z_dy = (INV_Z_SCALE * depth_equation.d_inv_z_dy) as i32;
 		// Add extra 0.5 to shift to pixel center.
 		let inv_z_k =
-			(FIXED_SCALE * (depth_equation.k + (depth_equation.d_inv_z_dx + depth_equation.d_inv_z_dy) * 0.5)) as i64;
+			(INV_Z_SCALE * (depth_equation.k + (depth_equation.d_inv_z_dx + depth_equation.d_inv_z_dy) * 0.5)) as i64;
 		let d_tc_dx = [
-			(FIXED_SCALE * tex_coord_equation.d_tc_dx[0]) as i64,
-			(FIXED_SCALE * tex_coord_equation.d_tc_dx[1]) as i64,
+			(FIXED_SCALE * tex_coord_equation.d_tc_dx[0]) as i32,
+			(FIXED_SCALE * tex_coord_equation.d_tc_dx[1]) as i32,
 		];
 		let d_tc_dy = [
-			(FIXED_SCALE * tex_coord_equation.d_tc_dy[0]) as i64,
-			(FIXED_SCALE * tex_coord_equation.d_tc_dy[1]) as i64,
+			(FIXED_SCALE * tex_coord_equation.d_tc_dy[0]) as i32,
+			(FIXED_SCALE * tex_coord_equation.d_tc_dy[1]) as i32,
 		];
 		let tc_k = [
 			(FIXED_SCALE *
@@ -189,10 +191,10 @@ impl<'a> Rasterizer<'a>
 		let y_start_delta = int_to_fixed16(y_start_int) + FIXED16_HALF - y_start;
 		let mut x_left = left_side.x_start + fixed16_mul(y_start_delta, left_side.dx_dy) + FIXED16_HALF;
 		let mut x_right = right_side.x_start + fixed16_mul(y_start_delta, right_side.dx_dy) + FIXED16_HALF;
-		let mut line_inv_z = (y_start_int as i64) * d_inv_z_dy + inv_z_k;
+		let mut line_inv_z = (y_start_int as i64) * (d_inv_z_dy as i64) + inv_z_k;
 		let mut line_tc = [
-			(y_start_int as i64) * d_tc_dy[0] + tc_k[0],
-			(y_start_int as i64) * d_tc_dy[1] + tc_k[1],
+			(y_start_int as i64) * (d_tc_dy[0] as i64) + tc_k[0],
+			(y_start_int as i64) * (d_tc_dy[1] as i64) + tc_k[1],
 		];
 
 		for y_int in y_start_int .. y_end_int
@@ -201,10 +203,10 @@ impl<'a> Rasterizer<'a>
 			let x_end_int = fixed16_floor_to_int(x_right).min(self.width);
 			if x_start_int < x_end_int
 			{
-				let mut inv_z = (x_start_int as i64) * d_inv_z_dx + line_inv_z;
+				let mut inv_z = ((x_start_int as i64) * (d_inv_z_dx as i64) + line_inv_z) as i32;
 				let mut tc = [
-					(x_start_int as i64) * d_tc_dx[0] + line_tc[0],
-					(x_start_int as i64) * d_tc_dx[1] + line_tc[1],
+					((x_start_int as i64) * (d_tc_dx[0] as i64) + line_tc[0]) as i32,
+					((x_start_int as i64) * (d_tc_dx[1] as i64) + line_tc[1]) as i32,
 				];
 				let line_buffer_offset = y_int * self.row_size;
 				let line_dst = &mut self.color_buffer
@@ -212,8 +214,21 @@ impl<'a> Rasterizer<'a>
 
 				for dst_pixel in line_dst
 				{
-					let z = (1 << (FIXED_SHIFT * 2)) / inv_z;
-					let mut pix_tc = [(z * tc[0]) >> (FIXED_SHIFT * 2), (z * tc[1]) >> (FIXED_SHIFT * 2)];
+					// TODO - correct inv_z start and step to avoid zero checks.
+					// Use unsigned integer division which is slightly faster than signed.
+					let inv_z_shifted = inv_z >> (INV_Z_SHIFT / 2);
+					let z = if inv_z_shifted <= 0
+					{
+						0
+					}
+					else
+					{
+						(1 << 29) / ((inv_z as u32) >> ((INV_Z_SHIFT / 2) as u32))
+					};
+					let mut pix_tc = [
+						(((z as i64) * (tc[0] as i64)) >> (FIXED_SHIFT + 29 - INV_Z_SHIFT / 2)) as i32,
+						(((z as i64) * (tc[1] as i64)) >> (FIXED_SHIFT + 29 - INV_Z_SHIFT / 2)) as i32,
+					];
 
 					for i in 0 .. 2
 					{
@@ -221,13 +236,13 @@ impl<'a> Rasterizer<'a>
 						{
 							pix_tc[i] = 0;
 						}
-						if pix_tc[i] >= (texture_info.size[i] as i64)
+						if pix_tc[i] >= (texture_info.size[i] as i32)
 						{
-							pix_tc[i] = (texture_info.size[i] as i64) - 1;
+							pix_tc[i] = (texture_info.size[i] as i32) - 1;
 						}
 					}
 
-					*dst_pixel = texture_data[(pix_tc[0] + pix_tc[1] * (texture_info.size[0] as i64)) as usize];
+					*dst_pixel = texture_data[(pix_tc[0] + pix_tc[1] * (texture_info.size[0] as i32)) as usize];
 
 					inv_z += d_inv_z_dx;
 					tc[0] += d_tc_dx[0];
@@ -237,9 +252,9 @@ impl<'a> Rasterizer<'a>
 
 			x_left += left_side.dx_dy;
 			x_right += right_side.dx_dy;
-			line_inv_z += d_inv_z_dy;
-			line_tc[0] += d_tc_dy[0];
-			line_tc[1] += d_tc_dy[1];
+			line_inv_z += d_inv_z_dy as i64;
+			line_tc[0] += d_tc_dy[0] as i64;
+			line_tc[1] += d_tc_dy[1] as i64;
 		}
 	}
 }
