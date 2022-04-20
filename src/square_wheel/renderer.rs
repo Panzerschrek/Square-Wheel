@@ -1,8 +1,10 @@
 use super::{clipping_polygon::*, rasterizer::*, renderer_config::*};
 use common::{
 	bsp_map_compact, camera_controller::CameraMatrices, clipping::*, color::*, fixed_math::*, image, math_types::*,
-	system_window,
+	performance_counter::*, system_window,
 };
+
+type Clock = std::time::Instant;
 
 pub struct Renderer
 {
@@ -15,6 +17,29 @@ pub struct Renderer
 	surfaces_pixels: Vec<Color32>,
 	leafs_search_waves: LeafsSearchWavesPair,
 	textures: Vec<TextureWithMips>,
+	performance_counters: RendererPerformanceCounters,
+}
+
+struct RendererPerformanceCounters
+{
+	frame_duration: PerformanceCounter,
+	visible_leafs_search: PerformanceCounter,
+	surfaces_preparation: PerformanceCounter,
+	rasterization: PerformanceCounter,
+}
+
+impl RendererPerformanceCounters
+{
+	fn new() -> Self
+	{
+		let window_size = 100;
+		Self {
+			frame_duration: PerformanceCounter::new(window_size),
+			visible_leafs_search: PerformanceCounter::new(window_size),
+			surfaces_preparation: PerformanceCounter::new(window_size),
+			rasterization: PerformanceCounter::new(window_size),
+		}
+	}
 }
 
 // Mutable data associated with map BSP Leaf.
@@ -86,6 +111,7 @@ impl Renderer
 			leafs_search_waves: LeafsSearchWavesPair::default(),
 			map,
 			textures,
+			performance_counters: RendererPerformanceCounters::new(),
 		}
 	}
 
@@ -96,6 +122,7 @@ impl Renderer
 		camera_matrices: &CameraMatrices,
 	)
 	{
+		let frame_start_time = Clock::now();
 		self.current_frame.0 += 1;
 
 		if self.config.clear_background
@@ -109,6 +136,10 @@ impl Renderer
 
 		// TODO - remove such temporary fuinction.
 		draw_crosshair(pixels, surface_info);
+
+		let frame_end_time = Clock::now();
+		let frame_duration_s = (frame_end_time - frame_start_time).as_secs_f32();
+		self.performance_counters.frame_duration.add_value(frame_duration_s);
 
 		if self.config.show_stats
 		{
@@ -145,9 +176,14 @@ impl Renderer
 				pixels,
 				surface_info,
 				&format!(
-					"leafs: {}/{}\nportals: {}/{}\npolygons: {}\nsurfaces pixels: {}k\nnum reachable leaf search  \
-					 calls: {}\nmax visits: {}\nmax reachable leaf search depth: {}\nmax reqachable leafs search wave \
-					 size: {}",
+					"frame time: {:04.2}ms\nvisible leafs search: {:04.2}ms\nsurfaces preparation: \
+					 {:04.2}ms\nrasterization: {:04.2}ms\nleafs: {}/{}\nportals: {}/{}\npolygons: {}\nsurfaces \
+					 pixels: {}k\nnum reachable leaf search  calls: {}\nmax visits: {}\nmax reachable leaf search \
+					 depth: {}\nmax reqachable leafs search wave size: {}",
+					self.performance_counters.frame_duration.get_average_value() * 1000.0,
+					self.performance_counters.visible_leafs_search.get_average_value() * 1000.0,
+					self.performance_counters.surfaces_preparation.get_average_value() * 1000.0,
+					self.performance_counters.rasterization.get_average_value() * 1000.0,
 					num_visible_leafs,
 					self.leafs_data.len(),
 					num_visible_portals,
@@ -181,6 +217,8 @@ impl Renderer
 		// TODO - before preparing frame try to shift camera a little bit away from all planes of BSP nodes before current leaf.
 		// This is needed to fix possible z_near clipping of current leaf portals.
 
+		let visibile_leafs_search_start_time = Clock::now();
+
 		let frame_bounds = ClippingPolygon::from_box(0.0, 0.0, surface_info.width as f32, surface_info.height as f32);
 		if self.config.recursive_visible_leafs_marking
 		{
@@ -201,6 +239,15 @@ impl Renderer
 			self.mark_reachable_leafs_iterative(current_leaf, camera_matrices, &frame_bounds, debug_stats);
 		}
 
+		let visibile_leafs_search_end_time = Clock::now();
+		let visibile_leafs_search_duration_s =
+			(visibile_leafs_search_end_time - visibile_leafs_search_start_time).as_secs_f32();
+		self.performance_counters
+			.visible_leafs_search
+			.add_value(visibile_leafs_search_duration_s);
+
+		let surfaces_preparation_start_time = Clock::now();
+
 		self.prepare_polygons_surfaces(
 			camera_matrices,
 			&[
@@ -209,8 +256,23 @@ impl Renderer
 			],
 		);
 
+		let surfaces_preparation_end_time = Clock::now();
+		let surfaces_preparation_duration_s =
+			(surfaces_preparation_end_time - surfaces_preparation_start_time).as_secs_f32();
+		self.performance_counters
+			.surfaces_preparation
+			.add_value(surfaces_preparation_duration_s);
+
+		let rasterization_start_time = Clock::now();
+
 		// Draw BSP tree in back to front order, skip unreachable leafs.
 		self.draw_tree_r(&mut rasterizer, camera_matrices, root_node);
+
+		let rasterization_end_time = Clock::now();
+		let rasterization_duration_s = (rasterization_end_time - rasterization_start_time).as_secs_f32();
+		self.performance_counters
+			.rasterization
+			.add_value(rasterization_duration_s);
 	}
 
 	fn find_current_leaf(&self, mut index: u32, planes_matrix: &Mat4f) -> u32
