@@ -161,18 +161,38 @@ impl<'a> Rasterizer<'a>
 		texture_data: &[Color32],
 	)
 	{
-		// TODO replace "F32" with Fixed16 for Z calculation.
+		const FIXED_SHIFT: i64 = 24;
+		const FIXED_SCALE: f32 = (1 << FIXED_SHIFT) as f32;
+		let d_inv_z_dx = (FIXED_SCALE * depth_equation.d_inv_z_dx) as i64;
+		let d_inv_z_dy = (FIXED_SCALE * depth_equation.d_inv_z_dy) as i64;
+		// Add extra 0.5 to shift to pixel center.
+		let inv_z_k =
+			(FIXED_SCALE * (depth_equation.k + (depth_equation.d_inv_z_dx + depth_equation.d_inv_z_dy) * 0.5)) as i64;
+		let d_tc_dx = [
+			(FIXED_SCALE * tex_coord_equation.d_tc_dx[0]) as i64,
+			(FIXED_SCALE * tex_coord_equation.d_tc_dx[1]) as i64,
+		];
+		let d_tc_dy = [
+			(FIXED_SCALE * tex_coord_equation.d_tc_dy[0]) as i64,
+			(FIXED_SCALE * tex_coord_equation.d_tc_dy[1]) as i64,
+		];
+		let tc_k = [
+			(FIXED_SCALE *
+				(tex_coord_equation.k[0] + (tex_coord_equation.d_tc_dx[0] + tex_coord_equation.d_tc_dy[0]) * 0.5)) as i64,
+			(FIXED_SCALE *
+				(tex_coord_equation.k[1] + (tex_coord_equation.d_tc_dx[1] + tex_coord_equation.d_tc_dy[1]) * 0.5)) as i64,
+		];
+
 		// TODO - avoid adding "0.5" for some calculations.
 		let y_start_int = fixed16_round_to_int(y_start).max(0);
 		let y_end_int = fixed16_round_to_int(y_end).min(self.height);
 		let y_start_delta = int_to_fixed16(y_start_int) + FIXED16_HALF - y_start;
 		let mut x_left = left_side.x_start + fixed16_mul(y_start_delta, left_side.dx_dy) + FIXED16_HALF;
 		let mut x_right = right_side.x_start + fixed16_mul(y_start_delta, right_side.dx_dy) + FIXED16_HALF;
-		let y_start_f32 = y_start_int as f32 + 0.5;
-		let mut line_inv_z = y_start_f32 * depth_equation.d_inv_z_dy + depth_equation.k;
+		let mut line_inv_z = (y_start_int as i64) * d_inv_z_dy + inv_z_k;
 		let mut line_tc = [
-			y_start_f32 * tex_coord_equation.d_tc_dy[0] + tex_coord_equation.k[0],
-			y_start_f32 * tex_coord_equation.d_tc_dy[1] + tex_coord_equation.k[1],
+			(y_start_int as i64) * d_tc_dy[0] + tc_k[0],
+			(y_start_int as i64) * d_tc_dy[1] + tc_k[1],
 		];
 
 		for y_int in y_start_int .. y_end_int
@@ -181,20 +201,19 @@ impl<'a> Rasterizer<'a>
 			let x_end_int = fixed16_floor_to_int(x_right).min(self.width);
 			if x_start_int < x_end_int
 			{
-				let x_start_f32 = x_start_int as f32 + 0.5;
-				let mut inv_z = x_start_f32 * depth_equation.d_inv_z_dx + line_inv_z;
+				let mut inv_z = (x_start_int as i64) * d_inv_z_dx + line_inv_z;
 				let mut tc = [
-					x_start_f32 * tex_coord_equation.d_tc_dx[0] + line_tc[0],
-					x_start_f32 * tex_coord_equation.d_tc_dx[1] + line_tc[1],
+					(x_start_int as i64) * d_tc_dx[0] + line_tc[0],
+					(x_start_int as i64) * d_tc_dx[1] + line_tc[1],
 				];
 				let line_buffer_offset = y_int * self.row_size;
 				let line_dst = &mut self.color_buffer
 					[(x_start_int + line_buffer_offset) as usize .. (x_end_int + line_buffer_offset) as usize];
+
 				for dst_pixel in line_dst
 				{
-					let z = 1.0 / inv_z;
-					// Just truncate float to integer. This is fine sice we clamp negative coordinates to zero.
-					let mut pix_tc = [(z * tc[0]) as i32, (z * tc[1]) as i32];
+					let z = (1 << (FIXED_SHIFT * 2)) / inv_z;
+					let mut pix_tc = [(z * tc[0]) >> (FIXED_SHIFT * 2), (z * tc[1]) >> (FIXED_SHIFT * 2)];
 
 					for i in 0 .. 2
 					{
@@ -202,25 +221,25 @@ impl<'a> Rasterizer<'a>
 						{
 							pix_tc[i] = 0;
 						}
-						if pix_tc[i] >= texture_info.size[i]
+						if pix_tc[i] >= (texture_info.size[i] as i64)
 						{
-							pix_tc[i] = texture_info.size[i] - 1;
+							pix_tc[i] = (texture_info.size[i] as i64) - 1;
 						}
 					}
 
-					*dst_pixel = texture_data[(pix_tc[0] + pix_tc[1] * texture_info.size[0]) as usize];
+					*dst_pixel = texture_data[(pix_tc[0] + pix_tc[1] * (texture_info.size[0] as i64)) as usize];
 
-					inv_z += depth_equation.d_inv_z_dx;
-					tc[0] += tex_coord_equation.d_tc_dx[0];
-					tc[1] += tex_coord_equation.d_tc_dx[1];
+					inv_z += d_inv_z_dx;
+					tc[0] += d_tc_dx[0];
+					tc[1] += d_tc_dx[1];
 				}
 			}
 
 			x_left += left_side.dx_dy;
 			x_right += right_side.dx_dy;
-			line_inv_z += depth_equation.d_inv_z_dy;
-			line_tc[0] += tex_coord_equation.d_tc_dy[0];
-			line_tc[1] += tex_coord_equation.d_tc_dy[1];
+			line_inv_z += d_inv_z_dy;
+			line_tc[0] += d_tc_dy[0];
+			line_tc[1] += d_tc_dy[1];
 		}
 	}
 }
