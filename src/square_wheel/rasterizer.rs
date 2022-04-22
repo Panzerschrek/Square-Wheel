@@ -161,6 +161,8 @@ impl<'a> Rasterizer<'a>
 		texture_data: &[Color32],
 	)
 	{
+		debug_assert!(texture_data.len() >= (texture_info.size[0] * texture_info.size[1]) as usize);
+
 		const FIXED_SHIFT: i32 = 24;
 		const INV_Z_SHIFT: i32 = 29;
 		const INV_Z_PRE_SHIFT: i32 = 12;
@@ -191,6 +193,7 @@ impl<'a> Rasterizer<'a>
 		];
 
 		let texture_size_minus_one = [texture_info.size[0] - 1, texture_info.size[1] - 1];
+		let texture_width = texture_info.size[0] as i32;
 
 		// TODO - avoid adding "0.5" for some calculations.
 		let y_start_int = fixed16_round_to_int(y_start).max(0);
@@ -267,7 +270,7 @@ impl<'a> Rasterizer<'a>
 					debug_assert!(span_tc[1] >= 0);
 					debug_assert!(span_inv_z >= (1 << INV_Z_PRE_SHIFT));
 
-					// TODO - correct inv_z start and step to avoid zero checks.
+					// TODO - use unchecked division (without panic! handler, because we know that divisor is non-zero).
 					let z = (1 << Z_CALC_SHIFT) / ((span_inv_z as u32) >> INV_Z_PRE_SHIFT);
 					let mut pix_tc = [
 						(((z as i64) * (span_tc[0] as i64)) >> TC_FINAL_SHIFT) as i32,
@@ -281,8 +284,18 @@ impl<'a> Rasterizer<'a>
 							pix_tc[i] = texture_size_minus_one[i];
 						}
 					}
+					let texel_address = (pix_tc[0] + pix_tc[1] * texture_width) as usize;
 
-					*dst_pixel = texture_data[(pix_tc[0] + pix_tc[1] * (texture_info.size[0] as i32)) as usize];
+					// TODO - fix unknown performance impact of bounds check removal.
+
+					// operator [] checks bounds and calls panic! handler in case if index is out of bounds.
+					// This check is useless here since we clamp texture coordnates properly.
+					// So, use "get_unchecked" in release mode.
+					//#[cfg(debug_assertions)]
+					let texel_value = texture_data[texel_address];
+					//#[cfg(not(debug_assertions))]
+					//let texel_value = unsafe{  *texture_data.get_unchecked(texel_address)  };
+					*dst_pixel = texel_value;
 
 					span_inv_z += span_d_inv_z;
 					span_tc[0] += span_d_tc[0];
