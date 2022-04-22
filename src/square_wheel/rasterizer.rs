@@ -201,10 +201,10 @@ impl<'a> Rasterizer<'a>
 		let y_start_delta = int_to_fixed16(y_start_int) + FIXED16_HALF - y_start;
 		let mut x_left = left_side.x_start + fixed16_mul(y_start_delta, left_side.dx_dy) + FIXED16_HALF;
 		let mut x_right = right_side.x_start + fixed16_mul(y_start_delta, right_side.dx_dy) + FIXED16_HALF;
-		let mut line_inv_z = (y_start_int as i64) * (d_inv_z_dy as i64) + inv_z_k;
+		let mut line_inv_z = (y_start_int as i64) * d_inv_z_dy + inv_z_k;
 		let mut line_tc = [
-			(y_start_int as i64) * (d_tc_dy[0] as i64) + tc_k[0],
-			(y_start_int as i64) * (d_tc_dy[1] as i64) + tc_k[1],
+			(y_start_int as i64) * d_tc_dy[0] + tc_k[0],
+			(y_start_int as i64) * d_tc_dy[1] + tc_k[1],
 		];
 
 		for y_int in y_start_int .. y_end_int
@@ -294,7 +294,7 @@ impl<'a> Rasterizer<'a>
 					//#[cfg(debug_assertions)]
 					let texel_value = texture_data[texel_address];
 					//#[cfg(not(debug_assertions))]
-					//let texel_value = unsafe{  *texture_data.get_unchecked(texel_address)  };
+					// let texel_value = unsafe{  *texture_data.get_unchecked(texel_address)  };
 					*dst_pixel = texel_value;
 
 					span_inv_z += span_d_inv_z;
@@ -305,9 +305,9 @@ impl<'a> Rasterizer<'a>
 
 			x_left += left_side.dx_dy;
 			x_right += right_side.dx_dy;
-			line_inv_z += d_inv_z_dy as i64;
-			line_tc[0] += d_tc_dy[0] as i64;
-			line_tc[1] += d_tc_dy[1] as i64;
+			line_inv_z += d_inv_z_dy;
+			line_tc[0] += d_tc_dy[0];
+			line_tc[1] += d_tc_dy[1];
 		} // for lines
 	}
 }
