@@ -171,12 +171,12 @@ impl<'a> Rasterizer<'a>
 		let inv_z_k =
 			(INV_Z_SCALE * (depth_equation.k + (depth_equation.d_inv_z_dx + depth_equation.d_inv_z_dy) * 0.5)) as i64;
 		let d_tc_dx = [
-			(FIXED_SCALE * tex_coord_equation.d_tc_dx[0]) as i32,
-			(FIXED_SCALE * tex_coord_equation.d_tc_dx[1]) as i32,
+			(FIXED_SCALE * tex_coord_equation.d_tc_dx[0]) as i64,
+			(FIXED_SCALE * tex_coord_equation.d_tc_dx[1]) as i64,
 		];
 		let d_tc_dy = [
-			(FIXED_SCALE * tex_coord_equation.d_tc_dy[0]) as i32,
-			(FIXED_SCALE * tex_coord_equation.d_tc_dy[1]) as i32,
+			(FIXED_SCALE * tex_coord_equation.d_tc_dy[0]) as i64,
+			(FIXED_SCALE * tex_coord_equation.d_tc_dy[1]) as i64,
 		];
 		let tc_k = [
 			(FIXED_SCALE *
@@ -184,6 +184,8 @@ impl<'a> Rasterizer<'a>
 			(FIXED_SCALE *
 				(tex_coord_equation.k[1] + (tex_coord_equation.d_tc_dx[1] + tex_coord_equation.d_tc_dy[1]) * 0.5)) as i64,
 		];
+
+		let texture_size_minus_one = [texture_info.size[0] - 1, texture_info.size[1] - 1];
 
 		// TODO - avoid adding "0.5" for some calculations.
 		let y_start_int = fixed16_round_to_int(y_start).max(0);
@@ -204,16 +206,36 @@ impl<'a> Rasterizer<'a>
 			if x_start_int < x_end_int
 			{
 				let mut inv_z = ((x_start_int as i64) * (d_inv_z_dx as i64) + line_inv_z) as i32;
-				let mut tc = [
-					((x_start_int as i64) * (d_tc_dx[0] as i64) + line_tc[0]) as i32,
-					((x_start_int as i64) * (d_tc_dx[1] as i64) + line_tc[1]) as i32,
-				];
 				let line_buffer_offset = y_int * self.row_size;
 				let line_dst = &mut self.color_buffer
 					[(x_start_int + line_buffer_offset) as usize .. (x_end_int + line_buffer_offset) as usize];
 
+				// Correct texture coordinates in order to avoid negative values.
+				// TODO - correct coordinates to avoid checking texture size.
+				let span_start_x = x_start_int as i64;
+				let span_end_x = (x_end_int - 1) as i64;
+				let span_length_minus_one = (x_end_int - 1) - x_start_int;
+				let mut span_tc = [0, 0];
+				let mut span_d_tc = [0, 0];
+				for i in 0 .. 2
+				{
+					let tc_max = 1 << 29; // TODO - calculate this based on texture size.
+					let span_tc_start =
+						std::cmp::max(0, std::cmp::min(span_start_x * d_tc_dx[i] + line_tc[i], tc_max)) as i32;
+					let span_tc_end =
+						std::cmp::max(0, std::cmp::min(span_end_x * d_tc_dx[i] + line_tc[i], tc_max)) as i32;
+					if span_length_minus_one > 0
+					{
+						span_d_tc[i] = (span_tc_end - span_tc_start) / span_length_minus_one;
+					}
+					span_tc[i] = span_tc_start;
+				}
+
 				for dst_pixel in line_dst
 				{
+					debug_assert!(span_tc[0] >= 0);
+					debug_assert!(span_tc[1] >= 0);
+
 					// TODO - correct inv_z start and step to avoid zero checks.
 					const INV_Z_PRE_SHIFT: i32 = 12;
 					let inv_z_shifted = inv_z >> INV_Z_PRE_SHIFT;
@@ -226,38 +248,34 @@ impl<'a> Rasterizer<'a>
 						(1 << 31) / ((inv_z as u32) >> (INV_Z_PRE_SHIFT as u32))
 					};
 					let mut pix_tc = [
-						(((z as i64) * (tc[0] as i64)) >> (FIXED_SHIFT + 31 - INV_Z_SHIFT + INV_Z_PRE_SHIFT) as i64)
-							as i32,
-						(((z as i64) * (tc[1] as i64)) >> (FIXED_SHIFT + 31 - INV_Z_SHIFT + INV_Z_PRE_SHIFT) as i64)
-							as i32,
+						(((z as i64) * (span_tc[0] as i64)) >>
+							(FIXED_SHIFT + 31 - INV_Z_SHIFT + INV_Z_PRE_SHIFT) as i64) as i32,
+						(((z as i64) * (span_tc[1] as i64)) >>
+							(FIXED_SHIFT + 31 - INV_Z_SHIFT + INV_Z_PRE_SHIFT) as i64) as i32,
 					];
 
 					for i in 0 .. 2
 					{
-						if pix_tc[i] < 0
+						if pix_tc[i] > texture_size_minus_one[i]
 						{
-							pix_tc[i] = 0;
-						}
-						if pix_tc[i] >= (texture_info.size[i] as i32)
-						{
-							pix_tc[i] = (texture_info.size[i] as i32) - 1;
+							pix_tc[i] = texture_size_minus_one[i];
 						}
 					}
 
 					*dst_pixel = texture_data[(pix_tc[0] + pix_tc[1] * (texture_info.size[0] as i32)) as usize];
 
 					inv_z += d_inv_z_dx;
-					tc[0] += d_tc_dx[0];
-					tc[1] += d_tc_dx[1];
-				}
-			}
+					span_tc[0] += span_d_tc[0];
+					span_tc[1] += span_d_tc[1];
+				} // for span pixels
+			} // if span is non-empty
 
 			x_left += left_side.dx_dy;
 			x_right += right_side.dx_dy;
 			line_inv_z += d_inv_z_dy as i64;
 			line_tc[0] += d_tc_dy[0] as i64;
 			line_tc[1] += d_tc_dy[1] as i64;
-		}
+		} // for lines
 	}
 }
 
