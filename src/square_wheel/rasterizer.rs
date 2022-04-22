@@ -162,11 +162,16 @@ impl<'a> Rasterizer<'a>
 	)
 	{
 		const FIXED_SHIFT: i32 = 24;
-		const FIXED_SCALE: f32 = (1 << FIXED_SHIFT) as f32;
 		const INV_Z_SHIFT: i32 = 29;
+		const INV_Z_PRE_SHIFT: i32 = 12;
+		const Z_CALC_SHIFT: i32 = 31;
+		const TC_FINAL_SHIFT: i64 = (FIXED_SHIFT + Z_CALC_SHIFT - INV_Z_SHIFT + INV_Z_PRE_SHIFT) as i64;
+
+		const FIXED_SCALE: f32 = (1 << FIXED_SHIFT) as f32;
 		const INV_Z_SCALE: f32 = (1 << INV_Z_SHIFT) as f32;
-		let d_inv_z_dx = (INV_Z_SCALE * depth_equation.d_inv_z_dx) as i32;
-		let d_inv_z_dy = (INV_Z_SCALE * depth_equation.d_inv_z_dy) as i32;
+
+		let d_inv_z_dx = (INV_Z_SCALE * depth_equation.d_inv_z_dx) as i64;
+		let d_inv_z_dy = (INV_Z_SCALE * depth_equation.d_inv_z_dy) as i64;
 		// Add extra 0.5 to shift to pixel center.
 		let inv_z_k =
 			(INV_Z_SCALE * (depth_equation.k + (depth_equation.d_inv_z_dx + depth_equation.d_inv_z_dy) * 0.5)) as i64;
@@ -205,16 +210,41 @@ impl<'a> Rasterizer<'a>
 			let x_end_int = fixed16_floor_to_int(x_right).min(self.width);
 			if x_start_int < x_end_int
 			{
-				let mut inv_z = ((x_start_int as i64) * (d_inv_z_dx as i64) + line_inv_z) as i32;
 				let line_buffer_offset = y_int * self.row_size;
 				let line_dst = &mut self.color_buffer
 					[(x_start_int + line_buffer_offset) as usize .. (x_end_int + line_buffer_offset) as usize];
 
-				// Correct texture coordinates in order to avoid negative values.
-				// TODO - correct coordinates to avoid checking texture size.
 				let span_start_x = x_start_int as i64;
 				let span_end_x = (x_end_int - 1) as i64;
 				let span_length_minus_one = (x_end_int - 1) - x_start_int;
+
+				// Correct inv_z to prevent overflow/underflow, negative values and divsion by zero.
+				let mut span_inv_z;
+				let span_d_inv_z;
+				{
+					let inv_z_min = 1 << INV_Z_PRE_SHIFT;
+					let inv_z_max = 1 << 29;
+					let span_inv_z_start = std::cmp::max(
+						inv_z_min,
+						std::cmp::min(span_start_x * d_inv_z_dx + line_inv_z, inv_z_max),
+					) as i32;
+					let span_inv_z_end = std::cmp::max(
+						inv_z_min,
+						std::cmp::min(span_end_x * d_inv_z_dx + line_inv_z, inv_z_max),
+					) as i32;
+					if span_length_minus_one > 0
+					{
+						span_d_inv_z = (span_inv_z_end - span_inv_z_start) / span_length_minus_one;
+					}
+					else
+					{
+						span_d_inv_z = 0;
+					}
+					span_inv_z = span_inv_z_start;
+				}
+
+				// Correct texture coordinates in order to avoid negative values.
+				// TODO - correct coordinates to avoid checking texture size.
 				let mut span_tc = [0, 0];
 				let mut span_d_tc = [0, 0];
 				for i in 0 .. 2
@@ -235,23 +265,13 @@ impl<'a> Rasterizer<'a>
 				{
 					debug_assert!(span_tc[0] >= 0);
 					debug_assert!(span_tc[1] >= 0);
+					debug_assert!(span_inv_z >= (1 << INV_Z_PRE_SHIFT));
 
 					// TODO - correct inv_z start and step to avoid zero checks.
-					const INV_Z_PRE_SHIFT: i32 = 12;
-					let inv_z_shifted = inv_z >> INV_Z_PRE_SHIFT;
-					let z = if inv_z_shifted <= 0
-					{
-						0
-					}
-					else
-					{
-						(1 << 31) / ((inv_z as u32) >> (INV_Z_PRE_SHIFT as u32))
-					};
+					let z = (1 << Z_CALC_SHIFT) / ((span_inv_z as u32) >> INV_Z_PRE_SHIFT);
 					let mut pix_tc = [
-						(((z as i64) * (span_tc[0] as i64)) >>
-							(FIXED_SHIFT + 31 - INV_Z_SHIFT + INV_Z_PRE_SHIFT) as i64) as i32,
-						(((z as i64) * (span_tc[1] as i64)) >>
-							(FIXED_SHIFT + 31 - INV_Z_SHIFT + INV_Z_PRE_SHIFT) as i64) as i32,
+						(((z as i64) * (span_tc[0] as i64)) >> TC_FINAL_SHIFT) as i32,
+						(((z as i64) * (span_tc[1] as i64)) >> TC_FINAL_SHIFT) as i32,
 					];
 
 					for i in 0 .. 2
@@ -264,7 +284,7 @@ impl<'a> Rasterizer<'a>
 
 					*dst_pixel = texture_data[(pix_tc[0] + pix_tc[1] * (texture_info.size[0] as i32)) as usize];
 
-					inv_z += d_inv_z_dx;
+					span_inv_z += span_d_inv_z;
 					span_tc[0] += span_d_tc[0];
 					span_tc[1] += span_d_tc[1];
 				} // for span pixels
