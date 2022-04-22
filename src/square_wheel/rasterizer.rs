@@ -165,16 +165,11 @@ impl<'a> Rasterizer<'a>
 		const FIXED_SCALE: f32 = (1 << FIXED_SHIFT) as f32;
 		const INV_Z_SHIFT: i32 = 29;
 		const INV_Z_SCALE: f32 = (1 << INV_Z_SHIFT) as f32;
-		// let d_inv_z_dx = (INV_Z_SCALE * depth_equation.d_inv_z_dx) as i32;
-		// let d_inv_z_dy = (INV_Z_SCALE * depth_equation.d_inv_z_dy) as i32;
+		let d_inv_z_dx = (INV_Z_SCALE * depth_equation.d_inv_z_dx) as i32;
+		let d_inv_z_dy = (INV_Z_SCALE * depth_equation.d_inv_z_dy) as i32;
 		// Add extra 0.5 to shift to pixel center.
-		// let inv_z_k =
-		// (FIXED_SCALE * (depth_equation.k + (depth_equation.d_inv_z_dx + depth_equation.d_inv_z_dy) * 0.5)) as i64;
-		// (INV_Z_SCALE * (depth_equation.k + (depth_equation.d_inv_z_dx + depth_equation.d_inv_z_dy) * 0.5)) as i64;
-		let d_inv_z_dx = depth_equation.d_inv_z_dx;
-		let d_inv_z_dy = depth_equation.d_inv_z_dy;
-		// Add extra 0.5 to shift to pixel center.
-		let inv_z_k = depth_equation.k + (depth_equation.d_inv_z_dx + depth_equation.d_inv_z_dy) * 0.5;
+		let inv_z_k =
+			(INV_Z_SCALE * (depth_equation.k + (depth_equation.d_inv_z_dx + depth_equation.d_inv_z_dy) * 0.5)) as i64;
 		let d_tc_dx = [
 			(FIXED_SCALE * tex_coord_equation.d_tc_dx[0]) as i32,
 			(FIXED_SCALE * tex_coord_equation.d_tc_dx[1]) as i32,
@@ -196,7 +191,7 @@ impl<'a> Rasterizer<'a>
 		let y_start_delta = int_to_fixed16(y_start_int) + FIXED16_HALF - y_start;
 		let mut x_left = left_side.x_start + fixed16_mul(y_start_delta, left_side.dx_dy) + FIXED16_HALF;
 		let mut x_right = right_side.x_start + fixed16_mul(y_start_delta, right_side.dx_dy) + FIXED16_HALF;
-		let mut line_inv_z = (y_start_int as f32) * d_inv_z_dy + inv_z_k;
+		let mut line_inv_z = (y_start_int as i64) * (d_inv_z_dy as i64) + inv_z_k;
 		let mut line_tc = [
 			(y_start_int as i64) * (d_tc_dy[0] as i64) + tc_k[0],
 			(y_start_int as i64) * (d_tc_dy[1] as i64) + tc_k[1],
@@ -208,7 +203,7 @@ impl<'a> Rasterizer<'a>
 			let x_end_int = fixed16_floor_to_int(x_right).min(self.width);
 			if x_start_int < x_end_int
 			{
-				let mut inv_z = (x_start_int as f32) * d_inv_z_dx + line_inv_z;
+				let mut inv_z = ((x_start_int as i64) * (d_inv_z_dx as i64) + line_inv_z) as i32;
 				let mut tc = [
 					((x_start_int as i64) * (d_tc_dx[0] as i64) + line_tc[0]) as i32,
 					((x_start_int as i64) * (d_tc_dx[1] as i64) + line_tc[1]) as i32,
@@ -220,24 +215,21 @@ impl<'a> Rasterizer<'a>
 				for dst_pixel in line_dst
 				{
 					// TODO - correct inv_z start and step to avoid zero checks.
-					// const INV_Z_PRE_SHIFT : i32 = 12;
-					// let inv_z_shifted = inv_z >> INV_Z_PRE_SHIFT;
-					// let z = if inv_z_shifted <= 0
-					// {
-					// 0
-					// }
-					// else
-					// {
-					// (1 << 31) / ((inv_z as u32) >> (INV_Z_PRE_SHIFT as u32))
-					// };
-					// let mut pix_tc = [
-					// 	(((z as i64) * (tc[0] as i64)) >> ((FIXED_SHIFT + 31 - INV_Z_SHIFT + INV_Z_PRE_SHIFT)) as i64) as i32,
-					// 	(((z as i64) * (tc[1] as i64)) >> ((FIXED_SHIFT + 31 - INV_Z_SHIFT + INV_Z_PRE_SHIFT)) as i64) as i32,
-					// ];
-					let z = INV_Z_SCALE / inv_z;
+					const INV_Z_PRE_SHIFT: i32 = 12;
+					let inv_z_shifted = inv_z >> INV_Z_PRE_SHIFT;
+					let z = if inv_z_shifted <= 0
+					{
+						0
+					}
+					else
+					{
+						(1 << 31) / ((inv_z as u32) >> (INV_Z_PRE_SHIFT as u32))
+					};
 					let mut pix_tc = [
-						(((z as i64) * (tc[0] as i64)) >> (FIXED_SHIFT + INV_Z_SHIFT)) as i32,
-						(((z as i64) * (tc[1] as i64)) >> (FIXED_SHIFT + INV_Z_SHIFT)) as i32,
+						(((z as i64) * (tc[0] as i64)) >> (FIXED_SHIFT + 31 - INV_Z_SHIFT + INV_Z_PRE_SHIFT) as i64)
+							as i32,
+						(((z as i64) * (tc[1] as i64)) >> (FIXED_SHIFT + 31 - INV_Z_SHIFT + INV_Z_PRE_SHIFT) as i64)
+							as i32,
 					];
 
 					for i in 0 .. 2
@@ -262,7 +254,7 @@ impl<'a> Rasterizer<'a>
 
 			x_left += left_side.dx_dy;
 			x_right += right_side.dx_dy;
-			line_inv_z += d_inv_z_dy;
+			line_inv_z += d_inv_z_dy as i64;
 			line_tc[0] += d_tc_dy[0] as i64;
 			line_tc[1] += d_tc_dy[1] as i64;
 		}
