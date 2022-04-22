@@ -247,21 +247,76 @@ impl<'a> Rasterizer<'a>
 				}
 
 				// Correct texture coordinates in order to avoid negative values.
-				// TODO - correct coordinates to avoid checking texture size.
+				// TODO - prove that this code generates proper texture coordinates equation thats guarantee us 100% protection against overflow/underflow.
 				let mut span_tc = [0, 0];
 				let mut span_d_tc = [0, 0];
 				for i in 0 .. 2
 				{
-					let tc_max = 1 << 29; // TODO - calculate this based on texture size.
+					let tc_max_shift = INV_Z_SHIFT - FIXED_SHIFT;
+					let tc_max_max = 1 << 29;
+					// TODO - prove that such tc_max values are correct in all possible situations.
+					let span_inv_z_corrected = (span_inv_z - (1 << INV_Z_PRE_SHIFT)) as i64;
+					let tc_max_start = std::cmp::max(
+						0,
+						std::cmp::min(
+							(span_inv_z_corrected * (texture_info.size[i] as i64) >> tc_max_shift) - 1,
+							tc_max_max,
+						),
+					);
+					let tc_max_end = std::cmp::max(
+						0,
+						std::cmp::min(
+							((span_inv_z_corrected + ((span_d_inv_z * span_length_minus_one) as i64)) *
+								(texture_info.size[i] as i64) >> tc_max_shift) -
+								1,
+							tc_max_max,
+						),
+					);
+
 					let span_tc_start =
-						std::cmp::max(0, std::cmp::min(span_start_x * d_tc_dx[i] + line_tc[i], tc_max)) as i32;
+						std::cmp::max(0, std::cmp::min(span_start_x * d_tc_dx[i] + line_tc[i], tc_max_start)) as i32;
 					let span_tc_end =
-						std::cmp::max(0, std::cmp::min(span_end_x * d_tc_dx[i] + line_tc[i], tc_max)) as i32;
+						std::cmp::max(0, std::cmp::min(span_end_x * d_tc_dx[i] + line_tc[i], tc_max_end)) as i32;
+
+					// We need to make sure than tc still is in range even if step is rounded.
+					// TODO - maybe use tc_max* instead of span_tc_(start|end) ?
 					if span_length_minus_one > 0
 					{
 						span_d_tc[i] = (span_tc_end - span_tc_start) / span_length_minus_one;
+
+						if span_tc_start >= span_length_minus_one && span_tc_end >= span_length_minus_one
+						{
+							if span_tc_start + span_d_tc[i] * span_length_minus_one <= span_tc_end
+							{
+								span_tc[i] = span_tc_start;
+							}
+							else
+							{
+								span_tc[i] = span_tc_end - span_d_tc[i] * span_length_minus_one;
+							}
+						}
+						else if span_tc_start >= span_length_minus_one
+						{
+							span_tc[i] = span_tc_end - span_d_tc[i] * span_length_minus_one;
+						}
+						else if span_tc_end >= span_length_minus_one
+						{
+							span_tc[i] = span_tc_start;
+						}
+						else
+						{
+							span_tc[i] = 0;
+							span_d_tc[i] = 0;
+						}
 					}
-					span_tc[i] = span_tc_start;
+					else
+					{
+						span_tc[i] = span_tc_start;
+					}
+					debug_assert!(span_tc[i] >= 0);
+					debug_assert!(span_tc[i] <= span_tc_start);
+					debug_assert!(span_tc[i] + span_d_tc[i] * span_length_minus_one >= 0);
+					debug_assert!(span_tc[i] + span_d_tc[i] * span_length_minus_one <= span_tc_end);
 				}
 
 				for dst_pixel in line_dst
@@ -270,20 +325,15 @@ impl<'a> Rasterizer<'a>
 					debug_assert!(span_tc[1] >= 0);
 					debug_assert!(span_inv_z >= (1 << INV_Z_PRE_SHIFT));
 
-					// TODO - use unchecked division (without panic! handler, because we know that divisor is non-zero).
+					// TODO - use unchecked division (without panic! handler), because we know that divisor is non-zero.
 					let z = (1 << Z_CALC_SHIFT) / ((span_inv_z as u32) >> INV_Z_PRE_SHIFT);
-					let mut pix_tc = [
+					let pix_tc = [
 						(((z as i64) * (span_tc[0] as i64)) >> TC_FINAL_SHIFT) as i32,
 						(((z as i64) * (span_tc[1] as i64)) >> TC_FINAL_SHIFT) as i32,
 					];
 
-					for i in 0 .. 2
-					{
-						if pix_tc[i] > texture_size_minus_one[i]
-						{
-							pix_tc[i] = texture_size_minus_one[i];
-						}
-					}
+					debug_assert!(pix_tc[0] <= texture_size_minus_one[0]);
+					debug_assert!(pix_tc[1] <= texture_size_minus_one[1]);
 					let texel_address = (pix_tc[0] + pix_tc[1] * texture_width) as usize;
 
 					// TODO - fix unknown performance impact of bounds check removal.
