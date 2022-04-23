@@ -193,7 +193,7 @@ impl<'a> Rasterizer<'a>
 		];
 
 		let texture_size_minus_one = [texture_info.size[0] - 1, texture_info.size[1] - 1];
-		let texture_width = texture_info.size[0] as i32;
+		let texture_width = texture_info.size[0] as u32;
 
 		// TODO - avoid adding "0.5" for some calculations.
 		let y_start_int = fixed16_round_to_int(y_start).max(0);
@@ -309,12 +309,12 @@ impl<'a> Rasterizer<'a>
 
 					let z = unchecked_div(1 << Z_CALC_SHIFT, (span_inv_z as u32) >> INV_Z_PRE_SHIFT);
 					let pix_tc = [
-						(((z as i64) * (span_tc[0] as i64)) >> TC_FINAL_SHIFT) as i32,
-						(((z as i64) * (span_tc[1] as i64)) >> TC_FINAL_SHIFT) as i32,
+						(((z as u64) * (span_tc[0] as u64)) >> TC_FINAL_SHIFT) as u32,
+						(((z as u64) * (span_tc[1] as u64)) >> TC_FINAL_SHIFT) as u32,
 					];
 
-					debug_assert!(pix_tc[0] <= texture_size_minus_one[0]);
-					debug_assert!(pix_tc[1] <= texture_size_minus_one[1]);
+					debug_assert!(pix_tc[0] <= texture_size_minus_one[0] as u32);
+					debug_assert!(pix_tc[1] <= texture_size_minus_one[1] as u32);
 					let texel_address = (pix_tc[0] + pix_tc[1] * texture_width) as usize;
 
 					// operator [] checks bounds and calls panic! handler in case if index is out of bounds.
