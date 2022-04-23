@@ -339,6 +339,147 @@ impl<'a> Rasterizer<'a>
 			line_tc[1] += d_tc_dy[1];
 		} // for lines
 	}
+
+	fn fill_polygon_part_affine(
+		&mut self,
+		y_start: Fixed16,
+		y_end: Fixed16,
+		left_side: PolygonSide,
+		right_side: PolygonSide,
+		depth_equation: &DepthEquation,
+		tex_coord_equation: &TexCoordEquation,
+		texture_info: &TextureInfo,
+		texture_data: &[Color32],
+	)
+	{
+		debug_assert!(texture_data.len() >= (texture_info.size[0] * texture_info.size[1]) as usize);
+
+		let y_start_f32 = fixed16_to_f32(y_start);
+		let y_end_f32 = fixed16_to_f32(y_end);
+		let y_delta = y_end - y_start;
+		let x_start_left = fixed16_to_f32(left_side.x_start);
+		let x_end_left = fixed16_to_f32(left_side.x_start + fixed16_mul(y_delta, left_side.dx_dy));
+		let x_start_right = fixed16_to_f32(right_side.x_start);
+		let x_end_right = fixed16_to_f32(right_side.x_start + fixed16_mul(y_delta, right_side.dx_dy));
+		let z_start_left = 1.0 /
+			(depth_equation.d_inv_z_dx * x_start_left + depth_equation.d_inv_z_dy * y_start_f32 + depth_equation.k);
+		let z_end_left =
+			1.0 / (depth_equation.d_inv_z_dx * x_end_left + depth_equation.d_inv_z_dy * y_end_f32 + depth_equation.k);
+		let z_start_right = 1.0 /
+			(depth_equation.d_inv_z_dx * x_start_right + depth_equation.d_inv_z_dy * y_start_f32 + depth_equation.k);
+		let z_end_right =
+			1.0 / (depth_equation.d_inv_z_dx * x_end_right + depth_equation.d_inv_z_dy * y_end_f32 + depth_equation.k);
+
+		let mut tc_left = [0, 0];
+		let mut tc_right = [0, 0];
+		let mut d_tc_left = [0, 0];
+		let mut d_tc_right = [0, 0];
+		for i in 0 .. 2
+		{
+			let max_tc = int_to_fixed16(texture_info.size[i]) - 1;
+
+			let tc_left_start = f32_to_fixed16(
+				z_start_left *
+					(x_start_left * tex_coord_equation.d_tc_dx[i] +
+						y_start_f32 * tex_coord_equation.d_tc_dy[i] +
+						tex_coord_equation.k[i]),
+			)
+			.max(0)
+			.min(max_tc);
+			let tc_left_end = f32_to_fixed16(
+				z_start_right *
+					(x_end_left * tex_coord_equation.d_tc_dx[i] +
+						y_end_f32 * tex_coord_equation.d_tc_dy[i] +
+						tex_coord_equation.k[i]),
+			)
+			.max(0)
+			.min(max_tc);
+
+			let tc_right_start = f32_to_fixed16(
+				z_end_left *
+					(x_start_right * tex_coord_equation.d_tc_dx[i] +
+						y_start_f32 * tex_coord_equation.d_tc_dy[i] +
+						tex_coord_equation.k[i]),
+			)
+			.max(0)
+			.min(max_tc);
+			let tc_right_end = f32_to_fixed16(
+				z_end_right *
+					(x_end_right * tex_coord_equation.d_tc_dx[i] +
+						y_end_f32 * tex_coord_equation.d_tc_dy[i] +
+						tex_coord_equation.k[i]),
+			)
+			.max(0)
+			.min(max_tc);
+
+			// TODO - prevent division by zero or overflow.
+			d_tc_left[i] = fixed16_div(tc_left_end - tc_left_start, y_delta);
+			d_tc_right[i] = fixed16_div(tc_right_end - tc_right_start, y_delta);
+			tc_left[i] = tc_left_start;
+			tc_right[i] = tc_right_start;
+		}
+
+		// TODO - avoid adding "0.5" for some calculations.
+		let y_start_int = fixed16_round_to_int(y_start).max(0);
+		let y_end_int = fixed16_round_to_int(y_end).min(self.height);
+		let y_start_delta = int_to_fixed16(y_start_int) + FIXED16_HALF - y_start;
+		let mut x_left = left_side.x_start + fixed16_mul(y_start_delta, left_side.dx_dy) + FIXED16_HALF;
+		let mut x_right = right_side.x_start + fixed16_mul(y_start_delta, right_side.dx_dy) + FIXED16_HALF;
+		for i in 0 .. 2
+		{
+			tc_left[i] += fixed16_mul(y_start_delta, d_tc_left[i]);
+			tc_right[i] += fixed16_mul(y_start_delta, d_tc_right[i]);
+		}
+
+		for y_int in y_start_int .. y_end_int
+		{
+			let x_start_int = fixed16_floor_to_int(x_left).max(0);
+			let x_end_int = fixed16_floor_to_int(x_right).min(self.width);
+			if x_start_int < x_end_int
+			{
+				let line_buffer_offset = y_int * self.row_size;
+				let line_dst = &mut self.color_buffer
+					[(x_start_int + line_buffer_offset) as usize .. (x_end_int + line_buffer_offset) as usize];
+
+				let mut tc = [tc_left[0], tc_left[1]];
+				// TODO - prevent division by zero or overflow.
+				let d_tc = [
+					fixed16_div(tc_right[0] - tc_left[0], x_right - x_left),
+					fixed16_div(tc_right[1] - tc_left[1], x_right - x_left),
+				];
+
+				for dst_pixel in line_dst
+				{
+					// TODO - use unsigned shift for conversion to int?
+					let tc_int = [fixed16_floor_to_int(tc[0]), fixed16_floor_to_int(tc[1])];
+					debug_assert!(tc_int[0] >= 0);
+					debug_assert!(tc_int[1] >= 0);
+					debug_assert!(tc_int[0] <= texture_info.size[0] as i32);
+					debug_assert!(tc_int[1] <= texture_info.size[1] as i32);
+					let texel_address = (tc_int[0] + tc_int[1] * texture_info.size[0]) as usize;
+
+					// operator [] checks bounds and calls panic! handler in case if index is out of bounds.
+					// This check is useless here since we clamp texture coordnates properly.
+					// So, use "get_unchecked" in release mode.
+					#[cfg(debug_assertions)]
+					let texel_value = texture_data[texel_address];
+					#[cfg(not(debug_assertions))]
+					let texel_value = unsafe { *texture_data.get_unchecked(texel_address) };
+					*dst_pixel = texel_value;
+
+					tc[0] += d_tc[0];
+					tc[1] += d_tc[1];
+				} // for span pixels
+			} // if span is non-empty
+
+			x_left += left_side.dx_dy;
+			x_right += right_side.dx_dy;
+			tc_left[0] += d_tc_left[0];
+			tc_left[1] += d_tc_left[1];
+			tc_right[0] += d_tc_right[0];
+			tc_right[1] += d_tc_right[1];
+		} // for lines
+	}
 }
 
 #[derive(Copy, Clone)]
