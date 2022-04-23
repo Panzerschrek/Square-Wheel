@@ -46,6 +46,9 @@ impl<'a> Rasterizer<'a>
 			TetureCoordinatesInterpolationMode::FullPerspective => Self::fill_polygon_part,
 			TetureCoordinatesInterpolationMode::Affine => Self::fill_polygon_part_affine,
 		};
+		// TODO - remove this and create some way to instantiate "fill_polygon" function with "fill_polygon_part*" function as template argument.
+		let draw_func = Self::fill_polygon_part;
+
 		// Search for start vertex (with min y).
 		let mut lower_vertex_index = 0;
 		let mut min_y = vertices[0].y;
