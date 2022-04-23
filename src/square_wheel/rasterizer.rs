@@ -318,15 +318,13 @@ impl<'a> Rasterizer<'a>
 					debug_assert!(pix_tc[1] <= texture_size_minus_one[1]);
 					let texel_address = (pix_tc[0] + pix_tc[1] * texture_width) as usize;
 
-					// TODO - fix unknown performance impact of bounds check removal.
-
 					// operator [] checks bounds and calls panic! handler in case if index is out of bounds.
 					// This check is useless here since we clamp texture coordnates properly.
 					// So, use "get_unchecked" in release mode.
-					//#[cfg(debug_assertions)]
+					#[cfg(debug_assertions)]
 					let texel_value = texture_data[texel_address];
-					//#[cfg(not(debug_assertions))]
-					// let texel_value = unsafe{  *texture_data.get_unchecked(texel_address)  };
+					#[cfg(not(debug_assertions))]
+					let texel_value = unsafe{  *texture_data.get_unchecked(texel_address)  };
 					*dst_pixel = texel_value;
 
 					span_inv_z += span_d_inv_z;
