@@ -370,6 +370,9 @@ impl<'a> Rasterizer<'a>
 		let z_end_right =
 			1.0 / (depth_equation.d_inv_z_dx * x_end_right + depth_equation.d_inv_z_dy * y_end_f32 + depth_equation.k);
 
+		// Prevent division by zero or overflow.
+		let y_delta_for_tc_interpoltion = y_delta.max(FIXED16_ONE);
+		
 		let mut tc_left = [0, 0];
 		let mut tc_right = [0, 0];
 		let mut d_tc_left = [0, 0];
@@ -412,9 +415,8 @@ impl<'a> Rasterizer<'a>
 			.max(0)
 			.min(max_tc);
 
-			// TODO - prevent division by zero or overflow.
-			d_tc_left[i] = fixed16_div(tc_left_end - tc_left_start, y_delta);
-			d_tc_right[i] = fixed16_div(tc_right_end - tc_right_start, y_delta);
+			d_tc_left[i] = fixed16_div(tc_left_end - tc_left_start, y_delta_for_tc_interpoltion);
+			d_tc_right[i] = fixed16_div(tc_right_end - tc_right_start, y_delta_for_tc_interpoltion);
 			tc_left[i] = tc_left_start;
 			tc_right[i] = tc_right_start;
 		}
@@ -442,10 +444,11 @@ impl<'a> Rasterizer<'a>
 					[(x_start_int + line_buffer_offset) as usize .. (x_end_int + line_buffer_offset) as usize];
 
 				let mut tc = [tc_left[0], tc_left[1]];
-				// TODO - prevent division by zero or overflow.
+				// Prevent division by zero or overflow.
+				let x_delta_for_tc_interpolation = (x_right - x_left).max(FIXED16_ONE);
 				let d_tc = [
-					fixed16_div(tc_right[0] - tc_left[0], x_right - x_left),
-					fixed16_div(tc_right[1] - tc_left[1], x_right - x_left),
+					fixed16_div(tc_right[0] - tc_left[0], x_delta_for_tc_interpolation),
+					fixed16_div(tc_right[1] - tc_left[1], x_delta_for_tc_interpolation),
 				];
 
 				for dst_pixel in line_dst
