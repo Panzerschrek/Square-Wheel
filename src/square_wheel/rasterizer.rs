@@ -33,6 +33,7 @@ impl<'a> Rasterizer<'a>
 	// Fill convex clockwise polygon.
 	pub fn fill_polygon(
 		&mut self,
+		texture_coordinates_interpolation_mode: TetureCoordinatesInterpolationMode,
 		vertices: &[PolygonPointProjected],
 		depth_equation: &DepthEquation,
 		tex_coord_equation: &TexCoordEquation,
@@ -40,6 +41,11 @@ impl<'a> Rasterizer<'a>
 		texture_data: &[Color32],
 	)
 	{
+		let draw_func = match texture_coordinates_interpolation_mode
+		{
+			TetureCoordinatesInterpolationMode::FullPerspective => Self::fill_polygon_part,
+			TetureCoordinatesInterpolationMode::Affine => Self::fill_polygon_part_affine,
+		};
 		// Search for start vertex (with min y).
 		let mut lower_vertex_index = 0;
 		let mut min_y = vertices[0].y;
@@ -76,7 +82,8 @@ impl<'a> Rasterizer<'a>
 			{
 				let dx_dy_left = fixed16_div(vertices[next_left_index].x - vertices[left_index].x, dy_left);
 				let dx_dy_right = fixed16_div(vertices[next_right_index].x - vertices[right_index].x, dy_right);
-				self.fill_polygon_part(
+				draw_func(
+					self,
 					cur_y,
 					next_y,
 					PolygonSide {
@@ -113,7 +120,8 @@ impl<'a> Rasterizer<'a>
 							vertices[next_right_index].x - vertices[right_index].x,
 							dy_right,
 						);
-					self.fill_polygon_part(
+					draw_func(
+						self,
 						cur_y,
 						next_y,
 						PolygonSide {
@@ -511,6 +519,12 @@ pub struct TexCoordEquation
 pub struct TextureInfo
 {
 	pub size: [i32; 2],
+}
+
+pub enum TetureCoordinatesInterpolationMode
+{
+	FullPerspective,
+	Affine,
 }
 
 struct PolygonSide

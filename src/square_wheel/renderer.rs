@@ -1057,6 +1057,35 @@ fn draw_polygon(
 		return;
 	}
 
+	// Find min/max inv_z to check if we can use affine texture coordinates interpolation.
+	// TODO - calculate this during surface preparation?
+	let mut min_inv_z = 1e24;
+	let mut max_inv_z = -1e24;
+	for vertex_2d in &vertices_2d[.. vertex_count]
+	{
+		let inv_z =
+			vertex_2d.x * depth_equation.d_inv_z_dx + vertex_2d.y * depth_equation.d_inv_z_dy + depth_equation.k;
+		if inv_z < min_inv_z
+		{
+			min_inv_z = inv_z;
+		}
+		if inv_z > max_inv_z
+		{
+			max_inv_z = inv_z;
+		}
+	}
+
+	let mut texture_coordinates_interpolation_mode = TetureCoordinatesInterpolationMode::FullPerspective;
+
+	// TODO - tune this value.
+	// TODO - maybe use other criteria?
+	let affine_texture_coordinates_interpolation_ratio = 1.025;
+	if max_inv_z / min_inv_z < affine_texture_coordinates_interpolation_ratio
+	{
+		// If difference between min/max z is pretty small - use fast affine textures coordinates interpolation.
+		texture_coordinates_interpolation_mode = TetureCoordinatesInterpolationMode::Affine;
+	}
+
 	// Perform f32 to Fixed16 conversion.
 	let mut vertices_for_rasterizer = [PolygonPointProjected { x: 0, y: 0 }; MAX_VERTICES]; // TODO - use uninitialized memory
 	for (index, vertex_2d) in vertices_2d.iter().enumerate().take(vertex_count)
@@ -1069,6 +1098,7 @@ fn draw_polygon(
 
 	// Perform rasterization of fully clipped polygon.
 	rasterizer.fill_polygon(
+		texture_coordinates_interpolation_mode,
 		&vertices_for_rasterizer[0 .. vertex_count],
 		&depth_equation,
 		&tex_coord_equation,
