@@ -457,8 +457,8 @@ impl<'a> Rasterizer<'a>
 					let tc_int = [fixed16_floor_to_int(tc[0]), fixed16_floor_to_int(tc[1])];
 					debug_assert!(tc_int[0] >= 0);
 					debug_assert!(tc_int[1] >= 0);
-					debug_assert!(tc_int[0] <= texture_info.size[0] as i32);
-					debug_assert!(tc_int[1] <= texture_info.size[1] as i32);
+					debug_assert!(tc_int[0] < texture_info.size[0] as i32);
+					debug_assert!(tc_int[1] < texture_info.size[1] as i32);
 					let texel_address = (tc_int[0] + tc_int[1] * texture_info.size[0]) as usize;
 
 					// operator [] checks bounds and calls panic! handler in case if index is out of bounds.
