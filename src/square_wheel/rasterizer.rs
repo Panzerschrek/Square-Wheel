@@ -372,7 +372,7 @@ impl<'a> Rasterizer<'a>
 
 		// Prevent division by zero or overflow.
 		let y_delta_for_tc_interpoltion = y_delta.max(FIXED16_ONE);
-		
+
 		let mut tc_left = [0, 0];
 		let mut tc_right = [0, 0];
 		let mut d_tc_left = [0, 0];
@@ -381,7 +381,7 @@ impl<'a> Rasterizer<'a>
 		{
 			let max_tc = int_to_fixed16(texture_info.size[i]) - 1;
 
-			let tc_left_start = f32_to_fixed16(
+			let tc_start_left = f32_to_fixed16(
 				z_start_left *
 					(x_start_left * tex_coord_equation.d_tc_dx[i] +
 						y_start_f32 * tex_coord_equation.d_tc_dy[i] +
@@ -389,8 +389,8 @@ impl<'a> Rasterizer<'a>
 			)
 			.max(0)
 			.min(max_tc);
-			let tc_left_end = f32_to_fixed16(
-				z_start_right *
+			let tc_end_left = f32_to_fixed16(
+				z_end_left *
 					(x_end_left * tex_coord_equation.d_tc_dx[i] +
 						y_end_f32 * tex_coord_equation.d_tc_dy[i] +
 						tex_coord_equation.k[i]),
@@ -398,15 +398,15 @@ impl<'a> Rasterizer<'a>
 			.max(0)
 			.min(max_tc);
 
-			let tc_right_start = f32_to_fixed16(
-				z_end_left *
+			let tc_start_right = f32_to_fixed16(
+				z_start_right *
 					(x_start_right * tex_coord_equation.d_tc_dx[i] +
 						y_start_f32 * tex_coord_equation.d_tc_dy[i] +
 						tex_coord_equation.k[i]),
 			)
 			.max(0)
 			.min(max_tc);
-			let tc_right_end = f32_to_fixed16(
+			let tc_end_right = f32_to_fixed16(
 				z_end_right *
 					(x_end_right * tex_coord_equation.d_tc_dx[i] +
 						y_end_f32 * tex_coord_equation.d_tc_dy[i] +
@@ -415,10 +415,10 @@ impl<'a> Rasterizer<'a>
 			.max(0)
 			.min(max_tc);
 
-			d_tc_left[i] = fixed16_div(tc_left_end - tc_left_start, y_delta_for_tc_interpoltion);
-			d_tc_right[i] = fixed16_div(tc_right_end - tc_right_start, y_delta_for_tc_interpoltion);
-			tc_left[i] = tc_left_start;
-			tc_right[i] = tc_right_start;
+			d_tc_left[i] = fixed16_div(tc_end_left - tc_start_left, y_delta_for_tc_interpoltion);
+			d_tc_right[i] = fixed16_div(tc_end_right - tc_start_right, y_delta_for_tc_interpoltion);
+			tc_left[i] = tc_start_left;
+			tc_right[i] = tc_start_right;
 		}
 
 		// TODO - avoid adding "0.5" for some calculations.
