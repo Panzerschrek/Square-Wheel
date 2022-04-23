@@ -263,60 +263,42 @@ impl<'a> Rasterizer<'a>
 							tc_max_max,
 						),
 					);
-					let tc_max_end = std::cmp::max(
-						0,
-						std::cmp::min(
-							((span_inv_z_corrected + ((span_d_inv_z * span_length_minus_one) as i64)) *
-								(texture_info.size[i] as i64) >> tc_max_shift) -
-								1,
-							tc_max_max,
-						),
-					);
-
 					let span_tc_start =
 						std::cmp::max(0, std::cmp::min(span_start_x * d_tc_dx[i] + line_tc[i], tc_max_start)) as i32;
-					let span_tc_end =
-						std::cmp::max(0, std::cmp::min(span_end_x * d_tc_dx[i] + line_tc[i], tc_max_end)) as i32;
 
-					// We need to make sure than tc still is in range even if step is rounded.
-					// TODO - maybe use tc_max* instead of span_tc_(start|end) ?
 					if span_length_minus_one > 0
 					{
-						span_d_tc[i] = (span_tc_end - span_tc_start) / span_length_minus_one;
+						let tc_max_end = std::cmp::max(
+							0,
+							std::cmp::min(
+								((span_inv_z_corrected + ((span_d_inv_z * span_length_minus_one) as i64)) *
+									(texture_info.size[i] as i64) >> tc_max_shift) -
+									1,
+								tc_max_max,
+							),
+						);
+						let span_tc_end =
+							std::cmp::max(0, std::cmp::min(span_end_x * d_tc_dx[i] + line_tc[i], tc_max_end)) as i32;
 
-						if span_tc_start >= span_length_minus_one && span_tc_end >= span_length_minus_one
-						{
-							if span_tc_start + span_d_tc[i] * span_length_minus_one <= span_tc_end
-							{
-								span_tc[i] = span_tc_start;
-							}
-							else
-							{
-								span_tc[i] = span_tc_end - span_d_tc[i] * span_length_minus_one;
-							}
-						}
-						else if span_tc_start >= span_length_minus_one
-						{
-							span_tc[i] = span_tc_end - span_d_tc[i] * span_length_minus_one;
-						}
-						else if span_tc_end >= span_length_minus_one
+						// We need to make sure than tc still is in range even if step is rounded.
+						span_d_tc[i] = (span_tc_end - span_tc_start) / span_length_minus_one;
+						if span_tc_end > span_tc_start
 						{
 							span_tc[i] = span_tc_start;
 						}
 						else
 						{
-							span_tc[i] = 0;
-							span_d_tc[i] = 0;
+							span_tc[i] = span_tc_end - span_d_tc[i] * span_length_minus_one;
 						}
+						debug_assert!(span_tc[i] >= 0);
+						debug_assert!(span_tc[i] <= span_tc_start);
+						debug_assert!(span_tc[i] + span_d_tc[i] * span_length_minus_one >= 0);
+						debug_assert!(span_tc[i] + span_d_tc[i] * span_length_minus_one <= span_tc_end);
 					}
 					else
 					{
 						span_tc[i] = span_tc_start;
 					}
-					debug_assert!(span_tc[i] >= 0);
-					debug_assert!(span_tc[i] <= span_tc_start);
-					debug_assert!(span_tc[i] + span_d_tc[i] * span_length_minus_one >= 0);
-					debug_assert!(span_tc[i] + span_d_tc[i] * span_length_minus_one <= span_tc_end);
 				}
 
 				for dst_pixel in line_dst
