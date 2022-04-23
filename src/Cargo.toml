@@ -8,6 +8,9 @@ edition = "2018"
 panic = "abort"
 lto = true
 
+[features]
+rasterizer_unchecked_div = []
+
 [dependencies]
 cgmath = "0.18"
 sdl2 = { version = "0.35", features = ["image"] }

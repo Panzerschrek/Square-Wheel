@@ -307,8 +307,7 @@ impl<'a> Rasterizer<'a>
 					debug_assert!(span_tc[1] >= 0);
 					debug_assert!(span_inv_z >= (1 << INV_Z_PRE_SHIFT));
 
-					// TODO - use unchecked division (without panic! handler), because we know that divisor is non-zero.
-					let z = (1 << Z_CALC_SHIFT) / ((span_inv_z as u32) >> INV_Z_PRE_SHIFT);
+					let z = unchecked_div(1 << Z_CALC_SHIFT, (span_inv_z as u32) >> INV_Z_PRE_SHIFT);
 					let pix_tc = [
 						(((z as i64) * (span_tc[0] as i64)) >> TC_FINAL_SHIFT) as i32,
 						(((z as i64) * (span_tc[1] as i64)) >> TC_FINAL_SHIFT) as i32,
@@ -324,7 +323,7 @@ impl<'a> Rasterizer<'a>
 					#[cfg(debug_assertions)]
 					let texel_value = texture_data[texel_address];
 					#[cfg(not(debug_assertions))]
-					let texel_value = unsafe{  *texture_data.get_unchecked(texel_address)  };
+					let texel_value = unsafe { *texture_data.get_unchecked(texel_address) };
 					*dst_pixel = texel_value;
 
 					span_inv_z += span_d_inv_z;
@@ -374,4 +373,18 @@ struct PolygonSide
 {
 	x_start: Fixed16,
 	dx_dy: Fixed16,
+}
+
+// We do not care if "y" is zero, because there is no difference between "panic!" and hardware exceptions.
+// In both cases application will be terminated.
+#[cfg(feature = "rasterizer_unchecked_div")]
+fn unchecked_div(x: u32, y: u32) -> u32
+{
+	unsafe { std::intrinsics::unchecked_div(x, y) }
+}
+
+#[cfg(not(feature = "rasterizer_unchecked_div"))]
+fn unchecked_div(x: u32, y: u32) -> u32
+{
+	x / y
 }
