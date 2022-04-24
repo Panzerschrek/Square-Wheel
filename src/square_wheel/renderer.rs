@@ -1104,27 +1104,52 @@ fn draw_polygon(
 			texture_data,
 		);
 	}
-	// If inv_z variation across line is constant - perform linear texture coordinates interpolation across line.
-	// TODO - perfomr more complex check, do not use exact 0.
-	else if depth_equation.d_inv_z_dx.abs() <= 1.0 / ( (1 << 28) as f32)
-	{
-			rasterizer.fill_polygon::<RasterizerSettingsLineZCorrection>(
-			&vertices_for_rasterizer[0 .. vertex_count],
-			&depth_equation,
-			&tex_coord_equation,
-			&texture_info,
-			texture_data,
-		);
-	}
 	else
 	{
-		rasterizer.fill_polygon::<RasterizerSettingsFullPerspective>(
-			&vertices_for_rasterizer[0 .. vertex_count],
-			&depth_equation,
-			&tex_coord_equation,
-			&texture_info,
-			texture_data,
-		);
+		// Scale depth and texture coordinates equation in order to increase precision inside rasterizer.
+		// Use only power of 2 scale for this.
+		// This is equivalent to moving far polygons closer to camera.
+		let z_scale = (-5.0 - max_inv_z.max(1.0 / ((1 << 20) as f32)).log2().ceil()).exp2();
+
+		let depth_equation_scaled = DepthEquation {
+			d_inv_z_dx: depth_equation.d_inv_z_dx * z_scale,
+			d_inv_z_dy: depth_equation.d_inv_z_dy * z_scale,
+			k: depth_equation.k * z_scale,
+		};
+		let tex_coord_equation_scaled = TexCoordEquation {
+			d_tc_dx: [
+				tex_coord_equation.d_tc_dx[0] * z_scale,
+				tex_coord_equation.d_tc_dx[1] * z_scale,
+			],
+			d_tc_dy: [
+				tex_coord_equation.d_tc_dy[0] * z_scale,
+				tex_coord_equation.d_tc_dy[1] * z_scale,
+			],
+			k: [tex_coord_equation.k[0] * z_scale, tex_coord_equation.k[1] * z_scale],
+		};
+
+		// If inv_z variation across line is constant - perform linear texture coordinates interpolation across line.
+		// TODO - perform more complex check, do not use almost exact 0.
+		if depth_equation.d_inv_z_dx.abs() <= 1.0 / ((1 << 28) as f32)
+		{
+			rasterizer.fill_polygon::<RasterizerSettingsLineZCorrection>(
+				&vertices_for_rasterizer[0 .. vertex_count],
+				&depth_equation_scaled,
+				&tex_coord_equation_scaled,
+				&texture_info,
+				texture_data,
+			);
+		}
+		else
+		{
+			rasterizer.fill_polygon::<RasterizerSettingsFullPerspective>(
+				&vertices_for_rasterizer[0 .. vertex_count],
+				&depth_equation_scaled,
+				&tex_coord_equation_scaled,
+				&texture_info,
+				texture_data,
+			);
+		}
 	}
 }
 

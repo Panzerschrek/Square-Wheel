@@ -675,7 +675,7 @@ fn unchecked_div(x: u32, y: u32) -> u32
 
 const TC_SHIFT: i32 = 24;
 const INV_Z_SHIFT: i32 = 29;
-const INV_Z_PRE_SHIFT: i32 = 12;
+const INV_Z_PRE_SHIFT: i32 = 8;
 const Z_CALC_SHIFT: i32 = 31;
 const TC_FINAL_SHIFT: i64 = (TC_SHIFT + Z_CALC_SHIFT - INV_Z_SHIFT + INV_Z_PRE_SHIFT) as i64;
 
