@@ -1097,16 +1097,29 @@ fn draw_polygon(
 	}
 
 	// Perform rasterization of fully clipped polygon.
-	rasterizer.fill_polygon(
-		texture_coordinates_interpolation_mode,
-		&vertices_for_rasterizer[0 .. vertex_count],
-		&depth_equation,
-		&tex_coord_equation,
-		&TextureInfo {
-			size: [texture_size[0] as i32, texture_size[1] as i32],
-		},
-		texture_data,
-	);
+	let texture_info = TextureInfo {
+		size: [texture_size[0] as i32, texture_size[1] as i32],
+	};
+	if texture_coordinates_interpolation_mode == TetureCoordinatesInterpolationMode::FullPerspective
+	{
+		rasterizer.fill_polygon::<RasterizerSettingsFullPerspective>(
+			&vertices_for_rasterizer[0 .. vertex_count],
+			&depth_equation,
+			&tex_coord_equation,
+			&texture_info,
+			texture_data,
+		);
+	}
+	else
+	{
+		rasterizer.fill_polygon::<RasterizerSettingsAffine>(
+			&vertices_for_rasterizer[0 .. vertex_count],
+			&depth_equation,
+			&tex_coord_equation,
+			&texture_info,
+			texture_data,
+		);
+	}
 }
 
 const MAX_VERTICES: usize = 24;
@@ -1217,4 +1230,22 @@ fn calculate_mip(points: &[Vec2f], depth_equation: &DepthEquation, tc_equation: 
 	let mip = std::cmp::max(0, std::cmp::min(mip_f.ceil() as i32, MAX_MIP as i32));
 
 	mip as u32
+}
+
+struct RasterizerSettingsFullPerspective;
+impl RasterizerSettings for RasterizerSettingsFullPerspective
+{
+	fn texture_coordinates_interpolation_mode() -> TetureCoordinatesInterpolationMode
+	{
+		TetureCoordinatesInterpolationMode::FullPerspective
+	}
+}
+
+struct RasterizerSettingsAffine;
+impl RasterizerSettings for RasterizerSettingsAffine
+{
+	fn texture_coordinates_interpolation_mode() -> TetureCoordinatesInterpolationMode
+	{
+		TetureCoordinatesInterpolationMode::Affine
+	}
 }

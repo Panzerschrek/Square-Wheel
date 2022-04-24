@@ -1,5 +1,18 @@
 use common::{color::*, fixed_math::*, system_window};
 
+// Use trait object with functions returning some values (constants) as replacement for C++ value template parameters.
+pub trait RasterizerSettings
+{
+	fn texture_coordinates_interpolation_mode() -> TetureCoordinatesInterpolationMode;
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum TetureCoordinatesInterpolationMode
+{
+	FullPerspective,
+	Affine,
+}
+
 pub struct Rasterizer<'a>
 {
 	color_buffer: &'a mut [Color32],
@@ -31,9 +44,8 @@ impl<'a> Rasterizer<'a>
 	}
 
 	// Fill convex clockwise polygon.
-	pub fn fill_polygon(
+	pub fn fill_polygon<Settings: RasterizerSettings>(
 		&mut self,
-		texture_coordinates_interpolation_mode: TetureCoordinatesInterpolationMode,
 		vertices: &[PolygonPointProjected],
 		depth_equation: &DepthEquation,
 		tex_coord_equation: &TexCoordEquation,
@@ -41,13 +53,11 @@ impl<'a> Rasterizer<'a>
 		texture_data: &[Color32],
 	)
 	{
-		let draw_func = match texture_coordinates_interpolation_mode
+		let draw_func = match Settings::texture_coordinates_interpolation_mode()
 		{
 			TetureCoordinatesInterpolationMode::FullPerspective => Self::fill_polygon_part,
 			TetureCoordinatesInterpolationMode::Affine => Self::fill_polygon_part_affine,
 		};
-		// TODO - remove this and create some way to instantiate "fill_polygon" function with "fill_polygon_part*" function as template argument.
-		let draw_func = Self::fill_polygon_part;
 
 		// Search for start vertex (with min y).
 		let mut lower_vertex_index = 0;
@@ -522,12 +532,6 @@ pub struct TexCoordEquation
 pub struct TextureInfo
 {
 	pub size: [i32; 2],
-}
-
-pub enum TetureCoordinatesInterpolationMode
-{
-	FullPerspective,
-	Affine,
 }
 
 struct PolygonSide
