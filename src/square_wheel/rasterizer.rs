@@ -10,6 +10,7 @@ pub trait RasterizerSettings
 pub enum TetureCoordinatesInterpolationMode
 {
 	FullPerspective,
+	LineZCorrection,
 	Affine,
 }
 
@@ -56,6 +57,7 @@ impl<'a> Rasterizer<'a>
 		let draw_func = match Settings::texture_coordinates_interpolation_mode()
 		{
 			TetureCoordinatesInterpolationMode::FullPerspective => Self::fill_polygon_part,
+			TetureCoordinatesInterpolationMode::LineZCorrection => Self::fill_polygon_part_line_z_corrected,
 			TetureCoordinatesInterpolationMode::Affine => Self::fill_polygon_part_affine,
 		};
 

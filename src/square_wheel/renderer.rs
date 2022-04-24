@@ -1075,17 +1075,6 @@ fn draw_polygon(
 		}
 	}
 
-	let mut texture_coordinates_interpolation_mode = TetureCoordinatesInterpolationMode::FullPerspective;
-
-	// TODO - tune this value.
-	// TODO - maybe use other criteria?
-	let affine_texture_coordinates_interpolation_ratio = 1.025;
-	if max_inv_z / min_inv_z < affine_texture_coordinates_interpolation_ratio
-	{
-		// If difference between min/max z is pretty small - use fast affine textures coordinates interpolation.
-		texture_coordinates_interpolation_mode = TetureCoordinatesInterpolationMode::Affine;
-	}
-
 	// Perform f32 to Fixed16 conversion.
 	let mut vertices_for_rasterizer = [PolygonPointProjected { x: 0, y: 0 }; MAX_VERTICES]; // TODO - use uninitialized memory
 	for (index, vertex_2d) in vertices_2d.iter().enumerate().take(vertex_count)
@@ -1100,9 +1089,26 @@ fn draw_polygon(
 	let texture_info = TextureInfo {
 		size: [texture_size[0] as i32, texture_size[1] as i32],
 	};
-	if texture_coordinates_interpolation_mode == TetureCoordinatesInterpolationMode::FullPerspective
+
+	// If difference between min/max z is pretty small - use fast affine textures coordinates interpolation.
+	// TODO - maybe use other criteria?
+	// TODO - tune this value.
+	let affine_texture_coordinates_interpolation_ratio = 1.025;
+	if max_inv_z / min_inv_z < affine_texture_coordinates_interpolation_ratio
 	{
-		rasterizer.fill_polygon::<RasterizerSettingsFullPerspective>(
+		rasterizer.fill_polygon::<RasterizerSettingsAffine>(
+			&vertices_for_rasterizer[0 .. vertex_count],
+			&depth_equation,
+			&tex_coord_equation,
+			&texture_info,
+			texture_data,
+		);
+	}
+	// If inv_z variation across line is constant - perform linear texture coordinates interpolation across line.
+	// TODO - perfomr more complex check, do not use exact 0.
+	else if depth_equation.d_inv_z_dx.abs() <= 1.0 / ( (1 << 28) as f32)
+	{
+			rasterizer.fill_polygon::<RasterizerSettingsLineZCorrection>(
 			&vertices_for_rasterizer[0 .. vertex_count],
 			&depth_equation,
 			&tex_coord_equation,
@@ -1112,7 +1118,7 @@ fn draw_polygon(
 	}
 	else
 	{
-		rasterizer.fill_polygon::<RasterizerSettingsAffine>(
+		rasterizer.fill_polygon::<RasterizerSettingsFullPerspective>(
 			&vertices_for_rasterizer[0 .. vertex_count],
 			&depth_equation,
 			&tex_coord_equation,
@@ -1238,6 +1244,15 @@ impl RasterizerSettings for RasterizerSettingsFullPerspective
 	fn texture_coordinates_interpolation_mode() -> TetureCoordinatesInterpolationMode
 	{
 		TetureCoordinatesInterpolationMode::FullPerspective
+	}
+}
+
+struct RasterizerSettingsLineZCorrection;
+impl RasterizerSettings for RasterizerSettingsLineZCorrection
+{
+	fn texture_coordinates_interpolation_mode() -> TetureCoordinatesInterpolationMode
+	{
+		TetureCoordinatesInterpolationMode::LineZCorrection
 	}
 }
 
