@@ -184,32 +184,23 @@ impl<'a> Rasterizer<'a>
 	{
 		debug_assert!(texture_data.len() >= (texture_info.size[0] * texture_info.size[1]) as usize);
 
-		const FIXED_SHIFT: i32 = 24;
-		const INV_Z_SHIFT: i32 = 29;
-		const INV_Z_PRE_SHIFT: i32 = 12;
-		const Z_CALC_SHIFT: i32 = 31;
-		const TC_FINAL_SHIFT: i64 = (FIXED_SHIFT + Z_CALC_SHIFT - INV_Z_SHIFT + INV_Z_PRE_SHIFT) as i64;
-
-		const FIXED_SCALE: f32 = (1 << FIXED_SHIFT) as f32;
-		const INV_Z_SCALE: f32 = (1 << INV_Z_SHIFT) as f32;
-
 		let d_inv_z_dx = (INV_Z_SCALE * depth_equation.d_inv_z_dx) as i64;
 		let d_inv_z_dy = (INV_Z_SCALE * depth_equation.d_inv_z_dy) as i64;
 		// Add extra 0.5 to shift to pixel center.
 		let inv_z_k =
 			(INV_Z_SCALE * (depth_equation.k + (depth_equation.d_inv_z_dx + depth_equation.d_inv_z_dy) * 0.5)) as i64;
 		let d_tc_dx = [
-			(FIXED_SCALE * tex_coord_equation.d_tc_dx[0]) as i64,
-			(FIXED_SCALE * tex_coord_equation.d_tc_dx[1]) as i64,
+			(TC_SCALE * tex_coord_equation.d_tc_dx[0]) as i64,
+			(TC_SCALE * tex_coord_equation.d_tc_dx[1]) as i64,
 		];
 		let d_tc_dy = [
-			(FIXED_SCALE * tex_coord_equation.d_tc_dy[0]) as i64,
-			(FIXED_SCALE * tex_coord_equation.d_tc_dy[1]) as i64,
+			(TC_SCALE * tex_coord_equation.d_tc_dy[0]) as i64,
+			(TC_SCALE * tex_coord_equation.d_tc_dy[1]) as i64,
 		];
 		let tc_k = [
-			(FIXED_SCALE *
+			(TC_SCALE *
 				(tex_coord_equation.k[0] + (tex_coord_equation.d_tc_dx[0] + tex_coord_equation.d_tc_dy[0]) * 0.5)) as i64,
-			(FIXED_SCALE *
+			(TC_SCALE *
 				(tex_coord_equation.k[1] + (tex_coord_equation.d_tc_dx[1] + tex_coord_equation.d_tc_dy[1]) * 0.5)) as i64,
 		];
 
@@ -273,7 +264,7 @@ impl<'a> Rasterizer<'a>
 				let mut span_d_tc = [0, 0];
 				for i in 0 .. 2
 				{
-					let tc_max_shift = INV_Z_SHIFT - FIXED_SHIFT;
+					let tc_max_shift = INV_Z_SHIFT - TC_SHIFT;
 					let tc_max_max = 1 << 29;
 					// TODO - prove that such tc_max values are correct in all possible situations.
 					let span_inv_z_corrected = (span_inv_z - (1 << INV_Z_PRE_SHIFT)) as i64;
@@ -348,6 +339,132 @@ impl<'a> Rasterizer<'a>
 					*dst_pixel = texel_value;
 
 					span_inv_z += span_d_inv_z;
+					span_tc[0] += span_d_tc[0];
+					span_tc[1] += span_d_tc[1];
+				} // for span pixels
+			} // if span is non-empty
+
+			x_left += left_side.dx_dy;
+			x_right += right_side.dx_dy;
+			line_inv_z += d_inv_z_dy;
+			line_tc[0] += d_tc_dy[0];
+			line_tc[1] += d_tc_dy[1];
+		} // for lines
+	}
+
+	fn fill_polygon_part_line_z_corrected(
+		&mut self,
+		y_start: Fixed16,
+		y_end: Fixed16,
+		left_side: PolygonSide,
+		right_side: PolygonSide,
+		depth_equation: &DepthEquation,
+		tex_coord_equation: &TexCoordEquation,
+		texture_info: &TextureInfo,
+		texture_data: &[Color32],
+	)
+	{
+		debug_assert!(texture_data.len() >= (texture_info.size[0] * texture_info.size[1]) as usize);
+
+		const LINE_TC_SHIFT: i64 = 16;
+
+		let d_inv_z_dx = (INV_Z_SCALE * depth_equation.d_inv_z_dx) as i64;
+		let d_inv_z_dy = (INV_Z_SCALE * depth_equation.d_inv_z_dy) as i64;
+		// Add extra 0.5 to shift to pixel center.
+		let inv_z_k =
+			(INV_Z_SCALE * (depth_equation.k + (depth_equation.d_inv_z_dx + depth_equation.d_inv_z_dy) * 0.5)) as i64;
+		let d_tc_dx = [
+			(TC_SCALE * tex_coord_equation.d_tc_dx[0]) as i64,
+			(TC_SCALE * tex_coord_equation.d_tc_dx[1]) as i64,
+		];
+		let d_tc_dy = [
+			(TC_SCALE * tex_coord_equation.d_tc_dy[0]) as i64,
+			(TC_SCALE * tex_coord_equation.d_tc_dy[1]) as i64,
+		];
+		let tc_k = [
+			(TC_SCALE *
+				(tex_coord_equation.k[0] + (tex_coord_equation.d_tc_dx[0] + tex_coord_equation.d_tc_dy[0]) * 0.5)) as i64,
+			(TC_SCALE *
+				(tex_coord_equation.k[1] + (tex_coord_equation.d_tc_dx[1] + tex_coord_equation.d_tc_dy[1]) * 0.5)) as i64,
+		];
+
+		let texture_width = texture_info.size[0] as u32;
+
+		// TODO - avoid adding "0.5" for some calculations.
+		let y_start_int = fixed16_round_to_int(y_start).max(0);
+		let y_end_int = fixed16_round_to_int(y_end).min(self.height);
+		let y_start_delta = int_to_fixed16(y_start_int) + FIXED16_HALF - y_start;
+		let mut x_left = left_side.x_start + fixed16_mul(y_start_delta, left_side.dx_dy) + FIXED16_HALF;
+		let mut x_right = right_side.x_start + fixed16_mul(y_start_delta, right_side.dx_dy) + FIXED16_HALF;
+		let mut line_inv_z = (y_start_int as i64) * d_inv_z_dy + inv_z_k;
+		let mut line_tc = [
+			(y_start_int as i64) * d_tc_dy[0] + tc_k[0],
+			(y_start_int as i64) * d_tc_dy[1] + tc_k[1],
+		];
+
+		for y_int in y_start_int .. y_end_int
+		{
+			let x_start_int = fixed16_floor_to_int(x_left).max(0);
+			let x_end_int = fixed16_floor_to_int(x_right).min(self.width);
+			if x_start_int < x_end_int
+			{
+				let line_buffer_offset = y_int * self.row_size;
+				let line_dst = &mut self.color_buffer
+					[(x_start_int + line_buffer_offset) as usize .. (x_end_int + line_buffer_offset) as usize];
+
+				// Calculate z for span start/end, calculate texture coordinates based on this z.
+				// Then just use liner interpolation of texture coordinates across span.
+				// This is fine if z variation across span is very small.
+
+				let span_start_x = x_start_int as i64;
+				let span_end_x = (x_end_int - 1) as i64;
+				let span_length_minus_one = (x_end_int - 1) - x_start_int;
+
+				let inv_z_min = 1 << INV_Z_PRE_SHIFT;
+				let inv_z_max = 1 << 29;
+				let span_inv_z_start = (span_start_x * d_inv_z_dx + line_inv_z).max(inv_z_min).min(inv_z_max) as u32;
+				let span_inv_z_end = (span_end_x * d_inv_z_dx + line_inv_z).max(inv_z_min).min(inv_z_max) as u32;
+				let span_z_start = unchecked_div(1 << Z_CALC_SHIFT, span_inv_z_start >> INV_Z_PRE_SHIFT) as u64;
+				let span_z_end = unchecked_div(1 << Z_CALC_SHIFT, span_inv_z_end >> INV_Z_PRE_SHIFT) as u64;
+
+				// Perform interpolation of textures coordinates inside span using 32-bit values.
+				let mut span_tc = [0, 0];
+				let mut span_d_tc = [0, 0];
+				for i in 0 .. 2
+				{
+					let tc_start = (line_tc[i] + span_start_x * d_tc_dx[i]).max(0) as u64;
+					let tc_end = (line_tc[i] + span_end_x * d_tc_dx[i]).max(0) as u64;
+					let max_tc = ((texture_info.size[i] as u64) << LINE_TC_SHIFT) - 1;
+					let tc_mul_z_start =
+						((span_z_start * tc_start) >> (TC_FINAL_SHIFT - LINE_TC_SHIFT)).min(max_tc) as i32;
+					let tc_mul_z_end = ((span_z_end * tc_end) >> (TC_FINAL_SHIFT - LINE_TC_SHIFT)).min(max_tc) as i32;
+
+					span_tc[i] = tc_mul_z_start;
+					if span_length_minus_one > 0
+					{
+						span_d_tc[i] = (tc_mul_z_end - tc_mul_z_start) / span_length_minus_one;
+					}
+				}
+
+				for dst_pixel in line_dst
+				{
+					let tc_int = [span_tc[0] >> LINE_TC_SHIFT, span_tc[1] >> LINE_TC_SHIFT];
+					debug_assert!(tc_int[0] >= 0);
+					debug_assert!(tc_int[1] >= 0);
+					debug_assert!(tc_int[0] < texture_info.size[0] as i32);
+					debug_assert!(tc_int[1] < texture_info.size[1] as i32);
+
+					let texel_address = ((tc_int[0] as u32) + (tc_int[1] as u32) * texture_width) as usize;
+
+					// operator [] checks bounds and calls panic! handler in case if index is out of bounds.
+					// This check is useless here since we clamp texture coordnates properly.
+					// So, use "get_unchecked" in release mode.
+					#[cfg(debug_assertions)]
+					let texel_value = texture_data[texel_address];
+					#[cfg(not(debug_assertions))]
+					let texel_value = unsafe { *texture_data.get_unchecked(texel_address) };
+					*dst_pixel = texel_value;
+
 					span_tc[0] += span_d_tc[0];
 					span_tc[1] += span_d_tc[1];
 				} // for span pixels
@@ -553,3 +670,12 @@ fn unchecked_div(x: u32, y: u32) -> u32
 {
 	x / y
 }
+
+const TC_SHIFT: i32 = 24;
+const INV_Z_SHIFT: i32 = 29;
+const INV_Z_PRE_SHIFT: i32 = 12;
+const Z_CALC_SHIFT: i32 = 31;
+const TC_FINAL_SHIFT: i64 = (TC_SHIFT + Z_CALC_SHIFT - INV_Z_SHIFT + INV_Z_PRE_SHIFT) as i64;
+
+const TC_SCALE: f32 = (1 << TC_SHIFT) as f32;
+const INV_Z_SCALE: f32 = (1 << INV_Z_SHIFT) as f32;
