@@ -1061,17 +1061,20 @@ fn draw_polygon(
 	// TODO - calculate this during surface preparation?
 	let mut min_inv_z = 1e24;
 	let mut max_inv_z = -1e24;
-	for vertex_2d in &vertices_2d[.. vertex_count]
+	let mut min_inv_z_point = &vertices_2d[0];
+	let mut max_inv_z_point = &vertices_2d[0];
+	for point in &vertices_2d[.. vertex_count]
 	{
-		let inv_z =
-			vertex_2d.x * depth_equation.d_inv_z_dx + vertex_2d.y * depth_equation.d_inv_z_dy + depth_equation.k;
+		let inv_z = point.x * depth_equation.d_inv_z_dx + point.y * depth_equation.d_inv_z_dy + depth_equation.k;
 		if inv_z < min_inv_z
 		{
 			min_inv_z = inv_z;
+			min_inv_z_point = point;
 		}
 		if inv_z > max_inv_z
 		{
 			max_inv_z = inv_z;
+			max_inv_z_point = point;
 		}
 	}
 
@@ -1090,11 +1093,12 @@ fn draw_polygon(
 		size: [texture_size[0] as i32, texture_size[1] as i32],
 	};
 
-	// If difference between min/max z is pretty small - use fast affine textures coordinates interpolation.
-	// TODO - maybe use other criteria?
-	// TODO - tune this value.
-	let affine_texture_coordinates_interpolation_ratio = 1.025;
-	if max_inv_z / min_inv_z < affine_texture_coordinates_interpolation_ratio
+	if affine_texture_coordinates_interpolation_may_be_used(
+		depth_equation,
+		tex_coord_equation,
+		min_inv_z_point,
+		max_inv_z_point,
+	)
 	{
 		rasterizer.fill_polygon::<RasterizerSettingsAffine>(
 			&vertices_for_rasterizer[0 .. vertex_count],
@@ -1151,6 +1155,87 @@ fn draw_polygon(
 			);
 		}
 	}
+}
+
+fn affine_texture_coordinates_interpolation_may_be_used(
+	depth_equation: &DepthEquation,
+	tex_coord_equation: &TexCoordEquation,
+	min_inv_z_point: &Vec2f,
+	max_inv_z_point: &Vec2f,
+) -> bool
+{
+	// Projects depth and texture coordinates eqution to edge between min and max z vertices of the polygon.
+	// Than calculate maximum texture coordinates deviation along the edge.
+	// If this value is less than specific threshold - enable affine texturing.
+
+	// TODO -maybe use inverse function - enable texel shift no more than this threshold?
+	const THRESHOLD: f32 = 0.75;
+
+	let edge = max_inv_z_point - min_inv_z_point;
+	let edge_square_len = edge.magnitude2();
+	if edge_square_len == 0.0
+	{
+		return true;
+	}
+
+	let edge_len = edge_square_len.sqrt();
+	let edge_vec_normalized = edge / edge_len;
+
+	let inv_z_clamp = 1.0 / ((1 << 20) as f32);
+	let min_point_inv_z = (depth_equation.d_inv_z_dx * min_inv_z_point.x +
+		depth_equation.d_inv_z_dy * min_inv_z_point.y +
+		depth_equation.k)
+		.max(inv_z_clamp);
+	let max_point_inv_z = (depth_equation.d_inv_z_dx * max_inv_z_point.x +
+		depth_equation.d_inv_z_dy * max_inv_z_point.y +
+		depth_equation.k)
+		.max(inv_z_clamp);
+
+	let depth_equation_projected_a =
+		Vec2f::new(depth_equation.d_inv_z_dx, depth_equation.d_inv_z_dy).dot(edge_vec_normalized);
+	let depth_equation_projected_b = min_point_inv_z;
+
+	if depth_equation_projected_a.abs() < 1.0e-10
+	{
+		// Z is almost constant along this edge.
+		return true;
+	}
+
+	let depth_b_div_a = depth_equation_projected_b / depth_equation_projected_a;
+	let max_diff_point = ((0.0 + depth_b_div_a) * (edge_len + depth_b_div_a)).sqrt() - depth_b_div_a;
+
+	let max_diff_point_inv_z = depth_equation_projected_a * max_diff_point + depth_equation_projected_b;
+
+	for i in 0 .. 2
+	{
+		let min_point_tc = tex_coord_equation.d_tc_dx[i] * min_inv_z_point.x +
+			tex_coord_equation.d_tc_dy[i] * min_inv_z_point.y +
+			tex_coord_equation.k[i];
+		let max_point_tc = tex_coord_equation.d_tc_dx[i] * max_inv_z_point.x +
+			tex_coord_equation.d_tc_dy[i] * max_inv_z_point.y +
+			tex_coord_equation.k[i];
+
+		let tc_projected_a =
+			Vec2f::new(tex_coord_equation.d_tc_dx[i], tex_coord_equation.d_tc_dy[i]).dot(edge_vec_normalized);
+		let tc_projected_b = min_point_tc;
+
+		let min_point_tc_z_mul = min_point_tc / min_point_inv_z;
+		let max_point_tc_z_mul = max_point_tc / max_point_inv_z;
+
+		// Calculate difference of true texture coordinates and linear approximation (based on edge points).
+
+		let max_diff_point_tc_real = (tc_projected_a * max_diff_point + tc_projected_b) / max_diff_point_inv_z;
+		let max_diff_point_tc_approximate =
+			min_point_tc_z_mul + (max_point_tc_z_mul - min_point_tc_z_mul) * (max_diff_point - 0.0) / (edge_len - 0.0);
+		let tc_abs_diff = (max_diff_point_tc_real - max_diff_point_tc_approximate).abs();
+		if tc_abs_diff > THRESHOLD
+		{
+			// Difference is too large - can't use affine texturing.
+			return false;
+		}
+	}
+
+	true
 }
 
 const MAX_VERTICES: usize = 24;
