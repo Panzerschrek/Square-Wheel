@@ -330,15 +330,7 @@ impl<'a> Rasterizer<'a>
 					debug_assert!(pix_tc[0] <= texture_size_minus_one[0] as u32);
 					debug_assert!(pix_tc[1] <= texture_size_minus_one[1] as u32);
 					let texel_address = (pix_tc[0] + pix_tc[1] * texture_width) as usize;
-
-					// operator [] checks bounds and calls panic! handler in case if index is out of bounds.
-					// This check is useless here since we clamp texture coordnates properly.
-					// So, use "get_unchecked" in release mode.
-					#[cfg(debug_assertions)]
-					let texel_value = texture_data[texel_address];
-					#[cfg(not(debug_assertions))]
-					let texel_value = unsafe { *texture_data.get_unchecked(texel_address) };
-					*dst_pixel = texel_value;
+					*dst_pixel = unchecked_texture_fetch(texture_data, texel_address);
 
 					span_inv_z += span_d_inv_z;
 					span_tc[0] += span_d_tc[0];
@@ -457,15 +449,7 @@ impl<'a> Rasterizer<'a>
 					debug_assert!(tc_int[1] < texture_info.size[1] as i32);
 
 					let texel_address = ((tc_int[0] as u32) + (tc_int[1] as u32) * texture_width) as usize;
-
-					// operator [] checks bounds and calls panic! handler in case if index is out of bounds.
-					// This check is useless here since we clamp texture coordnates properly.
-					// So, use "get_unchecked" in release mode.
-					#[cfg(debug_assertions)]
-					let texel_value = texture_data[texel_address];
-					#[cfg(not(debug_assertions))]
-					let texel_value = unsafe { *texture_data.get_unchecked(texel_address) };
-					*dst_pixel = texel_value;
+					*dst_pixel = unchecked_texture_fetch(texture_data, texel_address);
 
 					span_tc[0] += span_d_tc[0];
 					span_tc[1] += span_d_tc[1];
@@ -600,15 +584,7 @@ impl<'a> Rasterizer<'a>
 					debug_assert!(tc_int[0] < texture_info.size[0] as i32);
 					debug_assert!(tc_int[1] < texture_info.size[1] as i32);
 					let texel_address = (tc_int[0] + tc_int[1] * texture_info.size[0]) as usize;
-
-					// operator [] checks bounds and calls panic! handler in case if index is out of bounds.
-					// This check is useless here since we clamp texture coordnates properly.
-					// So, use "get_unchecked" in release mode.
-					#[cfg(debug_assertions)]
-					let texel_value = texture_data[texel_address];
-					#[cfg(not(debug_assertions))]
-					let texel_value = unsafe { *texture_data.get_unchecked(texel_address) };
-					*dst_pixel = texel_value;
+					*dst_pixel = unchecked_texture_fetch(texture_data, texel_address);
 
 					tc[0] += d_tc[0];
 					tc[1] += d_tc[1];
@@ -671,6 +647,21 @@ fn unchecked_div(x: u32, y: u32) -> u32
 fn unchecked_div(x: u32, y: u32) -> u32
 {
 	x / y
+}
+
+fn unchecked_texture_fetch(texture_data: &[Color32], texel_address: usize) -> Color32
+{
+	// operator [] checks bounds and calls panic! handler in case if index is out of bounds.
+	// This check is useless here since we clamp texture coordnates properly.
+	// So, use "get_unchecked" in release mode.
+	#[cfg(debug_assertions)]
+	{
+		texture_data[texel_address]
+	}
+	#[cfg(not(debug_assertions))]
+	unsafe {
+		*texture_data.get_unchecked(texel_address)
+	}
 }
 
 const TC_SHIFT: i32 = 24;
