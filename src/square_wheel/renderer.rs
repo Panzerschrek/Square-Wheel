@@ -1431,26 +1431,20 @@ fn calculate_mip(points: &[Vec2f], depth_equation: &DepthEquation, tc_equation: 
 struct RasterizerSettingsFullPerspective;
 impl RasterizerSettings for RasterizerSettingsFullPerspective
 {
-	fn texture_coordinates_interpolation_mode() -> TetureCoordinatesInterpolationMode
-	{
-		TetureCoordinatesInterpolationMode::FullPerspective
-	}
+	const TEXTURE_COORDINATES_INTERPOLATION_MODE: TetureCoordinatesInterpolationMode =
+		TetureCoordinatesInterpolationMode::FullPerspective;
 }
 
 struct RasterizerSettingsLineZCorrection;
 impl RasterizerSettings for RasterizerSettingsLineZCorrection
 {
-	fn texture_coordinates_interpolation_mode() -> TetureCoordinatesInterpolationMode
-	{
-		TetureCoordinatesInterpolationMode::LineZCorrection
-	}
+	const TEXTURE_COORDINATES_INTERPOLATION_MODE: TetureCoordinatesInterpolationMode =
+		TetureCoordinatesInterpolationMode::LineZCorrection;
 }
 
 struct RasterizerSettingsAffine;
 impl RasterizerSettings for RasterizerSettingsAffine
 {
-	fn texture_coordinates_interpolation_mode() -> TetureCoordinatesInterpolationMode
-	{
-		TetureCoordinatesInterpolationMode::Affine
-	}
+	const TEXTURE_COORDINATES_INTERPOLATION_MODE: TetureCoordinatesInterpolationMode =
+		TetureCoordinatesInterpolationMode::Affine;
 }

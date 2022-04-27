@@ -1,9 +1,9 @@
 use common::{color::*, fixed_math::*, system_window};
 
-// Use trait object with functions returning some values (constants) as replacement for C++ value template parameters.
+// Use trait object with constants as replacement for C++ value template parameters.
 pub trait RasterizerSettings
 {
-	fn texture_coordinates_interpolation_mode() -> TetureCoordinatesInterpolationMode;
+	const TEXTURE_COORDINATES_INTERPOLATION_MODE: TetureCoordinatesInterpolationMode;
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -54,7 +54,7 @@ impl<'a> Rasterizer<'a>
 		texture_data: &[Color32],
 	)
 	{
-		let draw_func = match Settings::texture_coordinates_interpolation_mode()
+		let draw_func = match Settings::TEXTURE_COORDINATES_INTERPOLATION_MODE
 		{
 			TetureCoordinatesInterpolationMode::FullPerspective => Self::fill_polygon_part,
 			TetureCoordinatesInterpolationMode::LineZCorrection => Self::fill_polygon_part_line_z_corrected,
