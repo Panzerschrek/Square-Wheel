@@ -1182,7 +1182,7 @@ fn affine_texture_coordinates_interpolation_may_be_used(
 	// Than calculate maximum texture coordinates deviation along the edge.
 	// If this value is less than specific threshold - enable affine texturing.
 
-	// TODO -maybe use inverse function - enable texel shift no more than this threshold?
+	// TODO - maybe use inverse function - enable texel shift no more than this threshold?
 
 	let edge = max_inv_z_point - min_inv_z_point;
 	let edge_square_len = edge.magnitude2();
@@ -1264,7 +1264,7 @@ fn line_z_corrected_texture_coordinates_interpolation_may_be_used(
 
 	if max_polygon_x - min_polygon_x < 1.0
 	{
-		// Thin polygon - can use line z corrected texture coordinates interpolation..
+		// Thin polygon - can use line z corrected texture coordinates interpolation.
 		return true;
 	}
 
