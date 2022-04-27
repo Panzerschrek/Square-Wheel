@@ -1057,6 +1057,37 @@ fn draw_polygon(
 		return;
 	}
 
+	// Find min/max inv_z to check if we can use affine texture coordinates interpolation.
+	// TODO - calculate this during surface preparation?
+	let mut min_inv_z = 1e24;
+	let mut max_inv_z = -1e24;
+	let mut min_x = 1e24;
+	let mut max_x = -1e24;
+	let mut min_inv_z_point = &vertices_2d[0];
+	let mut max_inv_z_point = &vertices_2d[0];
+	for point in &vertices_2d[.. vertex_count]
+	{
+		let inv_z = point.x * depth_equation.d_inv_z_dx + point.y * depth_equation.d_inv_z_dy + depth_equation.k;
+		if inv_z < min_inv_z
+		{
+			min_inv_z = inv_z;
+			min_inv_z_point = point;
+		}
+		if inv_z > max_inv_z
+		{
+			max_inv_z = inv_z;
+			max_inv_z_point = point;
+		}
+		if point.x < min_x
+		{
+			min_x = point.x;
+		}
+		if point.x > max_x
+		{
+			max_x = point.x;
+		}
+	}
+
 	// Perform f32 to Fixed16 conversion.
 	let mut vertices_for_rasterizer = [PolygonPointProjected { x: 0, y: 0 }; MAX_VERTICES]; // TODO - use uninitialized memory
 	for (index, vertex_2d) in vertices_2d.iter().enumerate().take(vertex_count)
@@ -1068,16 +1099,224 @@ fn draw_polygon(
 	}
 
 	// Perform rasterization of fully clipped polygon.
-	rasterizer.fill_polygon(
-		&vertices_for_rasterizer[0 .. vertex_count],
-		&depth_equation,
-		&tex_coord_equation,
-		&TextureInfo {
-			size: [texture_size[0] as i32, texture_size[1] as i32],
-		},
-		texture_data,
-	);
+	let texture_info = TextureInfo {
+		size: [texture_size[0] as i32, texture_size[1] as i32],
+	};
+
+	if affine_texture_coordinates_interpolation_may_be_used(
+		depth_equation,
+		tex_coord_equation,
+		min_inv_z_point,
+		max_inv_z_point,
+	)
+	{
+		rasterizer.fill_polygon::<RasterizerSettingsAffine>(
+			&vertices_for_rasterizer[0 .. vertex_count],
+			&depth_equation,
+			&tex_coord_equation,
+			&texture_info,
+			texture_data,
+		);
+	}
+	else
+	{
+		// Scale depth and texture coordinates equation in order to increase precision inside rasterizer.
+		// Use only power of 2 scale for this.
+		// This is equivalent to moving far polygons closer to camera.
+		let z_scale = (-5.0 - max_inv_z.max(1.0 / ((1 << 20) as f32)).log2().ceil()).exp2();
+
+		let depth_equation_scaled = DepthEquation {
+			d_inv_z_dx: depth_equation.d_inv_z_dx * z_scale,
+			d_inv_z_dy: depth_equation.d_inv_z_dy * z_scale,
+			k: depth_equation.k * z_scale,
+		};
+		let tex_coord_equation_scaled = TexCoordEquation {
+			d_tc_dx: [
+				tex_coord_equation.d_tc_dx[0] * z_scale,
+				tex_coord_equation.d_tc_dx[1] * z_scale,
+			],
+			d_tc_dy: [
+				tex_coord_equation.d_tc_dy[0] * z_scale,
+				tex_coord_equation.d_tc_dy[1] * z_scale,
+			],
+			k: [tex_coord_equation.k[0] * z_scale, tex_coord_equation.k[1] * z_scale],
+		};
+
+		if line_z_corrected_texture_coordinates_interpolation_may_be_used(
+			depth_equation,
+			tex_coord_equation,
+			max_inv_z_point,
+			min_x,
+			max_x,
+		)
+		{
+			rasterizer.fill_polygon::<RasterizerSettingsLineZCorrection>(
+				&vertices_for_rasterizer[0 .. vertex_count],
+				&depth_equation_scaled,
+				&tex_coord_equation_scaled,
+				&texture_info,
+				texture_data,
+			);
+		}
+		else
+		{
+			rasterizer.fill_polygon::<RasterizerSettingsFullPerspective>(
+				&vertices_for_rasterizer[0 .. vertex_count],
+				&depth_equation_scaled,
+				&tex_coord_equation_scaled,
+				&texture_info,
+				texture_data,
+			);
+		}
+	}
 }
+
+fn affine_texture_coordinates_interpolation_may_be_used(
+	depth_equation: &DepthEquation,
+	tex_coord_equation: &TexCoordEquation,
+	min_inv_z_point: &Vec2f,
+	max_inv_z_point: &Vec2f,
+) -> bool
+{
+	// Projects depth and texture coordinates eqution to edge between min and max z vertices of the polygon.
+	// Than calculate maximum texture coordinates deviation along the edge.
+	// If this value is less than specific threshold - enable affine texturing.
+
+	// TODO - maybe use inverse function - enable texel shift no more than this threshold?
+
+	let edge = max_inv_z_point - min_inv_z_point;
+	let edge_square_len = edge.magnitude2();
+	if edge_square_len == 0.0
+	{
+		return true;
+	}
+
+	let edge_len = edge_square_len.sqrt();
+	let edge_vec_normalized = edge / edge_len;
+
+	let inv_z_clamp = 1.0 / ((1 << 20) as f32);
+	let min_point_inv_z = (depth_equation.d_inv_z_dx * min_inv_z_point.x +
+		depth_equation.d_inv_z_dy * min_inv_z_point.y +
+		depth_equation.k)
+		.max(inv_z_clamp);
+	let max_point_inv_z = (depth_equation.d_inv_z_dx * max_inv_z_point.x +
+		depth_equation.d_inv_z_dy * max_inv_z_point.y +
+		depth_equation.k)
+		.max(inv_z_clamp);
+
+	let depth_equation_projected_a =
+		Vec2f::new(depth_equation.d_inv_z_dx, depth_equation.d_inv_z_dy).dot(edge_vec_normalized);
+	let depth_equation_projected_b = min_point_inv_z;
+
+	if depth_equation_projected_a.abs() < 1.0e-10
+	{
+		// Z is almost constant along this edge.
+		return true;
+	}
+
+	let depth_b_div_a = depth_equation_projected_b / depth_equation_projected_a;
+	let max_diff_point = ((0.0 + depth_b_div_a) * (edge_len + depth_b_div_a)).sqrt() - depth_b_div_a;
+
+	let max_diff_point_inv_z = depth_equation_projected_a * max_diff_point + depth_equation_projected_b;
+
+	for i in 0 .. 2
+	{
+		let min_point_tc = tex_coord_equation.d_tc_dx[i] * min_inv_z_point.x +
+			tex_coord_equation.d_tc_dy[i] * min_inv_z_point.y +
+			tex_coord_equation.k[i];
+		let max_point_tc = tex_coord_equation.d_tc_dx[i] * max_inv_z_point.x +
+			tex_coord_equation.d_tc_dy[i] * max_inv_z_point.y +
+			tex_coord_equation.k[i];
+
+		let tc_projected_a =
+			Vec2f::new(tex_coord_equation.d_tc_dx[i], tex_coord_equation.d_tc_dy[i]).dot(edge_vec_normalized);
+		let tc_projected_b = min_point_tc;
+
+		let min_point_tc_z_mul = min_point_tc / min_point_inv_z;
+		let max_point_tc_z_mul = max_point_tc / max_point_inv_z;
+
+		// Calculate difference of true texture coordinates and linear approximation (based on edge points).
+
+		let max_diff_point_tc_real = (tc_projected_a * max_diff_point + tc_projected_b) / max_diff_point_inv_z;
+		let max_diff_point_tc_approximate =
+			min_point_tc_z_mul + (max_point_tc_z_mul - min_point_tc_z_mul) * (max_diff_point - 0.0) / (edge_len - 0.0);
+		let tc_abs_diff = (max_diff_point_tc_real - max_diff_point_tc_approximate).abs();
+		if tc_abs_diff > TC_ERROR_THRESHOLD
+		{
+			// Difference is too large - can't use affine texturing.
+			return false;
+		}
+	}
+
+	true
+}
+
+fn line_z_corrected_texture_coordinates_interpolation_may_be_used(
+	depth_equation: &DepthEquation,
+	tex_coord_equation: &TexCoordEquation,
+	max_inv_z_point: &Vec2f,
+	min_polygon_x: f32,
+	max_polygon_x: f32,
+) -> bool
+{
+	// Build linear approximation of texture coordinates function based on two points with y = max_inv_z_point.y and x = min/max polygon point x.
+	// If linear approximation error is smaller than threshold - use line z corrected texture coordinates interpolation.
+
+	if max_polygon_x - min_polygon_x < 1.0
+	{
+		// Thin polygon - can use line z corrected texture coordinates interpolation.
+		return true;
+	}
+
+	let test_line_depth_equation_a = depth_equation.d_inv_z_dx;
+	let test_line_depth_equation_b = depth_equation.d_inv_z_dy * max_inv_z_point.y + depth_equation.k;
+
+	if test_line_depth_equation_a.abs() < 1.0e-10
+	{
+		// Z is almost constant along line.
+		return true;
+	}
+
+	let depth_b_div_a = test_line_depth_equation_b / test_line_depth_equation_a;
+	let max_diff_x = ((min_polygon_x + depth_b_div_a) * (max_polygon_x + depth_b_div_a)).sqrt() - depth_b_div_a;
+
+	let max_diff_point_inv_z = test_line_depth_equation_a * max_diff_x + test_line_depth_equation_b;
+	let inv_z_at_min_x = test_line_depth_equation_a * min_polygon_x + test_line_depth_equation_b;
+	let inv_z_at_max_x = test_line_depth_equation_a * max_polygon_x + test_line_depth_equation_b;
+
+	let almost_zero = 1e-20;
+	if inv_z_at_min_x <= almost_zero || inv_z_at_max_x <= almost_zero || max_diff_point_inv_z <= almost_zero
+	{
+		// Overflow of inv_z - possible for inclined polygons.
+		return false;
+	}
+
+	for i in 0 .. 2
+	{
+		let test_line_tex_coord_equation_a = tex_coord_equation.d_tc_dx[i];
+		let test_line_tex_coord_equation_b =
+			tex_coord_equation.d_tc_dy[i] * max_inv_z_point.y + tex_coord_equation.k[i];
+
+		let tc_at_min_x =
+			(test_line_tex_coord_equation_a * min_polygon_x + test_line_tex_coord_equation_b) / inv_z_at_min_x;
+		let tc_at_max_x =
+			(test_line_tex_coord_equation_a * max_polygon_x + test_line_tex_coord_equation_b) / inv_z_at_max_x;
+
+		let max_diff_point_tc_real =
+			(test_line_tex_coord_equation_a * max_diff_x + test_line_tex_coord_equation_b) / max_diff_point_inv_z;
+		let max_diff_point_tc_approximate =
+			tc_at_min_x + (tc_at_max_x - tc_at_min_x) * (max_diff_x - min_polygon_x) / (max_polygon_x - min_polygon_x);
+		let tc_abs_diff = (max_diff_point_tc_real - max_diff_point_tc_approximate).abs();
+		if tc_abs_diff > TC_ERROR_THRESHOLD
+		{
+			// Difference is too large - can't use line z corrected texture coordinates interpolation.
+			return false;
+		}
+	}
+	true
+}
+
+const TC_ERROR_THRESHOLD: f32 = 0.75;
 
 const MAX_VERTICES: usize = 24;
 
@@ -1187,4 +1426,25 @@ fn calculate_mip(points: &[Vec2f], depth_equation: &DepthEquation, tc_equation: 
 	let mip = std::cmp::max(0, std::cmp::min(mip_f.ceil() as i32, MAX_MIP as i32));
 
 	mip as u32
+}
+
+struct RasterizerSettingsFullPerspective;
+impl RasterizerSettings for RasterizerSettingsFullPerspective
+{
+	const TEXTURE_COORDINATES_INTERPOLATION_MODE: TetureCoordinatesInterpolationMode =
+		TetureCoordinatesInterpolationMode::FullPerspective;
+}
+
+struct RasterizerSettingsLineZCorrection;
+impl RasterizerSettings for RasterizerSettingsLineZCorrection
+{
+	const TEXTURE_COORDINATES_INTERPOLATION_MODE: TetureCoordinatesInterpolationMode =
+		TetureCoordinatesInterpolationMode::LineZCorrection;
+}
+
+struct RasterizerSettingsAffine;
+impl RasterizerSettings for RasterizerSettingsAffine
+{
+	const TEXTURE_COORDINATES_INTERPOLATION_MODE: TetureCoordinatesInterpolationMode =
+		TetureCoordinatesInterpolationMode::Affine;
 }
