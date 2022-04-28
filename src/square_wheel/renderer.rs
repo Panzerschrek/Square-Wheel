@@ -14,6 +14,7 @@ pub struct Renderer
 	leafs_data: Vec<DrawLeafData>,
 	portals_data: Vec<DrawPortalData>,
 	polygons_data: Vec<DrawPolygonData>,
+	vertices_transformed: Vec<Vec3f>,
 	surfaces_pixels: Vec<Color32>,
 	leafs_search_waves: LeafsSearchWavesPair,
 	textures: Vec<TextureWithMips>,
@@ -107,6 +108,7 @@ impl Renderer
 			leafs_data: vec![DrawLeafData::default(); map.leafs.len()],
 			portals_data: vec![DrawPortalData::default(); map.portals.len()],
 			polygons_data,
+			vertices_transformed: vec![Vec3f::new(0.0, 0.0, 0.0); map.vertices.len()],
 			surfaces_pixels: Vec::new(),
 			leafs_search_waves: LeafsSearchWavesPair::default(),
 			map,
@@ -456,8 +458,6 @@ impl Renderer
 		let polygon_data = &mut self.polygons_data[polygon_index];
 
 		let polygon = &self.map.polygons[polygon_index];
-		let polygon_vertices = &self.map.vertices
-			[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)];
 
 		let plane_transformed = camera_matrices.planes_matrix * polygon.plane.vec.extend(-polygon.plane.dist);
 		// Cull back faces.
@@ -466,14 +466,21 @@ impl Renderer
 			return;
 		}
 
-		// TODO - cache projected vertices and use them in rasterization.
+		// Transform polygon vertices once and put transformation result into transformed vertices container.
+		// Use these vertices later also for rasterization.
+		let polygon_vertices_range =
+			(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize);
+		let polygon_vertices = &self.map.vertices[polygon_vertices_range.clone()];
+		let polygon_vertices_transformed = &mut self.vertices_transformed[polygon_vertices_range];
+
+		for (in_vertex, out_vertex) in polygon_vertices.iter().zip(polygon_vertices_transformed.iter_mut())
+		{
+			let vertex_transformed = camera_matrices.view_matrix * in_vertex.extend(1.0);
+			*out_vertex = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
+		}
+
 		let mut vertices_2d = [Vec2f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-		let vertex_count = project_and_clip_polygon(
-			&camera_matrices.view_matrix,
-			clip_planes,
-			polygon_vertices,
-			&mut vertices_2d[..],
-		);
+		let vertex_count = project_and_clip_polygon(clip_planes, polygon_vertices_transformed, &mut vertices_2d[..]);
 		if vertex_count < 3
 		{
 			return;
@@ -655,7 +662,6 @@ impl Renderer
 			{
 				self.draw_leaf(
 					rasterizer,
-					camera_matrices,
 					&leaf_data.current_frame_bounds,
 					&self.map.leafs[leaf as usize],
 				);
@@ -677,13 +683,7 @@ impl Renderer
 		}
 	}
 
-	fn draw_leaf(
-		&self,
-		rasterizer: &mut Rasterizer,
-		camera_matrices: &CameraMatrices,
-		bounds: &ClippingPolygon,
-		leaf: &bsp_map_compact::BSPLeaf,
-	)
+	fn draw_leaf(&self, rasterizer: &mut Rasterizer, bounds: &ClippingPolygon, leaf: &bsp_map_compact::BSPLeaf)
 	{
 		// TODO - maybe just a little bit extend clipping polygon?
 		let clip_planes = bounds.get_clip_planes();
@@ -699,9 +699,8 @@ impl Renderer
 
 			draw_polygon(
 				rasterizer,
-				camera_matrices,
 				&clip_planes,
-				&self.map.vertices
+				&self.vertices_transformed
 					[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)],
 				&polygon_data.depth_equation,
 				&polygon_data.tex_coord_equation,
@@ -1031,27 +1030,21 @@ fn project_portal(
 
 fn draw_polygon(
 	rasterizer: &mut Rasterizer,
-	camera_matrices: &CameraMatrices,
 	clip_planes: &ClippingPolygonPlanes,
-	vertices: &[Vec3f],
+	vertices_transformed: &[Vec3f],
 	depth_equation: &DepthEquation,
 	tex_coord_equation: &TexCoordEquation,
 	texture_size: &[u32; 2],
 	texture_data: &[Color32],
 )
 {
-	if vertices.len() < 3
+	if vertices_transformed.len() < 3
 	{
 		return;
 	}
 
 	let mut vertices_2d = [Vec2f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-	let vertex_count = project_and_clip_polygon(
-		&camera_matrices.view_matrix,
-		clip_planes,
-		vertices,
-		&mut vertices_2d[..],
-	);
+	let vertex_count = project_and_clip_polygon(clip_planes, vertices_transformed, &mut vertices_2d[..]);
 	if vertex_count < 3
 	{
 		return;
@@ -1322,21 +1315,12 @@ const MAX_VERTICES: usize = 24;
 
 // Returns number of result vertices. < 3 if polygon is clipped.
 fn project_and_clip_polygon(
-	view_matrix: &Mat4f,
 	clip_planes: &ClippingPolygonPlanes,
-	vertices: &[Vec3f],
+	vertices_transformed: &[Vec3f],
 	out_vertices: &mut [Vec2f],
 ) -> usize
 {
-	let mut vertex_count = std::cmp::min(vertices.len(), MAX_VERTICES);
-
-	// Perform initial matrix tranformation, obtain 3d vertices in camera-aligned space.
-	let mut vertices_transformed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-	for (vertex, out_vertex) in vertices.iter().zip(vertices_transformed.iter_mut())
-	{
-		let vertex_transformed = view_matrix * vertex.extend(1.0);
-		*out_vertex = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
-	}
+	let mut vertex_count = std::cmp::min(vertices_transformed.len(), MAX_VERTICES);
 
 	// Perform z_near clipping.
 	let mut vertices_transformed_z_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
