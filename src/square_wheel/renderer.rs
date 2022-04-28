@@ -428,7 +428,7 @@ impl Renderer
 
 	fn prepare_polygons_surfaces(&mut self, camera_matrices: &CameraMatrices, viewport_half_size: &[f32; 2])
 	{
-		self.surfaces_pixels.clear();
+		let mut surfaces_pixels_accumulated_offset = 0;
 
 		// TODO - try to speed-up iteration, do not scan all leafs.
 		for i in 0 .. self.map.leafs.len()
@@ -445,10 +445,18 @@ impl Renderer
 						camera_matrices,
 						&clip_planes,
 						viewport_half_size,
+						&mut surfaces_pixels_accumulated_offset,
 						polygon_index as usize,
 					);
 				}
 			}
+		}
+
+		// Resize surfaces pixels vector only up to avoid filling it with zeros each frame.
+		if self.surfaces_pixels.len() < surfaces_pixels_accumulated_offset
+		{
+			self.surfaces_pixels
+				.resize(surfaces_pixels_accumulated_offset, Color32::from_rgb(0, 0, 0));
 		}
 	}
 
@@ -457,6 +465,7 @@ impl Renderer
 		camera_matrices: &CameraMatrices,
 		clip_planes: &ClippingPolygonPlanes,
 		viewport_half_size: &[f32; 2],
+		surfaces_pixels_accumulated_offset: &mut usize,
 		polygon_index: usize,
 	)
 	{
@@ -611,12 +620,8 @@ impl Renderer
 			(tc_max_int[1] - tc_min_int[1]).max(1).min(max_surface_size),
 		];
 
-		let surface_pixels_offset = self.surfaces_pixels.len();
-		// TODO - avoid filling buffer with zeros.
-		self.surfaces_pixels.resize(
-			self.surfaces_pixels.len() + ((surface_size[0] * surface_size[1]) as usize),
-			Color32::from_rgb(0, 0, 0),
-		);
+		let surface_pixels_offset = *surfaces_pixels_accumulated_offset;
+		*surfaces_pixels_accumulated_offset += (surface_size[0] * surface_size[1]) as usize;
 
 		polygon_data.visible_frame = self.current_frame;
 		polygon_data.depth_equation = depth_equation;
