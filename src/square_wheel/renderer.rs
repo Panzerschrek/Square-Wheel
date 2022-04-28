@@ -71,12 +71,15 @@ struct DrawPolygonData
 	// Precalculated during map loading min/max texture coordinates
 	tc_min: [f32; 2],
 	tc_max: [f32; 2],
+
 	// Frame last time this polygon was visible.
 	visible_frame: FrameNumber,
 	depth_equation: DepthEquation,
 	tex_coord_equation: TexCoordEquation,
 	surface_pixels_offset: usize,
 	surface_size: [u32; 2],
+	mip: u32,
+	surface_tc_min: [i32; 2],
 }
 
 // 32 bits are enough for frames enumeration.
@@ -257,6 +260,8 @@ impl Renderer
 				rasterizer.get_height() as f32 * 0.5,
 			],
 		);
+
+		self.build_polygons_surfaces();
 
 		let surfaces_preparation_end_time = Clock::now();
 		let surfaces_preparation_duration_s =
@@ -613,18 +618,55 @@ impl Renderer
 			Color32::from_rgb(0, 0, 0),
 		);
 
-		let mip_texture = &self.textures[polygon.texture as usize][mip as usize];
+		polygon_data.visible_frame = self.current_frame;
+		polygon_data.depth_equation = depth_equation;
+		polygon_data.tex_coord_equation = tc_equation_scaled;
+		polygon_data.surface_pixels_offset = surface_pixels_offset;
+		polygon_data.surface_size = [surface_size[0] as u32, surface_size[1] as u32];
+		polygon_data.mip = mip;
+		polygon_data.surface_tc_min = tc_min_int;
 
-		// TODO - perform surface data generation in separate step.
+		// Correct texture coordinates equation to compensate shift to surface rect.
+		for i in 0 .. 2
+		{
+			let tc_min = tc_min_int[i] as f32;
+			polygon_data.tex_coord_equation.d_tc_dx[i] -= tc_min * depth_equation.d_inv_z_dx;
+			polygon_data.tex_coord_equation.d_tc_dy[i] -= tc_min * depth_equation.d_inv_z_dy;
+			polygon_data.tex_coord_equation.k[i] -= tc_min * depth_equation.k;
+		}
+	}
+
+	fn build_polygons_surfaces(&mut self)
+	{
+		// TODO - avoid iteration over all map polygons.
+		// Remember (somehow) list of visible in current frame polygons.
+		for i in 0 .. self.polygons_data.len()
+		{
+			if self.polygons_data[i].visible_frame == self.current_frame
+			{
+				self.build_polygon_surface(i);
+			}
+		}
+	}
+
+	fn build_polygon_surface(&mut self, polygon_index: usize)
+	{
+		let polygon = &self.map.polygons[polygon_index];
+		let polygon_data = &self.polygons_data[polygon_index];
+		let mip_texture = &self.textures[polygon.texture as usize][polygon_data.mip as usize];
+		let surface_pixels_offset = polygon_data.surface_pixels_offset;
+		let surface_size = polygon_data.surface_size;
+		let surface_tc_min = polygon_data.surface_tc_min;
+
 		for dst_y in 0 .. surface_size[1]
 		{
 			let dst_line_start = surface_pixels_offset + ((dst_y * surface_size[0]) as usize);
 			let dst_line = &mut self.surfaces_pixels[dst_line_start .. dst_line_start + (surface_size[0] as usize)];
 
-			let src_y = (tc_min_int[1] + dst_y).rem_euclid(mip_texture.size[1] as i32);
+			let src_y = (surface_tc_min[1] + (dst_y as i32)).rem_euclid(mip_texture.size[1] as i32);
 			let src_line_start = ((src_y as u32) * mip_texture.size[0]) as usize;
 			let src_line = &mip_texture.pixels[src_line_start .. src_line_start + (mip_texture.size[0] as usize)];
-			let mut src_x = tc_min_int[0].rem_euclid(mip_texture.size[0] as i32);
+			let mut src_x = surface_tc_min[0].rem_euclid(mip_texture.size[0] as i32);
 			for dst_x in 0 .. surface_size[0]
 			{
 				dst_line[dst_x as usize] = src_line[src_x as usize];
@@ -634,21 +676,6 @@ impl Renderer
 					src_x = 0;
 				}
 			}
-		}
-
-		polygon_data.visible_frame = self.current_frame;
-		polygon_data.depth_equation = depth_equation;
-		polygon_data.tex_coord_equation = tc_equation_scaled;
-		polygon_data.surface_pixels_offset = surface_pixels_offset;
-		polygon_data.surface_size = [surface_size[0] as u32, surface_size[1] as u32];
-
-		// Correct texture coordinates equation to compensafe shift to surface rect.
-		for i in 0 .. 2
-		{
-			let tc_min = tc_min_int[i] as f32;
-			polygon_data.tex_coord_equation.d_tc_dx[i] -= tc_min * depth_equation.d_inv_z_dx;
-			polygon_data.tex_coord_equation.d_tc_dy[i] -= tc_min * depth_equation.d_inv_z_dy;
-			polygon_data.tex_coord_equation.k[i] -= tc_min * depth_equation.k;
 		}
 	}
 
