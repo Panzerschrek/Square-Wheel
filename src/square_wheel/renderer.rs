@@ -276,6 +276,34 @@ impl Renderer
 		// Draw BSP tree in back to front order, skip unreachable leafs.
 		self.draw_tree_r(&mut rasterizer, camera_matrices, root_node);
 
+		// TODO - draw submodels in leafs.
+		let frame_clip_planes = frame_bounds.get_clip_planes();
+		for &submodel in &self.map.submodels
+		{
+			for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
+			{
+				let polygon = &self.map.polygons[polygon_index as usize];
+				let polygon_data = &self.polygons_data[polygon_index as usize];
+				if polygon_data.visible_frame != self.current_frame
+				{
+					continue;
+				}
+
+				draw_polygon(
+					&mut rasterizer,
+					&frame_clip_planes,
+					&self.vertices_transformed
+						[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)],
+					&polygon_data.depth_equation,
+					&polygon_data.tex_coord_equation,
+					&polygon_data.surface_size,
+					&self.surfaces_pixels[polygon_data.surface_pixels_offset ..
+						polygon_data.surface_pixels_offset +
+							((polygon_data.surface_size[0] * polygon_data.surface_size[1]) as usize)],
+				);
+			}
+		}
+
 		let rasterization_end_time = Clock::now();
 		let rasterization_duration_s = (rasterization_end_time - rasterization_start_time).as_secs_f32();
 		self.performance_counters
@@ -450,6 +478,28 @@ impl Renderer
 						polygon_index as usize,
 					);
 				}
+			}
+		}
+
+		// TODO - use bounds cmobinde from bounds of all visible leafs of model.
+		let frame_bounds =
+			ClippingPolygon::from_box(0.0, 0.0, viewport_half_size[0] * 2.0, viewport_half_size[1] * 2.0);
+		let frame_clip_planes = frame_bounds.get_clip_planes();
+
+		// Prepare surfaces for submodels.
+		// TODO - do this only for submodels located in visible lefs.
+		for i in 0 .. self.map.submodels.len()
+		{
+			let submodel = &self.map.submodels[i];
+			for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
+			{
+				self.prepare_polygon_surface(
+					camera_matrices,
+					&frame_clip_planes,
+					viewport_half_size,
+					&mut surfaces_pixels_accumulated_offset,
+					polygon_index as usize,
+				);
 			}
 		}
 
