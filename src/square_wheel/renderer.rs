@@ -3,6 +3,7 @@ use common::{
 	bsp_map_compact, camera_controller::CameraMatrices, clipping::*, color::*, fixed_math::*, image, math_types::*,
 	performance_counter::*, system_window,
 };
+use std::rc::Rc;
 
 type Clock = std::time::Instant;
 
@@ -10,7 +11,7 @@ pub struct Renderer
 {
 	current_frame: FrameNumber,
 	config: RendererConfig,
-	map: bsp_map_compact::BSPMap,
+	map: Rc<bsp_map_compact::BSPMap>,
 	leafs_data: Vec<DrawLeafData>,
 	portals_data: Vec<DrawPortalData>,
 	polygons_data: Vec<DrawPolygonData>,
@@ -98,7 +99,7 @@ type TextureWithMips = [image::Image; NUM_MIPS];
 
 impl Renderer
 {
-	pub fn new(app_config: &serde_json::Value, map: bsp_map_compact::BSPMap) -> Self
+	pub fn new(app_config: &serde_json::Value, map: Rc<bsp_map_compact::BSPMap>) -> Self
 	{
 		let textures = load_textures(&map.textures);
 

@@ -251,7 +251,7 @@ impl Host
 		{
 			Ok(Some(map)) =>
 			{
-				self.renderer = Some(renderer::Renderer::new(&self.config_json, map));
+				self.renderer = Some(renderer::Renderer::new(&self.config_json, Rc::new(map)));
 			},
 			Ok(None) =>
 			{
