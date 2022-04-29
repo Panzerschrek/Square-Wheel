@@ -1,4 +1,4 @@
-use super::{clipping_polygon::*, rasterizer::*, renderer_config::*};
+use super::{clipping_polygon::*, inline_models_index::*, rasterizer::*, renderer_config::*};
 use common::{
 	bsp_map_compact, camera_controller::CameraMatrices, clipping::*, color::*, fixed_math::*, image, math_types::*,
 	performance_counter::*, system_window,
@@ -126,6 +126,7 @@ impl Renderer
 		pixels: &mut [Color32],
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
+		inline_models_index: &InlineModelsIndex,
 	)
 	{
 		let frame_start_time = Clock::now();
@@ -138,7 +139,13 @@ impl Renderer
 
 		let mut debug_stats = DebugStats::default();
 
-		self.draw_map(pixels, surface_info, camera_matrices, &mut debug_stats);
+		self.draw_map(
+			pixels,
+			surface_info,
+			camera_matrices,
+			inline_models_index,
+			&mut debug_stats,
+		);
 
 		// TODO - remove such temporary fuinction.
 		draw_crosshair(pixels, surface_info);
@@ -213,6 +220,7 @@ impl Renderer
 		pixels: &mut [Color32],
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
+		inline_models_index: &InlineModelsIndex,
 		debug_stats: &mut DebugStats,
 	)
 	{
@@ -260,6 +268,7 @@ impl Renderer
 				rasterizer.get_width() as f32 * 0.5,
 				rasterizer.get_height() as f32 * 0.5,
 			],
+			inline_models_index,
 		);
 
 		self.build_polygons_surfaces();
@@ -455,7 +464,12 @@ impl Renderer
 		debug_stats.reachable_leafs_search_calls_depth = depth;
 	}
 
-	fn prepare_polygons_surfaces(&mut self, camera_matrices: &CameraMatrices, viewport_half_size: &[f32; 2])
+	fn prepare_polygons_surfaces(
+		&mut self,
+		camera_matrices: &CameraMatrices,
+		viewport_half_size: &[f32; 2],
+		inline_models_index: &InlineModelsIndex,
+	)
 	{
 		let mut surfaces_pixels_accumulated_offset = 0;
 
@@ -481,21 +495,44 @@ impl Renderer
 			}
 		}
 
-		// TODO - use bounds cmobinde from bounds of all visible leafs of model.
-		let frame_bounds =
-			ClippingPolygon::from_box(0.0, 0.0, viewport_half_size[0] * 2.0, viewport_half_size[1] * 2.0);
-		let frame_clip_planes = frame_bounds.get_clip_planes();
-
 		// Prepare surfaces for submodels.
-		// TODO - do this only for submodels located in visible lefs.
-		for i in 0 .. self.map.submodels.len()
+		// Do this only for sumbodels located in visible leafs.
+		for model_index in 0 .. self.map.submodels.len()
 		{
-			let submodel = &self.map.submodels[i];
+			let mut bounds: Option<ClippingPolygon> = None;
+			for &leaf_index in inline_models_index.get_model_leafs(model_index as u32)
+			{
+				let leaf_data = &self.leafs_data[leaf_index as usize];
+				if leaf_data.visible_frame != self.current_frame
+				{
+					continue;
+				}
+				if let Some(bounds) = &mut bounds
+				{
+					bounds.extend(&leaf_data.current_frame_bounds);
+				}
+				else
+				{
+					bounds = Some(leaf_data.current_frame_bounds);
+				}
+			}
+
+			let clip_planes = if let Some(b) = bounds
+			{
+				b.get_clip_planes()
+			}
+			else
+			{
+				continue;
+			};
+
+			let submodel = &self.map.submodels[model_index];
+
 			for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
 			{
 				self.prepare_polygon_surface(
 					camera_matrices,
-					&frame_clip_planes,
+					&clip_planes,
 					viewport_half_size,
 					&mut surfaces_pixels_accumulated_offset,
 					polygon_index as usize,

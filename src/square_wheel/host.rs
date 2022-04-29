@@ -180,7 +180,9 @@ impl Host
 
 		if let Some(active_map) = &mut self.active_map
 		{
-			active_map.renderer.draw_frame(pixels, surface_info, view_matrix);
+			active_map
+				.renderer
+				.draw_frame(pixels, surface_info, view_matrix, &active_map.inline_models_index);
 		}
 		self.console.draw(pixels, surface_info);
 

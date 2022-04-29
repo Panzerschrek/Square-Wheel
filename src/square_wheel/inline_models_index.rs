@@ -55,6 +55,11 @@ impl InlineModelsIndex
 		&self.leafs_info[leaf_index as usize].models
 	}
 
+	pub fn get_model_leafs(&self, model_index: u32) -> &[u32]
+	{
+		&self.models_info[model_index as usize].leafs
+	}
+
 	fn force_reposition_model(&mut self, model_index: u32, shift: &Vec3f)
 	{
 		// First, erase this model index from models list of all leafs where this model was before.
