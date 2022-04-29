@@ -283,35 +283,7 @@ impl Renderer
 		let rasterization_start_time = Clock::now();
 
 		// Draw BSP tree in back to front order, skip unreachable leafs.
-		self.draw_tree_r(&mut rasterizer, camera_matrices, root_node);
-
-		// TODO - draw submodels in leafs.
-		let frame_clip_planes = frame_bounds.get_clip_planes();
-		for &submodel in &self.map.submodels
-		{
-			for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
-			{
-				let polygon = &self.map.polygons[polygon_index as usize];
-				let polygon_data = &self.polygons_data[polygon_index as usize];
-				if polygon_data.visible_frame != self.current_frame
-				{
-					continue;
-				}
-
-				draw_polygon(
-					&mut rasterizer,
-					&frame_clip_planes,
-					&self.vertices_transformed
-						[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)],
-					&polygon_data.depth_equation,
-					&polygon_data.tex_coord_equation,
-					&polygon_data.surface_size,
-					&self.surfaces_pixels[polygon_data.surface_pixels_offset ..
-						polygon_data.surface_pixels_offset +
-							((polygon_data.surface_size[0] * polygon_data.surface_size[1]) as usize)],
-				);
-			}
-		}
+		self.draw_tree_r(&mut rasterizer, camera_matrices, inline_models_index, root_node);
 
 		let rasterization_end_time = Clock::now();
 		let rasterization_duration_s = (rasterization_end_time - rasterization_start_time).as_secs_f32();
@@ -772,7 +744,13 @@ impl Renderer
 		}
 	}
 
-	fn draw_tree_r(&self, rasterizer: &mut Rasterizer, camera_matrices: &CameraMatrices, current_index: u32)
+	fn draw_tree_r(
+		&self,
+		rasterizer: &mut Rasterizer,
+		camera_matrices: &CameraMatrices,
+		inline_models_index: &InlineModelsIndex,
+		current_index: u32,
+	)
 	{
 		if current_index >= bsp_map_compact::FIRST_LEAF_INDEX
 		{
@@ -780,11 +758,7 @@ impl Renderer
 			let leaf_data = &self.leafs_data[leaf as usize];
 			if leaf_data.visible_frame == self.current_frame
 			{
-				self.draw_leaf(
-					rasterizer,
-					&leaf_data.current_frame_bounds,
-					&self.map.leafs[leaf as usize],
-				);
+				self.draw_leaf(rasterizer, &leaf_data.current_frame_bounds, inline_models_index, leaf);
 			}
 		}
 		else
@@ -798,13 +772,26 @@ impl Renderer
 			}
 			for i in 0 .. 2
 			{
-				self.draw_tree_r(rasterizer, camera_matrices, node.children[(i ^ mask) as usize]);
+				self.draw_tree_r(
+					rasterizer,
+					camera_matrices,
+					inline_models_index,
+					node.children[(i ^ mask) as usize],
+				);
 			}
 		}
 	}
 
-	fn draw_leaf(&self, rasterizer: &mut Rasterizer, bounds: &ClippingPolygon, leaf: &bsp_map_compact::BSPLeaf)
+	fn draw_leaf(
+		&self,
+		rasterizer: &mut Rasterizer,
+		bounds: &ClippingPolygon,
+		inline_models_index: &InlineModelsIndex,
+		leaf_index: u32,
+	)
 	{
+		let leaf = &self.map.leafs[leaf_index as usize];
+
 		// TODO - maybe just a little bit extend clipping polygon?
 		let clip_planes = bounds.get_clip_planes();
 
@@ -829,6 +816,36 @@ impl Renderer
 					polygon_data.surface_pixels_offset +
 						((polygon_data.surface_size[0] * polygon_data.surface_size[1]) as usize)],
 			);
+		}
+
+		// Draw models, located in this leaf, after leaf polygons.
+		// TODO - sort leaf models.
+		// TODO - clip models using leaf portals planes.
+		for &model_index in inline_models_index.get_leaf_models(leaf_index)
+		{
+			let submodel = &self.map.submodels[model_index as usize];
+			for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
+			{
+				let polygon = &self.map.polygons[polygon_index as usize];
+				let polygon_data = &self.polygons_data[polygon_index as usize];
+				if polygon_data.visible_frame != self.current_frame
+				{
+					continue;
+				}
+
+				draw_polygon(
+					rasterizer,
+					&clip_planes,
+					&self.vertices_transformed
+						[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)],
+					&polygon_data.depth_equation,
+					&polygon_data.tex_coord_equation,
+					&polygon_data.surface_size,
+					&self.surfaces_pixels[polygon_data.surface_pixels_offset ..
+						polygon_data.surface_pixels_offset +
+							((polygon_data.surface_size[0] * polygon_data.surface_size[1]) as usize)],
+				);
+			}
 		}
 	}
 }

@@ -108,7 +108,6 @@ impl InlineModelsIndex
 			let mut vertices_front = 0;
 			for &vertex in bbox_vertices
 			{
-				// TODO - check this.
 				if node.plane.vec.dot(vertex) > node.plane.dist
 				{
 					vertices_front += 1;
