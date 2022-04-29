@@ -1,4 +1,4 @@
-use super::{map_file, map_polygonizer, math_types::*, plane::*};
+use super::{clipping, map_file, map_polygonizer, math_types::*, plane::*};
 use std::{cell, rc};
 
 pub use map_polygonizer::Polygon;
@@ -224,7 +224,7 @@ fn split_polygon(in_polygon: &Polygon, plane: &Plane) -> (Polygon, Polygon)
 			{
 				if prev_vert_pos == PointPositionRelativePlane::Back
 				{
-					let intersection = get_line_plane_intersection(prev_vert, vert, plane);
+					let intersection = clipping::get_line_plane_intersection(prev_vert, vert, plane);
 					polygon_back.vertices.push(intersection);
 					polygon_front.vertices.push(intersection);
 				}
@@ -234,7 +234,7 @@ fn split_polygon(in_polygon: &Polygon, plane: &Plane) -> (Polygon, Polygon)
 			{
 				if prev_vert_pos == PointPositionRelativePlane::Front
 				{
-					let intersection = get_line_plane_intersection(prev_vert, vert, plane);
+					let intersection = clipping::get_line_plane_intersection(prev_vert, vert, plane);
 					polygon_front.vertices.push(intersection);
 					polygon_back.vertices.push(intersection);
 				}
@@ -252,16 +252,6 @@ fn split_polygon(in_polygon: &Polygon, plane: &Plane) -> (Polygon, Polygon)
 	}
 
 	(polygon_front, polygon_back)
-}
-
-fn get_line_plane_intersection(v0: &Vec3f, v1: &Vec3f, plane: &Plane) -> Vec3f
-{
-	let dist0 = v0.dot(plane.vec) - plane.dist;
-	let dist1 = v1.dot(plane.vec) - plane.dist;
-	let dist_sum = dist1 - dist0;
-	let k0 = dist0 / dist_sum;
-	let k1 = dist1 / dist_sum;
-	v0 * k1 - v1 * k0
 }
 
 // Returns None if can't find any situable splitter.

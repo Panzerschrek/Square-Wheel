@@ -1,7 +1,7 @@
 use super::{clipping_polygon::*, inline_models_index::*, rasterizer::*, renderer_config::*};
 use common::{
 	bsp_map_compact, camera_controller::CameraMatrices, clipping::*, color::*, fixed_math::*, image, math_types::*,
-	performance_counter::*, system_window,
+	performance_counter::*, plane::*, system_window,
 };
 use std::rc::Rc;
 
@@ -758,7 +758,13 @@ impl Renderer
 			let leaf_data = &self.leafs_data[leaf as usize];
 			if leaf_data.visible_frame == self.current_frame
 			{
-				self.draw_leaf(rasterizer, &leaf_data.current_frame_bounds, inline_models_index, leaf);
+				self.draw_leaf(
+					rasterizer,
+					camera_matrices,
+					&leaf_data.current_frame_bounds,
+					inline_models_index,
+					leaf,
+				);
 			}
 		}
 		else
@@ -785,6 +791,7 @@ impl Renderer
 	fn draw_leaf(
 		&self,
 		rasterizer: &mut Rasterizer,
+		camera_matrices: &CameraMatrices,
 		bounds: &ClippingPolygon,
 		inline_models_index: &InlineModelsIndex,
 		leaf_index: u32,
@@ -820,33 +827,105 @@ impl Renderer
 
 		// Draw models, located in this leaf, after leaf polygons.
 		// TODO - sort leaf models.
-		// TODO - clip models using leaf portals planes.
 		for &model_index in inline_models_index.get_leaf_models(leaf_index)
 		{
 			let submodel = &self.map.submodels[model_index as usize];
 			for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
 			{
-				let polygon = &self.map.polygons[polygon_index as usize];
-				let polygon_data = &self.polygons_data[polygon_index as usize];
-				if polygon_data.visible_frame != self.current_frame
-				{
-					continue;
-				}
-
-				draw_polygon(
-					rasterizer,
-					&clip_planes,
-					&self.vertices_transformed
-						[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)],
-					&polygon_data.depth_equation,
-					&polygon_data.tex_coord_equation,
-					&polygon_data.surface_size,
-					&self.surfaces_pixels[polygon_data.surface_pixels_offset ..
-						polygon_data.surface_pixels_offset +
-							((polygon_data.surface_size[0] * polygon_data.surface_size[1]) as usize)],
-				);
+				self.draw_model_polygon(rasterizer, camera_matrices, &clip_planes, leaf_index, polygon_index);
 			}
 		}
+	}
+
+	fn draw_model_polygon(
+		&self,
+		rasterizer: &mut Rasterizer,
+		camera_matrices: &CameraMatrices,
+		clip_planes: &ClippingPolygonPlanes,
+		leaf_index: u32,
+		polygon_index: u32,
+	)
+	{
+		let leaf = &self.map.leafs[leaf_index as usize];
+
+		let polygon = &self.map.polygons[polygon_index as usize];
+		let polygon_data = &self.polygons_data[polygon_index as usize];
+		if polygon_data.visible_frame != self.current_frame
+		{
+			return;
+		}
+
+		let mut vertices_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
+		let mut vertex_count = std::cmp::min(polygon.num_vertices as usize, MAX_VERTICES);
+
+		vertices_clipped[.. vertex_count].copy_from_slice(
+			&self.map.vertices[(polygon.first_vertex as usize) .. (polygon.first_vertex as usize) + vertex_count],
+		);
+
+		let mut vertices_temp = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
+
+		// Clip model polygon by portal planes of current leaf.
+		for &portal_index in &self.map.leafs_portals
+			[(leaf.first_leaf_portal as usize) .. ((leaf.first_leaf_portal + leaf.num_leaf_portals) as usize)]
+		{
+			let portal = &self.map.portals[portal_index as usize];
+			let clip_plane = if portal.leafs[0] == leaf_index
+			{
+				portal.plane
+			}
+			else
+			{
+				Plane {
+					vec: -portal.plane.vec,
+					dist: -portal.plane.dist,
+				}
+			};
+
+			vertex_count =
+				clip_3d_polygon_by_plane(&vertices_clipped[.. vertex_count], &clip_plane, &mut vertices_temp[..]);
+			if vertex_count < 3
+			{
+				return;
+			}
+			vertices_clipped[.. vertex_count].copy_from_slice(&vertices_temp[.. vertex_count]);
+		}
+
+		// Clip model also by polygons of current leaf.
+		for clip_polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
+		{
+			let clip_polygon = &self.map.polygons[clip_polygon_index as usize];
+
+			vertex_count = clip_3d_polygon_by_plane(
+				&vertices_clipped[.. vertex_count],
+				&clip_polygon.plane,
+				&mut vertices_temp[..],
+			);
+			if vertex_count < 3
+			{
+				return;
+			}
+			vertices_clipped[.. vertex_count].copy_from_slice(&vertices_temp[.. vertex_count]);
+		}
+
+		// Transform vetices after clipping.
+		// TODO - perform clipping using transformed planes instead.
+		for v in &mut vertices_clipped[.. vertex_count]
+		{
+			let vertex_transformed = camera_matrices.view_matrix * v.extend(1.0);
+			*v = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
+		}
+
+		draw_polygon(
+			rasterizer,
+			&clip_planes,
+			&vertices_clipped[.. vertex_count],
+			&polygon_data.depth_equation,
+			&polygon_data.tex_coord_equation,
+			&polygon_data.surface_size,
+			&self.surfaces_pixels[polygon_data.surface_pixels_offset ..
+				polygon_data.surface_pixels_offset +
+					((polygon_data.surface_size[0] * polygon_data.surface_size[1]) as usize)],
+		);
 	}
 }
 
