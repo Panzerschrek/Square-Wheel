@@ -1,7 +1,7 @@
-use super::{clipping_polygon::*, inline_models_index::*, rasterizer::*, renderer_config::*};
+use super::{clipping_polygon::*, draw_ordering, inline_models_index::*, rasterizer::*, renderer_config::*};
 use common::{
-	bsp_map_compact, camera_controller::CameraMatrices, clipping::*, color::*, fixed_math::*, image, math_types::*,
-	performance_counter::*, plane::*, system_window,
+	bbox::*, bsp_map_compact, camera_controller::CameraMatrices, clipping::*, color::*, fixed_math::*, image,
+	math_types::*, performance_counter::*, plane::*, system_window,
 };
 use std::rc::Rc;
 
@@ -828,11 +828,36 @@ impl Renderer
 			);
 		}
 
+		let leaf_models = inline_models_index.get_leaf_models(leaf_index);
+		if leaf_models.is_empty()
+		{
+			return;
+		}
+
+		// TODO - use uninitialized memory and increase this value.
+		const MAX_MODELS_IN_LEAF: usize = 12;
+		let mut models_for_sorting = [(
+			0,
+			BBox {
+				min: Vec3f::zero(),
+				max: Vec3f::zero(),
+			},
+		); MAX_MODELS_IN_LEAF];
+
+		for (&model_index, model_for_sorting) in leaf_models.iter().zip(models_for_sorting.iter_mut())
+		{
+			model_for_sorting.0 = model_index;
+			model_for_sorting.1 = inline_models_index.get_model_bbox(model_index);
+		}
+		let num_models = std::cmp::min(leaf_models.len(), MAX_MODELS_IN_LEAF);
+
+		draw_ordering::order_models(&mut models_for_sorting[.. num_models], &camera_matrices.position);
+
 		// Draw models, located in this leaf, after leaf polygons.
 		// TODO - sort leaf models.
-		for &model_index in inline_models_index.get_leaf_models(leaf_index)
+		for (model_index, _bbox) in &models_for_sorting[.. num_models]
 		{
-			let submodel = &self.map.submodels[model_index as usize];
+			let submodel = &self.map.submodels[*model_index as usize];
 			for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
 			{
 				self.draw_model_polygon(rasterizer, camera_matrices, &clip_planes, leaf_index, polygon_index);

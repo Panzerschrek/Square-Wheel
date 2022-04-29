@@ -1,4 +1,4 @@
-use super::{clipping, map_file, map_polygonizer, math_types::*, plane::*};
+use super::{bbox::*, clipping, map_file, map_polygonizer, math_types::*, plane::*};
 use std::{cell, rc};
 
 pub use map_polygonizer::Polygon;
@@ -86,11 +86,11 @@ pub fn build_leaf_bsp_tree(map_entities: &[map_polygonizer::Entity]) -> BSPTree
 	}
 }
 
-fn build_bounding_box(entity: &map_polygonizer::Entity) -> MapBBox
+fn build_bounding_box(entity: &map_polygonizer::Entity) -> BBox
 {
 	let inf = 1.0e8;
 	let bbox_extend = 128.0;
-	let mut bbox = MapBBox {
+	let mut bbox = BBox {
 		min: Vec3f::new(inf, inf, inf),
 		max: Vec3f::new(-inf, -inf, -inf),
 	};
@@ -434,7 +434,7 @@ fn get_point_position_relative_plane(point: &Vec3f, plane: &Plane) -> PointPosit
 	}
 }
 
-fn build_protals(node: &BSPNodeChild, map_bbox: &MapBBox) -> Vec<LeafsPortalPtr>
+fn build_protals(node: &BSPNodeChild, map_bbox: &BBox) -> Vec<LeafsPortalPtr>
 {
 	let mut splitter_nodes = Vec::new();
 	let mut leaf_portals_by_node = LeafPortalsInitialByNode::new();
@@ -449,12 +449,6 @@ fn build_protals(node: &BSPNodeChild, map_bbox: &MapBBox) -> Vec<LeafsPortalPtr>
 		}
 	}
 	result
-}
-
-struct MapBBox
-{
-	min: Vec3f,
-	max: Vec3f,
 }
 
 struct NodeForPortalsBuild
@@ -477,7 +471,7 @@ fn build_protals_r(
 	node_child: &BSPNodeChild,
 	splitter_nodes: &mut Vec<NodeForPortalsBuild>,
 	leaf_portals_by_node: &mut LeafPortalsInitialByNode,
-	map_bbox: &MapBBox,
+	map_bbox: &BBox,
 )
 {
 	match node_child
@@ -518,7 +512,7 @@ fn build_protals_r(
 fn build_leaf_portals(
 	leaf_ptr: &BSPLeafPtr,
 	splitter_nodes: &[NodeForPortalsBuild],
-	map_bbox: &MapBBox,
+	map_bbox: &BBox,
 	leaf_portals_by_node: &mut LeafPortalsInitialByNode,
 )
 {

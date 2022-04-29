@@ -1,3 +1,4 @@
+pub mod bbox;
 pub mod bsp_builder;
 pub mod bsp_map_compact;
 pub mod bsp_map_save_load;

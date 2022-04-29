@@ -1,4 +1,4 @@
-use common::{bsp_map_compact, math_types::*};
+use common::{bbox::*, bsp_map_compact, math_types::*};
 use std::rc::Rc;
 
 pub struct InlineModelsIndex
@@ -58,6 +58,15 @@ impl InlineModelsIndex
 	pub fn get_model_leafs(&self, model_index: u32) -> &[u32]
 	{
 		&self.models_info[model_index as usize].leafs
+	}
+
+	pub fn get_model_bbox(&self, model_index: u32) -> BBox
+	{
+		let model_info = &self.models_info[model_index as usize];
+		BBox {
+			min: model_info.bbox_min + model_info.shift,
+			max: model_info.bbox_max + model_info.shift,
+		}
 	}
 
 	fn force_reposition_model(&mut self, model_index: u32, shift: &Vec3f)
