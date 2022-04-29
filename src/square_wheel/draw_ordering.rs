@@ -29,7 +29,7 @@ pub fn order_models(models: &mut [ModelForDrawOrdering], camera_position: &Vec3f
 
 fn compare_models(l: &BBox, r: &BBox, camera_position: &Vec3f) -> bool
 {
-	// Try to determine if one bbox is closer than another bbox checking 3 axis.
+	// Try to determine if one bbox is closer than another bbox checking bbox ranges against camera position for 3 axis.
 
 	let l_min: &[f32; 3] = l.min.as_ref();
 	let l_max: &[f32; 3] = l.max.as_ref();
@@ -39,22 +39,42 @@ fn compare_models(l: &BBox, r: &BBox, camera_position: &Vec3f) -> bool
 
 	for i in 0 .. 3
 	{
+		let ranges_dist = get_ranges_dist(l_min[i], l_max[i], r_min[i], r_max[i]);
+		if ranges_dist == 0.0
+		{
+			// Overlapping ranges - can't determine proper order for this axis.
+			continue;
+		}
+
 		let dist_l = get_point_range_dist(l_min[i], l_max[i], cam_pos[i]);
 		let dist_r = get_point_range_dist(r_min[i], r_max[i], cam_pos[i]);
-
-		// TODO - check this properly.
 		if dist_l < dist_r
-		{
-			return false;
-		}
-		if dist_r > dist_l
 		{
 			return true;
 		}
+		if dist_r < dist_l
+		{
+			return false;
+		}
 	}
 
-	// TODO - try to perform additional checks here.
+	// There is no non-overlapping ranges.
+	// Try to reorder models, using simple distance criteria.
+	for i in 0 .. 3
+	{
+		let dist_l = get_point_range_dist(l_min[i], l_max[i], cam_pos[i]);
+		let dist_r = get_point_range_dist(r_min[i], r_max[i], cam_pos[i]);
+		if dist_l < dist_r
+		{
+			return true;
+		}
+		if dist_r < dist_l
+		{
+			return false;
+		}
+	}
 
+	// Can't determine order at all.
 	false
 }
 
@@ -69,6 +89,24 @@ fn get_point_range_dist(range_min: f32, range_max: f32, point: f32) -> f32
 	else if point > range_max
 	{
 		point - range_max
+	}
+	else
+	{
+		0.0
+	}
+}
+
+// Get distance (non-negative) between two ranges.
+// Returns 0 if ranges overlaps.
+fn get_ranges_dist(l_min: f32, l_max: f32, r_min: f32, r_max: f32) -> f32
+{
+	if l_max < r_min
+	{
+		r_min - l_max
+	}
+	else if r_max < l_min
+	{
+		l_min - r_max
 	}
 	else
 	{
