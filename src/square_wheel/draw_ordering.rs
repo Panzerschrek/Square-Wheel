@@ -39,8 +39,7 @@ fn compare_models(l: &BBox, r: &BBox, camera_position: &Vec3f) -> bool
 
 	for i in 0 .. 3
 	{
-		let ranges_dist = get_ranges_dist(l_min[i], l_max[i], r_min[i], r_max[i]);
-		if ranges_dist == 0.0
+		if ranges_overlapping(l_min[i], l_max[i], r_min[i], r_max[i])
 		{
 			// Overlapping ranges - can't determine proper order for this axis.
 			continue;
@@ -96,20 +95,7 @@ fn get_point_range_dist(range_min: f32, range_max: f32, point: f32) -> f32
 	}
 }
 
-// Get distance (non-negative) between two ranges.
-// Returns 0 if ranges overlaps.
-fn get_ranges_dist(l_min: f32, l_max: f32, r_min: f32, r_max: f32) -> f32
+fn ranges_overlapping(l_min: f32, l_max: f32, r_min: f32, r_max: f32) -> bool
 {
-	if l_max < r_min
-	{
-		r_min - l_max
-	}
-	else if r_max < l_min
-	{
-		l_min - r_max
-	}
-	else
-	{
-		0.0
-	}
+	!(l_max <= r_min || r_max <= l_min)
 }
