@@ -1,4 +1,4 @@
-use super::{commands_processor, commands_queue, config, console, host_config::*, renderer};
+use super::{commands_processor, commands_queue, config, console, host_config::*, inline_models_index, renderer};
 use common::{bsp_map_save_load, camera_controller, color::*, math_types::*, system_window, ticks_counter::*};
 use sdl2::{event::Event, keyboard::Keycode};
 use std::{cell::RefCell, rc::Rc, time::Duration};
@@ -11,10 +11,16 @@ pub struct Host
 	config: HostConfig,
 	window: Rc<RefCell<system_window::SystemWindow>>,
 	camera: camera_controller::CameraController,
-	renderer: Option<renderer::Renderer>,
+	active_map: Option<ActiveMap>,
 	prev_time: std::time::Instant,
 	fps_counter: TicksCounter,
 	quit_requested: bool,
+}
+
+struct ActiveMap
+{
+	renderer: renderer::Renderer,
+	inline_models_index: inline_models_index::InlineModelsIndex,
 }
 
 impl Host
@@ -63,7 +69,7 @@ impl Host
 			config: HostConfig::from_app_config(&config_json),
 			window: Rc::new(RefCell::new(system_window::SystemWindow::new())),
 			camera: camera_controller::CameraController::new(),
-			renderer: None,
+			active_map: None,
 			config_json,
 			prev_time: std::time::Instant::now(),
 			fps_counter: TicksCounter::new(),
@@ -172,9 +178,9 @@ impl Host
 			.camera
 			.build_view_matrix(surface_info.width as f32, surface_info.height as f32);
 
-		if let Some(renderer) = &mut self.renderer
+		if let Some(active_map) = &mut self.active_map
 		{
-			renderer.draw_frame(pixels, surface_info, view_matrix);
+			active_map.renderer.draw_frame(pixels, surface_info, view_matrix);
 		}
 		self.console.draw(pixels, surface_info);
 
@@ -243,7 +249,7 @@ impl Host
 			self.console.add_text("Expected map file name".to_string());
 			return;
 		}
-		self.renderer = None;
+		self.active_map = None;
 
 		// TODO - reset camera?
 
@@ -251,7 +257,11 @@ impl Host
 		{
 			Ok(Some(map)) =>
 			{
-				self.renderer = Some(renderer::Renderer::new(&self.config_json, Rc::new(map)));
+				let map_rc = Rc::new(map);
+				self.active_map = Some(ActiveMap {
+					renderer: renderer::Renderer::new(&self.config_json, map_rc.clone()),
+					inline_models_index: inline_models_index::InlineModelsIndex::new(map_rc),
+				});
 			},
 			Ok(None) =>
 			{

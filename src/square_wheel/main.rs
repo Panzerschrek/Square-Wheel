@@ -7,6 +7,7 @@ mod config;
 mod console;
 mod host;
 mod host_config;
+mod inline_models_index;
 mod rasterizer;
 mod renderer;
 mod renderer_config;
