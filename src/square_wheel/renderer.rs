@@ -158,12 +158,14 @@ impl Renderer
 		{
 			let mut num_visible_leafs = 0;
 			let mut max_search_visits = 0;
-			for leaf_data in &self.leafs_data
+			let mut num_visible_models_parts = 0;
+			for (leaf_index, leaf_data) in self.leafs_data.iter().enumerate()
 			{
 				if leaf_data.visible_frame == self.current_frame
 				{
 					num_visible_leafs += 1;
 					max_search_visits = std::cmp::max(max_search_visits, leaf_data.num_search_visits);
+					num_visible_models_parts += inline_models_index.get_leaf_models(leaf_index as u32).len();
 				}
 			}
 
@@ -190,9 +192,9 @@ impl Renderer
 				surface_info,
 				&format!(
 					"frame time: {:04.2}ms\nvisible leafs search: {:04.2}ms\nsurfaces preparation: \
-					 {:04.2}ms\nrasterization: {:04.2}ms\nleafs: {}/{}\nportals: {}/{}\npolygons: {}\nsurfaces \
-					 pixels: {}k\nnum reachable leaf search  calls: {}\nmax visits: {}\nmax reachable leaf search \
-					 depth: {}\nmax reqachable leafs search wave size: {}",
+					 {:04.2}ms\nrasterization: {:04.2}ms\nleafs: {}/{}\nportals: {}/{}\nmodels parts: {}\npolygons: \
+					 {}\nsurfaces pixels: {}k\nnum reachable leaf search  calls: {}\nmax visits: {}\nmax reachable \
+					 leaf search depth: {}\nmax reqachable leafs search wave size: {}",
 					self.performance_counters.frame_duration.get_average_value() * 1000.0,
 					self.performance_counters.visible_leafs_search.get_average_value() * 1000.0,
 					self.performance_counters.surfaces_preparation.get_average_value() * 1000.0,
@@ -201,6 +203,7 @@ impl Renderer
 					self.leafs_data.len(),
 					num_visible_portals,
 					self.portals_data.len(),
+					num_visible_models_parts,
 					num_visible_polygons,
 					(self.surfaces_pixels.len() + 1023) / 1024,
 					debug_stats.num_reachable_leafs_search_calls,
