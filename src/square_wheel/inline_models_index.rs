@@ -18,8 +18,7 @@ struct LeafInfo
 struct ModelInfo
 {
 	leafs: Vec<u32>,
-	bbox_min: Vec3f,
-	bbox_max: Vec3f,
+	bbox: BBox,
 	shift: Vec3f,
 	// Rotation relative bbox center.
 	// TODO - support arbitrary rotation.
@@ -71,24 +70,23 @@ impl InlineModelsIndex
 		{
 			// No rotation - just return shifted bounding box.
 			return BBox {
-				min: model_info.bbox_min + model_info.shift,
-				max: model_info.bbox_max + model_info.shift,
+				min: model_info.bbox.min + model_info.shift,
+				max: model_info.bbox.max + model_info.shift,
 			};
 		}
 
 		// Transform original bounding box vertices and calculate new bounding box around these vertices.
-		let bbox_min = &model_info.bbox_min;
-		let bbox_max = &model_info.bbox_max;
+		let bbox = &model_info.bbox;
 		let transform_matrix = self.get_model_matrix(model_index);
 
-		let mut bbox = BBox::from_point(&(transform_matrix * bbox_min.extend(1.0)).truncate());
-		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox_min.x, bbox_min.y, bbox_max.z, 1.0)).truncate());
-		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox_min.x, bbox_max.y, bbox_min.z, 1.0)).truncate());
-		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox_min.x, bbox_max.y, bbox_max.z, 1.0)).truncate());
-		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox_max.x, bbox_min.y, bbox_min.z, 1.0)).truncate());
-		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox_max.x, bbox_min.y, bbox_max.z, 1.0)).truncate());
-		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox_max.x, bbox_max.y, bbox_min.z, 1.0)).truncate());
-		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox_max.x, bbox_max.y, bbox_max.z, 1.0)).truncate());
+		let mut bbox = BBox::from_point(&(transform_matrix * bbox.min.extend(1.0)).truncate());
+		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox.min.x, bbox.min.y, bbox.max.z, 1.0)).truncate());
+		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox.min.x, bbox.max.y, bbox.min.z, 1.0)).truncate());
+		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox.min.x, bbox.max.y, bbox.max.z, 1.0)).truncate());
+		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox.max.x, bbox.min.y, bbox.min.z, 1.0)).truncate());
+		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox.max.x, bbox.min.y, bbox.max.z, 1.0)).truncate());
+		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox.max.x, bbox.max.y, bbox.min.z, 1.0)).truncate());
+		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox.max.x, bbox.max.y, bbox.max.z, 1.0)).truncate());
 
 		bbox
 	}
@@ -101,7 +99,7 @@ impl InlineModelsIndex
 	pub fn get_model_matrix(&self, model_index: u32) -> Mat4f
 	{
 		let model_info = &self.models_info[model_index as usize];
-		let center = (model_info.bbox_min + model_info.bbox_max) * 0.5;
+		let center = model_info.bbox.get_center();
 		Mat4f::from_translation(model_info.shift) *
 			Mat4f::from_translation(center) *
 			Mat4f::from_angle_z(model_info.angle_z) *
@@ -124,20 +122,19 @@ impl InlineModelsIndex
 		model_info.shift = *shift;
 		model_info.angle_z = angle_z;
 
-		let bbox_min = model_info.bbox_min;
-		let bbox_max = model_info.bbox_max;
+		let bbox = model_info.bbox;
 		let transform_matrix = self.get_model_matrix(model_index);
 
 		// Calculate trasformed bounding box vertices.
 		let bbox_vertices = [
-			(transform_matrix * Vec4f::new(bbox_min.x, bbox_min.y, bbox_min.z, 1.0)).truncate(),
-			(transform_matrix * Vec4f::new(bbox_min.x, bbox_min.y, bbox_max.z, 1.0)).truncate(),
-			(transform_matrix * Vec4f::new(bbox_min.x, bbox_max.y, bbox_min.z, 1.0)).truncate(),
-			(transform_matrix * Vec4f::new(bbox_min.x, bbox_max.y, bbox_max.z, 1.0)).truncate(),
-			(transform_matrix * Vec4f::new(bbox_max.x, bbox_min.y, bbox_min.z, 1.0)).truncate(),
-			(transform_matrix * Vec4f::new(bbox_max.x, bbox_min.y, bbox_max.z, 1.0)).truncate(),
-			(transform_matrix * Vec4f::new(bbox_max.x, bbox_max.y, bbox_min.z, 1.0)).truncate(),
-			(transform_matrix * Vec4f::new(bbox_max.x, bbox_max.y, bbox_max.z, 1.0)).truncate(),
+			(transform_matrix * Vec4f::new(bbox.min.x, bbox.min.y, bbox.min.z, 1.0)).truncate(),
+			(transform_matrix * Vec4f::new(bbox.min.x, bbox.min.y, bbox.max.z, 1.0)).truncate(),
+			(transform_matrix * Vec4f::new(bbox.min.x, bbox.max.y, bbox.min.z, 1.0)).truncate(),
+			(transform_matrix * Vec4f::new(bbox.min.x, bbox.max.y, bbox.max.z, 1.0)).truncate(),
+			(transform_matrix * Vec4f::new(bbox.max.x, bbox.min.y, bbox.min.z, 1.0)).truncate(),
+			(transform_matrix * Vec4f::new(bbox.max.x, bbox.min.y, bbox.max.z, 1.0)).truncate(),
+			(transform_matrix * Vec4f::new(bbox.max.x, bbox.max.y, bbox.min.z, 1.0)).truncate(),
+			(transform_matrix * Vec4f::new(bbox.max.x, bbox.max.y, bbox.max.z, 1.0)).truncate(),
 		];
 
 		// Place model in leafs.
@@ -197,46 +194,24 @@ fn prepare_model_info(map: &bsp_map_compact::BSPMap, submodel: &bsp_map_compact:
 {
 	// Calculate model bounding box based on all vertices of all polygons.
 	let inf = 1e24;
-	let mut bbox_min = Vec3f::new(inf, inf, inf);
-	let mut bbox_max = Vec3f::new(-inf, -inf, -inf);
+	let mut bbox = BBox {
+		min: Vec3f::new(inf, inf, inf),
+		max: Vec3f::new(-inf, -inf, -inf),
+	};
 
 	for &polygon in
 		&map.polygons[(submodel.first_polygon as usize) .. ((submodel.first_polygon + submodel.num_polygons) as usize)]
 	{
-		for &vertex in
+		for vertex in
 			&map.vertices[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)]
 		{
-			if vertex.x < bbox_min.x
-			{
-				bbox_min.x = vertex.x;
-			}
-			if vertex.x > bbox_max.x
-			{
-				bbox_max.x = vertex.x;
-			}
-			if vertex.y < bbox_min.y
-			{
-				bbox_min.y = vertex.y;
-			}
-			if vertex.y > bbox_max.y
-			{
-				bbox_max.y = vertex.y;
-			}
-			if vertex.z < bbox_min.z
-			{
-				bbox_min.z = vertex.z;
-			}
-			if vertex.z > bbox_max.z
-			{
-				bbox_max.z = vertex.z;
-			}
+			bbox.extend_with_point(vertex);
 		}
 	}
 
 	ModelInfo {
 		leafs: Vec::new(),
-		bbox_min,
-		bbox_max,
+		bbox,
 		shift: Vec3f::zero(),
 		angle_z: Rad(0.0),
 	}

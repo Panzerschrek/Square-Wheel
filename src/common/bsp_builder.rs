@@ -98,30 +98,7 @@ fn build_bounding_box(entity: &map_polygonizer::Entity) -> BBox
 	{
 		for v in &polygon.vertices
 		{
-			if v.x < bbox.min.x
-			{
-				bbox.min.x = v.x;
-			}
-			if v.x > bbox.max.x
-			{
-				bbox.max.x = v.x;
-			}
-			if v.y < bbox.min.y
-			{
-				bbox.min.y = v.y;
-			}
-			if v.y > bbox.max.y
-			{
-				bbox.max.y = v.y;
-			}
-			if v.z < bbox.min.z
-			{
-				bbox.min.z = v.z;
-			}
-			if v.z > bbox.max.z
-			{
-				bbox.max.z = v.z;
-			}
+			bbox.extend_with_point(v);
 		}
 	}
 	bbox.min -= Vec3f::new(bbox_extend, bbox_extend, bbox_extend);

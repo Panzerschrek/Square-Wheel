@@ -17,6 +17,11 @@ impl BBox
 		}
 	}
 
+	pub fn get_center(&self) -> Vec3f
+	{
+		(self.min + self.max) * 0.5
+	}
+
 	pub fn extend_with_point(&mut self, point: &Vec3f)
 	{
 		if point.x < self.min.x
