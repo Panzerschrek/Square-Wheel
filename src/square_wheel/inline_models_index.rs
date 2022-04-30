@@ -67,10 +67,30 @@ impl InlineModelsIndex
 	pub fn get_model_bbox(&self, model_index: u32) -> BBox
 	{
 		let model_info = &self.models_info[model_index as usize];
-		BBox {
-			min: model_info.bbox_min + model_info.shift,
-			max: model_info.bbox_max + model_info.shift,
+		if model_info.angle_z == Rad(0.0)
+		{
+			// No rotation - just return shifted bounding box.
+			return BBox {
+				min: model_info.bbox_min + model_info.shift,
+				max: model_info.bbox_max + model_info.shift,
+			};
 		}
+
+		// Transform original bounding box vertices and calculate new bounding box around these vertices.
+		let bbox_min = &model_info.bbox_min;
+		let bbox_max = &model_info.bbox_max;
+		let transform_matrix = self.get_model_matrix(model_index);
+
+		let mut bbox = BBox::from_point(&(transform_matrix * bbox_min.extend(1.0)).truncate());
+		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox_min.x, bbox_min.y, bbox_max.z, 1.0)).truncate());
+		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox_min.x, bbox_max.y, bbox_min.z, 1.0)).truncate());
+		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox_min.x, bbox_max.y, bbox_max.z, 1.0)).truncate());
+		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox_max.x, bbox_min.y, bbox_min.z, 1.0)).truncate());
+		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox_max.x, bbox_min.y, bbox_max.z, 1.0)).truncate());
+		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox_max.x, bbox_max.y, bbox_min.z, 1.0)).truncate());
+		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox_max.x, bbox_max.y, bbox_max.z, 1.0)).truncate());
+
+		bbox
 	}
 
 	pub fn get_num_models(&self) -> usize
