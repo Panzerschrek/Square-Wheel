@@ -193,7 +193,8 @@ impl Host
 						(abs_time_s * 0.3).sin(),
 						(abs_time_s * 0.5).sin(),
 					);
-				active_map.inline_models_index.reposition_model(i, &shift);
+				let angle_z = Rad(abs_time_s * 0.1);
+				active_map.inline_models_index.reposition_model(i, &shift, angle_z);
 			}
 		}
 	}

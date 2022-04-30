@@ -21,6 +21,9 @@ struct ModelInfo
 	bbox_min: Vec3f,
 	bbox_max: Vec3f,
 	shift: Vec3f,
+	// Rotation relative bbox center.
+	// TODO - support arbitrary rotation.
+	angle_z: RadiansF,
 }
 
 impl InlineModelsIndex
@@ -36,17 +39,18 @@ impl InlineModelsIndex
 		// Make initial positioning.
 		for i in 0 .. result.models_info.len() as u32
 		{
-			result.force_reposition_model(i, &Vec3f::zero());
+			result.force_reposition_model(i, &Vec3f::zero(), Rad(0.0));
 		}
 
 		result
 	}
 
-	pub fn reposition_model(&mut self, model_index: u32, shift: &Vec3f)
+	pub fn reposition_model(&mut self, model_index: u32, shift: &Vec3f, angle_z: RadiansF)
 	{
-		if self.models_info[model_index as usize].shift != *shift
+		let model_info = &self.models_info[model_index as usize];
+		if model_info.shift != *shift || model_info.angle_z != angle_z
 		{
-			self.force_reposition_model(model_index, shift);
+			self.force_reposition_model(model_index, shift, angle_z);
 		}
 	}
 
@@ -76,10 +80,15 @@ impl InlineModelsIndex
 
 	pub fn get_model_matrix(&self, model_index: u32) -> Mat4f
 	{
-		Mat4f::from_translation(self.models_info[model_index as usize].shift)
+		let model_info = &self.models_info[model_index as usize];
+		let center = (model_info.bbox_min + model_info.bbox_max) * 0.5;
+		Mat4f::from_translation(model_info.shift) *
+			Mat4f::from_translation(center) *
+			Mat4f::from_angle_z(model_info.angle_z) *
+			Mat4f::from_translation(-center)
 	}
 
-	fn force_reposition_model(&mut self, model_index: u32, shift: &Vec3f)
+	fn force_reposition_model(&mut self, model_index: u32, shift: &Vec3f, angle_z: RadiansF)
 	{
 		// First, erase this model index from models list of all leafs where this model was before.
 		let model_info = &mut self.models_info[model_index as usize];
@@ -91,19 +100,24 @@ impl InlineModelsIndex
 		// Reset model's leafs list.
 		model_info.leafs.clear();
 
-		// Set new shift.
+		// Set new position.
 		model_info.shift = *shift;
+		model_info.angle_z = angle_z;
 
-		// Calculate new model.
+		let bbox_min = model_info.bbox_min;
+		let bbox_max = model_info.bbox_max;
+		let transform_matrix = self.get_model_matrix(model_index);
+
+		// Calculate trasformed bounding box vertices.
 		let bbox_vertices = [
-			shift + Vec3f::new(model_info.bbox_min.x, model_info.bbox_min.y, model_info.bbox_min.z),
-			shift + Vec3f::new(model_info.bbox_min.x, model_info.bbox_min.y, model_info.bbox_max.z),
-			shift + Vec3f::new(model_info.bbox_min.x, model_info.bbox_max.y, model_info.bbox_min.z),
-			shift + Vec3f::new(model_info.bbox_min.x, model_info.bbox_max.y, model_info.bbox_max.z),
-			shift + Vec3f::new(model_info.bbox_max.x, model_info.bbox_min.y, model_info.bbox_min.z),
-			shift + Vec3f::new(model_info.bbox_max.x, model_info.bbox_min.y, model_info.bbox_max.z),
-			shift + Vec3f::new(model_info.bbox_max.x, model_info.bbox_max.y, model_info.bbox_min.z),
-			shift + Vec3f::new(model_info.bbox_max.x, model_info.bbox_max.y, model_info.bbox_max.z),
+			(transform_matrix * Vec4f::new(bbox_min.x, bbox_min.y, bbox_min.z, 1.0)).truncate(),
+			(transform_matrix * Vec4f::new(bbox_min.x, bbox_min.y, bbox_max.z, 1.0)).truncate(),
+			(transform_matrix * Vec4f::new(bbox_min.x, bbox_max.y, bbox_min.z, 1.0)).truncate(),
+			(transform_matrix * Vec4f::new(bbox_min.x, bbox_max.y, bbox_max.z, 1.0)).truncate(),
+			(transform_matrix * Vec4f::new(bbox_max.x, bbox_min.y, bbox_min.z, 1.0)).truncate(),
+			(transform_matrix * Vec4f::new(bbox_max.x, bbox_min.y, bbox_max.z, 1.0)).truncate(),
+			(transform_matrix * Vec4f::new(bbox_max.x, bbox_max.y, bbox_min.z, 1.0)).truncate(),
+			(transform_matrix * Vec4f::new(bbox_max.x, bbox_max.y, bbox_max.z, 1.0)).truncate(),
 		];
 
 		// Place model in leafs.
@@ -204,5 +218,6 @@ fn prepare_model_info(map: &bsp_map_compact::BSPMap, submodel: &bsp_map_compact:
 		bbox_min,
 		bbox_max,
 		shift: Vec3f::zero(),
+		angle_z: Rad(0.0),
 	}
 }
