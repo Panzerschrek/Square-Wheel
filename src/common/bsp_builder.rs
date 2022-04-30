@@ -1,4 +1,4 @@
-use super::{map_file, map_polygonizer, math_types::*, plane::*};
+use super::{bbox::*, clipping, map_file, map_polygonizer, math_types::*, plane::*};
 use std::{cell, rc};
 
 pub use map_polygonizer::Polygon;
@@ -86,11 +86,11 @@ pub fn build_leaf_bsp_tree(map_entities: &[map_polygonizer::Entity]) -> BSPTree
 	}
 }
 
-fn build_bounding_box(entity: &map_polygonizer::Entity) -> MapBBox
+fn build_bounding_box(entity: &map_polygonizer::Entity) -> BBox
 {
 	let inf = 1.0e8;
 	let bbox_extend = 128.0;
-	let mut bbox = MapBBox {
+	let mut bbox = BBox {
 		min: Vec3f::new(inf, inf, inf),
 		max: Vec3f::new(-inf, -inf, -inf),
 	};
@@ -98,30 +98,7 @@ fn build_bounding_box(entity: &map_polygonizer::Entity) -> MapBBox
 	{
 		for v in &polygon.vertices
 		{
-			if v.x < bbox.min.x
-			{
-				bbox.min.x = v.x;
-			}
-			if v.x > bbox.max.x
-			{
-				bbox.max.x = v.x;
-			}
-			if v.y < bbox.min.y
-			{
-				bbox.min.y = v.y;
-			}
-			if v.y > bbox.max.y
-			{
-				bbox.max.y = v.y;
-			}
-			if v.z < bbox.min.z
-			{
-				bbox.min.z = v.z;
-			}
-			if v.z > bbox.max.z
-			{
-				bbox.max.z = v.z;
-			}
+			bbox.extend_with_point(v);
 		}
 	}
 	bbox.min -= Vec3f::new(bbox_extend, bbox_extend, bbox_extend);
@@ -224,7 +201,7 @@ fn split_polygon(in_polygon: &Polygon, plane: &Plane) -> (Polygon, Polygon)
 			{
 				if prev_vert_pos == PointPositionRelativePlane::Back
 				{
-					let intersection = get_line_plane_intersection(prev_vert, vert, plane);
+					let intersection = clipping::get_line_plane_intersection(prev_vert, vert, plane);
 					polygon_back.vertices.push(intersection);
 					polygon_front.vertices.push(intersection);
 				}
@@ -234,7 +211,7 @@ fn split_polygon(in_polygon: &Polygon, plane: &Plane) -> (Polygon, Polygon)
 			{
 				if prev_vert_pos == PointPositionRelativePlane::Front
 				{
-					let intersection = get_line_plane_intersection(prev_vert, vert, plane);
+					let intersection = clipping::get_line_plane_intersection(prev_vert, vert, plane);
 					polygon_front.vertices.push(intersection);
 					polygon_back.vertices.push(intersection);
 				}
@@ -252,16 +229,6 @@ fn split_polygon(in_polygon: &Polygon, plane: &Plane) -> (Polygon, Polygon)
 	}
 
 	(polygon_front, polygon_back)
-}
-
-fn get_line_plane_intersection(v0: &Vec3f, v1: &Vec3f, plane: &Plane) -> Vec3f
-{
-	let dist0 = v0.dot(plane.vec) - plane.dist;
-	let dist1 = v1.dot(plane.vec) - plane.dist;
-	let dist_sum = dist1 - dist0;
-	let k0 = dist0 / dist_sum;
-	let k1 = dist1 / dist_sum;
-	v0 * k1 - v1 * k0
 }
 
 // Returns None if can't find any situable splitter.
@@ -444,7 +411,7 @@ fn get_point_position_relative_plane(point: &Vec3f, plane: &Plane) -> PointPosit
 	}
 }
 
-fn build_protals(node: &BSPNodeChild, map_bbox: &MapBBox) -> Vec<LeafsPortalPtr>
+fn build_protals(node: &BSPNodeChild, map_bbox: &BBox) -> Vec<LeafsPortalPtr>
 {
 	let mut splitter_nodes = Vec::new();
 	let mut leaf_portals_by_node = LeafPortalsInitialByNode::new();
@@ -459,12 +426,6 @@ fn build_protals(node: &BSPNodeChild, map_bbox: &MapBBox) -> Vec<LeafsPortalPtr>
 		}
 	}
 	result
-}
-
-struct MapBBox
-{
-	min: Vec3f,
-	max: Vec3f,
 }
 
 struct NodeForPortalsBuild
@@ -487,7 +448,7 @@ fn build_protals_r(
 	node_child: &BSPNodeChild,
 	splitter_nodes: &mut Vec<NodeForPortalsBuild>,
 	leaf_portals_by_node: &mut LeafPortalsInitialByNode,
-	map_bbox: &MapBBox,
+	map_bbox: &BBox,
 )
 {
 	match node_child
@@ -528,7 +489,7 @@ fn build_protals_r(
 fn build_leaf_portals(
 	leaf_ptr: &BSPLeafPtr,
 	splitter_nodes: &[NodeForPortalsBuild],
-	map_bbox: &MapBBox,
+	map_bbox: &BBox,
 	leaf_portals_by_node: &mut LeafPortalsInitialByNode,
 )
 {

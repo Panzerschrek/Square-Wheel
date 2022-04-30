@@ -157,6 +157,7 @@ impl CameraController
 		// TODO - maybe avoid clculation of inverse matrix and perform direct matrix calculation?
 		let planes_matrix = base_view_matrix.transpose().invert().unwrap();
 		CameraMatrices {
+			position: self.pos,
 			view_matrix: shift_to_viewport_center * perspective_finalization * base_view_matrix,
 			planes_matrix,
 		}
@@ -165,6 +166,7 @@ impl CameraController
 
 pub struct CameraMatrices
 {
+	pub position: Vec3f,
 	// Matrix used for vertices projection. Viewport size scale and shift applied.
 	pub view_matrix: Mat4f,
 	// Matrix used for transformation of plane equations. Viewport center shift is not applied.

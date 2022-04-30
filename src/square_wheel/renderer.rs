@@ -1,8 +1,9 @@
-use super::{clipping_polygon::*, rasterizer::*, renderer_config::*};
+use super::{clipping_polygon::*, draw_ordering, inline_models_index::*, rasterizer::*, renderer_config::*};
 use common::{
-	bsp_map_compact, camera_controller::CameraMatrices, clipping::*, color::*, fixed_math::*, image, math_types::*,
-	performance_counter::*, system_window,
+	bbox::*, bsp_map_compact, camera_controller::CameraMatrices, clipping::*, color::*, fixed_math::*, image,
+	math_types::*, performance_counter::*, plane::*, system_window,
 };
+use std::rc::Rc;
 
 type Clock = std::time::Instant;
 
@@ -10,7 +11,7 @@ pub struct Renderer
 {
 	current_frame: FrameNumber,
 	config: RendererConfig,
-	map: bsp_map_compact::BSPMap,
+	map: Rc<bsp_map_compact::BSPMap>,
 	leafs_data: Vec<DrawLeafData>,
 	portals_data: Vec<DrawPortalData>,
 	polygons_data: Vec<DrawPolygonData>,
@@ -98,7 +99,7 @@ type TextureWithMips = [image::Image; NUM_MIPS];
 
 impl Renderer
 {
-	pub fn new(app_config: &serde_json::Value, map: bsp_map_compact::BSPMap) -> Self
+	pub fn new(app_config: &serde_json::Value, map: Rc<bsp_map_compact::BSPMap>) -> Self
 	{
 		let textures = load_textures(&map.textures);
 
@@ -125,6 +126,7 @@ impl Renderer
 		pixels: &mut [Color32],
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
+		inline_models_index: &InlineModelsIndex,
 	)
 	{
 		let frame_start_time = Clock::now();
@@ -137,7 +139,13 @@ impl Renderer
 
 		let mut debug_stats = DebugStats::default();
 
-		self.draw_map(pixels, surface_info, camera_matrices, &mut debug_stats);
+		self.draw_map(
+			pixels,
+			surface_info,
+			camera_matrices,
+			inline_models_index,
+			&mut debug_stats,
+		);
 
 		// TODO - remove such temporary fuinction.
 		draw_crosshair(pixels, surface_info);
@@ -150,12 +158,14 @@ impl Renderer
 		{
 			let mut num_visible_leafs = 0;
 			let mut max_search_visits = 0;
-			for leaf_data in &self.leafs_data
+			let mut num_visible_models_parts = 0;
+			for (leaf_index, leaf_data) in self.leafs_data.iter().enumerate()
 			{
 				if leaf_data.visible_frame == self.current_frame
 				{
 					num_visible_leafs += 1;
 					max_search_visits = std::cmp::max(max_search_visits, leaf_data.num_search_visits);
+					num_visible_models_parts += inline_models_index.get_leaf_models(leaf_index as u32).len();
 				}
 			}
 
@@ -182,9 +192,9 @@ impl Renderer
 				surface_info,
 				&format!(
 					"frame time: {:04.2}ms\nvisible leafs search: {:04.2}ms\nsurfaces preparation: \
-					 {:04.2}ms\nrasterization: {:04.2}ms\nleafs: {}/{}\nportals: {}/{}\npolygons: {}\nsurfaces \
-					 pixels: {}k\nnum reachable leaf search  calls: {}\nmax visits: {}\nmax reachable leaf search \
-					 depth: {}\nmax reqachable leafs search wave size: {}",
+					 {:04.2}ms\nrasterization: {:04.2}ms\nleafs: {}/{}\nportals: {}/{}\nmodels parts: {}\npolygons: \
+					 {}\nsurfaces pixels: {}k\nnum reachable leaf search  calls: {}\nmax visits: {}\nmax reachable \
+					 leaf search depth: {}\nmax reqachable leafs search wave size: {}",
 					self.performance_counters.frame_duration.get_average_value() * 1000.0,
 					self.performance_counters.visible_leafs_search.get_average_value() * 1000.0,
 					self.performance_counters.surfaces_preparation.get_average_value() * 1000.0,
@@ -193,6 +203,7 @@ impl Renderer
 					self.leafs_data.len(),
 					num_visible_portals,
 					self.portals_data.len(),
+					num_visible_models_parts,
 					num_visible_polygons,
 					(self.surfaces_pixels.len() + 1023) / 1024,
 					debug_stats.num_reachable_leafs_search_calls,
@@ -212,6 +223,7 @@ impl Renderer
 		pixels: &mut [Color32],
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
+		inline_models_index: &InlineModelsIndex,
 		debug_stats: &mut DebugStats,
 	)
 	{
@@ -259,6 +271,7 @@ impl Renderer
 				rasterizer.get_width() as f32 * 0.5,
 				rasterizer.get_height() as f32 * 0.5,
 			],
+			inline_models_index,
 		);
 
 		self.build_polygons_surfaces();
@@ -273,7 +286,7 @@ impl Renderer
 		let rasterization_start_time = Clock::now();
 
 		// Draw BSP tree in back to front order, skip unreachable leafs.
-		self.draw_tree_r(&mut rasterizer, camera_matrices, root_node);
+		self.draw_tree_r(&mut rasterizer, camera_matrices, inline_models_index, root_node);
 
 		let rasterization_end_time = Clock::now();
 		let rasterization_duration_s = (rasterization_end_time - rasterization_start_time).as_secs_f32();
@@ -426,7 +439,12 @@ impl Renderer
 		debug_stats.reachable_leafs_search_calls_depth = depth;
 	}
 
-	fn prepare_polygons_surfaces(&mut self, camera_matrices: &CameraMatrices, viewport_half_size: &[f32; 2])
+	fn prepare_polygons_surfaces(
+		&mut self,
+		camera_matrices: &CameraMatrices,
+		viewport_half_size: &[f32; 2],
+		inline_models_index: &InlineModelsIndex,
+	)
 	{
 		let mut surfaces_pixels_accumulated_offset = 0;
 
@@ -449,6 +467,59 @@ impl Renderer
 						polygon_index as usize,
 					);
 				}
+			}
+		}
+
+		// Prepare surfaces for submodels.
+		// Do this only for sumbodels located in visible leafs.
+		for model_index in 0 .. self.map.submodels.len()
+		{
+			let mut bounds: Option<ClippingPolygon> = None;
+			for &leaf_index in inline_models_index.get_model_leafs(model_index as u32)
+			{
+				let leaf_data = &self.leafs_data[leaf_index as usize];
+				if leaf_data.visible_frame != self.current_frame
+				{
+					continue;
+				}
+				if let Some(bounds) = &mut bounds
+				{
+					bounds.extend(&leaf_data.current_frame_bounds);
+				}
+				else
+				{
+					bounds = Some(leaf_data.current_frame_bounds);
+				}
+			}
+
+			let clip_planes = if let Some(b) = bounds
+			{
+				b.get_clip_planes()
+			}
+			else
+			{
+				continue;
+			};
+
+			let submodel = &self.map.submodels[model_index];
+
+			let model_matrix = inline_models_index.get_model_matrix(model_index as u32);
+			let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
+			let model_matrices = CameraMatrices {
+				view_matrix: camera_matrices.view_matrix * model_matrix,
+				planes_matrix: camera_matrices.planes_matrix * model_matrix_inverse,
+				position: camera_matrices.position,
+			};
+
+			for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
+			{
+				self.prepare_polygon_surface(
+					&model_matrices,
+					&clip_planes,
+					viewport_half_size,
+					&mut surfaces_pixels_accumulated_offset,
+					polygon_index as usize,
+				);
 			}
 		}
 
@@ -684,7 +755,13 @@ impl Renderer
 		}
 	}
 
-	fn draw_tree_r(&self, rasterizer: &mut Rasterizer, camera_matrices: &CameraMatrices, current_index: u32)
+	fn draw_tree_r(
+		&self,
+		rasterizer: &mut Rasterizer,
+		camera_matrices: &CameraMatrices,
+		inline_models_index: &InlineModelsIndex,
+		current_index: u32,
+	)
 	{
 		if current_index >= bsp_map_compact::FIRST_LEAF_INDEX
 		{
@@ -694,8 +771,10 @@ impl Renderer
 			{
 				self.draw_leaf(
 					rasterizer,
+					camera_matrices,
 					&leaf_data.current_frame_bounds,
-					&self.map.leafs[leaf as usize],
+					inline_models_index,
+					leaf,
 				);
 			}
 		}
@@ -710,13 +789,27 @@ impl Renderer
 			}
 			for i in 0 .. 2
 			{
-				self.draw_tree_r(rasterizer, camera_matrices, node.children[(i ^ mask) as usize]);
+				self.draw_tree_r(
+					rasterizer,
+					camera_matrices,
+					inline_models_index,
+					node.children[(i ^ mask) as usize],
+				);
 			}
 		}
 	}
 
-	fn draw_leaf(&self, rasterizer: &mut Rasterizer, bounds: &ClippingPolygon, leaf: &bsp_map_compact::BSPLeaf)
+	fn draw_leaf(
+		&self,
+		rasterizer: &mut Rasterizer,
+		camera_matrices: &CameraMatrices,
+		bounds: &ClippingPolygon,
+		inline_models_index: &InlineModelsIndex,
+		leaf_index: u32,
+	)
 	{
+		let leaf = &self.map.leafs[leaf_index as usize];
+
 		// TODO - maybe just a little bit extend clipping polygon?
 		let clip_planes = bounds.get_clip_planes();
 
@@ -742,6 +835,150 @@ impl Renderer
 						((polygon_data.surface_size[0] * polygon_data.surface_size[1]) as usize)],
 			);
 		}
+
+		let leaf_models = inline_models_index.get_leaf_models(leaf_index);
+		if leaf_models.is_empty()
+		{
+			return;
+		}
+
+		// TODO - use uninitialized memory and increase this value.
+		const MAX_MODELS_IN_LEAF: usize = 12;
+		let mut models_for_sorting = [(
+			0,
+			BBox {
+				min: Vec3f::zero(),
+				max: Vec3f::zero(),
+			},
+		); MAX_MODELS_IN_LEAF];
+
+		for (&model_index, model_for_sorting) in leaf_models.iter().zip(models_for_sorting.iter_mut())
+		{
+			model_for_sorting.0 = model_index;
+			model_for_sorting.1 = inline_models_index.get_model_bbox(model_index);
+		}
+		let num_models = std::cmp::min(leaf_models.len(), MAX_MODELS_IN_LEAF);
+
+		draw_ordering::order_models(&mut models_for_sorting[.. num_models], &camera_matrices.position);
+
+		// Draw models, located in this leaf, after leaf polygons.
+		// TODO - sort leaf models.
+		for (model_index, _bbox) in &models_for_sorting[.. num_models]
+		{
+			let model_matrix = inline_models_index.get_model_matrix(*model_index);
+
+			let submodel = &self.map.submodels[*model_index as usize];
+			for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
+			{
+				self.draw_model_polygon(
+					rasterizer,
+					&model_matrix,
+					&camera_matrices.view_matrix,
+					&clip_planes,
+					leaf_index,
+					polygon_index,
+				);
+			}
+		}
+	}
+
+	fn draw_model_polygon(
+		&self,
+		rasterizer: &mut Rasterizer,
+		model_transform_matrix: &Mat4f,
+		view_matrix: &Mat4f,
+		clip_planes: &ClippingPolygonPlanes,
+		leaf_index: u32,
+		polygon_index: u32,
+	)
+	{
+		let leaf = &self.map.leafs[leaf_index as usize];
+
+		let polygon = &self.map.polygons[polygon_index as usize];
+		let polygon_data = &self.polygons_data[polygon_index as usize];
+		if polygon_data.visible_frame != self.current_frame
+		{
+			return;
+		}
+
+		let mut vertices_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
+		let mut vertex_count = std::cmp::min(polygon.num_vertices as usize, MAX_VERTICES);
+
+		// Apply model transfomration in order to move polygons to world space, before performing clipping.
+		// TODO - reduce number of transformations. Perform clipping by fully-transformed clip planes.
+		for (in_vertex, out_vertex) in self.map.vertices
+			[(polygon.first_vertex as usize) .. (polygon.first_vertex as usize) + vertex_count]
+			.iter()
+			.zip(vertices_clipped[.. vertex_count].iter_mut())
+		{
+			let vertex_transformed = model_transform_matrix * in_vertex.extend(1.0);
+			*out_vertex = vertex_transformed.truncate();
+		}
+
+		let mut vertices_temp = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
+
+		// Clip model polygon by portal planes of current leaf.
+		for &portal_index in &self.map.leafs_portals
+			[(leaf.first_leaf_portal as usize) .. ((leaf.first_leaf_portal + leaf.num_leaf_portals) as usize)]
+		{
+			let portal = &self.map.portals[portal_index as usize];
+			let clip_plane = if portal.leafs[0] == leaf_index
+			{
+				portal.plane
+			}
+			else
+			{
+				Plane {
+					vec: -portal.plane.vec,
+					dist: -portal.plane.dist,
+				}
+			};
+
+			vertex_count =
+				clip_3d_polygon_by_plane(&vertices_clipped[.. vertex_count], &clip_plane, &mut vertices_temp[..]);
+			if vertex_count < 3
+			{
+				return;
+			}
+			vertices_clipped[.. vertex_count].copy_from_slice(&vertices_temp[.. vertex_count]);
+		}
+
+		// Clip model also by polygons of current leaf.
+		for clip_polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
+		{
+			let clip_polygon = &self.map.polygons[clip_polygon_index as usize];
+
+			vertex_count = clip_3d_polygon_by_plane(
+				&vertices_clipped[.. vertex_count],
+				&clip_polygon.plane,
+				&mut vertices_temp[..],
+			);
+			if vertex_count < 3
+			{
+				return;
+			}
+			vertices_clipped[.. vertex_count].copy_from_slice(&vertices_temp[.. vertex_count]);
+		}
+
+		// Transform vetices after clipping.
+		// TODO - perform clipping using transformed planes instead.
+		for v in &mut vertices_clipped[.. vertex_count]
+		{
+			let vertex_transformed = view_matrix * v.extend(1.0);
+			*v = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
+		}
+
+		draw_polygon(
+			rasterizer,
+			&clip_planes,
+			&vertices_clipped[.. vertex_count],
+			&polygon_data.depth_equation,
+			&polygon_data.tex_coord_equation,
+			&polygon_data.surface_size,
+			&self.surfaces_pixels[polygon_data.surface_pixels_offset ..
+				polygon_data.surface_pixels_offset +
+					((polygon_data.surface_size[0] * polygon_data.surface_size[1]) as usize)],
+		);
 	}
 }
 
