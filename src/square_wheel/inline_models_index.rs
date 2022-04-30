@@ -69,6 +69,16 @@ impl InlineModelsIndex
 		}
 	}
 
+	pub fn get_num_models(&self) -> usize
+	{
+		self.models_info.len()
+	}
+
+	pub fn get_model_matrix(&self, model_index: u32) -> Mat4f
+	{
+		Mat4f::from_translation(self.models_info[model_index as usize].shift)
+	}
+
 	fn force_reposition_model(&mut self, model_index: u32, shift: &Vec3f)
 	{
 		// First, erase this model index from models list of all leafs where this model was before.

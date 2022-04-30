@@ -12,6 +12,7 @@ pub struct Host
 	window: Rc<RefCell<system_window::SystemWindow>>,
 	camera: camera_controller::CameraController,
 	active_map: Option<ActiveMap>,
+	start_time: std::time::Instant,
 	prev_time: std::time::Instant,
 	fps_counter: TicksCounter,
 	quit_requested: bool,
@@ -63,6 +64,9 @@ impl Host
 			console.add_text("Failed to load config file".to_string());
 			serde_json::Value::Object(serde_json::Map::new())
 		};
+
+		let cur_time = std::time::Instant::now();
+
 		Host {
 			commands_queue,
 			console,
@@ -71,7 +75,8 @@ impl Host
 			camera: camera_controller::CameraController::new(),
 			active_map: None,
 			config_json,
-			prev_time: std::time::Instant::now(),
+			start_time: cur_time,
+			prev_time: cur_time,
 			fps_counter: TicksCounter::new(),
 			quit_requested: false,
 		}
@@ -92,6 +97,8 @@ impl Host
 			self.camera
 				.update(&self.window.borrow_mut().get_keyboard_state(), time_delta_s);
 		}
+
+		self.process_game_logic();
 
 		let witndow_ptr_clone = self.window.clone();
 
@@ -170,6 +177,25 @@ impl Host
 	{
 		let queue_ptr_copy = self.commands_queue.clone();
 		queue_ptr_copy.borrow_mut().process_commands(self);
+	}
+
+	fn process_game_logic(&mut self)
+	{
+		let abs_time_s = self.start_time.elapsed().as_secs_f32();
+
+		if let Some(active_map) = &mut self.active_map
+		{
+			for i in 0 .. active_map.inline_models_index.get_num_models() as u32
+			{
+				let shift = 64.0 *
+					Vec3f::new(
+						(abs_time_s * 0.2).sin(),
+						(abs_time_s * 0.3).sin(),
+						(abs_time_s * 0.5).sin(),
+					);
+				active_map.inline_models_index.reposition_model(i, &shift);
+			}
+		}
 	}
 
 	fn draw_frame(&mut self, pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo)

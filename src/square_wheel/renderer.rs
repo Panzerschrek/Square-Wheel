@@ -503,10 +503,18 @@ impl Renderer
 
 			let submodel = &self.map.submodels[model_index];
 
+			let model_matrix = inline_models_index.get_model_matrix(model_index as u32);
+			let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
+			let model_matrices = CameraMatrices {
+				view_matrix: camera_matrices.view_matrix * model_matrix,
+				planes_matrix: camera_matrices.planes_matrix * model_matrix_inverse,
+				position: camera_matrices.position,
+			};
+
 			for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
 			{
 				self.prepare_polygon_surface(
-					camera_matrices,
+					&model_matrices,
 					&clip_planes,
 					viewport_half_size,
 					&mut surfaces_pixels_accumulated_offset,
@@ -857,10 +865,18 @@ impl Renderer
 		// TODO - sort leaf models.
 		for (model_index, _bbox) in &models_for_sorting[.. num_models]
 		{
+			let model_matrix = inline_models_index.get_model_matrix(*model_index);
+			let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
+			let model_matrices = CameraMatrices {
+				view_matrix: camera_matrices.view_matrix * model_matrix,
+				planes_matrix: camera_matrices.planes_matrix * model_matrix_inverse,
+				position: camera_matrices.position,
+			};
+
 			let submodel = &self.map.submodels[*model_index as usize];
 			for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
 			{
-				self.draw_model_polygon(rasterizer, camera_matrices, &clip_planes, leaf_index, polygon_index);
+				self.draw_model_polygon(rasterizer, &model_matrices, &clip_planes, leaf_index, polygon_index);
 			}
 		}
 	}
