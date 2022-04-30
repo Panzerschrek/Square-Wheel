@@ -12,7 +12,6 @@ pub struct Host
 	window: Rc<RefCell<system_window::SystemWindow>>,
 	camera: camera_controller::CameraController,
 	active_map: Option<ActiveMap>,
-	start_time: std::time::Instant,
 	prev_time: std::time::Instant,
 	fps_counter: TicksCounter,
 	quit_requested: bool,
@@ -75,7 +74,6 @@ impl Host
 			camera: camera_controller::CameraController::new(),
 			active_map: None,
 			config_json,
-			start_time: cur_time,
 			prev_time: cur_time,
 			fps_counter: TicksCounter::new(),
 			quit_requested: false,
@@ -181,22 +179,7 @@ impl Host
 
 	fn process_game_logic(&mut self)
 	{
-		let abs_time_s = self.start_time.elapsed().as_secs_f32();
-
-		if let Some(active_map) = &mut self.active_map
-		{
-			for i in 0 .. active_map.inline_models_index.get_num_models() as u32
-			{
-				let shift = 64.0 *
-					Vec3f::new(
-						(abs_time_s * 0.2).sin(),
-						(abs_time_s * 0.3).sin(),
-						(abs_time_s * 0.5).sin(),
-					);
-				let angle_z = Rad(abs_time_s * 0.1);
-				active_map.inline_models_index.reposition_model(i, &shift, angle_z);
-			}
-		}
+		// TODO
 	}
 
 	fn draw_frame(&mut self, pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo)

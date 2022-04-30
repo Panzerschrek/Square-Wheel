@@ -25,6 +25,7 @@ struct ModelInfo
 	angle_z: RadiansF,
 }
 
+#[allow(dead_code)]
 impl InlineModelsIndex
 {
 	pub fn new(map: Rc<bsp_map_compact::BSPMap>) -> Self
