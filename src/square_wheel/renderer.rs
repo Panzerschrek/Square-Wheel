@@ -866,17 +866,18 @@ impl Renderer
 		for (model_index, _bbox) in &models_for_sorting[.. num_models]
 		{
 			let model_matrix = inline_models_index.get_model_matrix(*model_index);
-			let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
-			let model_matrices = CameraMatrices {
-				view_matrix: camera_matrices.view_matrix * model_matrix,
-				planes_matrix: camera_matrices.planes_matrix * model_matrix_inverse,
-				position: camera_matrices.position,
-			};
 
 			let submodel = &self.map.submodels[*model_index as usize];
 			for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
 			{
-				self.draw_model_polygon(rasterizer, &model_matrices, &clip_planes, leaf_index, polygon_index);
+				self.draw_model_polygon(
+					rasterizer,
+					&model_matrix,
+					&camera_matrices.view_matrix,
+					&clip_planes,
+					leaf_index,
+					polygon_index,
+				);
 			}
 		}
 	}
@@ -884,7 +885,8 @@ impl Renderer
 	fn draw_model_polygon(
 		&self,
 		rasterizer: &mut Rasterizer,
-		camera_matrices: &CameraMatrices,
+		model_transform_matrix: &Mat4f,
+		view_matrix: &Mat4f,
 		clip_planes: &ClippingPolygonPlanes,
 		leaf_index: u32,
 		polygon_index: u32,
@@ -902,9 +904,16 @@ impl Renderer
 		let mut vertices_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
 		let mut vertex_count = std::cmp::min(polygon.num_vertices as usize, MAX_VERTICES);
 
-		vertices_clipped[.. vertex_count].copy_from_slice(
-			&self.map.vertices[(polygon.first_vertex as usize) .. (polygon.first_vertex as usize) + vertex_count],
-		);
+		// Apply model transfomration in order to move polygons to world space, before performing clipping.
+		// TODO - reduce number of transformations. Perform clipping by fully-transformed clip planes.
+		for (in_vertex, out_vertex) in self.map.vertices
+			[(polygon.first_vertex as usize) .. (polygon.first_vertex as usize) + vertex_count]
+			.iter()
+			.zip(vertices_clipped[.. vertex_count].iter_mut())
+		{
+			let vertex_transformed = model_transform_matrix * in_vertex.extend(1.0);
+			*out_vertex = vertex_transformed.truncate();
+		}
 
 		let mut vertices_temp = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
 
@@ -955,7 +964,7 @@ impl Renderer
 		// TODO - perform clipping using transformed planes instead.
 		for v in &mut vertices_clipped[.. vertex_count]
 		{
-			let vertex_transformed = camera_matrices.view_matrix * v.extend(1.0);
+			let vertex_transformed = view_matrix * v.extend(1.0);
 			*v = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
 		}
 
