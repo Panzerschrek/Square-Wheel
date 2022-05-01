@@ -728,8 +728,8 @@ impl Renderer
 					surface_size,
 					polygon_data.surface_tc_min,
 					&self.textures[polygon.texture as usize][polygon_data.mip as usize],
-					&mut self.surfaces_pixels
-						[surface_pixels_offset .. (surface_pixels_offset + ((surface_size[0] * surface_size[1]) as usize))],
+					&mut self.surfaces_pixels[surface_pixels_offset ..
+						(surface_pixels_offset + ((surface_size[0] * surface_size[1]) as usize))],
 				);
 			}
 		}
