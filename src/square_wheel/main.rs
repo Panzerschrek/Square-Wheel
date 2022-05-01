@@ -9,6 +9,7 @@ mod draw_ordering;
 mod host;
 mod host_config;
 mod inline_models_index;
+mod light;
 mod rasterizer;
 mod renderer;
 mod renderer_config;

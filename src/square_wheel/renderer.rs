@@ -1,5 +1,5 @@
 use super::{
-	clipping_polygon::*, draw_ordering, inline_models_index::*, rasterizer::*, renderer_config::*, surfaces,
+	clipping_polygon::*, draw_ordering, inline_models_index::*, light::*, rasterizer::*, renderer_config::*, surfaces,
 	textures::*,
 };
 use common::{
@@ -126,6 +126,7 @@ impl Renderer
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
 		inline_models_index: &InlineModelsIndex,
+		test_lights: &[PointLight],
 	)
 	{
 		let frame_start_time = Clock::now();
@@ -143,6 +144,7 @@ impl Renderer
 			surface_info,
 			camera_matrices,
 			inline_models_index,
+			test_lights,
 			&mut debug_stats,
 		);
 
@@ -223,6 +225,7 @@ impl Renderer
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
 		inline_models_index: &InlineModelsIndex,
+		test_lights: &[PointLight],
 		debug_stats: &mut DebugStats,
 	)
 	{
@@ -273,7 +276,7 @@ impl Renderer
 			inline_models_index,
 		);
 
-		self.build_polygons_surfaces(&camera_matrices.position);
+		self.build_polygons_surfaces(test_lights);
 
 		let surfaces_preparation_end_time = Clock::now();
 		let surfaces_preparation_duration_s =
@@ -711,7 +714,7 @@ impl Renderer
 		}
 	}
 
-	fn build_polygons_surfaces(&mut self, light_pos: &Vec3f)
+	fn build_polygons_surfaces(&mut self, lights: &[PointLight])
 	{
 		// TODO - avoid iteration over all map polygons.
 		// Remember (somehow) list of visible in current frame polygons.
@@ -742,7 +745,7 @@ impl Renderer
 					&self.textures[polygon.texture as usize][polygon_data.mip as usize],
 					&polygon.plane,
 					&tex_coord_equation_scaled,
-					light_pos,
+					lights,
 					&mut self.surfaces_pixels[surface_pixels_offset ..
 						(surface_pixels_offset + ((surface_size[0] * surface_size[1]) as usize))],
 				);

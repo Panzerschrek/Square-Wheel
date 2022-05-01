@@ -1,3 +1,4 @@
+use super::light::*;
 use common::{color::*, image, math_types::*, plane::*};
 
 pub fn build_surface(
@@ -6,7 +7,7 @@ pub fn build_surface(
 	texture: &image::Image,
 	plane: &Plane,
 	tex_coord_equation: &[Plane; 2],
-	light_pos: &Vec3f,
+	lights: &[PointLight],
 	out_surface_data: &mut [Color32],
 )
 {
@@ -29,7 +30,6 @@ pub fn build_surface(
 	let plane_normal_normalized = plane.vec * inv_sqrt_fast(plane.vec.magnitude2());
 
 	let constant_light = [1.5, 1.4, 1.3];
-	let light_power = [100000.0, 100000.0, 100000.0];
 
 	for dst_v in 0 .. surface_size[1]
 	{
@@ -46,17 +46,20 @@ pub fn build_surface(
 		{
 			let pos = start_pos_v + (dst_u as f32) * u_vec;
 
-			let vec_to_light = light_pos - pos;
-			let vec_to_light_len2 = vec_to_light.magnitude2();
-			let angle_cos = plane_normal_normalized.dot(vec_to_light) * inv_sqrt_fast(vec_to_light_len2);
+			let mut total_light = constant_light;
 
-			let light_scale = angle_cos.max(0.0) / vec_to_light_len2;
+			for light in lights
+			{
+				let vec_to_light = light.pos - pos;
+				let vec_to_light_len2 = vec_to_light.magnitude2();
+				let angle_cos = plane_normal_normalized.dot(vec_to_light) * inv_sqrt_fast(vec_to_light_len2);
 
-			let total_light = [
-				constant_light[0] + light_power[0] * light_scale,
-				constant_light[1] + light_power[1] * light_scale,
-				constant_light[2] + light_power[2] * light_scale,
-			];
+				let light_scale = angle_cos.max(0.0) / vec_to_light_len2;
+
+				total_light[0] += light.color[0] * light_scale;
+				total_light[1] += light.color[1] * light_scale;
+				total_light[2] += light.color[2] * light_scale;
+			}
 
 			let texel_value = src_line[src_u as usize];
 
