@@ -273,7 +273,7 @@ impl Renderer
 			inline_models_index,
 		);
 
-		self.build_polygons_surfaces();
+		self.build_polygons_surfaces(&camera_matrices.position);
 
 		let surfaces_preparation_end_time = Clock::now();
 		let surfaces_preparation_duration_s =
@@ -711,7 +711,7 @@ impl Renderer
 		}
 	}
 
-	fn build_polygons_surfaces(&mut self)
+	fn build_polygons_surfaces(&mut self, light_pos :& Vec3f)
 	{
 		// TODO - avoid iteration over all map polygons.
 		// Remember (somehow) list of visible in current frame polygons.
@@ -728,6 +728,9 @@ impl Renderer
 					surface_size,
 					polygon_data.surface_tc_min,
 					&self.textures[polygon.texture as usize][polygon_data.mip as usize],
+					&polygon.plane,
+					&polygon.tex_coord_equation,
+					light_pos,
 					&mut self.surfaces_pixels[surface_pixels_offset ..
 						(surface_pixels_offset + ((surface_size[0] * surface_size[1]) as usize))],
 				);
