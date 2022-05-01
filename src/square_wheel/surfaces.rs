@@ -19,10 +19,13 @@ pub fn build_surface(
 		Vec4f::new(0.0, 0.0, 0.0, 1.0),
 	);
 
-	let tex_coord_basis_inverted = tex_coord_basis.invert().unwrap(); // TODO - avoid "unwrap"?
-	let x_equation = tex_coord_basis_inverted.x;
-	let y_equation = tex_coord_basis_inverted.y;
-	let pos_shift = tex_coord_basis_inverted.z;
+	let tex_coord_basis_inverted = tex_coord_basis.transpose().invert().unwrap(); // TODO - avoid "unwrap"?
+
+	let u_vec = tex_coord_basis_inverted.x.truncate();
+	let v_vec = tex_coord_basis_inverted.y.truncate();
+	let start_pos = tex_coord_basis_inverted.w.truncate() +
+		u_vec * ((surface_tc_min[0]) as f32 + 0.5) +
+		v_vec * ((surface_tc_min[1]) as f32 + 0.5);
 
 	let plane_normal_normalized = plane.vec / plane.vec.magnitude();
 
@@ -39,17 +42,10 @@ pub fn build_surface(
 		let src_line = &texture.pixels[src_line_start .. src_line_start + (texture.size[0] as usize)];
 		let mut src_u = surface_tc_min[0].rem_euclid(texture.size[0] as i32);
 		let mut dst_u = 0;
+		let start_pos_v = start_pos + (dst_v as f32) * v_vec;
 		for dst_texel in dst_line.iter_mut()
 		{
-			// TODO - optimize this.
-			// TODO - shift to pixel center.
-			let uv = Vec4f::new(
-				((dst_u as i32) + surface_tc_min[0]) as f32,
-				((dst_v as i32) + surface_tc_min[1]) as f32,
-				0.0,
-				1.0,
-			);
-			let pos = Vec3f::new(x_equation.dot(uv), y_equation.dot(uv), pos_shift.dot(uv));
+			let pos = start_pos_v + (dst_u as f32) * u_vec;
 
 			let vec_to_light = light_pos - pos;
 			let vec_to_light_len2 = vec_to_light.magnitude2();
