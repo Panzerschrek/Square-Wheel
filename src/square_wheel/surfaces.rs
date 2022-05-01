@@ -1,4 +1,4 @@
-use common::{color::*, image, plane::*, math_types::*};
+use common::{color::*, image, math_types::*, plane::*};
 
 pub fn build_surface(
 	surface_size: [u32; 2],
@@ -6,18 +6,18 @@ pub fn build_surface(
 	texture: &image::Image,
 	plane: &Plane,
 	tex_coord_equation: &[Plane; 2],
-	light_pos : &Vec3f,
+	light_pos: &Vec3f,
 	out_surface_data: &mut [Color32],
 )
 {
 	// Calculate inverse matrix for tex_coord aquation and plane equation in order to calculate world position for UV.
 	// TODO - project tc equation to surface plane?
-	let tex_coord_basis =
-		Mat4f::from_cols(
-			tex_coord_equation[0].vec.extend(tex_coord_equation[0].dist),
-			tex_coord_equation[1].vec.extend(tex_coord_equation[1].dist),
-			plane.vec.extend(-plane.dist),
-			Vec4f::new(0.0, 0.0, 0.0, 1.0));
+	let tex_coord_basis = Mat4f::from_cols(
+		tex_coord_equation[0].vec.extend(tex_coord_equation[0].dist),
+		tex_coord_equation[1].vec.extend(tex_coord_equation[1].dist),
+		plane.vec.extend(-plane.dist),
+		Vec4f::new(0.0, 0.0, 0.0, 1.0),
+	);
 
 	let tex_coord_basis_inverted = tex_coord_basis.invert().unwrap(); // TODO - avoid "unwrap"?
 	let x_equation = tex_coord_basis_inverted.x;
@@ -25,9 +25,9 @@ pub fn build_surface(
 	let pos_shift = tex_coord_basis_inverted.z;
 
 	let plane_normal_normalized = plane.vec / plane.vec.magnitude();
-	
+
 	let constant_light = [1.5, 1.4, 1.3];
-	let light_power = [ 100000.0, 100000.0, 100000.0 ];
+	let light_power = [100000.0, 100000.0, 100000.0];
 
 	for dst_v in 0 .. surface_size[1]
 	{
@@ -43,19 +43,27 @@ pub fn build_surface(
 		{
 			// TODO - optimize this.
 			// TODO - shift to pixel center.
-			let uv = Vec4f::new( ((dst_u as i32) + surface_tc_min[0]) as f32, ((dst_v as i32) + surface_tc_min[1]) as f32, 0.0, 1.0 );
+			let uv = Vec4f::new(
+				((dst_u as i32) + surface_tc_min[0]) as f32,
+				((dst_v as i32) + surface_tc_min[1]) as f32,
+				0.0,
+				1.0,
+			);
 			let pos = Vec3f::new(x_equation.dot(uv), y_equation.dot(uv), pos_shift.dot(uv));
 
-			 let vec_to_light = light_pos - pos;
-			 let vec_to_light_len2 = vec_to_light.magnitude2();
-			 // TODO - use fast inverse square root.
-			 let angle_cos = plane_normal_normalized.dot(vec_to_light) / vec_to_light_len2.sqrt();
+			let vec_to_light = light_pos - pos;
+			let vec_to_light_len2 = vec_to_light.magnitude2();
+			// TODO - use fast inverse square root.
+			let angle_cos = plane_normal_normalized.dot(vec_to_light) / vec_to_light_len2.sqrt();
 
 			let light_scale = angle_cos.max(0.0) / vec_to_light_len2;
 
+			let total_light = [
+				constant_light[0] + light_power[0] * light_scale,
+				constant_light[1] + light_power[1] * light_scale,
+				constant_light[2] + light_power[2] * light_scale,
+			];
 
-			let total_light = [ constant_light[0] + light_power[0] * light_scale, constant_light[1] + light_power[1] * light_scale, constant_light[02] + light_power[2] * light_scale ];
-			
 			let texel_value = src_line[src_u as usize];
 
 			let components = texel_value.unpack_to_rgb_f32();

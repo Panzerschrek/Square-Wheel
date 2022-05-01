@@ -711,7 +711,7 @@ impl Renderer
 		}
 	}
 
-	fn build_polygons_surfaces(&mut self, light_pos :& Vec3f)
+	fn build_polygons_surfaces(&mut self, light_pos: &Vec3f)
 	{
 		// TODO - avoid iteration over all map polygons.
 		// Remember (somehow) list of visible in current frame polygons.
@@ -724,12 +724,24 @@ impl Renderer
 				let surface_pixels_offset = polygon_data.surface_pixels_offset;
 				let surface_size = polygon_data.surface_size;
 
+				let mip_scale = 1.0 / (1 << polygon_data.mip) as f32;
+				let tex_coord_equation_scaled = [
+					Plane {
+						vec: polygon.tex_coord_equation[0].vec * mip_scale,
+						dist: polygon.tex_coord_equation[0].dist * mip_scale,
+					},
+					Plane {
+						vec: polygon.tex_coord_equation[1].vec * mip_scale,
+						dist: polygon.tex_coord_equation[1].dist * mip_scale,
+					},
+				];
+
 				surfaces::build_surface(
 					surface_size,
 					polygon_data.surface_tc_min,
 					&self.textures[polygon.texture as usize][polygon_data.mip as usize],
 					&polygon.plane,
-					&polygon.tex_coord_equation,
+					&tex_coord_equation_scaled,
 					light_pos,
 					&mut self.surfaces_pixels[surface_pixels_offset ..
 						(surface_pixels_offset + ((surface_size[0] * surface_size[1]) as usize))],
