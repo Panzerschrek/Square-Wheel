@@ -18,7 +18,6 @@ pub fn build_surface(
 		plane.vec.extend(-plane.dist),
 		Vec4f::new(0.0, 0.0, 0.0, 1.0),
 	);
-
 	let tex_coord_basis_inverted = tex_coord_basis.transpose().invert().unwrap(); // TODO - avoid "unwrap"?
 
 	let u_vec = tex_coord_basis_inverted.x.truncate();
@@ -27,7 +26,7 @@ pub fn build_surface(
 		u_vec * ((surface_tc_min[0]) as f32 + 0.5) +
 		v_vec * ((surface_tc_min[1]) as f32 + 0.5);
 
-	let plane_normal_normalized = plane.vec / plane.vec.magnitude();
+	let plane_normal_normalized = plane.vec * inv_sqrt_fast(plane.vec.magnitude2());
 
 	let constant_light = [1.5, 1.4, 1.3];
 	let light_power = [100000.0, 100000.0, 100000.0];
@@ -49,8 +48,7 @@ pub fn build_surface(
 
 			let vec_to_light = light_pos - pos;
 			let vec_to_light_len2 = vec_to_light.magnitude2();
-			// TODO - use fast inverse square root.
-			let angle_cos = plane_normal_normalized.dot(vec_to_light) / vec_to_light_len2.sqrt();
+			let angle_cos = plane_normal_normalized.dot(vec_to_light) * inv_sqrt_fast(vec_to_light_len2);
 
 			let light_scale = angle_cos.max(0.0) / vec_to_light_len2;
 
@@ -83,4 +81,23 @@ pub fn build_surface(
 			dst_u += 1;
 		}
 	}
+}
+
+// Relative erorr <= 1.5 * 2^(-12)
+#[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
+fn inv_sqrt_fast(x: f32) -> f32
+{
+	unsafe { core::arch::x86_64::_mm_cvtss_f32(core::arch::x86_64::_mm_rsqrt_ss(core::arch::x86_64::_mm_set1_ps(x))) }
+}
+
+#[cfg(all(target_arch = "x86", target_feature = "sse"))]
+fn inv_sqrt_fast(x: f32) -> f32
+{
+	unsafe { core::arch::x86::_mm_cvtss_f32(core::arch::x86::_mm_rsqrt_ss(core::arch::x86::_mm_set1_ps(x))) }
+}
+
+#[cfg(not(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse")))]
+fn inv_sqrt_fast(x: f32) -> f32
+{
+	1.0 / sqrt(x)
 }
