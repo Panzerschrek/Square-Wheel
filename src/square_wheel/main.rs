@@ -12,6 +12,7 @@ mod inline_models_index;
 mod rasterizer;
 mod renderer;
 mod renderer_config;
+mod surfaces;
 mod textures;
 
 use structopt::StructOpt;

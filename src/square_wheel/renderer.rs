@@ -1,5 +1,6 @@
 use super::{
-	clipping_polygon::*, draw_ordering, inline_models_index::*, rasterizer::*, renderer_config::*, textures::*,
+	clipping_polygon::*, draw_ordering, inline_models_index::*, rasterizer::*, renderer_config::*, surfaces,
+	textures::*,
 };
 use common::{
 	bbox::*, bsp_map_compact, camera_controller::CameraMatrices, clipping::*, color::*, fixed_math::*, math_types::*,
@@ -718,37 +719,18 @@ impl Renderer
 		{
 			if self.polygons_data[i].visible_frame == self.current_frame
 			{
-				self.build_polygon_surface(i);
-			}
-		}
-	}
+				let polygon = &self.map.polygons[i];
+				let polygon_data = &self.polygons_data[i];
+				let surface_pixels_offset = polygon_data.surface_pixels_offset;
+				let surface_size = polygon_data.surface_size;
 
-	fn build_polygon_surface(&mut self, polygon_index: usize)
-	{
-		let polygon = &self.map.polygons[polygon_index];
-		let polygon_data = &self.polygons_data[polygon_index];
-		let mip_texture = &self.textures[polygon.texture as usize][polygon_data.mip as usize];
-		let surface_pixels_offset = polygon_data.surface_pixels_offset;
-		let surface_size = polygon_data.surface_size;
-		let surface_tc_min = polygon_data.surface_tc_min;
-
-		for dst_y in 0 .. surface_size[1]
-		{
-			let dst_line_start = surface_pixels_offset + ((dst_y * surface_size[0]) as usize);
-			let dst_line = &mut self.surfaces_pixels[dst_line_start .. dst_line_start + (surface_size[0] as usize)];
-
-			let src_y = (surface_tc_min[1] + (dst_y as i32)).rem_euclid(mip_texture.size[1] as i32);
-			let src_line_start = ((src_y as u32) * mip_texture.size[0]) as usize;
-			let src_line = &mip_texture.pixels[src_line_start .. src_line_start + (mip_texture.size[0] as usize)];
-			let mut src_x = surface_tc_min[0].rem_euclid(mip_texture.size[0] as i32);
-			for dst_x in 0 .. surface_size[0]
-			{
-				dst_line[dst_x as usize] = src_line[src_x as usize];
-				src_x += 1;
-				if src_x == (mip_texture.size[0] as i32)
-				{
-					src_x = 0;
-				}
+				surfaces::build_surface(
+					surface_size,
+					polygon_data.surface_tc_min,
+					&self.textures[polygon.texture as usize][polygon_data.mip as usize],
+					&mut self.surfaces_pixels
+						[surface_pixels_offset .. (surface_pixels_offset + ((surface_size[0] * surface_size[1]) as usize))],
+				);
 			}
 		}
 	}
