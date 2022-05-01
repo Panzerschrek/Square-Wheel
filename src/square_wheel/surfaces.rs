@@ -18,7 +18,7 @@ pub fn build_surface(
 		let src_line_start = ((src_y as u32) * texture.size[0]) as usize;
 		let src_line = &texture.pixels[src_line_start .. src_line_start + (texture.size[0] as usize)];
 		let mut src_x = surface_tc_min[0].rem_euclid(texture.size[0] as i32);
-		for dst_x in 0 .. surface_size[0]
+		for dst_texel in dst_line.iter_mut()
 		{
 			let texel_value = src_line[src_x as usize];
 
@@ -33,7 +33,7 @@ pub fn build_surface(
 			// NaNs are not possible here too.
 			let color_packed = unsafe { Color32::from_rgb_f32_unchecked(&components_modulated) };
 
-			dst_line[dst_x as usize] = color_packed;
+			*dst_texel = color_packed;
 			src_x += 1;
 			if src_x == (texture.size[0] as i32)
 			{
