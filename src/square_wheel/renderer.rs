@@ -16,6 +16,7 @@ pub struct Renderer
 	config: RendererConfig,
 	map: Rc<bsp_map_compact::BSPMap>,
 	visibility_calculator: MapVisibilityCalculator,
+	shadows_maps_renderer: DepthRenderer,
 	polygons_data: Vec<DrawPolygonData>,
 	vertices_transformed: Vec<Vec3f>,
 	surfaces_pixels: Vec<Color32>,
@@ -79,6 +80,7 @@ impl Renderer
 			vertices_transformed: vec![Vec3f::new(0.0, 0.0, 0.0); map.vertices.len()],
 			surfaces_pixels: Vec::new(),
 			visibility_calculator: MapVisibilityCalculator::new(map.clone()),
+			shadows_maps_renderer: DepthRenderer::new(map.clone()),
 			map,
 			textures,
 			performance_counters: RendererPerformanceCounters::new(),
@@ -169,6 +171,19 @@ impl Renderer
 		test_lights: &[PointLight],
 	)
 	{
+		let depth_map_size = 256;
+		let mut test_lights_shadow_maps = Vec::with_capacity(test_lights.len());
+		for light in test_lights
+		{
+			let depth_matrices =
+				calculate_cube_shadow_map_side_matrices(light.pos, depth_map_size as f32, CubeMapSide::ZMinus);
+
+			let mut depth_data = vec![0.0; (depth_map_size * depth_map_size) as usize];
+			self.shadows_maps_renderer
+				.draw_map(&mut depth_data, depth_map_size, depth_map_size, &depth_matrices);
+			test_lights_shadow_maps.push(depth_data);
+		}
+
 		let mut rasterizer = Rasterizer::new(pixels, surface_info);
 		let root_node = (self.map.nodes.len() - 1) as u32;
 
@@ -221,24 +236,16 @@ impl Renderer
 
 		if self.config.debug_draw_depth
 		{
-			let depth_map_size = 256;
-			let depth_matrices = calculate_cube_shadow_map_side_matrices(
-				camera_matrices.position,
-				depth_map_size as f32,
-				CubeMapSide::ZMinus,
-			);
-
-			let mut depth_data = vec![0.0; (depth_map_size * depth_map_size) as usize];
-			let mut depth_renderer = DepthRenderer::new(self.map.clone());
-			depth_renderer.draw_map(&mut depth_data, depth_map_size, depth_map_size, &depth_matrices);
-
-			for y in 0 .. depth_map_size
+			if let Some(depth_data) = test_lights_shadow_maps.last()
 			{
-				for x in 0 .. depth_map_size
+				for y in 0 .. depth_map_size
 				{
-					let depth = depth_data[(x + y * depth_map_size) as usize];
-					let z = (0.5 / depth).max(0.0).min(255.0) as u8;
-					pixels[(x as usize) + (y as usize) * surface_info.pitch] = Color32::from_rgb(z, z, z);
+					for x in 0 .. depth_map_size
+					{
+						let depth = depth_data[(x + y * depth_map_size) as usize];
+						let z = (0.5 / depth).max(0.0).min(255.0) as u8;
+						pixels[(x as usize) + (y as usize) * surface_info.pitch] = Color32::from_rgb(z, z, z);
+					}
 				}
 			}
 		}

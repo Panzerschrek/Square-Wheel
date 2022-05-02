@@ -17,7 +17,7 @@ pub fn calculate_cube_shadow_map_side_matrices(
 ) -> CameraMatrices
 {
 	let translate = Mat4f::from_translation(-position);
-	let mut side_mat = get_cube_map_side_matrix(side);
+	let side_mat = get_cube_map_side_matrix(side);
 
 	// Perform Z and W manipulations only for projection, but not for planes equation matrix.
 	let mut perspective_finalization = Mat4f::identity();
