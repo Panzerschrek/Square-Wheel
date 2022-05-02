@@ -93,7 +93,7 @@ impl DepthRenderer
 			let d_inv_z_dx = plane_transformed.x / plane_transformed_w;
 			let d_inv_z_dy = plane_transformed.y / plane_transformed_w;
 			// Use depth bias in order to avoid self-shadowing.
-			const DEPTH_BIAS_CONST: f32 = -1.0 / 4096.0;
+			const DEPTH_BIAS_CONST: f32 = -1.0 / ((1 << 20) as f32);
 			const DEPTH_BIAS_SLOPE: f32 = -1.0;
 			let depth_equation = DepthEquation {
 				d_inv_z_dx,
