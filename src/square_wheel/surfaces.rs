@@ -56,7 +56,7 @@ pub fn build_surface(
 
 				let shadow_factor = cube_shadow_map_fetch(shadow_cube_map, &vec_to_light);
 
-				let vec_to_light_len2 = vec_to_light.magnitude2();
+				let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
 				let angle_cos = plane_normal_normalized.dot(vec_to_light) * inv_sqrt_fast(vec_to_light_len2);
 				let light_scale = shadow_factor * angle_cos.max(0.0) / vec_to_light_len2;
 
@@ -98,33 +98,33 @@ fn cube_shadow_map_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f) -> f32
 	{
 		if vec.x >= 0.0
 		{
-			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(-vec.y, vec.z, vec.x), 1)
+			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(-vec.y, vec.z, vec_abs.x), 1)
 		}
 		else
 		{
-			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(vec.y, vec.z, -vec.x), 0)
+			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(vec.y, vec.z, vec_abs.x), 0)
 		}
 	}
 	else if vec_abs.y >= vec_abs.x && vec_abs.y >= vec_abs.z
 	{
 		if vec.y >= 0.0
 		{
-			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(vec.x, vec.z, vec.y), 3)
+			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(vec.x, vec.z, vec_abs.y), 3)
 		}
 		else
 		{
-			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(-vec.x, vec.z, -vec.y), 2)
+			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(-vec.x, vec.z, vec_abs.y), 2)
 		}
 	}
 	else
 	{
 		if vec.z >= 0.0
 		{
-			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(-vec.x, vec.y, vec.z), 5)
+			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(-vec.x, vec.y, vec_abs.z), 5)
 		}
 		else
 		{
-			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(-vec.x, -vec.y, -vec.z), 4)
+			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(-vec.x, -vec.y, vec_abs.z), 4)
 		}
 	}
 }
@@ -132,14 +132,24 @@ fn cube_shadow_map_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f) -> f32
 // Returns 1 if in light, 0 if in shadow.
 fn cube_shadow_map_side_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f, side: u32) -> f32
 {
+	const ONE_MINUS_EPS: f32 = 1.0 - 1.0 / 65536.0;
 	let cubemap_size_f = cube_shadow_map.size as f32;
 
-	let depth = 1.0 / vec.z;
-	let u = (((vec.x * depth * 0.5 + 0.5).max(0.0) * cubemap_size_f) as u32).min(cube_shadow_map.size - 1);
-	let v = (((vec.y * depth * 0.5 + 0.5).max(0.0) * cubemap_size_f) as u32).min(cube_shadow_map.size - 1);
-	let value = cube_shadow_map.sides[side as usize][(u + v * cube_shadow_map.size) as usize];
+	let depth = 1.0 / vec.z.max(MIN_POSITIVE_VALUE);
+	let half_depth = 0.5 * depth;
+	let u_f = (vec.x * half_depth + 0.5).max(0.0).min(ONE_MINUS_EPS) * cubemap_size_f;
+	let v_f = (vec.y * half_depth + 0.5).max(0.0).min(ONE_MINUS_EPS) * cubemap_size_f;
+	// It is safe to use "unsafe" f32 to int conversion, since NaN and Inf is not possible here.
+	let u = unsafe { u_f.to_int_unchecked::<u32>() };
+	let v = unsafe { v_f.to_int_unchecked::<u32>() };
+	debug_assert!(u < cube_shadow_map.size);
+	debug_assert!(v < cube_shadow_map.size);
+	let texel_address = (u + v * cube_shadow_map.size) as usize;
+	let value = unchecked_shadow_map_fetch(&cube_shadow_map.sides[side as usize], texel_address);
 	return if depth >= value { 1.0 } else { 0.0 };
 }
+
+const MIN_POSITIVE_VALUE: f32 = 1.0 / ((1 << 30) as f32);
 
 // Relative erorr <= 1.5 * 2^(-12)
 #[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
@@ -158,4 +168,19 @@ fn inv_sqrt_fast(x: f32) -> f32
 fn inv_sqrt_fast(x: f32) -> f32
 {
 	1.0 / sqrt(x)
+}
+
+fn unchecked_shadow_map_fetch(shadow_map_data: &[f32], texel_address: usize) -> f32
+{
+	// operator [] checks bounds and calls panic! handler in case if index is out of bounds.
+	// This check is useless here since we clamp coordnates properly.
+	// So, use "get_unchecked" in release mode.
+	#[cfg(debug_assertions)]
+	{
+		shadow_map_data[texel_address]
+	}
+	#[cfg(not(debug_assertions))]
+	unsafe {
+		*shadow_map_data.get_unchecked(texel_address)
+	}
 }
