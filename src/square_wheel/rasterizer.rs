@@ -630,11 +630,7 @@ impl<'a> DepthRasterizer<'a>
 	}
 
 	// Fill convex clockwise polygon.
-	pub fn fill_polygon<Settings: RasterizerSettings>(
-		&mut self,
-		vertices: &[PolygonPointProjected],
-		depth_equation: &DepthEquation,
-	)
+	pub fn fill_polygon(&mut self, vertices: &[PolygonPointProjected], depth_equation: &DepthEquation)
 	{
 		// Search for start vertex (with min y).
 		let mut lower_vertex_index = 0;

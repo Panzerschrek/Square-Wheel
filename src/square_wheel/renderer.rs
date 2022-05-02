@@ -295,6 +295,24 @@ impl Renderer
 		self.performance_counters
 			.rasterization
 			.add_value(rasterization_duration_s);
+
+		if self.config.debug_draw_depth
+		{
+			let mut depth_data = vec![0.0; (surface_info.width * surface_info.height) as usize];
+			let mut depth_rasterizer =
+				DepthRasterizer::new(&mut depth_data, surface_info.width as u32, surface_info.height as u32);
+			self.draw_depth_tree_r(&mut depth_rasterizer, camera_matrices, root_node);
+
+			for y in 0 .. surface_info.height
+			{
+				for x in 0 .. surface_info.width
+				{
+					let depth = depth_data[x + y * surface_info.width];
+					let z = (0.125 / depth).max(0.0).min(255.0) as u8;
+					pixels[x + y * surface_info.pitch] = Color32::from_rgb(z, z, z);
+				}
+			}
+		}
 	}
 
 	fn find_current_leaf(&self, mut index: u32, planes_matrix: &Mat4f) -> u32
@@ -797,6 +815,33 @@ impl Renderer
 		}
 	}
 
+	fn draw_depth_tree_r(&self, rasterizer: &mut DepthRasterizer, camera_matrices: &CameraMatrices, current_index: u32)
+	{
+		if current_index >= bsp_map_compact::FIRST_LEAF_INDEX
+		{
+			let leaf = current_index - bsp_map_compact::FIRST_LEAF_INDEX;
+			let leaf_data = &self.leafs_data[leaf as usize];
+			if leaf_data.visible_frame == self.current_frame
+			{
+				self.draw_depth_leaf(rasterizer, camera_matrices, &leaf_data.current_frame_bounds, leaf);
+			}
+		}
+		else
+		{
+			let node = &self.map.nodes[current_index as usize];
+			let plane_transformed = camera_matrices.planes_matrix * node.plane.vec.extend(-node.plane.dist);
+			let mut mask = if plane_transformed.w >= 0.0 { 1 } else { 0 };
+			if self.config.invert_polygons_order
+			{
+				mask ^= 1;
+			}
+			for i in 0 .. 2
+			{
+				self.draw_depth_tree_r(rasterizer, camera_matrices, node.children[(i ^ mask) as usize]);
+			}
+		}
+	}
+
 	fn draw_leaf(
 		&self,
 		rasterizer: &mut Rasterizer,
@@ -877,6 +922,65 @@ impl Renderer
 					polygon_index,
 				);
 			}
+		}
+	}
+
+	fn draw_depth_leaf(
+		&self,
+		rasterizer: &mut DepthRasterizer,
+		camera_matrices: &CameraMatrices,
+		bounds: &ClippingPolygon,
+		leaf_index: u32,
+	)
+	{
+		let leaf = &self.map.leafs[leaf_index as usize];
+
+		// TODO - maybe just a little bit extend clipping polygon?
+		let clip_planes = bounds.get_clip_planes();
+
+		let viewport_half_size = [
+			rasterizer.get_width() as f32 * 0.5,
+			rasterizer.get_height() as f32 * 0.5,
+		];
+		for polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
+		{
+			let polygon = &self.map.polygons[polygon_index as usize];
+
+			let plane_transformed = camera_matrices.planes_matrix * polygon.plane.vec.extend(-polygon.plane.dist);
+			// Cull back faces.
+			if plane_transformed.w <= 0.0
+			{
+				continue;
+			}
+
+			let plane_transformed_w = -plane_transformed.w;
+			let d_inv_z_dx = plane_transformed.x / plane_transformed_w;
+			let d_inv_z_dy = plane_transformed.y / plane_transformed_w;
+			let depth_equation = DepthEquation {
+				d_inv_z_dx,
+				d_inv_z_dy,
+				k: plane_transformed.z / plane_transformed_w -
+					d_inv_z_dx * viewport_half_size[0] -
+					d_inv_z_dy * viewport_half_size[1],
+			};
+
+			let mut vertices_transformed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
+			let vertex_count = std::cmp::min(polygon.num_vertices as usize, MAX_VERTICES);
+			for (in_vertex, out_vertex) in self.map.vertices
+				[(polygon.first_vertex as usize) .. (polygon.first_vertex as usize) + vertex_count]
+				.iter()
+				.zip(vertices_transformed[.. vertex_count].iter_mut())
+			{
+				let vertex_transformed = camera_matrices.view_matrix * in_vertex.extend(1.0);
+				*out_vertex = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
+			}
+
+			draw_depth_polygon(
+				rasterizer,
+				&clip_planes,
+				&vertices_transformed[.. vertex_count],
+				&depth_equation,
+			);
 		}
 	}
 
@@ -1332,6 +1436,38 @@ fn draw_polygon(
 			);
 		}
 	}
+}
+
+fn draw_depth_polygon(
+	rasterizer: &mut DepthRasterizer,
+	clip_planes: &ClippingPolygonPlanes,
+	vertices_transformed: &[Vec3f],
+	depth_equation: &DepthEquation,
+)
+{
+	if vertices_transformed.len() < 3
+	{
+		return;
+	}
+
+	let mut vertices_2d = [Vec2f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
+	let vertex_count = project_and_clip_polygon(clip_planes, vertices_transformed, &mut vertices_2d[..]);
+	if vertex_count < 3
+	{
+		return;
+	}
+
+	// Perform f32 to Fixed16 conversion.
+	let mut vertices_for_rasterizer = [PolygonPointProjected { x: 0, y: 0 }; MAX_VERTICES]; // TODO - use uninitialized memory
+	for (index, vertex_2d) in vertices_2d.iter().enumerate().take(vertex_count)
+	{
+		vertices_for_rasterizer[index] = PolygonPointProjected {
+			x: f32_to_fixed16(vertex_2d.x),
+			y: f32_to_fixed16(vertex_2d.y),
+		};
+	}
+
+	rasterizer.fill_polygon(&vertices_for_rasterizer[0 .. vertex_count], &depth_equation);
 }
 
 fn affine_texture_coordinates_interpolation_may_be_used(
