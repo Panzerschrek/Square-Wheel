@@ -1,6 +1,6 @@
 use super::{
 	clipping_polygon::*, depth_renderer::*, draw_ordering, frame_number::*, inline_models_index::*, light::*,
-	map_visibility_calculator::*, rasterizer::*, renderer_config::*, surfaces, textures::*,
+	map_visibility_calculator::*, rasterizer::*, renderer_config::*, shadow_map::*, surfaces, textures::*,
 };
 use common::{
 	bbox::*, bsp_map_compact, camera_controller::CameraMatrices, clipping::*, color::*, fixed_math::*, math_types::*,
@@ -221,22 +221,24 @@ impl Renderer
 
 		if self.config.debug_draw_depth
 		{
-			let mut depth_data = vec![0.0; (surface_info.width * surface_info.height) as usize];
-			let mut depth_renderer = DepthRenderer::new(self.map.clone());
-			depth_renderer.draw_map(
-				&mut depth_data,
-				surface_info.width as u32,
-				surface_info.height as u32,
-				&camera_matrices,
+			let depth_map_size = 256;
+			let depth_matrices = calculate_cube_shadow_map_side_matrices(
+				camera_matrices.position,
+				depth_map_size as f32,
+				CubeMapSide::ZMinus,
 			);
 
-			for y in 0 .. surface_info.height
+			let mut depth_data = vec![0.0; (depth_map_size * depth_map_size) as usize];
+			let mut depth_renderer = DepthRenderer::new(self.map.clone());
+			depth_renderer.draw_map(&mut depth_data, depth_map_size, depth_map_size, &depth_matrices);
+
+			for y in 0 .. depth_map_size
 			{
-				for x in 0 .. surface_info.width
+				for x in 0 .. depth_map_size
 				{
-					let depth = depth_data[x + y * surface_info.width];
-					let z = (0.125 / depth).max(0.0).min(255.0) as u8;
-					pixels[x + y * surface_info.pitch] = Color32::from_rgb(z, z, z);
+					let depth = depth_data[(x + y * depth_map_size) as usize];
+					let z = (0.5 / depth).max(0.0).min(255.0) as u8;
+					pixels[(x as usize) + (y as usize) * surface_info.pitch] = Color32::from_rgb(z, z, z);
 				}
 			}
 		}

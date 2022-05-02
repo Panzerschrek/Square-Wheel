@@ -16,6 +16,7 @@ mod map_visibility_calculator;
 mod rasterizer;
 mod renderer;
 mod renderer_config;
+mod shadow_map;
 mod surfaces;
 mod textures;
 
