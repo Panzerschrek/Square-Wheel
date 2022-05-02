@@ -90,46 +90,55 @@ pub fn build_surface(
 	}
 }
 
-// Returns hadow factor
+// Returns 1 if in light, 0 if in shadow.
 fn cube_shadow_map_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f) -> f32
 {
-	let cubemap_size_f = cube_shadow_map.size as f32;
-
 	let vec_abs = Vec3f::new(vec.x.abs(), vec.y.abs(), vec.z.abs());
 	if vec_abs.x >= vec_abs.y && vec_abs.x >= vec_abs.z
 	{
 		if vec.x >= 0.0
 		{
+			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(-vec.y, vec.z, vec.x), 1)
 		}
 		else
 		{
+			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(vec.y, vec.z, -vec.x), 0)
 		}
 	}
 	else if vec_abs.y >= vec_abs.x && vec_abs.y >= vec_abs.z
 	{
 		if vec.y >= 0.0
 		{
+			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(vec.x, vec.z, vec.y), 3)
 		}
 		else
 		{
+			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(-vec.x, vec.z, -vec.y), 2)
 		}
 	}
 	else
 	{
 		if vec.z >= 0.0
 		{
-			let depth = 1.0 / vec.z;
-			let u = (((-vec.x * depth * 0.5 + 0.5).max(0.0) * cubemap_size_f) as u32).min(cube_shadow_map.size - 1);
-			let v = (((vec.y * depth * 0.5 + 0.5).max(0.0) * cubemap_size_f) as u32).min(cube_shadow_map.size - 1);
-			let value = cube_shadow_map.sides[5][(u + v * cube_shadow_map.size) as usize];
-			return if depth >= value { 1.0 } else { 0.0 };
+			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(-vec.x, vec.y, vec.z), 5)
 		}
 		else
 		{
+			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(-vec.x, -vec.y, -vec.z), 4)
 		}
 	}
+}
 
-	1.0
+// Returns 1 if in light, 0 if in shadow.
+fn cube_shadow_map_side_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f, side: u32) -> f32
+{
+	let cubemap_size_f = cube_shadow_map.size as f32;
+
+	let depth = 1.0 / vec.z;
+	let u = (((vec.x * depth * 0.5 + 0.5).max(0.0) * cubemap_size_f) as u32).min(cube_shadow_map.size - 1);
+	let v = (((vec.y * depth * 0.5 + 0.5).max(0.0) * cubemap_size_f) as u32).min(cube_shadow_map.size - 1);
+	let value = cube_shadow_map.sides[side as usize][(u + v * cube_shadow_map.size) as usize];
+	return if depth >= value { 1.0 } else { 0.0 };
 }
 
 // Relative erorr <= 1.5 * 2^(-12)
