@@ -5,6 +5,7 @@ mod commands_processor;
 mod commands_queue;
 mod config;
 mod console;
+mod depth_renderer;
 mod draw_ordering;
 mod frame_number;
 mod host;
