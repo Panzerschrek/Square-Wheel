@@ -1,6 +1,6 @@
 use super::{
 	clipping_polygon::*, depth_renderer::*, draw_ordering, frame_number::*, inline_models_index::*, light::*,
-	map_visibility_calculator::*, rasterizer::*, renderer_config::*, shadow_map::*, surfaces, textures::*,
+	map_visibility_calculator::*, rasterizer::*, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
 };
 use common::{
 	bbox::*, bsp_map_compact, camera_controller::CameraMatrices, clipping::*, color::*, fixed_math::*, math_types::*,
@@ -226,7 +226,15 @@ impl Renderer
 			inline_models_index,
 		);
 
-		self.build_polygons_surfaces(test_lights);
+		{
+			// TODO - avoid allocation.
+			let mut lights_with_shadow_maps = Vec::new();
+			for (light, shadow_map) in test_lights.iter().zip(test_lights_shadow_maps.iter())
+			{
+				lights_with_shadow_maps.push((light, shadow_map));
+			}
+			self.build_polygons_surfaces(&lights_with_shadow_maps);
+		}
 
 		let surfaces_preparation_end_time = Clock::now();
 		let surfaces_preparation_duration_s =
@@ -254,7 +262,7 @@ impl Renderer
 				{
 					for x in 0 .. depth_map_size
 					{
-						let depth = shadow_map.sides[0][(x + y * depth_map_size) as usize];
+						let depth = shadow_map.sides[5][(x + y * depth_map_size) as usize];
 						let z = (0.5 / depth).max(0.0).min(255.0) as u8;
 						pixels[(x as usize) + (y as usize) * surface_info.pitch] = Color32::from_rgb(z, z, z);
 					}
@@ -533,7 +541,7 @@ impl Renderer
 		}
 	}
 
-	fn build_polygons_surfaces(&mut self, lights: &[PointLight])
+	fn build_polygons_surfaces(&mut self, lights: &[LightWithShadowMap])
 	{
 		// TODO - avoid iteration over all map polygons.
 		// Remember (somehow) list of visible in current frame polygons.
@@ -558,7 +566,7 @@ impl Renderer
 					},
 				];
 
-				surfaces::build_surface(
+				build_surface(
 					surface_size,
 					polygon_data.surface_tc_min,
 					&self.textures[polygon.texture as usize][polygon_data.mip as usize],

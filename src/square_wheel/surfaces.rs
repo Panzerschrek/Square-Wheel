@@ -1,5 +1,7 @@
-use super::light::*;
+use super::{light::*, shadow_map::*};
 use common::{color::*, image, math_types::*, plane::*};
+
+pub type LightWithShadowMap<'a, 'b> = (&'a PointLight, &'b CubeShadowMap);
 
 pub fn build_surface(
 	surface_size: [u32; 2],
@@ -7,7 +9,7 @@ pub fn build_surface(
 	texture: &image::Image,
 	plane: &Plane,
 	tex_coord_equation: &[Plane; 2],
-	lights: &[PointLight],
+	lights: &[LightWithShadowMap],
 	out_surface_data: &mut [Color32],
 )
 {
@@ -48,13 +50,15 @@ pub fn build_surface(
 
 			let mut total_light = constant_light;
 
-			for light in lights
+			for (light, shadow_cube_map) in lights
 			{
 				let vec_to_light = light.pos - pos;
+
+				let shadow_factor = cube_shadow_map_fetch(shadow_cube_map, &vec_to_light);
+
 				let vec_to_light_len2 = vec_to_light.magnitude2();
 				let angle_cos = plane_normal_normalized.dot(vec_to_light) * inv_sqrt_fast(vec_to_light_len2);
-
-				let light_scale = angle_cos.max(0.0) / vec_to_light_len2;
+				let light_scale = shadow_factor * angle_cos.max(0.0) / vec_to_light_len2;
 
 				total_light[0] += light.color[0] * light_scale;
 				total_light[1] += light.color[1] * light_scale;
@@ -84,6 +88,48 @@ pub fn build_surface(
 			dst_u += 1;
 		}
 	}
+}
+
+// Returns hadow factor
+fn cube_shadow_map_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f) -> f32
+{
+	let cubemap_size_f = cube_shadow_map.size as f32;
+
+	let vec_abs = Vec3f::new(vec.x.abs(), vec.y.abs(), vec.z.abs());
+	if vec_abs.x >= vec_abs.y && vec_abs.x >= vec_abs.z
+	{
+		if vec.x >= 0.0
+		{
+		}
+		else
+		{
+		}
+	}
+	else if vec_abs.y >= vec_abs.x && vec_abs.y >= vec_abs.z
+	{
+		if vec.y >= 0.0
+		{
+		}
+		else
+		{
+		}
+	}
+	else
+	{
+		if vec.z >= 0.0
+		{
+			let depth = 1.0 / vec.z;
+			let u = (((-vec.x * depth * 0.5 + 0.5).max(0.0) * cubemap_size_f) as u32).min(cube_shadow_map.size - 1);
+			let v = (((vec.y * depth * 0.5 + 0.5).max(0.0) * cubemap_size_f) as u32).min(cube_shadow_map.size - 1);
+			let value = cube_shadow_map.sides[5][(u + v * cube_shadow_map.size) as usize];
+			return if depth >= value { 1.0 } else { 0.0 };
+		}
+		else
+		{
+		}
+	}
+
+	1.0
 }
 
 // Relative erorr <= 1.5 * 2^(-12)

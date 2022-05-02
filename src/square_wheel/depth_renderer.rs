@@ -92,12 +92,14 @@ impl DepthRenderer
 			let plane_transformed_w = -plane_transformed.w;
 			let d_inv_z_dx = plane_transformed.x / plane_transformed_w;
 			let d_inv_z_dy = plane_transformed.y / plane_transformed_w;
+			const DEPTH_BIAS: f32 = -1.0;
 			let depth_equation = DepthEquation {
 				d_inv_z_dx,
 				d_inv_z_dy,
 				k: plane_transformed.z / plane_transformed_w -
 					d_inv_z_dx * viewport_half_size[0] -
-					d_inv_z_dy * viewport_half_size[1],
+					d_inv_z_dy * viewport_half_size[1] +
+					DEPTH_BIAS * (d_inv_z_dx + d_inv_z_dy),
 			};
 
 			let mut vertices_transformed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
