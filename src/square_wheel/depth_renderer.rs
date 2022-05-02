@@ -101,7 +101,7 @@ impl DepthRenderer
 				k: plane_transformed.z / plane_transformed_w -
 					d_inv_z_dx * viewport_half_size[0] -
 					d_inv_z_dy * viewport_half_size[1] +
-					DEPTH_BIAS_CONST + DEPTH_BIAS_SLOPE * (d_inv_z_dx + d_inv_z_dy),
+					DEPTH_BIAS_CONST + DEPTH_BIAS_SLOPE * (d_inv_z_dx.abs() + d_inv_z_dy.abs()),
 			};
 
 			let mut vertices_transformed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
