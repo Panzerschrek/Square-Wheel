@@ -1,4 +1,4 @@
-use super::clipping_polygon::*;
+use super::{clipping_polygon::*, frame_number::*};
 use common::{bsp_map_compact, camera_controller::CameraMatrices, clipping::*, math_types::*};
 use std::rc::Rc;
 
@@ -10,11 +10,6 @@ pub struct MapVisibilityCalculator
 	portals_data: Vec<PortalData>,
 	leafs_search_waves: LeafsSearchWavesPair,
 }
-
-// 32 bits are enough for frames enumeration.
-// It is more than year at 60FPS.
-#[derive(Default, Copy, Clone, PartialEq, Eq)]
-pub struct FrameNumber(u32);
 
 #[derive(Default, Copy, Clone)]
 struct LeafData
@@ -44,7 +39,7 @@ impl MapVisibilityCalculator
 	pub fn new(map: Rc<bsp_map_compact::BSPMap>) -> Self
 	{
 		Self {
-			current_frame: FrameNumber(0),
+			current_frame: FrameNumber::default(),
 			leafs_data: vec![LeafData::default(); map.leafs.len()],
 			portals_data: vec![PortalData::default(); map.portals.len()],
 			leafs_search_waves: LeafsSearchWavesPair::default(),
@@ -54,7 +49,7 @@ impl MapVisibilityCalculator
 
 	pub fn update_visibility(&mut self, camera_matrices: &CameraMatrices, frame_bounds: &ClippingPolygon)
 	{
-		self.current_frame.0 += 1;
+		self.current_frame.next();
 
 		let root_node = (self.map.nodes.len() - 1) as u32;
 		let current_leaf = self.find_current_leaf(root_node, &camera_matrices.planes_matrix);

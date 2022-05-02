@@ -1,6 +1,6 @@
 use super::{
-	clipping_polygon::*, draw_ordering, inline_models_index::*, light::*, map_visibility_calculator::*, rasterizer::*,
-	renderer_config::*, surfaces, textures::*,
+	clipping_polygon::*, draw_ordering, frame_number::*, inline_models_index::*, light::*,
+	map_visibility_calculator::*, rasterizer::*, renderer_config::*, surfaces, textures::*,
 };
 use common::{
 	bbox::*, bsp_map_compact, camera_controller::CameraMatrices, clipping::*, color::*, fixed_math::*, math_types::*,
@@ -63,11 +63,6 @@ struct DrawPolygonData
 	surface_tc_min: [i32; 2],
 }
 
-// 32 bits are enough for frames enumeration.
-// It is more than year at 60FPS.
-#[derive(Default, Copy, Clone, PartialEq, Eq)]
-struct FrameNumber(u32);
-
 impl Renderer
 {
 	pub fn new(app_config: &serde_json::Value, map: Rc<bsp_map_compact::BSPMap>) -> Self
@@ -78,7 +73,7 @@ impl Renderer
 		precalculate_polygons_tex_coords_bounds(&map, &mut polygons_data);
 
 		Renderer {
-			current_frame: FrameNumber(0),
+			current_frame: FrameNumber::default(),
 			config: RendererConfig::from_app_config(app_config),
 			polygons_data,
 			vertices_transformed: vec![Vec3f::new(0.0, 0.0, 0.0); map.vertices.len()],
@@ -100,7 +95,7 @@ impl Renderer
 	)
 	{
 		let frame_start_time = Clock::now();
-		self.current_frame.0 += 1;
+		self.current_frame.next();
 
 		if self.config.clear_background
 		{

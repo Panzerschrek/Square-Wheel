@@ -6,6 +6,7 @@ mod commands_queue;
 mod config;
 mod console;
 mod draw_ordering;
+mod frame_number;
 mod host;
 mod host_config;
 mod inline_models_index;
