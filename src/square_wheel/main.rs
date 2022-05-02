@@ -10,6 +10,7 @@ mod host;
 mod host_config;
 mod inline_models_index;
 mod light;
+mod map_visibility_calculator;
 mod rasterizer;
 mod renderer;
 mod renderer_config;

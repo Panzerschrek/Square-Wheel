@@ -1,6 +1,6 @@
 use super::{
-	clipping_polygon::*, draw_ordering, inline_models_index::*, light::*, rasterizer::*, renderer_config::*, surfaces,
-	textures::*,
+	clipping_polygon::*, draw_ordering, inline_models_index::*, light::*, map_visibility_calculator::*, rasterizer::*,
+	renderer_config::*, surfaces, textures::*,
 };
 use common::{
 	bbox::*, bsp_map_compact, camera_controller::CameraMatrices, clipping::*, color::*, fixed_math::*, math_types::*,
@@ -15,12 +15,10 @@ pub struct Renderer
 	current_frame: FrameNumber,
 	config: RendererConfig,
 	map: Rc<bsp_map_compact::BSPMap>,
-	leafs_data: Vec<DrawLeafData>,
-	portals_data: Vec<DrawPortalData>,
+	visibility_calculator: MapVisibilityCalculator,
 	polygons_data: Vec<DrawPolygonData>,
 	vertices_transformed: Vec<Vec3f>,
 	surfaces_pixels: Vec<Color32>,
-	leafs_search_waves: LeafsSearchWavesPair,
 	textures: Vec<TextureWithMips>,
 	performance_counters: RendererPerformanceCounters,
 }
@@ -47,27 +45,6 @@ impl RendererPerformanceCounters
 	}
 }
 
-// Mutable data associated with map BSP Leaf.
-#[derive(Default, Copy, Clone)]
-struct DrawLeafData
-{
-	// Frame last time this leaf was visible.
-	visible_frame: FrameNumber,
-	// Bounds, combined from all paths through portals.
-	current_frame_bounds: ClippingPolygon,
-	num_search_visits: usize,
-}
-
-// Mutable data associated with map portal.
-#[derive(Default, Copy, Clone)]
-struct DrawPortalData
-{
-	// Frame last time this leaf was visible.
-	visible_frame: FrameNumber,
-	// None if behind camera.
-	current_frame_projection: Option<ClippingPolygon>,
-}
-
 // Mutable data associated with map polygon.
 #[derive(Default, Copy, Clone)]
 struct DrawPolygonData
@@ -91,11 +68,6 @@ struct DrawPolygonData
 #[derive(Default, Copy, Clone, PartialEq, Eq)]
 struct FrameNumber(u32);
 
-type LeafsSearchWaveElement = u32; // Leaf index
-type LeafsSearchWave = Vec<LeafsSearchWaveElement>;
-#[derive(Default)]
-struct LeafsSearchWavesPair(LeafsSearchWave, LeafsSearchWave);
-
 impl Renderer
 {
 	pub fn new(app_config: &serde_json::Value, map: Rc<bsp_map_compact::BSPMap>) -> Self
@@ -108,12 +80,10 @@ impl Renderer
 		Renderer {
 			current_frame: FrameNumber(0),
 			config: RendererConfig::from_app_config(app_config),
-			leafs_data: vec![DrawLeafData::default(); map.leafs.len()],
-			portals_data: vec![DrawPortalData::default(); map.portals.len()],
 			polygons_data,
 			vertices_transformed: vec![Vec3f::new(0.0, 0.0, 0.0); map.vertices.len()],
 			surfaces_pixels: Vec::new(),
-			leafs_search_waves: LeafsSearchWavesPair::default(),
+			visibility_calculator: MapVisibilityCalculator::new(map.clone()),
 			map,
 			textures,
 			performance_counters: RendererPerformanceCounters::new(),
@@ -137,16 +107,7 @@ impl Renderer
 			draw_background(pixels);
 		}
 
-		let mut debug_stats = DebugStats::default();
-
-		self.draw_map(
-			pixels,
-			surface_info,
-			camera_matrices,
-			inline_models_index,
-			test_lights,
-			&mut debug_stats,
-		);
+		self.draw_map(pixels, surface_info, camera_matrices, inline_models_index, test_lights);
 
 		// TODO - remove such temporary fuinction.
 		draw_crosshair(pixels, surface_info);
@@ -158,24 +119,16 @@ impl Renderer
 		if self.config.show_stats
 		{
 			let mut num_visible_leafs = 0;
-			let mut max_search_visits = 0;
 			let mut num_visible_models_parts = 0;
-			for (leaf_index, leaf_data) in self.leafs_data.iter().enumerate()
+			for leaf_index in 0 .. self.map.leafs.len() as u32
 			{
-				if leaf_data.visible_frame == self.current_frame
+				if self
+					.visibility_calculator
+					.get_current_frame_leaf_bounds(leaf_index)
+					.is_some()
 				{
 					num_visible_leafs += 1;
-					max_search_visits = std::cmp::max(max_search_visits, leaf_data.num_search_visits);
 					num_visible_models_parts += inline_models_index.get_leaf_models(leaf_index as u32).len();
-				}
-			}
-
-			let mut num_visible_portals = 0;
-			for portal_data in &self.portals_data
-			{
-				if portal_data.visible_frame == self.current_frame
-				{
-					num_visible_portals += 1;
 				}
 			}
 
@@ -193,24 +146,17 @@ impl Renderer
 				surface_info,
 				&format!(
 					"frame time: {:04.2}ms\nvisible leafs search: {:04.2}ms\nsurfaces preparation: \
-					 {:04.2}ms\nrasterization: {:04.2}ms\nleafs: {}/{}\nportals: {}/{}\nmodels parts: {}\npolygons: \
-					 {}\nsurfaces pixels: {}k\nnum reachable leaf search  calls: {}\nmax visits: {}\nmax reachable \
-					 leaf search depth: {}\nmax reqachable leafs search wave size: {}",
+					 {:04.2}ms\nrasterization: {:04.2}ms\nleafs: {}/{}\nmodels parts: {}\npolygons: {}\nsurfaces \
+					 pixels: {}k\n",
 					self.performance_counters.frame_duration.get_average_value() * 1000.0,
 					self.performance_counters.visible_leafs_search.get_average_value() * 1000.0,
 					self.performance_counters.surfaces_preparation.get_average_value() * 1000.0,
 					self.performance_counters.rasterization.get_average_value() * 1000.0,
 					num_visible_leafs,
-					self.leafs_data.len(),
-					num_visible_portals,
-					self.portals_data.len(),
+					self.map.leafs.len(),
 					num_visible_models_parts,
 					num_visible_polygons,
 					(self.surfaces_pixels.len() + 1023) / 1024,
-					debug_stats.num_reachable_leafs_search_calls,
-					max_search_visits,
-					debug_stats.reachable_leafs_search_calls_depth,
-					debug_stats.reachable_leafs_search_max_wave_size,
 				),
 				0,
 				0,
@@ -226,12 +172,10 @@ impl Renderer
 		camera_matrices: &CameraMatrices,
 		inline_models_index: &InlineModelsIndex,
 		test_lights: &[PointLight],
-		debug_stats: &mut DebugStats,
 	)
 	{
 		let mut rasterizer = Rasterizer::new(pixels, surface_info);
 		let root_node = (self.map.nodes.len() - 1) as u32;
-		let current_leaf = self.find_current_leaf(root_node, &camera_matrices.planes_matrix);
 
 		// TODO - before preparing frame try to shift camera a little bit away from all planes of BSP nodes before current leaf.
 		// This is needed to fix possible z_near clipping of current leaf portals.
@@ -239,24 +183,8 @@ impl Renderer
 		let visibile_leafs_search_start_time = Clock::now();
 
 		let frame_bounds = ClippingPolygon::from_box(0.0, 0.0, surface_info.width as f32, surface_info.height as f32);
-		if self.config.recursive_visible_leafs_marking
-		{
-			mark_reachable_leafs_recursive(
-				current_leaf,
-				&self.map,
-				self.current_frame,
-				camera_matrices,
-				0,
-				&frame_bounds,
-				&mut self.leafs_data,
-				&mut self.portals_data,
-				debug_stats,
-			);
-		}
-		else
-		{
-			self.mark_reachable_leafs_iterative(current_leaf, camera_matrices, &frame_bounds, debug_stats);
-		}
+		self.visibility_calculator
+			.update_visibility(camera_matrices, &frame_bounds);
 
 		let visibile_leafs_search_end_time = Clock::now();
 		let visibile_leafs_search_duration_s =
@@ -315,150 +243,6 @@ impl Renderer
 		}
 	}
 
-	fn find_current_leaf(&self, mut index: u32, planes_matrix: &Mat4f) -> u32
-	{
-		loop
-		{
-			if index >= bsp_map_compact::FIRST_LEAF_INDEX
-			{
-				return index - bsp_map_compact::FIRST_LEAF_INDEX;
-			}
-
-			let node = &self.map.nodes[index as usize];
-			let plane_transformed = planes_matrix * node.plane.vec.extend(-node.plane.dist);
-			index = if plane_transformed.w >= 0.0
-			{
-				node.children[0]
-			}
-			else
-			{
-				node.children[1]
-			};
-		}
-	}
-
-	fn mark_reachable_leafs_iterative(
-		&mut self,
-		start_leaf: u32,
-		camera_matrices: &CameraMatrices,
-		start_bounds: &ClippingPolygon,
-		debug_stats: &mut DebugStats,
-	)
-	{
-		debug_stats.reachable_leafs_search_max_wave_size = 0;
-
-		let cur_wave = &mut self.leafs_search_waves.0;
-		let next_wave = &mut self.leafs_search_waves.1;
-
-		cur_wave.clear();
-		next_wave.clear();
-
-		cur_wave.push(start_leaf);
-		self.leafs_data[start_leaf as usize].current_frame_bounds = *start_bounds;
-		self.leafs_data[start_leaf as usize].visible_frame = self.current_frame;
-
-		let mut depth = 0;
-		while !cur_wave.is_empty()
-		{
-			for &leaf in cur_wave.iter()
-			{
-				debug_stats.num_reachable_leafs_search_calls += 1;
-
-				let leaf_bounds = self.leafs_data[leaf as usize].current_frame_bounds;
-
-				let leaf_value = self.map.leafs[leaf as usize];
-				for &portal in &self.map.leafs_portals[(leaf_value.first_leaf_portal as usize) ..
-					((leaf_value.first_leaf_portal + leaf_value.num_leaf_portals) as usize)]
-				{
-					let portal_value = &self.map.portals[portal as usize];
-
-					// Do not look through portals that are facing from camera.
-					let portal_plane_pos =
-						(camera_matrices.planes_matrix * portal_value.plane.vec.extend(-portal_value.plane.dist)).w;
-
-					let next_leaf;
-					if portal_value.leafs[0] == leaf
-					{
-						if portal_plane_pos <= 0.0
-						{
-							continue;
-						}
-						next_leaf = portal_value.leafs[1];
-					}
-					else
-					{
-						if portal_plane_pos >= 0.0
-						{
-							continue;
-						}
-						next_leaf = portal_value.leafs[0];
-					}
-
-					// Same portal may be visited multiple times.
-					// So, cache calculation of portal bounds.
-					let portal_data = &mut self.portals_data[portal as usize];
-					if portal_data.visible_frame != self.current_frame
-					{
-						portal_data.visible_frame = self.current_frame;
-						portal_data.current_frame_projection =
-							project_portal(portal_value, &self.map, &camera_matrices.view_matrix);
-					}
-
-					let mut bounds_intersection = if let Some(b) = portal_data.current_frame_projection
-					{
-						b
-					}
-					else
-					{
-						continue;
-					};
-					bounds_intersection.intersect(&leaf_bounds);
-					if bounds_intersection.is_empty_or_invalid()
-					{
-						continue;
-					}
-
-					let next_leaf_data = &mut self.leafs_data[next_leaf as usize];
-					if next_leaf_data.visible_frame != self.current_frame
-					{
-						next_leaf_data.visible_frame = self.current_frame;
-						next_leaf_data.current_frame_bounds = bounds_intersection;
-						next_leaf_data.num_search_visits = 1;
-					}
-					else
-					{
-						next_leaf_data.num_search_visits += 1;
-
-						// If we visit this leaf not first time, check if bounds is inside current.
-						// If so - we can skip it.
-						if next_leaf_data.current_frame_bounds.contains(&bounds_intersection)
-						{
-							continue;
-						}
-						// Perform clipping of portals of this leaf using combined bounds to ensure that we visit all possible paths with such bounds.
-						next_leaf_data.current_frame_bounds.extend(&bounds_intersection);
-					}
-
-					next_wave.push(next_leaf);
-				} // For leaf portals.
-			} // For wave elements.
-
-			debug_stats.reachable_leafs_search_max_wave_size =
-				std::cmp::max(debug_stats.reachable_leafs_search_max_wave_size, next_wave.len());
-
-			cur_wave.clear();
-			std::mem::swap(cur_wave, next_wave);
-
-			depth += 1;
-			if depth > 1024
-			{
-				// Prevent infinite loop in case of broken graph.
-				break;
-			}
-		}
-		debug_stats.reachable_leafs_search_calls_depth = depth;
-	}
-
 	fn prepare_polygons_surfaces(
 		&mut self,
 		camera_matrices: &CameraMatrices,
@@ -471,12 +255,11 @@ impl Renderer
 		// TODO - try to speed-up iteration, do not scan all leafs.
 		for i in 0 .. self.map.leafs.len()
 		{
-			let leaf_data = &self.leafs_data[i];
-			if leaf_data.visible_frame == self.current_frame
+			if let Some(leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(i as u32)
 			{
 				let leaf = &self.map.leafs[i];
 				// TODO - maybe just a little bit extend clipping polygon?
-				let clip_planes = leaf_data.current_frame_bounds.get_clip_planes();
+				let clip_planes = leaf_bounds.get_clip_planes();
 				for polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
 				{
 					self.prepare_polygon_surface(
@@ -497,18 +280,16 @@ impl Renderer
 			let mut bounds: Option<ClippingPolygon> = None;
 			for &leaf_index in inline_models_index.get_model_leafs(model_index as u32)
 			{
-				let leaf_data = &self.leafs_data[leaf_index as usize];
-				if leaf_data.visible_frame != self.current_frame
+				if let Some(leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf_index)
 				{
-					continue;
-				}
-				if let Some(bounds) = &mut bounds
-				{
-					bounds.extend(&leaf_data.current_frame_bounds);
-				}
-				else
-				{
-					bounds = Some(leaf_data.current_frame_bounds);
+					if let Some(bounds) = &mut bounds
+					{
+						bounds.extend(&leaf_bounds);
+					}
+					else
+					{
+						bounds = Some(leaf_bounds);
+					}
 				}
 			}
 
@@ -782,16 +563,9 @@ impl Renderer
 		if current_index >= bsp_map_compact::FIRST_LEAF_INDEX
 		{
 			let leaf = current_index - bsp_map_compact::FIRST_LEAF_INDEX;
-			let leaf_data = &self.leafs_data[leaf as usize];
-			if leaf_data.visible_frame == self.current_frame
+			if let Some(leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf)
 			{
-				self.draw_leaf(
-					rasterizer,
-					camera_matrices,
-					&leaf_data.current_frame_bounds,
-					inline_models_index,
-					leaf,
-				);
+				self.draw_leaf(rasterizer, camera_matrices, &leaf_bounds, inline_models_index, leaf);
 			}
 		}
 		else
@@ -820,10 +594,9 @@ impl Renderer
 		if current_index >= bsp_map_compact::FIRST_LEAF_INDEX
 		{
 			let leaf = current_index - bsp_map_compact::FIRST_LEAF_INDEX;
-			let leaf_data = &self.leafs_data[leaf as usize];
-			if leaf_data.visible_frame == self.current_frame
+			if let Some(leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf)
 			{
-				self.draw_depth_leaf(rasterizer, camera_matrices, &leaf_data.current_frame_bounds, leaf);
+				self.draw_depth_leaf(rasterizer, camera_matrices, &leaf_bounds, leaf);
 			}
 		}
 		else
@@ -1139,167 +912,6 @@ fn precalculate_polygons_tex_coords_bounds(map: &bsp_map_compact::BSPMap, polygo
 		polygon_data.tc_min = tc_min;
 		polygon_data.tc_max = tc_max;
 	}
-}
-
-// TODO - get rid of debug code.
-#[derive(Default)]
-struct DebugStats
-{
-	num_reachable_leafs_search_calls: usize,
-	reachable_leafs_search_calls_depth: usize,
-	reachable_leafs_search_max_wave_size: usize,
-}
-
-fn mark_reachable_leafs_recursive(
-	leaf: u32,
-	map: &bsp_map_compact::BSPMap,
-	current_frame: FrameNumber,
-	camera_matrices: &CameraMatrices,
-	depth: u32,
-	bounds: &ClippingPolygon,
-	leafs_data: &mut [DrawLeafData],
-	portals_data: &mut [DrawPortalData],
-	debug_stats: &mut DebugStats,
-)
-{
-	debug_stats.num_reachable_leafs_search_calls += 1;
-
-	let max_depth = 1024; // Prevent stack overflow in case of broken graph.
-	if depth > max_depth
-	{
-		return;
-	}
-
-	let leaf_data = &mut leafs_data[leaf as usize];
-
-	if leaf_data.visible_frame != current_frame
-	{
-		leaf_data.visible_frame = current_frame;
-		leaf_data.current_frame_bounds = *bounds;
-		leaf_data.num_search_visits = 1;
-	}
-	else
-	{
-		leaf_data.num_search_visits += 1;
-
-		// If we visit this leaf not first time, check if bounds is inside current.
-		// If so - we can skip it.
-		if leaf_data.current_frame_bounds.contains(bounds)
-		{
-			return;
-		}
-		// Perform clipping of portals of this leaf using combined bounds to ensure that we visit all possible paths with such bounds.
-		leaf_data.current_frame_bounds.extend(bounds);
-	}
-	let bound_for_portals_clipping = leaf_data.current_frame_bounds;
-
-	let leaf_value = map.leafs[leaf as usize];
-	for portal in &map.leafs_portals[(leaf_value.first_leaf_portal as usize) ..
-		((leaf_value.first_leaf_portal + leaf_value.num_leaf_portals) as usize)]
-	{
-		let portal_value = &map.portals[(*portal) as usize];
-
-		// Do not look through portals that are facing from camera.
-		let portal_plane_pos =
-			(camera_matrices.planes_matrix * portal_value.plane.vec.extend(-portal_value.plane.dist)).w;
-
-		let next_leaf;
-		if portal_value.leafs[0] == leaf
-		{
-			if portal_plane_pos <= 0.0
-			{
-				continue;
-			}
-			next_leaf = portal_value.leafs[1];
-		}
-		else
-		{
-			if portal_plane_pos >= 0.0
-			{
-				continue;
-			}
-			next_leaf = portal_value.leafs[0];
-		}
-
-		// Same portal may be visited multiple times.
-		// So, cache calculation of portal bounds.
-		let portal_data = &mut portals_data[(*portal) as usize];
-		if portal_data.visible_frame != current_frame
-		{
-			portal_data.visible_frame = current_frame;
-			portal_data.current_frame_projection = project_portal(portal_value, map, &camera_matrices.view_matrix);
-		}
-
-		let mut bounds_intersection = if let Some(b) = portal_data.current_frame_projection
-		{
-			b
-		}
-		else
-		{
-			continue;
-		};
-		bounds_intersection.intersect(&bound_for_portals_clipping);
-		if bounds_intersection.is_empty_or_invalid()
-		{
-			continue;
-		}
-
-		mark_reachable_leafs_recursive(
-			next_leaf,
-			map,
-			current_frame,
-			camera_matrices,
-			depth + 1,
-			&bounds_intersection,
-			leafs_data,
-			portals_data,
-			debug_stats,
-		);
-	}
-}
-
-fn project_portal(
-	portal: &bsp_map_compact::Portal,
-	map: &bsp_map_compact::BSPMap,
-	view_matrix: &Mat4f,
-) -> Option<ClippingPolygon>
-{
-	const MAX_VERTICES: usize = 24;
-	let mut vertex_count = std::cmp::min(portal.num_vertices as usize, MAX_VERTICES);
-
-	// Perform initial matrix tranformation, obtain 3d vertices in camera-aligned space.
-	let mut vertices_transformed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-	for (in_vertex, out_vertex) in map.vertices
-		[(portal.first_vertex as usize) .. (portal.first_vertex as usize) + vertex_count]
-		.iter()
-		.zip(vertices_transformed.iter_mut())
-	{
-		let vertex_transformed = view_matrix * in_vertex.extend(1.0);
-		*out_vertex = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
-	}
-
-	// Perform z_near clipping. Use very small z_near to avoid clipping portals.
-	let mut vertices_transformed_z_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-	const Z_NEAR: f32 = 1.0 / 4096.0;
-	vertex_count = clip_3d_polygon_by_z_plane(
-		&vertices_transformed[.. vertex_count],
-		Z_NEAR,
-		&mut vertices_transformed_z_clipped,
-	);
-	if vertex_count < 3
-	{
-		return None;
-	}
-
-	let mut portal_polygon_bounds = ClippingPolygon::from_point(
-		&(vertices_transformed_z_clipped[0].truncate() / vertices_transformed_z_clipped[0].z),
-	);
-	for vertex_transformed in &vertices_transformed_z_clipped[1 .. vertex_count]
-	{
-		portal_polygon_bounds.extend_with_point(&(vertex_transformed.truncate() / vertex_transformed.z));
-	}
-
-	Some(portal_polygon_bounds)
 }
 
 fn draw_polygon(
