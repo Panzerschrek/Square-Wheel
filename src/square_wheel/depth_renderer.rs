@@ -1,5 +1,10 @@
-use super::{clipping_polygon::*, map_visibility_calculator::*, rasterizer::*};
-use common::{bsp_map_compact, camera_controller::CameraMatrices, clipping::*, fixed_math::*, math_types::*};
+use super::{
+	clipping_polygon::*,
+	map_visibility_calculator::*,
+	rasterizer::*,
+	renderer::{project_and_clip_polygon, MAX_VERTICES},
+};
+use common::{bsp_map_compact, camera_controller::CameraMatrices, fixed_math::*, math_types::*};
 use std::rc::Rc;
 
 pub struct DepthRenderer
@@ -146,66 +151,4 @@ fn draw_depth_polygon(
 	}
 
 	rasterizer.fill_polygon(&vertices_for_rasterizer[0 .. vertex_count], &depth_equation);
-}
-
-const MAX_VERTICES: usize = 24;
-
-// Returns number of result vertices. < 3 if polygon is clipped.
-fn project_and_clip_polygon(
-	clip_planes: &ClippingPolygonPlanes,
-	vertices_transformed: &[Vec3f],
-	out_vertices: &mut [Vec2f],
-) -> usize
-{
-	let mut vertex_count = std::cmp::min(vertices_transformed.len(), MAX_VERTICES);
-
-	// Perform z_near clipping.
-	let mut vertices_transformed_z_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-	const Z_NEAR: f32 = 1.0;
-	vertex_count = clip_3d_polygon_by_z_plane(
-		&vertices_transformed[.. vertex_count],
-		Z_NEAR,
-		&mut vertices_transformed_z_clipped,
-	);
-	if vertex_count < 3
-	{
-		return vertex_count;
-	}
-
-	// Make 2d vertices, then perform clipping in 2d space.
-	// This is needed to avoid later overflows for Fixed16 vertex coords in rasterizer.
-	for (vertex_transformed, out_vertex) in vertices_transformed_z_clipped
-		.iter()
-		.take(vertex_count)
-		.zip(out_vertices.iter_mut())
-	{
-		*out_vertex = vertex_transformed.truncate() / vertex_transformed.z;
-	}
-
-	let mut vertices_temp = [Vec2f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-
-	// Perform clipping in pairs - use pair of buffers.
-	for i in 0 .. clip_planes.len() / 2
-	{
-		vertex_count = clip_2d_polygon(
-			&out_vertices[.. vertex_count],
-			&clip_planes[i * 2],
-			&mut vertices_temp[..],
-		);
-		if vertex_count < 3
-		{
-			return vertex_count;
-		}
-		vertex_count = clip_2d_polygon(
-			&vertices_temp[.. vertex_count],
-			&clip_planes[i * 2 + 1],
-			&mut out_vertices[..],
-		);
-		if vertex_count < 3
-		{
-			return vertex_count;
-		}
-	}
-
-	vertex_count
 }

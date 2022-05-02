@@ -1111,10 +1111,10 @@ fn line_z_corrected_texture_coordinates_interpolation_may_be_used(
 
 const TC_ERROR_THRESHOLD: f32 = 0.75;
 
-const MAX_VERTICES: usize = 24;
+pub const MAX_VERTICES: usize = 24;
 
 // Returns number of result vertices. < 3 if polygon is clipped.
-fn project_and_clip_polygon(
+pub fn project_and_clip_polygon(
 	clip_planes: &ClippingPolygonPlanes,
 	vertices_transformed: &[Vec3f],
 	out_vertices: &mut [Vec2f],
