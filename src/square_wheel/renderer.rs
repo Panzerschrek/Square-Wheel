@@ -175,13 +175,25 @@ impl Renderer
 		let mut test_lights_shadow_maps = Vec::with_capacity(test_lights.len());
 		for light in test_lights
 		{
-			let depth_matrices =
-				calculate_cube_shadow_map_side_matrices(light.pos, depth_map_size as f32, CubeMapSide::ZMinus);
+			let mut cube_shadow_map = CubeShadowMap {
+				size: depth_map_size,
+				sides: [Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()],
+			};
+			for side in 0 .. 6
+			{
+				let depth_matrices = calculate_cube_shadow_map_side_matrices(
+					light.pos,
+					depth_map_size as f32,
+					int_to_cubemap_side(side).unwrap(),
+				);
 
-			let mut depth_data = vec![0.0; (depth_map_size * depth_map_size) as usize];
-			self.shadows_maps_renderer
-				.draw_map(&mut depth_data, depth_map_size, depth_map_size, &depth_matrices);
-			test_lights_shadow_maps.push(depth_data);
+				let mut depth_data = vec![0.0; (depth_map_size * depth_map_size) as usize];
+				self.shadows_maps_renderer
+					.draw_map(&mut depth_data, depth_map_size, depth_map_size, &depth_matrices);
+
+				cube_shadow_map.sides[side as usize] = depth_data;
+			}
+			test_lights_shadow_maps.push(cube_shadow_map);
 		}
 
 		let mut rasterizer = Rasterizer::new(pixels, surface_info);
@@ -236,13 +248,13 @@ impl Renderer
 
 		if self.config.debug_draw_depth
 		{
-			if let Some(depth_data) = test_lights_shadow_maps.last()
+			if let Some(shadow_map) = test_lights_shadow_maps.last()
 			{
 				for y in 0 .. depth_map_size
 				{
 					for x in 0 .. depth_map_size
 					{
-						let depth = depth_data[(x + y * depth_map_size) as usize];
+						let depth = shadow_map.sides[0][(x + y * depth_map_size) as usize];
 						let z = (0.5 / depth).max(0.0).min(255.0) as u8;
 						pixels[(x as usize) + (y as usize) * surface_info.pitch] = Color32::from_rgb(z, z, z);
 					}

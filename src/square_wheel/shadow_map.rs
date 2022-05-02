@@ -1,5 +1,7 @@
 use common::{camera_controller::*, math_types::*};
 
+#[repr(u32)]
+#[derive(PartialEq, PartialOrd)]
 pub enum CubeMapSide
 {
 	XPlus,
@@ -8,6 +10,26 @@ pub enum CubeMapSide
 	YMinus,
 	ZPlus,
 	ZMinus,
+}
+
+pub fn int_to_cubemap_side(i: u32) -> Option<CubeMapSide>
+{
+	match i
+	{
+		0 => Some(CubeMapSide::XPlus),
+		1 => Some(CubeMapSide::XMinus),
+		2 => Some(CubeMapSide::YPlus),
+		3 => Some(CubeMapSide::YMinus),
+		4 => Some(CubeMapSide::ZPlus),
+		5 => Some(CubeMapSide::ZMinus),
+		_ => None,
+	}
+}
+
+pub struct CubeShadowMap
+{
+	pub size: u32,
+	pub sides: [Vec<f32>; 6],
 }
 
 pub fn calculate_cube_shadow_map_side_matrices(
