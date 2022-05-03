@@ -1,3 +1,4 @@
+use super::config;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Default, Debug)]
@@ -9,9 +10,17 @@ pub struct HostConfig
 
 impl HostConfig
 {
-	pub fn from_app_config(app_config: &serde_json::Value) -> Self
+	pub fn from_app_config(app_config: &config::ConfigSharedPtr) -> Self
 	{
-		serde_json::from_value(app_config["host"].clone()).unwrap_or_default()
+		serde_json::from_value(app_config.borrow()["host"].clone()).unwrap_or_default()
+	}
+
+	pub fn update_app_config(&self, app_config: &config::ConfigSharedPtr)
+	{
+		if let Ok(json) = serde_json::to_value(self)
+		{
+			app_config.borrow_mut()["host"] = json;
+		}
 	}
 }
 

@@ -1,19 +1,21 @@
-use super::commands_queue;
+use super::{commands_queue, config};
 use std::{cell::RefCell, rc::Rc};
 
 pub struct CommandsProcessor
 {
 	commands_queues: Vec<commands_queue::CommandsQueueDynPtr>,
+	config: config::ConfigSharedPtr,
 }
 
 pub type CommandsProcessorPtr = Rc<RefCell<CommandsProcessor>>;
 
 impl CommandsProcessor
 {
-	pub fn new() -> CommandsProcessorPtr
+	pub fn new(config: config::ConfigSharedPtr) -> CommandsProcessorPtr
 	{
 		Rc::new(RefCell::new(Self {
 			commands_queues: Vec::new(),
+			config,
 		}))
 	}
 
@@ -25,10 +27,55 @@ impl CommandsProcessor
 	// Returns single string if successfully completed or list of variants.
 	pub fn complete_command(&self, command_start: &str) -> Vec<String>
 	{
+		// Extract matched commands of all command queues.
 		let mut matched_commands = Vec::new();
 		for queue in &self.commands_queues
 		{
 			matched_commands.append(&mut queue.borrow().get_commands_started_with(command_start));
+		}
+
+		// Extract matched paths in config.
+		let config_path = command_start.split(CONFIG_PATH_SEPARATOR).collect::<Vec<&str>>();
+		if !config_path.is_empty()
+		{
+			let path_without_last_component = &config_path[.. config_path.len() - 1];
+			let last_component = config_path.last().unwrap();
+
+			let config_lock = self.config.borrow();
+			let mut cur_value: &serde_json::Value = &config_lock;
+			let mut path_found = true;
+			for config_path_component in path_without_last_component
+			{
+				if let Some(member) = cur_value.get(config_path_component)
+				{
+					cur_value = member;
+				}
+				else
+				{
+					path_found = false;
+					break;
+				}
+			}
+
+			if path_found
+			{
+				if let Some(obj) = cur_value.as_object()
+				{
+					for key in obj.keys()
+					{
+						if key.starts_with(last_component)
+						{
+							let mut matched_path = path_without_last_component.join(CONFIG_PATH_SEPARATOR_STR);
+							if !matched_path.is_empty()
+							{
+								matched_path.push(CONFIG_PATH_SEPARATOR);
+							}
+							matched_path += key;
+							matched_commands.push(matched_path);
+						}
+					}
+				}
+			}
 		}
 
 		if matched_commands.len() <= 1
@@ -51,8 +98,8 @@ impl CommandsProcessor
 		}
 	}
 
-	// Returns true if command found.
-	pub fn process_command(&mut self, command_line: &str) -> bool
+	// Returns command processing message, that may be empty.
+	pub fn process_command(&mut self, command_line: &str) -> String
 	{
 		let mut command = None;
 		let mut args = Vec::<String>::new();
@@ -68,19 +115,81 @@ impl CommandsProcessor
 			}
 		}
 
-		if let Some(c) = command
+		let c = if let Some(c) = command
 		{
-			for queue in &self.commands_queues
+			c
+		}
+		else
+		{
+			return String::new();
+		};
+
+		// First, process commands.
+		for queue in &self.commands_queues
+		{
+			if queue.borrow().has_handler(&c)
 			{
-				if queue.borrow().has_handler(&c)
-				{
-					queue.borrow_mut().add_invocation(&c, args);
-					return true;
-				}
+				queue.borrow_mut().add_invocation(&c, args);
+				return String::new();
 			}
 		}
 
-		false
+		// Second, process config.
+		let mut config_lock = self.config.borrow_mut();
+		let mut cur_value: &mut serde_json::Value = &mut config_lock;
+		for config_path_component in c.split(CONFIG_PATH_SEPARATOR)
+		{
+			if let Some(member) = cur_value.get_mut(config_path_component)
+			{
+				cur_value = member;
+			}
+			else
+			{
+				return format!("{} not found", c);
+			}
+		}
+
+		if args.is_empty()
+		{
+			return format!("{} is {}", c, cur_value);
+		}
+
+		let arg = &args[0];
+		if cur_value.is_string()
+		{
+			*cur_value = serde_json::Value::from(arg.clone());
+		}
+		else if cur_value.is_number()
+		{
+			if let Ok(num) = arg.parse::<f64>()
+			{
+				*cur_value = serde_json::Value::from(num);
+			}
+			else
+			{
+				return format!("Failed to parse number");
+			}
+		}
+		else if cur_value.is_boolean()
+		{
+			if arg == "1" || arg == "true"
+			{
+				*cur_value = serde_json::Value::from(true);
+			}
+			else if arg == "0" || arg == "false"
+			{
+				*cur_value = serde_json::Value::from(false);
+			}
+			else
+			{
+				return format!("Failed to parse bool");
+			}
+		}
+		else
+		{
+			return format!("Can't set value of this type");
+		}
+		return String::new();
 	}
 }
 
@@ -138,3 +247,6 @@ fn find_common_prefix(strings: &[String]) -> String
 
 	common_prefix
 }
+
+const CONFIG_PATH_SEPARATOR: char = '.';
+const CONFIG_PATH_SEPARATOR_STR: &str = ".";

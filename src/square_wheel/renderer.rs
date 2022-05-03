@@ -1,5 +1,5 @@
 use super::{
-	clipping_polygon::*, depth_renderer::*, draw_ordering, frame_number::*, inline_models_index::*, light::*,
+	clipping_polygon::*, config, depth_renderer::*, draw_ordering, frame_number::*, inline_models_index::*, light::*,
 	map_visibility_calculator::*, rasterizer::*, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
 };
 use common::{
@@ -12,8 +12,11 @@ type Clock = std::time::Instant;
 
 pub struct Renderer
 {
-	current_frame: FrameNumber,
+	app_config: config::ConfigSharedPtr,
 	config: RendererConfig,
+	config_is_durty: bool,
+
+	current_frame: FrameNumber,
 	map: Rc<bsp_map_compact::BSPMap>,
 	visibility_calculator: MapVisibilityCalculator,
 	shadows_maps_renderer: DepthRenderer,
@@ -66,16 +69,19 @@ struct DrawPolygonData
 
 impl Renderer
 {
-	pub fn new(app_config: &serde_json::Value, map: Rc<bsp_map_compact::BSPMap>) -> Self
+	pub fn new(app_config: config::ConfigSharedPtr, map: Rc<bsp_map_compact::BSPMap>) -> Self
 	{
 		let textures = load_textures(&map.textures);
 
 		let mut polygons_data = vec![DrawPolygonData::default(); map.polygons.len()];
 		precalculate_polygons_tex_coords_bounds(&map, &mut polygons_data);
 
+		let config_parsed = RendererConfig::from_app_config(&app_config);
 		Renderer {
+			app_config,
+			config: config_parsed,
+			config_is_durty: false,
 			current_frame: FrameNumber::default(),
-			config: RendererConfig::from_app_config(app_config),
 			polygons_data,
 			vertices_transformed: vec![Vec3f::new(0.0, 0.0, 0.0); map.vertices.len()],
 			surfaces_pixels: Vec::new(),
@@ -96,6 +102,8 @@ impl Renderer
 		test_lights: &[PointLight],
 	)
 	{
+		self.synchronize_config();
+
 		let frame_start_time = Clock::now();
 		self.current_frame.next();
 
@@ -797,6 +805,31 @@ impl Renderer
 				polygon_data.surface_pixels_offset +
 					((polygon_data.surface_size[0] * polygon_data.surface_size[1]) as usize)],
 		);
+	}
+
+	fn synchronize_config(&mut self)
+	{
+		if self.config_is_durty
+		{
+			self.config_is_durty = false;
+			self.config.update_app_config(&self.app_config);
+		}
+		else
+		{
+			self.config = RendererConfig::from_app_config(&self.app_config);
+		}
+
+		// Make sure that config values are reasonable.
+		if self.config.textures_mip_bias < -1.0
+		{
+			self.config.textures_mip_bias = -1.0;
+			self.config_is_durty = true;
+		}
+		if self.config.textures_mip_bias > 2.0
+		{
+			self.config.textures_mip_bias = 2.0;
+			self.config_is_durty = true;
+		}
 	}
 }
 

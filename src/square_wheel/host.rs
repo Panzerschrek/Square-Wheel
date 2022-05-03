@@ -7,10 +7,13 @@ use std::{cell::RefCell, rc::Rc, time::Duration};
 
 pub struct Host
 {
+	config_file_path: std::path::PathBuf,
+	app_config: config::ConfigSharedPtr,
+	config: HostConfig,
+	config_is_durty: bool,
+
 	commands_queue: commands_queue::CommandsQueuePtr<Host>,
 	console: console::Console,
-	config_json: serde_json::Value,
-	config: HostConfig,
 	window: Rc<RefCell<system_window::SystemWindow>>,
 	camera: camera_controller::CameraController,
 	active_map: Option<ActiveMap>,
@@ -28,9 +31,21 @@ struct ActiveMap
 
 impl Host
 {
-	pub fn new(startup_commands: Vec<String>) -> Self
+	pub fn new(config_file_path: std::path::PathBuf, startup_commands: Vec<String>) -> Self
 	{
-		let commands_processor = commands_processor::CommandsProcessor::new();
+		println!("Loading config from file \"{:?}\"", config_file_path);
+		let config_json = if let Some(json) = config::load(&config_file_path)
+		{
+			json
+		}
+		else
+		{
+			println!("Failed to load config file");
+			serde_json::Value::Object(serde_json::Map::new())
+		};
+		let app_config = config::make_shared(config_json);
+
+		let commands_processor = commands_processor::CommandsProcessor::new(app_config.clone());
 		let mut console = console::Console::new(commands_processor.clone());
 		console.add_text("Innitializing host".to_string());
 
@@ -57,28 +72,19 @@ impl Host
 			commands_processor.borrow_mut().process_command(&command_line);
 		}
 
-		let config_file_path = "config.json";
-		console.add_text(format!("Loading config from file \"{}\"", config_file_path));
-		let config_json = if let Some(json) = config::load(std::path::Path::new(config_file_path))
-		{
-			json
-		}
-		else
-		{
-			console.add_text("Failed to load config file".to_string());
-			serde_json::Value::Object(serde_json::Map::new())
-		};
-
 		let cur_time = std::time::Instant::now();
 
+		let host_config = HostConfig::from_app_config(&app_config);
 		Host {
+			config_file_path,
+			app_config: app_config,
+			config: host_config,
+			config_is_durty: false,
 			commands_queue,
 			console,
-			config: HostConfig::from_app_config(&config_json),
 			window: Rc::new(RefCell::new(system_window::SystemWindow::new())),
 			camera: camera_controller::CameraController::new(),
 			active_map: None,
-			config_json,
 			prev_time: cur_time,
 			fps_counter: TicksCounter::new(),
 			quit_requested: false,
@@ -90,6 +96,7 @@ impl Host
 	{
 		self.process_events();
 		self.process_commands();
+		self.synchronize_config();
 
 		let cur_time = std::time::Instant::now();
 		let time_delta_s = (cur_time - self.prev_time).as_secs_f32();
@@ -180,6 +187,26 @@ impl Host
 	{
 		let queue_ptr_copy = self.commands_queue.clone();
 		queue_ptr_copy.borrow_mut().process_commands(self);
+	}
+
+	fn synchronize_config(&mut self)
+	{
+		if self.config_is_durty
+		{
+			self.config_is_durty = false;
+			self.config.update_app_config(&self.app_config);
+		}
+		else
+		{
+			self.config = HostConfig::from_app_config(&self.app_config);
+		}
+
+		// Make sure that config values are reasonable.
+		if self.config.max_fps < 0.0
+		{
+			self.config.max_fps = 0.0;
+			self.config_is_durty = true;
+		}
 	}
 
 	fn process_game_logic(&mut self)
@@ -312,7 +339,7 @@ impl Host
 			{
 				let map_rc = Rc::new(map);
 				self.active_map = Some(ActiveMap {
-					renderer: renderer::Renderer::new(&self.config_json, map_rc.clone()),
+					renderer: renderer::Renderer::new(self.app_config.clone(), map_rc.clone()),
 					inline_models_index: inline_models_index::InlineModelsIndex::new(map_rc),
 					test_lights: Vec::new(),
 				});
@@ -331,5 +358,13 @@ impl Host
 	fn command_quit(&mut self, _args: commands_queue::CommandArgs)
 	{
 		self.quit_requested = true;
+	}
+}
+
+impl Drop for Host
+{
+	fn drop(&mut self)
+	{
+		config::save(&self.app_config.borrow(), &self.config_file_path);
 	}
 }
