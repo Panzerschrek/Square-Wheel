@@ -1,19 +1,21 @@
-use super::commands_queue;
+use super::{commands_queue, config};
 use std::{cell::RefCell, rc::Rc};
 
 pub struct CommandsProcessor
 {
 	commands_queues: Vec<commands_queue::CommandsQueueDynPtr>,
+	config: config::ConfigSharedPtr,
 }
 
 pub type CommandsProcessorPtr = Rc<RefCell<CommandsProcessor>>;
 
 impl CommandsProcessor
 {
-	pub fn new() -> CommandsProcessorPtr
+	pub fn new(config: config::ConfigSharedPtr) -> CommandsProcessorPtr
 	{
 		Rc::new(RefCell::new(Self {
 			commands_queues: Vec::new(),
+			config,
 		}))
 	}
 
@@ -78,6 +80,68 @@ impl CommandsProcessor
 					return true;
 				}
 			}
+
+			// TODO - print messages to console.
+
+			let mut config_lock = self.config.borrow_mut();
+			let mut cur_value: &mut serde_json::Value = &mut config_lock;
+			for config_path_component in c.split('.')
+			{
+				if let Some(member) = cur_value.get_mut(config_path_component)
+				{
+					cur_value = member;
+				}
+				else
+				{
+					println!("{} not found", c);
+					return false;
+				}
+			}
+
+			if args.is_empty()
+			{
+				println!("{} is {}", c, cur_value);
+			}
+			else
+			{
+				let arg = &args[0];
+				if cur_value.is_string()
+				{
+					*cur_value = serde_json::Value::from(arg.clone());
+				}
+				else if cur_value.is_number()
+				{
+					if let Ok(num) = arg.parse::<f64>()
+					{
+						*cur_value = serde_json::Value::from(num);
+					}
+					else
+					{
+						println!("Failed to parse number");
+					}
+				}
+				else if cur_value.is_boolean()
+				{
+					if arg == "1" || arg == "true"
+					{
+						*cur_value = serde_json::Value::from(true);
+					}
+					else if arg == "0" || arg == "false"
+					{
+						*cur_value = serde_json::Value::from(false);
+					}
+					else
+					{
+						println!("Failed to parse bool");
+					}
+				}
+				else
+				{
+					println!("Can't set value of this type");
+				}
+			}
+
+			return true;
 		}
 
 		false

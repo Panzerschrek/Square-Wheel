@@ -30,7 +30,20 @@ impl Host
 {
 	pub fn new(startup_commands: Vec<String>) -> Self
 	{
-		let commands_processor = commands_processor::CommandsProcessor::new();
+		let config_file_path = "config.json";
+		println!("Loading config from file \"{}\"", config_file_path);
+		let config_json = if let Some(json) = config::load(std::path::Path::new(config_file_path))
+		{
+			json
+		}
+		else
+		{
+			println!("Failed to load config file");
+			serde_json::Value::Object(serde_json::Map::new())
+		};
+		let config_json_shared = config::make_shared(config_json);
+
+		let commands_processor = commands_processor::CommandsProcessor::new(config_json_shared.clone());
 		let mut console = console::Console::new(commands_processor.clone());
 		console.add_text("Innitializing host".to_string());
 
@@ -56,19 +69,6 @@ impl Host
 			console.add_text(format!("Executing \"{}\"", command_line));
 			commands_processor.borrow_mut().process_command(&command_line);
 		}
-
-		let config_file_path = "config.json";
-		console.add_text(format!("Loading config from file \"{}\"", config_file_path));
-		let config_json = if let Some(json) = config::load(std::path::Path::new(config_file_path))
-		{
-			json
-		}
-		else
-		{
-			console.add_text("Failed to load config file".to_string());
-			serde_json::Value::Object(serde_json::Map::new())
-		};
-		let config_json_shared = config::make_shared(config_json);
 
 		let cur_time = std::time::Instant::now();
 
