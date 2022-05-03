@@ -8,6 +8,7 @@ pub trait CommandsQueueInterface
 {
 	fn has_handler(&self, command: &str) -> bool;
 	fn add_invocation(&mut self, command: &str, args: CommandArgs);
+	fn get_commands_started_with(&self, command_start: &str) -> Vec<String>;
 }
 
 pub struct CommandsQueue<HandlerClass>
@@ -66,5 +67,18 @@ impl<HandlerClass> CommandsQueueInterface for CommandsQueue<HandlerClass>
 				return;
 			}
 		}
+	}
+
+	fn get_commands_started_with(&self, command_start: &str) -> Vec<String>
+	{
+		let mut result = Vec::new();
+		for (command_name, _) in &self.handlers
+		{
+			if command_name.starts_with(command_start) || command_start.is_empty()
+			{
+				result.push(command_name.to_string());
+			}
+		}
+		result
 	}
 }

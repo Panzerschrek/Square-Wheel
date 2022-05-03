@@ -84,7 +84,22 @@ impl Console
 				}
 			}
 		}
-		// Todo - implement completion.
+		if key_code == Keycode::Tab
+		{
+			let mut completion_result = self.commands_processor.borrow().complete_command(&self.input_line);
+			if completion_result.len() == 1
+			{
+				self.input_line = completion_result.pop().unwrap();
+			}
+			else
+			{
+				self.add_text("> ".to_string());
+				for possible_command in completion_result.drain(..)
+				{
+					self.add_text(format!(" {}", possible_command));
+				}
+			}
+		}
 	}
 
 	pub fn is_active(&self) -> bool
