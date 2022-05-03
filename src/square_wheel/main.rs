@@ -31,7 +31,7 @@ struct Opt
 	#[structopt(long)]
 	exec: Vec<String>,
 
-	/// Optional path to config file. If empty default path will be used.
+	/// Optional path to config file. If empty - default path will be used.
 	#[structopt(long, parse(from_os_str))]
 	config: Option<PathBuf>,
 }

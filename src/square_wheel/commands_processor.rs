@@ -121,7 +121,7 @@ impl CommandsProcessor
 		}
 		else
 		{
-			return "command not found".to_string();
+			return String::new();
 		};
 
 		// First, process commands.

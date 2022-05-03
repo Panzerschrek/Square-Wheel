@@ -161,13 +161,13 @@ impl Console
 		self.input_history.push_back(self.input_line.clone());
 		self.current_history_index = self.input_history.len();
 
-		let command_process_test = self.commands_processor.borrow_mut().process_command(&self.input_line);
+		let command_process_text = self.commands_processor.borrow_mut().process_command(&self.input_line);
 		self.add_text(self.input_line.clone());
 		self.input_line.clear();
 
-		if !command_process_test.is_empty()
+		if !command_process_text.is_empty()
 		{
-			self.add_text(command_process_test);
+			self.add_text(command_process_text);
 		}
 	}
 }
