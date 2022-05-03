@@ -314,7 +314,7 @@ impl Host
 			{
 				let map_rc = Rc::new(map);
 				self.active_map = Some(ActiveMap {
-					renderer: renderer::Renderer::new(&self.config_json, map_rc.clone()),
+					renderer: renderer::Renderer::new(self.config_json.clone(), map_rc.clone()),
 					inline_models_index: inline_models_index::InlineModelsIndex::new(map_rc),
 					test_lights: Vec::new(),
 				});
