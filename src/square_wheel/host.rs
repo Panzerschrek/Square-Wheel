@@ -10,6 +10,8 @@ pub struct Host
 	config_file_path: std::path::PathBuf,
 	app_config: config::ConfigSharedPtr,
 	config: HostConfig,
+	config_is_durty: bool,
+
 	commands_queue: commands_queue::CommandsQueuePtr<Host>,
 	console: console::Console,
 	window: Rc<RefCell<system_window::SystemWindow>>,
@@ -72,11 +74,12 @@ impl Host
 
 		let cur_time = std::time::Instant::now();
 
-		let host_config = HostConfig::from_app_config(&app_config.borrow());
+		let host_config = HostConfig::from_app_config(&app_config);
 		Host {
 			config_file_path,
 			app_config: app_config,
 			config: host_config,
+			config_is_durty: false,
 			commands_queue,
 			console,
 			window: Rc::new(RefCell::new(system_window::SystemWindow::new())),
@@ -93,6 +96,7 @@ impl Host
 	{
 		self.process_events();
 		self.process_commands();
+		self.synchronize_config();
 
 		let cur_time = std::time::Instant::now();
 		let time_delta_s = (cur_time - self.prev_time).as_secs_f32();
@@ -183,6 +187,26 @@ impl Host
 	{
 		let queue_ptr_copy = self.commands_queue.clone();
 		queue_ptr_copy.borrow_mut().process_commands(self);
+	}
+
+	fn synchronize_config(&mut self)
+	{
+		if self.config_is_durty
+		{
+			self.config_is_durty = false;
+			self.config.update_app_config(&self.app_config);
+		}
+		else
+		{
+			self.config = HostConfig::from_app_config(&self.app_config);
+		}
+
+		// Make sure that config values are reasonable.
+		if self.config.max_fps < 0.0
+		{
+			self.config.max_fps = 0.0;
+			self.config_is_durty = true;
+		}
 	}
 
 	fn process_game_logic(&mut self)
