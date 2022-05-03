@@ -39,4 +39,36 @@ impl Color32
 				(components_sum[3] & 0xFF000000),
 		)
 	}
+
+	pub const MAX_RGB_F32_COMPONENTS: [f32; 3] = [255.0 * (256.0 * 256.0), 255.0 * 256.0, 255.0];
+
+	// Result components are shifted.
+	pub fn unpack_to_rgb_f32(&self) -> [f32; 3]
+	{
+		[
+			(self.0 & 0x00FF0000) as f32,
+			(self.0 & 0x0000FF00) as f32,
+			(self.0 & 0x000000FF) as f32,
+		]
+	}
+
+	// Pack back shifted components.
+	// Truncate extra bits in case of overflow.
+	// TODO - add same method but with unsafe f32 to u32 cast.
+	pub fn from_rgb_f32(rgb: &[f32; 3]) -> Self
+	{
+		Color32(((rgb[0] as u32) & 0x00FF0000) | ((rgb[1] as u32) & 0x0000FF00) | ((rgb[2] as u32) & 0x000000FF))
+	}
+
+	// Uses unchecked f32 to int conversion.
+	// Undefine behaviour  in case of f32 -> u32 overflow/underflow or NaN.
+	// Components also must be not greater than MAX_RGB_F32_COMPONENTS.
+	pub unsafe fn from_rgb_f32_unchecked(rgb: &[f32; 3]) -> Self
+	{
+		Color32(
+			(rgb[0].to_int_unchecked::<u32>() & 0x00FF0000) |
+				(rgb[1].to_int_unchecked::<u32>() & 0x0000FF00) |
+				rgb[2].to_int_unchecked::<u32>(),
+		)
+	}
 }

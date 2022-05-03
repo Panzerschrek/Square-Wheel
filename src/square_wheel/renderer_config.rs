@@ -10,6 +10,9 @@ pub struct RendererConfig
 	pub show_stats: bool,
 
 	#[serde(default)]
+	pub debug_draw_depth: bool,
+
+	#[serde(default)]
 	pub invert_polygons_order: bool,
 
 	// use alternaive (slow, recursive) search algorithm.

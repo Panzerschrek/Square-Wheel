@@ -1,4 +1,6 @@
-use super::{commands_processor, commands_queue, config, console, host_config::*, inline_models_index, renderer};
+use super::{
+	commands_processor, commands_queue, config, console, host_config::*, inline_models_index, light::*, renderer,
+};
 use common::{bsp_map_save_load, camera_controller, color::*, math_types::*, system_window, ticks_counter::*};
 use sdl2::{event::Event, keyboard::Keycode};
 use std::{cell::RefCell, rc::Rc, time::Duration};
@@ -21,6 +23,7 @@ struct ActiveMap
 {
 	renderer: renderer::Renderer,
 	inline_models_index: inline_models_index::InlineModelsIndex,
+	test_lights: Vec<PointLight>,
 }
 
 impl Host
@@ -36,6 +39,8 @@ impl Host
 			("set_pos", Host::command_set_pos),
 			("get_angles", Host::command_get_angles),
 			("set_angles", Host::command_set_angles),
+			("add_test_light", Host::command_add_test_light),
+			("reset_test_lights", Host::command_reset_test_lights),
 			("map", Host::command_map),
 			("quit", Host::command_quit),
 		]);
@@ -190,9 +195,13 @@ impl Host
 
 		if let Some(active_map) = &mut self.active_map
 		{
-			active_map
-				.renderer
-				.draw_frame(pixels, surface_info, view_matrix, &active_map.inline_models_index);
+			active_map.renderer.draw_frame(
+				pixels,
+				surface_info,
+				view_matrix,
+				&active_map.inline_models_index,
+				&active_map.test_lights,
+			);
 		}
 		self.console.draw(pixels, surface_info);
 
@@ -248,6 +257,38 @@ impl Host
 		}
 	}
 
+	fn command_add_test_light(&mut self, args: commands_queue::CommandArgs)
+	{
+		if args.len() < 3
+		{
+			self.console.add_text("Expected 3 args".to_string());
+			return;
+		}
+
+		if let (Ok(r), Ok(g), Ok(b)) = (args[0].parse::<f32>(), args[1].parse::<f32>(), args[2].parse::<f32>())
+		{
+			if let Some(active_map) = &mut self.active_map
+			{
+				active_map.test_lights.push(PointLight {
+					pos: self.camera.get_pos(),
+					color: [r * 1024.0, g * 1024.0, b * 1024.0],
+				});
+			}
+		}
+		else
+		{
+			self.console.add_text("Failed to parse args".to_string());
+		}
+	}
+
+	fn command_reset_test_lights(&mut self, _args: commands_queue::CommandArgs)
+	{
+		if let Some(active_map) = &mut self.active_map
+		{
+			active_map.test_lights.clear();
+		}
+	}
+
 	fn command_get_pos(&mut self, _args: commands_queue::CommandArgs)
 	{
 		let pos = self.camera.get_pos();
@@ -273,6 +314,7 @@ impl Host
 				self.active_map = Some(ActiveMap {
 					renderer: renderer::Renderer::new(&self.config_json, map_rc.clone()),
 					inline_models_index: inline_models_index::InlineModelsIndex::new(map_rc),
+					test_lights: Vec::new(),
 				});
 			},
 			Ok(None) =>
