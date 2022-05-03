@@ -27,10 +27,55 @@ impl CommandsProcessor
 	// Returns single string if successfully completed or list of variants.
 	pub fn complete_command(&self, command_start: &str) -> Vec<String>
 	{
+		// Extract matched commands of all command queues.
 		let mut matched_commands = Vec::new();
 		for queue in &self.commands_queues
 		{
 			matched_commands.append(&mut queue.borrow().get_commands_started_with(command_start));
+		}
+
+		// Extract matched paths in config.
+		let config_path = command_start.split(CONFIG_PATH_SEPARATOR).collect::<Vec<&str>>();
+		if !config_path.is_empty()
+		{
+			let path_without_last_component = &config_path[.. config_path.len() - 1];
+			let last_component = config_path.last().unwrap();
+
+			let config_lock = self.config.borrow();
+			let mut cur_value: &serde_json::Value = &config_lock;
+			let mut path_found = true;
+			for config_path_component in path_without_last_component
+			{
+				if let Some(member) = cur_value.get(config_path_component)
+				{
+					cur_value = member;
+				}
+				else
+				{
+					path_found = false;
+					break;
+				}
+			}
+
+			if path_found
+			{
+				if let Some(obj) = cur_value.as_object()
+				{
+					for key in obj.keys()
+					{
+						if key.starts_with(last_component)
+						{
+							let mut matched_path = path_without_last_component.join(CONFIG_PATH_SEPARATOR_STR);
+							if !matched_path.is_empty()
+							{
+								matched_path.push(CONFIG_PATH_SEPARATOR);
+							}
+							matched_path += key;
+							matched_commands.push(matched_path);
+						}
+					}
+				}
+			}
 		}
 
 		if matched_commands.len() <= 1
@@ -92,7 +137,7 @@ impl CommandsProcessor
 		// Second, process config.
 		let mut config_lock = self.config.borrow_mut();
 		let mut cur_value: &mut serde_json::Value = &mut config_lock;
-		for config_path_component in c.split('.')
+		for config_path_component in c.split(CONFIG_PATH_SEPARATOR)
 		{
 			if let Some(member) = cur_value.get_mut(config_path_component)
 			{
@@ -202,3 +247,6 @@ fn find_common_prefix(strings: &[String]) -> String
 
 	common_prefix
 }
+
+const CONFIG_PATH_SEPARATOR: char = '.';
+const CONFIG_PATH_SEPARATOR_STR: &str = ".";
