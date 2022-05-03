@@ -1,5 +1,5 @@
 use super::{
-	clipping_polygon::*, depth_renderer::*, draw_ordering, frame_number::*, inline_models_index::*, light::*,
+	clipping_polygon::*, config, depth_renderer::*, draw_ordering, frame_number::*, inline_models_index::*, light::*,
 	map_visibility_calculator::*, rasterizer::*, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
 };
 use common::{
@@ -66,7 +66,7 @@ struct DrawPolygonData
 
 impl Renderer
 {
-	pub fn new(app_config: &serde_json::Value, map: Rc<bsp_map_compact::BSPMap>) -> Self
+	pub fn new(app_config: &config::ConfigSharedPtr, map: Rc<bsp_map_compact::BSPMap>) -> Self
 	{
 		let textures = load_textures(&map.textures);
 
@@ -75,7 +75,7 @@ impl Renderer
 
 		Renderer {
 			current_frame: FrameNumber::default(),
-			config: RendererConfig::from_app_config(app_config),
+			config: RendererConfig::from_app_config(&app_config.borrow()),
 			polygons_data,
 			vertices_transformed: vec![Vec3f::new(0.0, 0.0, 0.0); map.vertices.len()],
 			surfaces_pixels: Vec::new(),

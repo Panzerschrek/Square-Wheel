@@ -9,7 +9,7 @@ pub struct Host
 {
 	commands_queue: commands_queue::CommandsQueuePtr<Host>,
 	console: console::Console,
-	config_json: serde_json::Value,
+	config_json: config::ConfigSharedPtr,
 	config: HostConfig,
 	window: Rc<RefCell<system_window::SystemWindow>>,
 	camera: camera_controller::CameraController,
@@ -68,17 +68,19 @@ impl Host
 			console.add_text("Failed to load config file".to_string());
 			serde_json::Value::Object(serde_json::Map::new())
 		};
+		let config_json_shared = config::make_shared(config_json);
 
 		let cur_time = std::time::Instant::now();
 
+		let host_config = HostConfig::from_app_config(&config_json_shared.borrow());
 		Host {
 			commands_queue,
 			console,
-			config: HostConfig::from_app_config(&config_json),
+			config: host_config,
 			window: Rc::new(RefCell::new(system_window::SystemWindow::new())),
 			camera: camera_controller::CameraController::new(),
 			active_map: None,
-			config_json,
+			config_json: config_json_shared,
 			prev_time: cur_time,
 			fps_counter: TicksCounter::new(),
 			quit_requested: false,
