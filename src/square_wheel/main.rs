@@ -20,20 +20,26 @@ mod shadow_map;
 mod surfaces;
 mod textures;
 
+use std::path::PathBuf;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "squar_wheel", about = "SquareWheel engine.")]
 struct Opt
 {
+	/// Optional command to execute on start.
 	#[structopt(long)]
 	exec: Vec<String>,
+
+	/// Optional path to config file. If empty default path will be used.
+	#[structopt(long, parse(from_os_str))]
+	config: Option<PathBuf>,
 }
 
 pub fn main()
 {
 	let opt = Opt::from_args();
-	let mut h = host::Host::new(opt.exec);
+	let mut h = host::Host::new(opt.config.unwrap_or_else(|| PathBuf::from("config.json")), opt.exec);
 	loop
 	{
 		if !h.process_frame()

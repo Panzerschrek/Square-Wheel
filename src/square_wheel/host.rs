@@ -7,10 +7,11 @@ use std::{cell::RefCell, rc::Rc, time::Duration};
 
 pub struct Host
 {
+	config_file_path: std::path::PathBuf,
+	app_config: config::ConfigSharedPtr,
+	config: HostConfig,
 	commands_queue: commands_queue::CommandsQueuePtr<Host>,
 	console: console::Console,
-	config_json: config::ConfigSharedPtr,
-	config: HostConfig,
 	window: Rc<RefCell<system_window::SystemWindow>>,
 	camera: camera_controller::CameraController,
 	active_map: Option<ActiveMap>,
@@ -28,11 +29,10 @@ struct ActiveMap
 
 impl Host
 {
-	pub fn new(startup_commands: Vec<String>) -> Self
+	pub fn new(config_file_path: std::path::PathBuf, startup_commands: Vec<String>) -> Self
 	{
-		let config_file_path = "config.json";
-		println!("Loading config from file \"{}\"", config_file_path);
-		let config_json = if let Some(json) = config::load(std::path::Path::new(config_file_path))
+		println!("Loading config from file \"{:?}\"", config_file_path);
+		let config_json = if let Some(json) = config::load(&config_file_path)
 		{
 			json
 		}
@@ -41,9 +41,9 @@ impl Host
 			println!("Failed to load config file");
 			serde_json::Value::Object(serde_json::Map::new())
 		};
-		let config_json_shared = config::make_shared(config_json);
+		let app_config = config::make_shared(config_json);
 
-		let commands_processor = commands_processor::CommandsProcessor::new(config_json_shared.clone());
+		let commands_processor = commands_processor::CommandsProcessor::new(app_config.clone());
 		let mut console = console::Console::new(commands_processor.clone());
 		console.add_text("Innitializing host".to_string());
 
@@ -72,15 +72,16 @@ impl Host
 
 		let cur_time = std::time::Instant::now();
 
-		let host_config = HostConfig::from_app_config(&config_json_shared.borrow());
+		let host_config = HostConfig::from_app_config(&app_config.borrow());
 		Host {
+			config_file_path,
+			app_config: app_config,
+			config: host_config,
 			commands_queue,
 			console,
-			config: host_config,
 			window: Rc::new(RefCell::new(system_window::SystemWindow::new())),
 			camera: camera_controller::CameraController::new(),
 			active_map: None,
-			config_json: config_json_shared,
 			prev_time: cur_time,
 			fps_counter: TicksCounter::new(),
 			quit_requested: false,
@@ -314,7 +315,7 @@ impl Host
 			{
 				let map_rc = Rc::new(map);
 				self.active_map = Some(ActiveMap {
-					renderer: renderer::Renderer::new(self.config_json.clone(), map_rc.clone()),
+					renderer: renderer::Renderer::new(self.app_config.clone(), map_rc.clone()),
 					inline_models_index: inline_models_index::InlineModelsIndex::new(map_rc),
 					test_lights: Vec::new(),
 				});
@@ -333,5 +334,13 @@ impl Host
 	fn command_quit(&mut self, _args: commands_queue::CommandArgs)
 	{
 		self.quit_requested = true;
+	}
+}
+
+impl Drop for Host
+{
+	fn drop(&mut self)
+	{
+		config::save(&self.app_config.borrow(), &self.config_file_path);
 	}
 }
