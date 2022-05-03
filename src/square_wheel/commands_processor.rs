@@ -53,8 +53,8 @@ impl CommandsProcessor
 		}
 	}
 
-	// Returns true if command found.
-	pub fn process_command(&mut self, command_line: &str) -> bool
+	// Returns command processing message, that may be empty.
+	pub fn process_command(&mut self, command_line: &str) -> String
 	{
 		let mut command = None;
 		let mut args = Vec::<String>::new();
@@ -70,81 +70,81 @@ impl CommandsProcessor
 			}
 		}
 
-		if let Some(c) = command
+		let c = if let Some(c) = command
 		{
-			for queue in &self.commands_queues
+			c
+		}
+		else
+		{
+			return "command not found".to_string();
+		};
+
+		// First, process commands.
+		for queue in &self.commands_queues
+		{
+			if queue.borrow().has_handler(&c)
 			{
-				if queue.borrow().has_handler(&c)
-				{
-					queue.borrow_mut().add_invocation(&c, args);
-					return true;
-				}
+				queue.borrow_mut().add_invocation(&c, args);
+				return String::new();
 			}
+		}
 
-			// TODO - print messages to console.
-
-			let mut config_lock = self.config.borrow_mut();
-			let mut cur_value: &mut serde_json::Value = &mut config_lock;
-			for config_path_component in c.split('.')
+		// Second, process config.
+		let mut config_lock = self.config.borrow_mut();
+		let mut cur_value: &mut serde_json::Value = &mut config_lock;
+		for config_path_component in c.split('.')
+		{
+			if let Some(member) = cur_value.get_mut(config_path_component)
 			{
-				if let Some(member) = cur_value.get_mut(config_path_component)
-				{
-					cur_value = member;
-				}
-				else
-				{
-					println!("{} not found", c);
-					return false;
-				}
-			}
-
-			if args.is_empty()
-			{
-				println!("{} is {}", c, cur_value);
+				cur_value = member;
 			}
 			else
 			{
-				let arg = &args[0];
-				if cur_value.is_string()
-				{
-					*cur_value = serde_json::Value::from(arg.clone());
-				}
-				else if cur_value.is_number()
-				{
-					if let Ok(num) = arg.parse::<f64>()
-					{
-						*cur_value = serde_json::Value::from(num);
-					}
-					else
-					{
-						println!("Failed to parse number");
-					}
-				}
-				else if cur_value.is_boolean()
-				{
-					if arg == "1" || arg == "true"
-					{
-						*cur_value = serde_json::Value::from(true);
-					}
-					else if arg == "0" || arg == "false"
-					{
-						*cur_value = serde_json::Value::from(false);
-					}
-					else
-					{
-						println!("Failed to parse bool");
-					}
-				}
-				else
-				{
-					println!("Can't set value of this type");
-				}
+				return format!("{} not found", c);
 			}
-
-			return true;
 		}
 
-		false
+		if args.is_empty()
+		{
+			return format!("{} is {}", c, cur_value);
+		}
+
+		let arg = &args[0];
+		if cur_value.is_string()
+		{
+			*cur_value = serde_json::Value::from(arg.clone());
+		}
+		else if cur_value.is_number()
+		{
+			if let Ok(num) = arg.parse::<f64>()
+			{
+				*cur_value = serde_json::Value::from(num);
+			}
+			else
+			{
+				return format!("Failed to parse number");
+			}
+		}
+		else if cur_value.is_boolean()
+		{
+			if arg == "1" || arg == "true"
+			{
+				*cur_value = serde_json::Value::from(true);
+			}
+			else if arg == "0" || arg == "false"
+			{
+				*cur_value = serde_json::Value::from(false);
+			}
+			else
+			{
+				return format!("Failed to parse bool");
+			}
+		}
+		else
+		{
+			return format!("Can't set value of this type");
+		}
+		return String::new();
 	}
 }
 
