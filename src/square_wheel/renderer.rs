@@ -79,6 +79,8 @@ impl Renderer
 		precalculate_polygons_tex_coords_bounds(&map, &mut polygons_data);
 
 		let config_parsed = RendererConfig::from_app_config(&app_config);
+		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
+
 		Renderer {
 			app_config,
 			config: config_parsed,

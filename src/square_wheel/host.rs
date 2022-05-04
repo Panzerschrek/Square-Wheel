@@ -75,6 +75,8 @@ impl Host
 		let cur_time = std::time::Instant::now();
 
 		let host_config = HostConfig::from_app_config(&app_config);
+		host_config.update_app_config(&app_config); // Update JSON with struct fields.
+
 		Host {
 			config_file_path,
 			app_config: app_config,
