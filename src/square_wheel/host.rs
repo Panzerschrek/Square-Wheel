@@ -123,7 +123,7 @@ impl Host
 			let min_frame_time = 1.0 / self.config.max_fps;
 			if frame_time_s < min_frame_time
 			{
-				std::thread::sleep(Duration::from_secs_f32(min_frame_time - frame_time_s));
+				std::thread::sleep(Duration::from_secs_f32(((min_frame_time - frame_time_s) * 1000.0).floor() / 1000.0));
 			}
 		}
 
