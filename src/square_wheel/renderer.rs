@@ -23,6 +23,7 @@ pub struct Renderer
 	polygons_data: Vec<DrawPolygonData>,
 	vertices_transformed: Vec<Vec3f>,
 	surfaces_pixels: Vec<Color32>,
+	num_visible_surfaces_pixels : usize,
 	textures: Vec<TextureWithMips>,
 	performance_counters: RendererPerformanceCounters,
 }
@@ -85,6 +86,7 @@ impl Renderer
 			polygons_data,
 			vertices_transformed: vec![Vec3f::new(0.0, 0.0, 0.0); map.vertices.len()],
 			surfaces_pixels: Vec::new(),
+			num_visible_surfaces_pixels: 0,
 			visibility_calculator: MapVisibilityCalculator::new(map.clone()),
 			shadows_maps_renderer: DepthRenderer::new(map.clone()),
 			map,
@@ -161,7 +163,7 @@ impl Renderer
 					self.map.leafs.len(),
 					num_visible_models_parts,
 					num_visible_polygons,
-					(self.surfaces_pixels.len() + 1023) / 1024,
+					(self.num_visible_surfaces_pixels + 1023) / 1024,
 				),
 				0,
 				0,
@@ -366,6 +368,8 @@ impl Renderer
 			self.surfaces_pixels
 				.resize(surfaces_pixels_accumulated_offset, Color32::from_rgb(0, 0, 0));
 		}
+
+		self.num_visible_surfaces_pixels = surfaces_pixels_accumulated_offset;
 	}
 
 	fn prepare_polygon_surface(
