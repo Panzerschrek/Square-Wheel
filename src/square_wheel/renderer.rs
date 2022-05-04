@@ -24,6 +24,7 @@ pub struct Renderer
 	vertices_transformed: Vec<Vec3f>,
 	surfaces_pixels: Vec<Color32>,
 	num_visible_surfaces_pixels : usize,
+	mip_bias : f32,
 	textures: Vec<TextureWithMips>,
 	performance_counters: RendererPerformanceCounters,
 }
@@ -87,6 +88,7 @@ impl Renderer
 			vertices_transformed: vec![Vec3f::new(0.0, 0.0, 0.0); map.vertices.len()],
 			surfaces_pixels: Vec::new(),
 			num_visible_surfaces_pixels: 0,
+			mip_bias : 0.0,
 			visibility_calculator: MapVisibilityCalculator::new(map.clone()),
 			shadows_maps_renderer: DepthRenderer::new(map.clone()),
 			map,
@@ -105,6 +107,7 @@ impl Renderer
 	)
 	{
 		self.synchronize_config();
+		self.update_mip_bias();
 
 		let frame_start_time = Clock::now();
 		self.current_frame.next();
@@ -154,7 +157,7 @@ impl Renderer
 				&format!(
 					"frame time: {:04.2}ms\nvisible leafs search: {:04.2}ms\nsurfaces preparation: \
 					 {:04.2}ms\nrasterization: {:04.2}ms\nleafs: {}/{}\nmodels parts: {}\npolygons: {}\nsurfaces \
-					 pixels: {}k\n",
+					 pixels: {}k\nmip bias: {:04.2}\n",
 					self.performance_counters.frame_duration.get_average_value() * 1000.0,
 					self.performance_counters.visible_leafs_search.get_average_value() * 1000.0,
 					self.performance_counters.surfaces_preparation.get_average_value() * 1000.0,
@@ -164,6 +167,7 @@ impl Renderer
 					num_visible_models_parts,
 					num_visible_polygons,
 					(self.num_visible_surfaces_pixels + 1023) / 1024,
+					self.mip_bias,
 				),
 				0,
 				0,
@@ -454,7 +458,7 @@ impl Renderer
 			&vertices_2d[.. vertex_count],
 			&depth_equation,
 			&tc_equation,
-			self.config.textures_mip_bias,
+			self.mip_bias,
 		);
 		let tc_equation_scale = 1.0 / ((1 << mip) as f32);
 
@@ -809,6 +813,23 @@ impl Renderer
 				polygon_data.surface_pixels_offset +
 					((polygon_data.surface_size[0] * polygon_data.surface_size[1]) as usize)],
 		);
+	}
+
+	fn update_mip_bias(&mut self)
+	{
+		if self.config.dynamic_mip_bias
+		{
+			let target_num_pixels = 1024 * 256;
+			let target_mip_bias = ((self.num_visible_surfaces_pixels as f32) / (target_num_pixels as f32)).log2().max(0.0).min(3.0);
+			if (self.mip_bias - target_mip_bias).abs() >= 1.0 / 16.0
+			{
+				self.mip_bias = (target_mip_bias + self.mip_bias * 15.0) / 16.0;
+			}
+		}
+		else
+		{
+			self.mip_bias = self.config.textures_mip_bias;
+		}
 	}
 
 	fn synchronize_config(&mut self)
