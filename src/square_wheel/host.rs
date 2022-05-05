@@ -56,20 +56,12 @@ impl Host
 			.borrow_mut()
 			.register_command_queue(commands_queue.clone() as commands_queue::CommandsQueueDynPtr);
 
-		// Process startup commands.
-		// Atually such commands will be processed later (commands will be added to queue).
-		for command_line in &startup_commands
-		{
-			console.borrow_mut().add_text(format!("Executing \"{}\"", command_line));
-			commands_processor.borrow_mut().process_command(&command_line);
-		}
-
 		let cur_time = std::time::Instant::now();
 
 		let host_config = HostConfig::from_app_config(&app_config);
 		host_config.update_app_config(&app_config); // Update JSON with struct fields.
 
-		Host {
+		let mut host = Host {
 			config_file_path,
 			app_config: app_config,
 			config: host_config,
@@ -82,7 +74,20 @@ impl Host
 			prev_time: cur_time,
 			fps_counter: TicksCounter::new(),
 			quit_requested: false,
+		};
+
+		// Process startup commands one by one.
+		// This is needed to handle properly commands of subsystems that are constructed by previous commands.
+		for command_line in &startup_commands
+		{
+			host.console
+				.borrow_mut()
+				.add_text(format!("Executing \"{}\"", command_line));
+			host.commands_processor.borrow_mut().process_command(&command_line);
+			host.process_commands();
 		}
+
+		host
 	}
 
 	// Returns true if need to continue.
