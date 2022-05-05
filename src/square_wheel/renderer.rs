@@ -3,8 +3,8 @@ use super::{
 	map_visibility_calculator::*, rasterizer::*, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
 };
 use common::{
-	bbox::*, bsp_map_compact, camera_controller::CameraMatrices, clipping::*, color::*, fixed_math::*, math_types::*,
-	performance_counter::*, plane::*, system_window,
+	bbox::*, bsp_map_compact, clipping::*, color::*, fixed_math::*, math_types::*, matrix::*, performance_counter::*,
+	plane::*, system_window,
 };
 use std::rc::Rc;
 
@@ -23,8 +23,8 @@ pub struct Renderer
 	polygons_data: Vec<DrawPolygonData>,
 	vertices_transformed: Vec<Vec3f>,
 	surfaces_pixels: Vec<Color32>,
-	num_visible_surfaces_pixels : usize,
-	mip_bias : f32,
+	num_visible_surfaces_pixels: usize,
+	mip_bias: f32,
 	textures: Vec<TextureWithMips>,
 	performance_counters: RendererPerformanceCounters,
 }
@@ -90,7 +90,7 @@ impl Renderer
 			vertices_transformed: vec![Vec3f::new(0.0, 0.0, 0.0); map.vertices.len()],
 			surfaces_pixels: Vec::new(),
 			num_visible_surfaces_pixels: 0,
-			mip_bias : 0.0,
+			mip_bias: 0.0,
 			visibility_calculator: MapVisibilityCalculator::new(map.clone()),
 			shadows_maps_renderer: DepthRenderer::new(map.clone()),
 			map,
@@ -822,7 +822,10 @@ impl Renderer
 		if self.config.dynamic_mip_bias
 		{
 			let target_num_pixels = 1024 * 256;
-			let target_mip_bias = ((self.num_visible_surfaces_pixels as f32) / (target_num_pixels as f32)).log2().max(0.0).min(3.0);
+			let target_mip_bias = ((self.num_visible_surfaces_pixels as f32) / (target_num_pixels as f32))
+				.log2()
+				.max(0.0)
+				.min(3.0);
 			if (self.mip_bias - target_mip_bias).abs() >= 1.0 / 16.0
 			{
 				self.mip_bias = (target_mip_bias + self.mip_bias * 15.0) / 16.0;

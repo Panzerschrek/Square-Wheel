@@ -24,7 +24,7 @@ pub struct RendererConfig
 	pub textures_mip_bias: f32,
 
 	#[serde(default)]
-	pub dynamic_mip_bias : bool,
+	pub dynamic_mip_bias: bool,
 }
 
 impl RendererConfig

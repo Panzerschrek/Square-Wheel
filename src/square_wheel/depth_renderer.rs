@@ -4,7 +4,7 @@ use super::{
 	rasterizer::*,
 	renderer::{project_and_clip_polygon, MAX_VERTICES},
 };
-use common::{bsp_map_compact, camera_controller::CameraMatrices, fixed_math::*, math_types::*};
+use common::{bsp_map_compact, fixed_math::*, math_types::*, matrix::*};
 use std::rc::Rc;
 
 pub struct DepthRenderer

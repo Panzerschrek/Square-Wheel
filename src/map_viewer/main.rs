@@ -1,5 +1,6 @@
 use common::{
-	bsp_builder, bsp_map_compact, bsp_map_save_load, debug_renderer, map_file, map_polygonizer, system_window,
+	bsp_builder, bsp_map_compact, bsp_map_save_load, debug_renderer, map_file, map_polygonizer, matrix::*,
+	system_window,
 };
 use sdl2::{event::Event, keyboard::Keycode};
 use std::{path::PathBuf, time::Duration};
@@ -128,7 +129,14 @@ pub fn main()
 					draw_polygon_normals: opt.draw_polygon_normals,
 					draw_all_portals: opt.draw_all_portals,
 				},
-				&camera_controller.build_view_matrix(surface_info.width as f32, surface_info.height as f32),
+				&build_view_matrix(
+					camera_controller.get_pos(),
+					camera_controller.get_azimuth(),
+					camera_controller.get_elevation(),
+					std::f32::consts::PI * 0.375,
+					surface_info.width as f32,
+					surface_info.height as f32,
+				),
 				map_file_parsed_opt.as_ref(),
 				map_polygonized_opt.as_ref(),
 				map_bsp_tree_opt.as_ref(),

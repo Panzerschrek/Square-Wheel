@@ -1,5 +1,5 @@
 use super::{clipping_polygon::*, frame_number::*};
-use common::{bsp_map_compact, camera_controller::CameraMatrices, clipping::*, math_types::*};
+use common::{bsp_map_compact, clipping::*, math_types::*, matrix::*};
 use std::rc::Rc;
 
 pub struct MapVisibilityCalculator

@@ -1,5 +1,5 @@
 use super::{commands_processor, commands_queue, console, light::*};
-use common::{camera_controller, math_types::*, system_window};
+use common::{camera_controller, math_types::*, matrix::*, system_window};
 
 pub struct Game
 {
@@ -47,10 +47,17 @@ impl Game
 		self.process_commands();
 	}
 
-	pub fn get_camera_matrices(&self, surface_info: &system_window::SurfaceInfo) -> camera_controller::CameraMatrices
+	pub fn get_camera_matrices(&self, surface_info: &system_window::SurfaceInfo) -> CameraMatrices
 	{
-		self.camera
-			.build_view_matrix(surface_info.width as f32, surface_info.height as f32)
+		let fov = std::f32::consts::PI * 0.375;
+		build_view_matrix(
+			self.camera.get_pos(),
+			self.camera.get_azimuth(),
+			self.camera.get_elevation(),
+			fov,
+			surface_info.width as f32,
+			surface_info.height as f32,
+		)
 	}
 
 	pub fn get_test_lights(&self) -> &[PointLight]
