@@ -18,6 +18,7 @@ mod renderer;
 mod renderer_config;
 mod shadow_map;
 mod surfaces;
+mod test_game;
 mod textures;
 
 use std::path::PathBuf;

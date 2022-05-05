@@ -24,6 +24,11 @@ impl CommandsProcessor
 		self.commands_queues.push(queue);
 	}
 
+	pub fn remove_command_queue(&mut self, queue: &commands_queue::CommandsQueueDynPtr)
+	{
+		self.commands_queues.retain(|q| q.as_ptr() != queue.as_ptr());
+	}
+
 	// Returns single string if successfully completed or list of variants.
 	pub fn complete_command(&self, command_start: &str) -> Vec<String>
 	{

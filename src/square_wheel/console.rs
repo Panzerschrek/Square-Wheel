@@ -1,7 +1,7 @@
 use super::commands_processor;
 use common::{color::*, system_window, text_printer};
 use sdl2::keyboard::Keycode;
-use std::collections::VecDeque;
+use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
 pub struct Console
 {
@@ -14,11 +14,13 @@ pub struct Console
 	input_line: String,
 }
 
+pub type ConsoleSharedPtr = Rc<RefCell<Console>>;
+
 impl Console
 {
-	pub fn new(commands_processor: commands_processor::CommandsProcessorPtr) -> Self
+	pub fn new(commands_processor: commands_processor::CommandsProcessorPtr) -> ConsoleSharedPtr
 	{
-		Console {
+		Rc::new(RefCell::new(Console {
 			commands_processor,
 			is_active: false,
 			start_time: std::time::Instant::now(),
@@ -26,7 +28,7 @@ impl Console
 			input_history: VecDeque::with_capacity(LINES_BUFFER_LEN),
 			current_history_index: 0,
 			input_line: String::new(),
-		}
+		}))
 	}
 
 	pub fn add_text(&mut self, text: String)
