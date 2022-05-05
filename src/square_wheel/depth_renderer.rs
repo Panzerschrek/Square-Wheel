@@ -74,10 +74,6 @@ impl DepthRenderer
 		// TODO - maybe just a little bit extend clipping polygon?
 		let clip_planes = bounds.get_clip_planes();
 
-		let viewport_half_size = [
-			rasterizer.get_width() as f32 * 0.5,
-			rasterizer.get_height() as f32 * 0.5,
-		];
 		for polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
 		{
 			let polygon = &self.map.polygons[polygon_index as usize];
@@ -98,9 +94,7 @@ impl DepthRenderer
 			let depth_equation = DepthEquation {
 				d_inv_z_dx,
 				d_inv_z_dy,
-				k: plane_transformed.z / plane_transformed_w -
-					d_inv_z_dx * viewport_half_size[0] -
-					d_inv_z_dy * viewport_half_size[1] +
+				k: plane_transformed.z / plane_transformed_w +
 					DEPTH_BIAS_CONST + DEPTH_BIAS_SLOPE * (d_inv_z_dx.abs() + d_inv_z_dy.abs()),
 			};
 

@@ -60,6 +60,10 @@ pub fn complete_view_matrix(
 	let shift_to_viewport_center =
 		Mat4f::from_translation(Vec3f::new(viewport_width * 0.5, viewport_height * 0.5, 0.0));
 
+	let mut planes_shift_to_viewport_center = Mat4f::identity();
+	planes_shift_to_viewport_center.x.z = -viewport_width * 0.5;
+	planes_shift_to_viewport_center.y.z = -viewport_height * 0.5;
+
 	// Perform transformations in reverse order in order to perform transformation via "matrix * vector".
 	// TODO - perform calculations in "double" for better pericision?
 	let base_view_matrix = resize_to_viewport * perspective * rotation_matrix * translate;
@@ -68,6 +72,6 @@ pub fn complete_view_matrix(
 	CameraMatrices {
 		position,
 		view_matrix: shift_to_viewport_center * perspective_finalization * base_view_matrix,
-		planes_matrix,
+		planes_matrix: planes_shift_to_viewport_center * planes_matrix,
 	}
 }

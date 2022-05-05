@@ -620,16 +620,12 @@ fn draw_polygon_decomposed(
 
 	let width = rasterizer.get_width() as f32;
 	let height = rasterizer.get_height() as f32;
-	let half_width = width * 0.5;
-	let half_height = height * 0.5;
 
 	let plane_transformed_w = -plane_transformed.w;
-	let d_inv_z_dx = plane_transformed.x / plane_transformed_w;
-	let d_inv_z_dy = plane_transformed.y / plane_transformed_w;
 	let depth_equation = DepthEquation {
-		d_inv_z_dx,
-		d_inv_z_dy,
-		k: plane_transformed.z / plane_transformed_w - d_inv_z_dx * half_width - d_inv_z_dy * half_height,
+		d_inv_z_dx: plane_transformed.x / plane_transformed_w,
+		d_inv_z_dy: plane_transformed.y / plane_transformed_w,
+		k: plane_transformed.z / plane_transformed_w,
 	};
 
 	const MAX_VERTICES: usize = 24;
@@ -721,14 +717,7 @@ fn draw_polygon_decomposed(
 	let tc_equation = TexCoordEquation {
 		d_tc_dx: [tc_basis_transformed[0].x, tc_basis_transformed[1].x],
 		d_tc_dy: [tc_basis_transformed[0].y, tc_basis_transformed[1].y],
-		d_tc_dz: [
-			tc_basis_transformed[0].z -
-				tc_basis_transformed[0].x * half_width -
-				tc_basis_transformed[0].y * half_height,
-			tc_basis_transformed[1].z -
-				tc_basis_transformed[1].x * half_width -
-				tc_basis_transformed[1].y * half_height,
-		],
+		d_tc_dz: [tc_basis_transformed[0].z, tc_basis_transformed[1].z],
 		k: [tc_basis_transformed[0].w, tc_basis_transformed[1].w],
 	};
 

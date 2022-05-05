@@ -233,14 +233,7 @@ impl Renderer
 
 		let surfaces_preparation_start_time = Clock::now();
 
-		self.prepare_polygons_surfaces(
-			camera_matrices,
-			&[
-				rasterizer.get_width() as f32 * 0.5,
-				rasterizer.get_height() as f32 * 0.5,
-			],
-			inline_models_index,
-		);
+		self.prepare_polygons_surfaces(camera_matrices, inline_models_index);
 
 		{
 			// TODO - avoid allocation.
@@ -287,12 +280,7 @@ impl Renderer
 		}
 	}
 
-	fn prepare_polygons_surfaces(
-		&mut self,
-		camera_matrices: &CameraMatrices,
-		viewport_half_size: &[f32; 2],
-		inline_models_index: &InlineModelsIndex,
-	)
+	fn prepare_polygons_surfaces(&mut self, camera_matrices: &CameraMatrices, inline_models_index: &InlineModelsIndex)
 	{
 		let mut surfaces_pixels_accumulated_offset = 0;
 
@@ -309,7 +297,6 @@ impl Renderer
 					self.prepare_polygon_surface(
 						camera_matrices,
 						&clip_planes,
-						viewport_half_size,
 						&mut surfaces_pixels_accumulated_offset,
 						polygon_index as usize,
 					);
@@ -361,7 +348,6 @@ impl Renderer
 				self.prepare_polygon_surface(
 					&model_matrices,
 					&clip_planes,
-					viewport_half_size,
 					&mut surfaces_pixels_accumulated_offset,
 					polygon_index as usize,
 				);
@@ -382,7 +368,6 @@ impl Renderer
 		&mut self,
 		camera_matrices: &CameraMatrices,
 		clip_planes: &ClippingPolygonPlanes,
-		viewport_half_size: &[f32; 2],
 		surfaces_pixels_accumulated_offset: &mut usize,
 		polygon_index: usize,
 	)
@@ -419,14 +404,10 @@ impl Renderer
 		}
 
 		let plane_transformed_w = -plane_transformed.w;
-		let d_inv_z_dx = plane_transformed.x / plane_transformed_w;
-		let d_inv_z_dy = plane_transformed.y / plane_transformed_w;
 		let depth_equation = DepthEquation {
-			d_inv_z_dx,
-			d_inv_z_dy,
-			k: plane_transformed.z / plane_transformed_w -
-				d_inv_z_dx * viewport_half_size[0] -
-				d_inv_z_dy * viewport_half_size[1],
+			d_inv_z_dx: plane_transformed.x / plane_transformed_w,
+			d_inv_z_dy: plane_transformed.y / plane_transformed_w,
+			k: plane_transformed.z / plane_transformed_w,
 		};
 
 		let tex_coord_equation = &polygon.tex_coord_equation;
@@ -447,12 +428,8 @@ impl Renderer
 				tc_basis_transformed[1].y + tc_basis_transformed[1].w * depth_equation.d_inv_z_dy,
 			],
 			k: [
-				tc_basis_transformed[0].z + tc_basis_transformed[0].w * depth_equation.k -
-					tc_basis_transformed[0].x * viewport_half_size[0] -
-					tc_basis_transformed[0].y * viewport_half_size[1],
-				tc_basis_transformed[1].z + tc_basis_transformed[1].w * depth_equation.k -
-					tc_basis_transformed[1].x * viewport_half_size[0] -
-					tc_basis_transformed[1].y * viewport_half_size[1],
+				tc_basis_transformed[0].z + tc_basis_transformed[0].w * depth_equation.k,
+				tc_basis_transformed[1].z + tc_basis_transformed[1].w * depth_equation.k,
 			],
 		};
 

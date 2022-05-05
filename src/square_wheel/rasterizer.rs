@@ -34,16 +34,6 @@ impl<'a> Rasterizer<'a>
 		}
 	}
 
-	pub fn get_width(&self) -> i32
-	{
-		self.width
-	}
-
-	pub fn get_height(&self) -> i32
-	{
-		self.height
-	}
-
 	// Fill convex clockwise polygon.
 	pub fn fill_polygon<Settings: RasterizerSettings>(
 		&mut self,
@@ -617,16 +607,6 @@ impl<'a> DepthRasterizer<'a>
 			width: width as i32,
 			height: height as i32,
 		}
-	}
-
-	pub fn get_width(&self) -> i32
-	{
-		self.width
-	}
-
-	pub fn get_height(&self) -> i32
-	{
-		self.height
 	}
 
 	// Fill convex clockwise polygon.
