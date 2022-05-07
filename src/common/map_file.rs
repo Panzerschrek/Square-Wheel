@@ -165,7 +165,7 @@ fn parse_brush_plane_vertex(it: &mut Iterator) -> ParseResult<Vec3f>
 	Ok(result)
 }
 
-fn parse_number(it: &mut Iterator) -> ParseResult<f32>
+pub fn parse_number(it: &mut Iterator) -> ParseResult<f32>
 {
 	let mut s = String::new();
 

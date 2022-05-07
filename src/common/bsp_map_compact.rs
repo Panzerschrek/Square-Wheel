@@ -146,6 +146,11 @@ pub fn convert_bsp_map_to_compact_format(
 	out_map
 }
 
+pub fn get_map_string(s: StringRef, map: &BSPMap) -> &str
+{
+	std::str::from_utf8(&map.strings_data[(s.offset as usize) .. ((s.offset + s.size) as usize)]).unwrap_or("")
+}
+
 type PortalPtrToIndexMap = HashMap<*const bsp_builder::LeafsPortal, u32>;
 
 fn convert_portals_to_compact_format(
