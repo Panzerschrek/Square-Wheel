@@ -92,12 +92,14 @@ pub struct KeyValuePair
 	pub value: StringRef,
 }
 
+// Use 16 bits for offset and size.
+// This limits total strings data size to 65536 bytes, but this is enought for most cases, since we use strings deduplication.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct StringRef
 {
-	pub offset: u32,
-	pub size: u32,
+	pub offset: u16,
+	pub size: u16,
 }
 
 pub const MAX_TEXTURE_NAME_LEN: usize = 64;
@@ -427,10 +429,19 @@ fn convert_string_to_compect_format(s: &String, out_map: &mut BSPMap, strings_ca
 		return *prev_string;
 	}
 
-	let offset = out_map.strings_data.len() as u32;
+	// Strings data overflow.
+	if out_map.strings_data.len() > 65535
+	{
+		return StringRef { offset: 0, size: 0 };
+	}
+
+	let offset = out_map.strings_data.len();
 	out_map.strings_data.extend_from_slice(s.as_bytes());
-	let size = (out_map.strings_data.len() as u32) - offset;
-	let result = StringRef { offset, size };
+	let size = out_map.strings_data.len() - offset;
+	let result = StringRef {
+		offset: offset as u16,
+		size: size as u16,
+	};
 
 	strings_cache.insert(s.clone(), result);
 	result
