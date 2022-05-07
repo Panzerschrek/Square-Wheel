@@ -80,7 +80,7 @@ pub struct Submodel
 #[derive(Clone, Copy)]
 pub struct Entity
 {
-	first_key_value_pair : u32,
+	first_key_value_pair: u32,
 	num_key_value_pairs: u32,
 }
 
@@ -130,7 +130,7 @@ pub fn convert_bsp_map_to_compact_format(
 	fill_portals_leafs(&bsp_tree.portals, &leaf_ptr_to_index_map, &mut out_map);
 
 	// Skip model for entity 0 - world model.
-	convert_submodels_to_compact_format(&entities[ 1 .. ], &mut out_map, &mut texture_name_to_index_map);
+	convert_submodels_to_compact_format(&entities[1 ..], &mut out_map, &mut texture_name_to_index_map);
 	convert_entities_to_compact_format(entities, &mut out_map);
 
 	fill_textures(&texture_name_to_index_map, &mut out_map);
@@ -387,16 +387,20 @@ fn convert_submodel_to_compact_format(
 
 fn convert_entities_to_compact_format(entities: &[map_polygonizer::Entity], out_map: &mut BSPMap)
 {
+	let mut strings_cache = StringsCache::new();
 	for entity in entities
 	{
-		let entity_converted = convert_entity_to_compact_format(entity, out_map);
+		let entity_converted = convert_entity_to_compact_format(entity, out_map, &mut strings_cache);
 		out_map.entities.push(entity_converted);
 	}
 }
 
+type StringsCache = std::collections::HashMap<String, StringRef>;
+
 fn convert_entity_to_compact_format(
 	entity: &map_polygonizer::Entity,
 	out_map: &mut BSPMap,
+	strings_cache: &mut StringsCache,
 ) -> Entity
 {
 	let first_key_value_pair = out_map.key_value_pairs.len() as u32;
@@ -404,22 +408,30 @@ fn convert_entity_to_compact_format(
 	for (key, value) in &entity.keys
 	{
 		let key_value_pair = KeyValuePair {
-			key: convert_string_to_compect_format(key, out_map),
-			value: convert_string_to_compect_format(value, out_map),
+			key: convert_string_to_compect_format(key, out_map, strings_cache),
+			value: convert_string_to_compect_format(value, out_map, strings_cache),
 		};
 		out_map.key_value_pairs.push(key_value_pair);
 	}
-	
-	Entity{
+
+	Entity {
 		first_key_value_pair,
 		num_key_value_pairs: 0,
 	}
 }
 
-fn convert_string_to_compect_format(s : &str, out_map: &mut BSPMap) -> StringRef
+fn convert_string_to_compect_format(s: &String, out_map: &mut BSPMap, strings_cache: &mut StringsCache) -> StringRef
 {
+	if let Some(prev_string) = strings_cache.get(s)
+	{
+		return *prev_string;
+	}
+
 	let offset = out_map.strings_data.len() as u32;
 	out_map.strings_data.extend_from_slice(s.as_bytes());
 	let size = offset - (out_map.strings_data.len() as u32);
-	StringRef{ offset, size }
+	let result = StringRef { offset, size };
+
+	strings_cache.insert(s.clone(), result);
+	result
 }
