@@ -71,6 +71,24 @@ pub fn save_map(bsp_map: &BSPMap, file_path: &Path) -> Result<(), std::io::Error
 		&mut header.lumps[LUMP_SUBMODELS],
 		&mut offset,
 	)?;
+	write_lump(
+		&bsp_map.entities,
+		&mut file,
+		&mut header.lumps[LUMP_ENTITIES],
+		&mut offset,
+	)?;
+	write_lump(
+		&bsp_map.key_value_pairs,
+		&mut file,
+		&mut header.lumps[LUMP_KEY_VALUE_PAIRS],
+		&mut offset,
+	)?;
+	write_lump(
+		&bsp_map.strings_data,
+		&mut file,
+		&mut header.lumps[LUMP_STRINGS_DATA],
+		&mut offset,
+	)?;
 
 	// Write header again to update lumps headers.
 	file.seek(std::io::SeekFrom::Start(0))?;
@@ -122,6 +140,9 @@ pub fn load_map(file_path: &Path) -> Result<Option<BSPMap>, std::io::Error>
 		vertices: read_lump(&mut file, &header.lumps[LUMP_VERTICES])?,
 		textures: read_lump(&mut file, &header.lumps[LUMP_TEXTURES])?,
 		submodels: read_lump(&mut file, &header.lumps[LUMP_SUBMODELS])?,
+		entities: read_lump(&mut file, &header.lumps[LUMP_ENTITIES])?,
+		key_value_pairs: read_lump(&mut file, &header.lumps[LUMP_KEY_VALUE_PAIRS])?,
+		strings_data: read_lump(&mut file, &header.lumps[LUMP_STRINGS_DATA])?,
 	};
 
 	Ok(Some(map))
@@ -156,6 +177,9 @@ const LUMP_LEAFS_PORTALS: usize = 4;
 const LUMP_VERTICES: usize = 5;
 const LUMP_TEXTURES: usize = 6;
 const LUMP_SUBMODELS: usize = 7;
+const LUMP_ENTITIES: usize = 8;
+const LUMP_KEY_VALUE_PAIRS: usize = 9;
+const LUMP_STRINGS_DATA: usize = 10;
 
 fn write_lump<T>(
 	data: &[T],
