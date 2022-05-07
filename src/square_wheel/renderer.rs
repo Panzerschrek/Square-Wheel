@@ -55,10 +55,6 @@ impl RendererPerformanceCounters
 #[derive(Default, Copy, Clone)]
 struct DrawPolygonData
 {
-	// Precalculated during map loading min/max texture coordinates
-	tc_min: [f32; 2],
-	tc_max: [f32; 2],
-
 	// Frame last time this polygon was visible.
 	visible_frame: FrameNumber,
 	depth_equation: DepthEquation,
@@ -75,9 +71,6 @@ impl Renderer
 	{
 		let textures = load_textures(&map.textures);
 
-		let mut polygons_data = vec![DrawPolygonData::default(); map.polygons.len()];
-		precalculate_polygons_tex_coords_bounds(&map, &mut polygons_data);
-
 		let config_parsed = RendererConfig::from_app_config(&app_config);
 		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
 
@@ -86,7 +79,7 @@ impl Renderer
 			config: config_parsed,
 			config_is_durty: false,
 			current_frame: FrameNumber::default(),
-			polygons_data,
+			polygons_data: vec![DrawPolygonData::default(); map.polygons.len()],
 			vertices_transformed: vec![Vec3f::new(0.0, 0.0, 0.0); map.vertices.len()],
 			surfaces_pixels: Vec::new(),
 			num_visible_surfaces_pixels: 0,
@@ -494,8 +487,8 @@ impl Renderer
 		{
 			tc_min[i] += tc_reduce_eps;
 			tc_max[i] -= tc_reduce_eps;
-			let polygon_tc_min = polygon_data.tc_min[i] * tc_equation_scale;
-			let polygon_tc_max = polygon_data.tc_max[i] * tc_equation_scale;
+			let polygon_tc_min = (polygon.tex_coord_min[i] as f32) * tc_equation_scale;
+			let polygon_tc_max = (polygon.tex_coord_max[i] as f32) * tc_equation_scale;
 			if tc_min[i] < polygon_tc_min
 			{
 				tc_min[i] = polygon_tc_min;
@@ -851,50 +844,6 @@ fn draw_background(pixels: &mut [Color32])
 fn draw_crosshair(pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo)
 {
 	pixels[surface_info.width / 2 + surface_info.height / 2 * surface_info.pitch] = Color32::from_rgb(255, 255, 255);
-}
-
-fn precalculate_polygons_tex_coords_bounds(map: &bsp_map_compact::BSPMap, polygons_data: &mut [DrawPolygonData])
-{
-	for (polygon, polygon_data) in map.polygons.iter().zip(polygons_data.iter_mut())
-	{
-		let inf = (1 << 29) as f32;
-		let mut tc_min = [inf, inf];
-		let mut tc_max = [-inf, -inf];
-
-		for vertex in
-			&map.vertices[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)]
-		{
-			for i in 0 .. 2
-			{
-				let tc = polygon.tex_coord_equation[i].vec.dot(*vertex) + polygon.tex_coord_equation[i].dist;
-				if tc < tc_min[i]
-				{
-					tc_min[i] = tc;
-				}
-				if tc > tc_max[i]
-				{
-					tc_max[i] = tc;
-				}
-			}
-		}
-
-		// Limit result by very large values that still fits inside integer.
-		// Thisi is needed to avoid integer overflows if something is wrong with texture coordinates.
-		for i in 0 .. 2
-		{
-			if tc_min[i] < -inf
-			{
-				tc_min[i] = inf;
-			}
-			if tc_max[i] > inf
-			{
-				tc_max[i] = inf;
-			}
-		}
-
-		polygon_data.tc_min = tc_min;
-		polygon_data.tc_max = tc_max;
-	}
 }
 
 fn draw_polygon(

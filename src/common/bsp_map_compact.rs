@@ -54,6 +54,12 @@ pub struct Polygon
 	pub num_vertices: u32,
 	pub plane: Plane,
 	pub tex_coord_equation: [Plane; 2],
+	// Store precalculated min/max texture coordinates. Min value is rounded down, maximum value is rounded up.
+	// Surface size is max - min.
+	// Do this because we calculate lightmap position/size based on this values.
+	// We can't recalculate this values after map loading since calculation result may be different due to floating-point calculation errors.
+	pub tex_coord_min: [i32; 2],
+	pub tex_coord_max: [i32; 2],
 	pub texture: u32,
 }
 
@@ -288,11 +294,40 @@ fn convert_polygon_to_compact_format(
 {
 	let first_vertex = out_map.vertices.len() as u32;
 	out_map.vertices.extend_from_slice(&polygon.vertices);
+
+	let inf = (1 << 29) as f32;
+	let mut tc_min = [inf, inf];
+	let mut tc_max = [-inf, -inf];
+	for &vertex in &polygon.vertices
+	{
+		for i in 0 .. 2
+		{
+			let tc = polygon.texture_info.tex_coord_equation[i].vec.dot(vertex) +
+				polygon.texture_info.tex_coord_equation[i].dist;
+			if tc < tc_min[i]
+			{
+				tc_min[i] = tc;
+			}
+			if tc > tc_max[i]
+			{
+				tc_max[i] = tc;
+			}
+		}
+	}
+
+	let tex_coord_min = [tc_min[0].floor() as i32, tc_min[1].floor() as i32];
+	let tex_coord_max = [
+		(tc_max[0].ceil() as i32).max(tex_coord_min[0] + 1),
+		(tc_max[1].ceil() as i32).max(tex_coord_min[1] + 1),
+	];
+
 	Polygon {
 		first_vertex,
 		num_vertices: polygon.vertices.len() as u32,
 		plane: polygon.plane,
 		tex_coord_equation: polygon.texture_info.tex_coord_equation,
+		tex_coord_min,
+		tex_coord_max,
 		texture: get_texture_index(&polygon.texture_info.texture, texture_name_to_index_map),
 	}
 }

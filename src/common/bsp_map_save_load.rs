@@ -122,10 +122,10 @@ pub fn load_map(file_path: &Path) -> Result<Option<BSPMap>, std::io::Error>
 		println!("File is not a valid BSP map");
 		return Ok(None);
 	}
-	if header.version > BSP_MAP_VERSION
+	if header.version != BSP_MAP_VERSION
 	{
 		println!(
-			"Can't load newer map version: {}, expected {}",
+			"Can't load incompatible map version: {}, expected {}",
 			header.version, BSP_MAP_VERSION
 		);
 		return Ok(None);
@@ -165,7 +165,7 @@ struct Lump
 }
 
 const BSP_MAP_ID: [u8; 4] = ['S' as u8, 'q' as u8, 'w' as u8, 'M' as u8];
-const BSP_MAP_VERSION: u32 = 2; // Change each time when format is changed!
+const BSP_MAP_VERSION: u32 = 3; // Change each time when format is changed!
 
 const MAX_LUMPS: usize = 16;
 
