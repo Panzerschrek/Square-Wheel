@@ -80,24 +80,24 @@ pub struct Submodel
 #[derive(Clone, Copy)]
 pub struct Entity
 {
-	first_key_value_pair: u32,
-	num_key_value_pairs: u32,
+	pub first_key_value_pair: u32,
+	pub num_key_value_pairs: u32,
 }
 
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct KeyValuePair
 {
-	key: StringRef,
-	value: StringRef,
+	pub key: StringRef,
+	pub value: StringRef,
 }
 
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct StringRef
 {
-	offset: u32,
-	size: u32,
+	pub offset: u32,
+	pub size: u32,
 }
 
 pub const MAX_TEXTURE_NAME_LEN: usize = 64;
@@ -416,7 +416,7 @@ fn convert_entity_to_compact_format(
 
 	Entity {
 		first_key_value_pair,
-		num_key_value_pairs: 0,
+		num_key_value_pairs: entity.keys.len() as u32,
 	}
 }
 
@@ -429,7 +429,7 @@ fn convert_string_to_compect_format(s: &String, out_map: &mut BSPMap, strings_ca
 
 	let offset = out_map.strings_data.len() as u32;
 	out_map.strings_data.extend_from_slice(s.as_bytes());
-	let size = offset - (out_map.strings_data.len() as u32);
+	let size = (out_map.strings_data.len() as u32) - offset;
 	let result = StringRef { offset, size };
 
 	strings_cache.insert(s.clone(), result);
