@@ -245,17 +245,29 @@ fn build_primary_lightmap(lights: &[PointLight], polygon_index: usize, map: &mut
 					continue;
 				}
 
+				let light_scale = angle_cos / vec_to_light_len2;
+				let color_scaled = [
+					light.color[0] * light_scale,
+					light.color[1] * light_scale,
+					light.color[2] * light_scale,
+				];
+
+				if color_scaled[0].max(color_scaled[1]).max(color_scaled[2]) <= MIN_LIGHT_VALUE
+				{
+					// Light value is too small. Do not perform shadow check.
+					// This check allows us to significantly reduce light computation time by skipping shadow check for distant lights.
+					continue;
+				}
+
 				if !can_see(&light.pos, &pos, map)
 				{
 					// In shadow.
 					continue;
 				}
 
-				let light_scale = angle_cos / vec_to_light_len2;
-
-				total_light[0] += light.color[0] * light_scale;
-				total_light[1] += light.color[1] * light_scale;
-				total_light[2] += light.color[2] * light_scale;
+				total_light[0] += color_scaled[0];
+				total_light[1] += color_scaled[1];
+				total_light[2] += color_scaled[2];
 			}
 
 			map.lightmaps_data[(u + line_dst_start) as usize] = total_light;
@@ -265,6 +277,7 @@ fn build_primary_lightmap(lights: &[PointLight], polygon_index: usize, map: &mut
 
 const MIN_POSITIVE_VALUE: f32 = 1.0 / ((1 << 30) as f32);
 const MAP_LIGHTS_SCALE: f32 = 32.0; // TODO - tune this.
+const MIN_LIGHT_VALUE: f32 = 1.0 / 256.0; // TODO - tune this.
 
 fn can_see(from: &Vec3f, to: &Vec3f, map: &bsp_map_compact::BSPMap) -> bool
 {
