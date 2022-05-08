@@ -1,5 +1,5 @@
 use super::{light::*, shadow_map::*};
-use common::{color::*, image, math_types::*, plane::*};
+use common::{bsp_map_compact, color::*, image, lightmaps_builder, math_types::*, plane::*};
 
 pub type LightWithShadowMap<'a, 'b> = (&'a PointLight, &'b CubeShadowMap);
 
@@ -72,6 +72,57 @@ pub fn build_surface(
 				(components[0] * total_light[0]).min(Color32::MAX_RGB_F32_COMPONENTS[0]),
 				(components[1] * total_light[1]).min(Color32::MAX_RGB_F32_COMPONENTS[1]),
 				(components[2] * total_light[2]).min(Color32::MAX_RGB_F32_COMPONENTS[2]),
+			];
+
+			// Here we 100% sure that components overflow is not possible (because of "min").
+			// NaNs are not possible here too.
+			let color_packed = unsafe { Color32::from_rgb_f32_unchecked(&components_modulated) };
+
+			*dst_texel = color_packed;
+			src_u += 1;
+			if src_u == (texture.size[0] as i32)
+			{
+				src_u = 0;
+			}
+
+			dst_u += 1;
+		}
+	}
+}
+
+pub fn build_surface_with_lightmap(
+	surface_size: [u32; 2],
+	surface_tc_min: [i32; 2],
+	texture: &image::Image,
+	lightmap_size: [u32; 2],
+	lightmap_data: &[bsp_map_compact::LightmapElement],
+	out_surface_data: &mut [Color32],
+)
+{
+	for dst_v in 0 .. surface_size[1]
+	{
+		let dst_line_start = (dst_v * surface_size[0]) as usize;
+		let dst_line = &mut out_surface_data[dst_line_start .. dst_line_start + (surface_size[0] as usize)];
+
+		let src_v = (surface_tc_min[1] + (dst_v as i32)).rem_euclid(texture.size[1] as i32);
+		let src_line_start = ((src_v as u32) * texture.size[0]) as usize;
+		let src_line = &texture.pixels[src_line_start .. src_line_start + (texture.size[0] as usize)];
+		let mut src_u = surface_tc_min[0].rem_euclid(texture.size[0] as i32);
+		let mut dst_u = 0;
+		for dst_texel in dst_line.iter_mut()
+		{
+			// TODO - optimize this, use unchecked index function.
+			// TODO - interpolate lightmaps.
+			let lightmap_value = lightmap_data[(dst_u / lightmaps_builder::LIGHTMAP_SCALE +
+				dst_v / lightmaps_builder::LIGHTMAP_SCALE * lightmap_size[0]) as usize];
+
+			let texel_value = src_line[src_u as usize];
+
+			let components = texel_value.unpack_to_rgb_f32();
+			let components_modulated = [
+				(components[0] * lightmap_value[0]).min(Color32::MAX_RGB_F32_COMPONENTS[0]),
+				(components[1] * lightmap_value[1]).min(Color32::MAX_RGB_F32_COMPONENTS[1]),
+				(components[2] * lightmap_value[2]).min(Color32::MAX_RGB_F32_COMPONENTS[2]),
 			];
 
 			// Here we 100% sure that components overflow is not possible (because of "min").

@@ -3,8 +3,8 @@ use super::{
 	map_visibility_calculator::*, rasterizer::*, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
 };
 use common::{
-	bbox::*, bsp_map_compact, clipping::*, color::*, fixed_math::*, math_types::*, matrix::*, performance_counter::*,
-	plane::*, system_window,
+	bbox::*, bsp_map_compact, clipping::*, color::*, fixed_math::*, lightmaps_builder, math_types::*, matrix::*,
+	performance_counter::*, plane::*, system_window,
 };
 use std::rc::Rc;
 
@@ -535,13 +535,21 @@ impl Renderer
 		// Remember (somehow) list of visible in current frame polygons.
 		for i in 0 .. self.polygons_data.len()
 		{
-			if self.polygons_data[i].visible_frame == self.current_frame
+			let polygon_data = &self.polygons_data[i];
+			if polygon_data.visible_frame != self.current_frame
 			{
-				let polygon = &self.map.polygons[i];
-				let polygon_data = &self.polygons_data[i];
-				let surface_pixels_offset = polygon_data.surface_pixels_offset;
-				let surface_size = polygon_data.surface_size;
+				continue;
+			}
+			let polygon = &self.map.polygons[i];
+			let surface_pixels_offset = polygon_data.surface_pixels_offset;
+			let surface_size = polygon_data.surface_size;
 
+			let texture = &self.textures[polygon.texture as usize][polygon_data.mip as usize];
+			let surface_data = &mut self.surfaces_pixels
+				[surface_pixels_offset .. (surface_pixels_offset + ((surface_size[0] * surface_size[1]) as usize))];
+
+			if self.map.lightmaps_data.is_empty()
+			{
 				let mip_scale = 1.0 / (1 << polygon_data.mip) as f32;
 				let tex_coord_equation_scaled = [
 					Plane {
@@ -557,12 +565,24 @@ impl Renderer
 				build_surface(
 					surface_size,
 					polygon_data.surface_tc_min,
-					&self.textures[polygon.texture as usize][polygon_data.mip as usize],
+					texture,
 					&polygon.plane,
 					&tex_coord_equation_scaled,
 					lights,
-					&mut self.surfaces_pixels[surface_pixels_offset ..
-						(surface_pixels_offset + ((surface_size[0] * surface_size[1]) as usize))],
+					surface_data,
+				);
+			}
+			else
+			{
+				let lightmap_size = lightmaps_builder::get_polygon_lightmap_size(polygon);
+				build_surface_with_lightmap(
+					surface_size,
+					polygon_data.surface_tc_min,
+					texture,
+					lightmap_size,
+					&self.map.lightmaps_data[polygon.lightmap_data_offset as usize ..
+						((polygon.lightmap_data_offset + lightmap_size[0] * lightmap_size[1]) as usize)],
+					surface_data,
 				);
 			}
 		}

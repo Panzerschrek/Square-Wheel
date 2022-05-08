@@ -6,6 +6,9 @@ pub fn build_lightmaps(map: &mut bsp_map_compact::BSPMap)
 	allocate_lightmaps(map);
 }
 
+// If this chaged, map file version must be changed too!
+pub const LIGHTMAP_SCALE: u32 = 16;
+
 pub fn get_polygon_lightmap_size(polygon: &bsp_map_compact::Polygon) -> [u32; 2]
 {
 	[
@@ -18,9 +21,7 @@ fn get_lightmap_size(tc_min: i32, tc_max: i32) -> u32
 {
 	// If this chaged, map file version must be changed too!
 	debug_assert!(tc_min < tc_max);
-	const SCALE: u32 = 16;
-
-	(((tc_max - tc_min) as u32) + (SCALE - 1)) / SCALE + 1
+	(((tc_max - tc_min) as u32) + (LIGHTMAP_SCALE - 1)) / LIGHTMAP_SCALE + 1
 }
 
 struct PointLight
