@@ -152,7 +152,16 @@ fn build_primary_lightmap(lights: &[PointLight], polygon_index: usize, map: &mut
 	let polygon = &map.polygons[polygon_index];
 	let lightmap_size = get_polygon_lightmap_size(polygon);
 
+	const TEXEL_NORMAL_SHIFT: f32 = 1.0 / 16.0;
 	let plane_normal_normalized = polygon.plane.vec / polygon.plane.vec.magnitude();
+
+	let mut polygon_vertices_average = Vec3f::new(0.0, 0.0, 0.0);
+	for &v in &map.vertices[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize]
+	{
+		polygon_vertices_average += v;
+	}
+	let polygon_center =
+		polygon_vertices_average / (polygon.num_vertices as f32) + TEXEL_NORMAL_SHIFT * plane_normal_normalized;
 
 	// Calculate inverse matrix for tex_coord equation and plane equation in order to calculate world position for UV.
 	let tc_basis_scale = 1.0 / (LIGHTMAP_SCALE as f32);
@@ -176,7 +185,7 @@ fn build_primary_lightmap(lights: &[PointLight], polygon_index: usize, map: &mut
 	let start_pos = tex_coord_basis_inverted.w.truncate() +
 		u_vec * ((polygon.tex_coord_min[0] >> LIGHTMAP_SCALE_LOG2) as f32) +
 		v_vec * ((polygon.tex_coord_min[1] >> LIGHTMAP_SCALE_LOG2) as f32) +
-		plane_normal_normalized / 16.0;
+		plane_normal_normalized * TEXEL_NORMAL_SHIFT;
 
 	for v in 0 .. lightmap_size[1]
 	{
@@ -184,7 +193,44 @@ fn build_primary_lightmap(lights: &[PointLight], polygon_index: usize, map: &mut
 		let line_dst_start = polygon.lightmap_data_offset + v * lightmap_size[0];
 		for u in 0 .. lightmap_size[0]
 		{
-			let pos = start_pos_v + (u as f32) * u_vec;
+			let mut pos = start_pos_v + (u as f32) * u_vec;
+			// Correct texel position if can't see from texel to polygon center.
+			// TODO - improve this. Fix cases where texel position is exactly on some polygon plane.
+			for i in 0 .. 16
+			{
+				if can_see(&pos, &polygon_center, map)
+				{
+					break;
+				}
+				if i < 4
+				{
+					// Special cases - shift postion along U/V axis for texels on border.
+					if u == 0
+					{
+						pos += 0.5 * u_vec;
+					}
+					if u == lightmap_size[0] - 1
+					{
+						pos -= 0.5 * u_vec;
+					}
+					if v == 0
+					{
+						pos += 0.5 * v_vec;
+					}
+					if v == lightmap_size[1] - 1
+					{
+						pos -= 0.5 * v_vec;
+					}
+				}
+				else
+				{
+					// Hard case - shift towards center.
+					let vec_to_center = polygon_center - pos;
+					let vec_to_center_len = vec_to_center.magnitude().max(MIN_POSITIVE_VALUE);
+					let vec_to_center_normalized = vec_to_center / vec_to_center_len;
+					pos += vec_to_center_normalized * u_vec.magnitude().max(v_vec.magnitude()).min(vec_to_center_len);
+				}
+			}
 
 			let mut total_light = [0.0, 0.0, 0.0];
 			for light in lights
@@ -314,6 +360,7 @@ fn edge_intersects_with_polygon(v0: &Vec3f, v1: &Vec3f, polygon_index: usize, ma
 	let k1 = dist1 / dist_sum;
 	let intersection_pos = v0 * k1 - v1 * k0;
 
+	// TODO - extend polygon just a bit, to prevent light leakage between adjusted polygons.
 	for i in 0 .. polygon.num_vertices
 	{
 		let v = map.vertices[(polygon.first_vertex + i) as usize];
