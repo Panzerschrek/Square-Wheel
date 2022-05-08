@@ -5,7 +5,7 @@ pub fn build_lightmaps(map: &mut bsp_map_compact::BSPMap)
 	let lights = extract_map_lights(map);
 	allocate_lightmaps(map);
 	test_fill_lightmaps(map);
-	build_primary_lightmaps(&lights, &map.polygons, &mut map.lightmaps_data);
+	build_primary_lightmaps(&lights, map);
 }
 
 // If this chaged, map file version must be changed too!
@@ -139,28 +139,20 @@ fn test_fill_lightmaps(map: &mut bsp_map_compact::BSPMap)
 	}
 }
 
-fn build_primary_lightmaps(
-	lights: &[PointLight],
-	polygons: &[bsp_map_compact::Polygon],
-	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
-)
+fn build_primary_lightmaps(lights: &[PointLight], map: &mut bsp_map_compact::BSPMap)
 {
-	for polygon in polygons
+	for i in 0 .. map.polygons.len()
 	{
-		build_primary_lightmap(lights, polygon, lightmaps_data);
+		build_primary_lightmap(lights, i, map);
 	}
 }
 
-fn build_primary_lightmap(
-	lights: &[PointLight],
-	polygon: &bsp_map_compact::Polygon,
-	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
-)
+fn build_primary_lightmap(lights: &[PointLight], polygon_index: usize, map: &mut bsp_map_compact::BSPMap)
 {
+	let polygon = &map.polygons[polygon_index];
 	let lightmap_size = get_polygon_lightmap_size(polygon);
 
-	let polygon_lightmap_data = &mut lightmaps_data[polygon.lightmap_data_offset as usize ..
-		((polygon.lightmap_data_offset + lightmap_size[0] * lightmap_size[1]) as usize)];
+	let plane_normal_normalized = polygon.plane.vec / polygon.plane.vec.magnitude();
 
 	// Calculate inverse matrix for tex_coord equation and plane equation in order to calculate world position for UV.
 	let tc_basis_scale = 1.0 / (LIGHTMAP_SCALE as f32);
@@ -180,17 +172,16 @@ fn build_primary_lightmap(
 
 	let u_vec = tex_coord_basis_inverted.x.truncate();
 	let v_vec = tex_coord_basis_inverted.y.truncate();
+	// Shift pos slightly towards direction of normal to avoid self-shadowing artifacts.
 	let start_pos = tex_coord_basis_inverted.w.truncate() +
 		u_vec * ((polygon.tex_coord_min[0] >> LIGHTMAP_SCALE_LOG2) as f32) +
-		v_vec * ((polygon.tex_coord_min[1] >> LIGHTMAP_SCALE_LOG2) as f32);
-
-	let plane_normal_normalized = polygon.plane.vec / polygon.plane.vec.magnitude();
+		v_vec * ((polygon.tex_coord_min[1] >> LIGHTMAP_SCALE_LOG2) as f32) +
+		plane_normal_normalized / 16.0;
 
 	for v in 0 .. lightmap_size[1]
 	{
-		let dst_line_start = (v * lightmap_size[0]) as usize;
-		let dst_line = &mut polygon_lightmap_data[dst_line_start .. dst_line_start + (lightmap_size[0] as usize)];
 		let start_pos_v = start_pos + (v as f32) * v_vec;
+		let line_dst_start = polygon.lightmap_data_offset + v * lightmap_size[0];
 		for u in 0 .. lightmap_size[0]
 		{
 			let pos = start_pos_v + (u as f32) * u_vec;
@@ -201,17 +192,81 @@ fn build_primary_lightmap(
 				let vec_to_light = light.pos - pos;
 				let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
 				let angle_cos = plane_normal_normalized.dot(vec_to_light) / vec_to_light_len2.sqrt();
-				let light_scale = angle_cos.max(0.0) / vec_to_light_len2;
+
+				if angle_cos <= 0.0
+				{
+					// Do not determine visibility for light behind polygon plane.
+					continue;
+				}
+
+				if !can_see(&light.pos, &pos, map)
+				{
+					// In shadow.
+					continue;
+				}
+
+				let light_scale = angle_cos / vec_to_light_len2;
 
 				total_light[0] += light.color[0] * light_scale;
 				total_light[1] += light.color[1] * light_scale;
 				total_light[2] += light.color[2] * light_scale;
 			}
 
-			dst_line[u as usize] = total_light;
+			map.lightmaps_data[(u + line_dst_start) as usize] = total_light;
 		}
 	}
 }
 
 const MIN_POSITIVE_VALUE: f32 = 1.0 / ((1 << 30) as f32);
 const MAP_LIGHTS_SCALE: f32 = 32.0; // TODO - tune this.
+
+fn can_see(from: &Vec3f, to: &Vec3f, map: &bsp_map_compact::BSPMap) -> bool
+{
+	for i in 0 .. map.polygons.len()
+	{
+		if edge_intersects_with_polygon(from, to, i, map)
+		{
+			return false;
+		}
+	}
+	true
+}
+
+fn edge_intersects_with_polygon(v0: &Vec3f, v1: &Vec3f, polygon_index: usize, map: &bsp_map_compact::BSPMap) -> bool
+{
+	let polygon = &map.polygons[polygon_index];
+	let plane = &polygon.plane;
+
+	let dist0 = v0.dot(plane.vec) - plane.dist;
+	let dist1 = v1.dot(plane.vec) - plane.dist;
+	if dist0.signum() == dist1.signum()
+	{
+		// Edge is located at one side of polygon plane.
+		return false;
+	}
+	let dist_sum = dist1 - dist0;
+	if dist_sum.abs() < MIN_POSITIVE_VALUE
+	{
+		// Edge is almost on polygon plane.
+		return false;
+	}
+	let k0 = dist0 / dist_sum;
+	let k1 = dist1 / dist_sum;
+	let intersection_pos = v0 * k1 - v1 * k0;
+
+	for i in 0 .. polygon.num_vertices
+	{
+		let v = map.vertices[(polygon.first_vertex + i) as usize];
+		let next_v = map.vertices[(polygon.first_vertex + (i + 1) % polygon.num_vertices) as usize];
+		let edge_vec = next_v - v;
+		let vec_to_instersection_pos = intersection_pos - v;
+		let cross = vec_to_instersection_pos.cross(edge_vec);
+		let normal_dot = cross.dot(plane.vec);
+		if normal_dot < 0.0
+		{
+			return false;
+		}
+	}
+
+	true
+}
