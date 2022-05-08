@@ -5,6 +5,7 @@ pub fn build_lightmaps(map: &mut bsp_map_compact::BSPMap)
 	let lights = extract_map_lights(map);
 	allocate_lightmaps(map);
 	test_fill_lightmaps(map);
+	build_primary_lightmaps(&lights, &map.polygons, &mut map.lightmaps_data);
 }
 
 // If this chaged, map file version must be changed too!
@@ -23,7 +24,8 @@ fn get_lightmap_size(tc_min: i32, tc_max: i32) -> u32
 {
 	// If this chaged, map file version must be changed too!
 	debug_assert!(tc_min < tc_max);
-	let result = ((tc_max + ((LIGHTMAP_SCALE - 1) as i32) >> LIGHTMAP_SCALE_LOG2) - (tc_min >> LIGHTMAP_SCALE_LOG2) + 1) as u32;
+	let result =
+		((tc_max + ((LIGHTMAP_SCALE - 1) as i32) >> LIGHTMAP_SCALE_LOG2) - (tc_min >> LIGHTMAP_SCALE_LOG2) + 1) as u32;
 	debug_assert!(result >= 2);
 	result
 }
@@ -84,7 +86,7 @@ fn extract_map_lights(map: &bsp_map_compact::BSPMap) -> Vec<PointLight>
 		{
 			if let Some(pos) = origin
 			{
-				let intensity = intensity.unwrap_or(300.0).max(0.0);
+				let intensity = intensity.unwrap_or(300.0).max(0.0) * MAP_LIGHTS_SCALE;
 				let mut out_color = [intensity, intensity, intensity];
 				if let Some(color) = color
 				{
@@ -136,3 +138,80 @@ fn test_fill_lightmaps(map: &mut bsp_map_compact::BSPMap)
 		}
 	}
 }
+
+fn build_primary_lightmaps(
+	lights: &[PointLight],
+	polygons: &[bsp_map_compact::Polygon],
+	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
+)
+{
+	for polygon in polygons
+	{
+		build_primary_lightmap(lights, polygon, lightmaps_data);
+	}
+}
+
+fn build_primary_lightmap(
+	lights: &[PointLight],
+	polygon: &bsp_map_compact::Polygon,
+	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
+)
+{
+	let lightmap_size = get_polygon_lightmap_size(polygon);
+
+	let polygon_lightmap_data = &mut lightmaps_data[polygon.lightmap_data_offset as usize ..
+		((polygon.lightmap_data_offset + lightmap_size[0] * lightmap_size[1]) as usize)];
+
+	// Calculate inverse matrix for tex_coord equation and plane equation in order to calculate world position for UV.
+	let tc_basis_scale = 1.0 / (LIGHTMAP_SCALE as f32);
+	let tex_coord_basis = Mat4f::from_cols(
+		polygon.tex_coord_equation[0]
+			.vec
+			.extend(polygon.tex_coord_equation[0].dist) *
+			tc_basis_scale,
+		polygon.tex_coord_equation[1]
+			.vec
+			.extend(polygon.tex_coord_equation[1].dist) *
+			tc_basis_scale,
+		polygon.plane.vec.extend(-polygon.plane.dist),
+		Vec4f::new(0.0, 0.0, 0.0, 1.0),
+	);
+	let tex_coord_basis_inverted = tex_coord_basis.transpose().invert().unwrap(); // TODO - avoid "unwrap"?
+
+	let u_vec = tex_coord_basis_inverted.x.truncate();
+	let v_vec = tex_coord_basis_inverted.y.truncate();
+	let start_pos = tex_coord_basis_inverted.w.truncate() +
+		u_vec * ((polygon.tex_coord_min[0] >> LIGHTMAP_SCALE_LOG2) as f32) +
+		v_vec * ((polygon.tex_coord_min[1] >> LIGHTMAP_SCALE_LOG2) as f32);
+
+	let plane_normal_normalized = polygon.plane.vec / polygon.plane.vec.magnitude();
+
+	for v in 0 .. lightmap_size[1]
+	{
+		let dst_line_start = (v * lightmap_size[0]) as usize;
+		let dst_line = &mut polygon_lightmap_data[dst_line_start .. dst_line_start + (lightmap_size[0] as usize)];
+		let start_pos_v = start_pos + (v as f32) * v_vec;
+		for u in 0 .. lightmap_size[0]
+		{
+			let pos = start_pos_v + (u as f32) * u_vec;
+
+			let mut total_light = [0.0, 0.0, 0.0];
+			for light in lights
+			{
+				let vec_to_light = light.pos - pos;
+				let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
+				let angle_cos = plane_normal_normalized.dot(vec_to_light) / vec_to_light_len2.sqrt();
+				let light_scale = angle_cos.max(0.0) / vec_to_light_len2;
+
+				total_light[0] += light.color[0] * light_scale;
+				total_light[1] += light.color[1] * light_scale;
+				total_light[2] += light.color[2] * light_scale;
+			}
+
+			dst_line[u as usize] = total_light;
+		}
+	}
+}
+
+const MIN_POSITIVE_VALUE: f32 = 1.0 / ((1 << 30) as f32);
+const MAP_LIGHTS_SCALE: f32 = 32.0; // TODO - tune this.

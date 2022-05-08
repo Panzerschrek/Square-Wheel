@@ -96,7 +96,7 @@ pub fn build_surface_with_lightmap(
 	texture: &image::Image,
 	lightmap_size: [u32; 2],
 	lightmap_scale_log2: u32,
-	lightmap_tc_shift : [u32; 2],
+	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	out_surface_data: &mut [Color32],
 )
