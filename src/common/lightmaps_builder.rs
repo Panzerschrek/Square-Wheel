@@ -23,7 +23,9 @@ fn get_lightmap_size(tc_min: i32, tc_max: i32) -> u32
 {
 	// If this chaged, map file version must be changed too!
 	debug_assert!(tc_min < tc_max);
-	(((tc_max - tc_min) as u32) + (LIGHTMAP_SCALE - 1)) / LIGHTMAP_SCALE + 1
+	let result = ((tc_max + ((LIGHTMAP_SCALE - 1) as i32) >> LIGHTMAP_SCALE_LOG2) - (tc_min >> LIGHTMAP_SCALE_LOG2) + 1) as u32;
+	debug_assert!(result >= 2);
+	result
 }
 
 struct PointLight

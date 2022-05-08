@@ -574,6 +574,15 @@ impl Renderer
 			}
 			else
 			{
+				let mut lightmap_tc_shift : [u32; 2] = [0, 0];
+				for i in 0 .. 2
+				{
+					let round_mask = !((lightmaps_builder::LIGHTMAP_SCALE as i32) - 1);
+					let shift = polygon_data.surface_tc_min[i] - ((polygon.tex_coord_min[i] & round_mask) >> polygon_data.mip);
+					debug_assert!(shift >= 0);
+					lightmap_tc_shift[i] = shift as u32;
+				}
+				
 				let lightmap_size = lightmaps_builder::get_polygon_lightmap_size(polygon);
 				build_surface_with_lightmap(
 					surface_size,
@@ -581,6 +590,7 @@ impl Renderer
 					texture,
 					lightmap_size,
 					lightmaps_builder::LIGHTMAP_SCALE_LOG2 - polygon_data.mip,
+					lightmap_tc_shift,
 					&self.map.lightmaps_data[polygon.lightmap_data_offset as usize ..
 						((polygon.lightmap_data_offset + lightmap_size[0] * lightmap_size[1]) as usize)],
 					surface_data,

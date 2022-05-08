@@ -96,6 +96,7 @@ pub fn build_surface_with_lightmap(
 	texture: &image::Image,
 	lightmap_size: [u32; 2],
 	lightmap_scale_log2: u32,
+	lightmap_tc_shift : [u32; 2],
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	out_surface_data: &mut [Color32],
 )
@@ -114,8 +115,9 @@ pub fn build_surface_with_lightmap(
 		{
 			// TODO - optimize this, use unchecked index function.
 			// TODO - interpolate lightmaps.
-			let lightmap_value = lightmap_data
-				[((dst_u >> lightmap_scale_log2) + (dst_v >> lightmap_scale_log2) * lightmap_size[0]) as usize];
+			let lightmap_u = (dst_u + lightmap_tc_shift[0]) >> lightmap_scale_log2;
+			let lightmap_v = (dst_v + lightmap_tc_shift[1]) >> lightmap_scale_log2;
+			let lightmap_value = lightmap_data[(lightmap_u + lightmap_v * lightmap_size[0]) as usize];
 
 			let texel_value = src_line[src_u as usize];
 
