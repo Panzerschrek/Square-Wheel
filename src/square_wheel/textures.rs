@@ -1,5 +1,6 @@
 use common::{bsp_map_compact, color::*, image};
 
+// MAX_MIP must be not greater, than LIGHTMAP_SCALE_LOG2
 pub const MAX_MIP: usize = 3;
 pub const NUM_MIPS: usize = MAX_MIP + 1;
 pub type TextureWithMips = [image::Image; NUM_MIPS];

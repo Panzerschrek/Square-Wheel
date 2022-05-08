@@ -1,5 +1,5 @@
 use super::{light::*, shadow_map::*};
-use common::{bsp_map_compact, color::*, image, lightmaps_builder, math_types::*, plane::*};
+use common::{bsp_map_compact, color::*, image, math_types::*, plane::*};
 
 pub type LightWithShadowMap<'a, 'b> = (&'a PointLight, &'b CubeShadowMap);
 
@@ -95,6 +95,7 @@ pub fn build_surface_with_lightmap(
 	surface_tc_min: [i32; 2],
 	texture: &image::Image,
 	lightmap_size: [u32; 2],
+	lightmap_scale_log2: u32,
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	out_surface_data: &mut [Color32],
 )
@@ -113,8 +114,8 @@ pub fn build_surface_with_lightmap(
 		{
 			// TODO - optimize this, use unchecked index function.
 			// TODO - interpolate lightmaps.
-			let lightmap_value = lightmap_data[(dst_u / lightmaps_builder::LIGHTMAP_SCALE +
-				dst_v / lightmaps_builder::LIGHTMAP_SCALE * lightmap_size[0]) as usize];
+			let lightmap_value = lightmap_data
+				[((dst_u >> lightmap_scale_log2) + (dst_v >> lightmap_scale_log2) * lightmap_size[0]) as usize];
 
 			let texel_value = src_line[src_u as usize];
 

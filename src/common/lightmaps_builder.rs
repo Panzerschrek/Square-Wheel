@@ -4,10 +4,12 @@ pub fn build_lightmaps(map: &mut bsp_map_compact::BSPMap)
 {
 	let lights = extract_map_lights(map);
 	allocate_lightmaps(map);
+	test_fill_lightmaps(map);
 }
 
 // If this chaged, map file version must be changed too!
-pub const LIGHTMAP_SCALE: u32 = 16;
+pub const LIGHTMAP_SCALE_LOG2: u32 = 4;
+pub const LIGHTMAP_SCALE: u32 = 1 << LIGHTMAP_SCALE_LOG2;
 
 pub fn get_polygon_lightmap_size(polygon: &bsp_map_compact::Polygon) -> [u32; 2]
 {
@@ -114,4 +116,21 @@ fn allocate_lightmaps(map: &mut bsp_map_compact::BSPMap)
 	map.lightmaps_data.resize(offset, [0.0, 0.0, 0.0]);
 
 	println!("Lightmap texels: {}", offset);
+}
+
+fn test_fill_lightmaps(map: &mut bsp_map_compact::BSPMap)
+{
+	for polygon in &map.polygons
+	{
+		let size = get_polygon_lightmap_size(polygon);
+		for v in 0 .. size[1]
+		{
+			for u in 0 .. size[0]
+			{
+				let r = (u as f32) / 8.0;
+				let g = (v as f32) / 8.0;
+				map.lightmaps_data[(polygon.lightmap_data_offset + u + v * size[0]) as usize] = [r, g, 0.1];
+			}
+		}
+	}
 }

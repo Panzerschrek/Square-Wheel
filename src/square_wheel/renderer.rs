@@ -580,6 +580,7 @@ impl Renderer
 					polygon_data.surface_tc_min,
 					texture,
 					lightmap_size,
+					lightmaps_builder::LIGHTMAP_SCALE_LOG2 - polygon_data.mip,
 					&self.map.lightmaps_data[polygon.lightmap_data_offset as usize ..
 						((polygon.lightmap_data_offset + lightmap_size[0] * lightmap_size[1]) as usize)],
 					surface_data,
