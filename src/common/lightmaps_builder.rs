@@ -3,6 +3,24 @@ use super::{bsp_map_compact, map_file, math_types::*};
 pub fn build_lightmaps(map: &mut bsp_map_compact::BSPMap)
 {
 	let lights = extract_map_lights(map);
+	allocate_lightmaps(map);
+}
+
+pub fn get_polygon_lightmap_size(polygon: &bsp_map_compact::Polygon) -> [u32; 2]
+{
+	[
+		get_lightmap_size(polygon.tex_coord_min[0], polygon.tex_coord_max[0]),
+		get_lightmap_size(polygon.tex_coord_min[1], polygon.tex_coord_max[1]),
+	]
+}
+
+fn get_lightmap_size(tc_min: i32, tc_max: i32) -> u32
+{
+	// If this chaged, map file version must be changed too!
+	debug_assert!(tc_min < tc_max);
+	const SCALE: u32 = 16;
+
+	(((tc_max - tc_min) as u32) + (SCALE - 1)) / SCALE + 1
 }
 
 struct PointLight
@@ -79,4 +97,20 @@ fn extract_map_lights(map: &bsp_map_compact::BSPMap) -> Vec<PointLight>
 	}
 
 	result
+}
+
+fn allocate_lightmaps(map: &mut bsp_map_compact::BSPMap)
+{
+	let mut offset = 0;
+	for polygon in &mut map.polygons
+	{
+		let size = get_polygon_lightmap_size(polygon);
+		polygon.lightmap_data_offset = offset as u32;
+		offset += (size[0] * size[1]) as usize;
+	}
+
+	map.lightmaps_data.clear();
+	map.lightmaps_data.resize(offset, [0.0, 0.0, 0.0]);
+
+	println!("Lightmap texels: {}", offset);
 }

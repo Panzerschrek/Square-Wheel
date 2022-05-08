@@ -23,6 +23,7 @@ pub struct BSPMap
 	pub key_value_pairs: Vec<KeyValuePair>,
 	// UTF-8 bytes of all strings.
 	pub strings_data: Vec<u8>,
+	pub lightmaps_data: Vec<LightmapElement>,
 }
 
 #[repr(C)]
@@ -60,6 +61,7 @@ pub struct Polygon
 	// We can't recalculate this values after map loading since calculation result may be different due to floating-point calculation errors.
 	pub tex_coord_min: [i32; 2],
 	pub tex_coord_max: [i32; 2],
+	pub lightmap_data_offset: u32,
 	pub texture: u32,
 }
 
@@ -111,6 +113,9 @@ pub struct StringRef
 pub const MAX_TEXTURE_NAME_LEN: usize = 64;
 // UTF-8 values of texture (name, path, or some id). Remaining symbols are filled with nulls.
 pub type Texture = [u8; MAX_TEXTURE_NAME_LEN];
+
+// Currently it is just a simple diffuse colored light.
+pub type LightmapElement = [f32; 3];
 
 // Conversion functions.
 //
@@ -333,6 +338,7 @@ fn convert_polygon_to_compact_format(
 		tex_coord_equation: polygon.texture_info.tex_coord_equation,
 		tex_coord_min,
 		tex_coord_max,
+		lightmap_data_offset: 0, // Fill this later, during lightmaps build.
 		texture: get_texture_index(&polygon.texture_info.texture, texture_name_to_index_map),
 	}
 }

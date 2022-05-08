@@ -89,6 +89,12 @@ pub fn save_map(bsp_map: &BSPMap, file_path: &Path) -> Result<(), std::io::Error
 		&mut header.lumps[LUMP_STRINGS_DATA],
 		&mut offset,
 	)?;
+	write_lump(
+		&bsp_map.lightmaps_data,
+		&mut file,
+		&mut header.lumps[LUMP_LIGHTMAPS_DATA],
+		&mut offset,
+	)?;
 
 	// Write header again to update lumps headers.
 	file.seek(std::io::SeekFrom::Start(0))?;
@@ -143,6 +149,7 @@ pub fn load_map(file_path: &Path) -> Result<Option<BSPMap>, std::io::Error>
 		entities: read_lump(&mut file, &header.lumps[LUMP_ENTITIES])?,
 		key_value_pairs: read_lump(&mut file, &header.lumps[LUMP_KEY_VALUE_PAIRS])?,
 		strings_data: read_lump(&mut file, &header.lumps[LUMP_STRINGS_DATA])?,
+		lightmaps_data: read_lump(&mut file, &header.lumps[LUMP_LIGHTMAPS_DATA])?,
 	};
 
 	Ok(Some(map))
@@ -165,7 +172,7 @@ struct Lump
 }
 
 const BSP_MAP_ID: [u8; 4] = ['S' as u8, 'q' as u8, 'w' as u8, 'M' as u8];
-const BSP_MAP_VERSION: u32 = 3; // Change each time when format is changed!
+const BSP_MAP_VERSION: u32 = 4; // Change each time when format is changed!
 
 const MAX_LUMPS: usize = 16;
 
@@ -180,6 +187,7 @@ const LUMP_SUBMODELS: usize = 7;
 const LUMP_ENTITIES: usize = 8;
 const LUMP_KEY_VALUE_PAIRS: usize = 9;
 const LUMP_STRINGS_DATA: usize = 10;
+const LUMP_LIGHTMAPS_DATA: usize = 11;
 
 fn write_lump<T>(
 	data: &[T],
