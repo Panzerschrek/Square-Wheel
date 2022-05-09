@@ -107,25 +107,32 @@ pub fn build_surface_with_lightmap(
 	let mut line_lightmap = [[0.0, 0.0, 0.0]; MAX_LIGHTMAP_SAMPLES];
 	let lightmap_scale_f = (1 << lightmap_scale_log2) as f32;
 	let inv_lightmap_scale_f = 1.0 / lightmap_scale_f;
+	let k_shift = 0.5 * inv_lightmap_scale_f;
+	let lightmap_fetch_mask = (1 << lightmap_scale_log2) - 1;
 
 	for dst_v in 0 .. surface_size[1]
 	{
 		// Prepare interpolated lightmap values for current line.
 		// TODO - skip samples outside current surface borders.
-		// TODO - optimize this, use unchecked index function.
 		{
-			let lightmap_v = (dst_v + lightmap_tc_shift[1]) >> lightmap_scale_log2;
+			let lightmap_base_v = dst_v + lightmap_tc_shift[1];
+			let lightmap_v = lightmap_base_v >> lightmap_scale_log2;
 			let lightmap_v_plus_one = lightmap_v + 1;
 			debug_assert!(lightmap_v_plus_one < lightmap_size[1]);
-			let k = ((dst_v + lightmap_tc_shift[1] - (lightmap_v << lightmap_scale_log2)) as f32) *
-				inv_lightmap_scale_f +
-				0.5 * inv_lightmap_scale_f;
+			let k = ((lightmap_base_v & lightmap_fetch_mask) as f32) * inv_lightmap_scale_f + k_shift;
 			let k_minus_one = 1.0 - k;
-			for lightmap_u in 0 .. lightmap_size[0]
+			let base_lightmap_address = lightmap_v * lightmap_size[0];
+			for ((dst, l0), l1) in line_lightmap
+				.iter_mut()
+				.zip(
+					&lightmap_data
+						[base_lightmap_address as usize .. (base_lightmap_address + lightmap_size[0]) as usize],
+				)
+				.zip(
+					&lightmap_data[(base_lightmap_address + lightmap_size[0]) as usize ..
+						(base_lightmap_address + 2 * lightmap_size[0]) as usize],
+				)
 			{
-				let l0 = lightmap_data[(lightmap_u + lightmap_v * lightmap_size[0]) as usize];
-				let l1 = lightmap_data[(lightmap_u + lightmap_v_plus_one * lightmap_size[0]) as usize];
-				let dst = &mut line_lightmap[lightmap_u as usize];
 				for i in 0 .. 3
 				{
 					dst[i] = l0[i] * k_minus_one + l1[i] * k;
@@ -144,12 +151,13 @@ pub fn build_surface_with_lightmap(
 		for dst_texel in dst_line.iter_mut()
 		{
 			// TODO - optimize this, use unchecked index function.
-			let lightmap_u = (dst_u + lightmap_tc_shift[0]) >> lightmap_scale_log2;
+			let lightmap_base_u = dst_u + lightmap_tc_shift[0];
+			let lightmap_u = lightmap_base_u >> lightmap_scale_log2;
 			let lightmap_u_plus_one = lightmap_u + 1;
 			debug_assert!(lightmap_u_plus_one < lightmap_size[0]);
 			let l0 = line_lightmap[lightmap_u as usize];
 			let l1 = line_lightmap[lightmap_u_plus_one as usize];
-			let k = ((dst_u + lightmap_tc_shift[0] - (lightmap_u << lightmap_scale_log2)) as f32) * inv_lightmap_scale_f + 0.5 * inv_lightmap_scale_f;
+			let k = ((lightmap_base_u & lightmap_fetch_mask) as f32) * inv_lightmap_scale_f + k_shift;
 			let k_minus_one = 1.0 - k;
 			let mut lightmap_value = [0.0, 0.0, 0.0];
 			for i in 0 .. 3
