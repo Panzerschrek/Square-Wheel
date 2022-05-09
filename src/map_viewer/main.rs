@@ -77,7 +77,7 @@ pub fn main()
 					{
 						map_bsp_compact_opt = Some(bsp_map_compact::convert_bsp_map_to_compact_format(
 							map_bsp_tree_opt.as_ref().unwrap(),
-							&map_polygonized[1 ..],
+							&map_polygonized,
 						));
 					}
 				}

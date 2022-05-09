@@ -9,6 +9,7 @@ pub mod debug_rasterizer;
 pub mod debug_renderer;
 pub mod fixed_math;
 pub mod image;
+pub mod lightmaps_builder;
 pub mod map_file;
 pub mod map_polygonizer;
 pub mod math_types;

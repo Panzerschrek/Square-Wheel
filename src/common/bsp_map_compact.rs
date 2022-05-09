@@ -17,6 +17,13 @@ pub struct BSPMap
 	pub vertices: Vec<Vec3f>,
 	pub textures: Vec<Texture>,
 	pub submodels: Vec<Submodel>,
+
+	// Data for entities. Entity is a set of string key-value pairs.
+	pub entities: Vec<Entity>,
+	pub key_value_pairs: Vec<KeyValuePair>,
+	// UTF-8 bytes of all strings.
+	pub strings_data: Vec<u8>,
+	pub lightmaps_data: Vec<LightmapElement>,
 }
 
 #[repr(C)]
@@ -48,6 +55,13 @@ pub struct Polygon
 	pub num_vertices: u32,
 	pub plane: Plane,
 	pub tex_coord_equation: [Plane; 2],
+	// Store precalculated min/max texture coordinates. Min value is rounded down, maximum value is rounded up.
+	// Surface size is max - min.
+	// Do this because we calculate lightmap position/size based on this values.
+	// We can't recalculate this values after map loading since calculation result may be different due to floating-point calculation errors.
+	pub tex_coord_min: [i32; 2],
+	pub tex_coord_max: [i32; 2],
+	pub lightmap_data_offset: u32,
 	pub texture: u32,
 }
 
@@ -70,16 +84,45 @@ pub struct Submodel
 	// TODO - save keys/values?
 }
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Entity
+{
+	pub first_key_value_pair: u32,
+	pub num_key_value_pairs: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct KeyValuePair
+{
+	pub key: StringRef,
+	pub value: StringRef,
+}
+
+// Use 16 bits for offset and size.
+// This limits total strings data size to 65536 bytes, but this is enought for most cases, since we use strings deduplication.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct StringRef
+{
+	pub offset: u16,
+	pub size: u16,
+}
+
 pub const MAX_TEXTURE_NAME_LEN: usize = 64;
 // UTF-8 values of texture (name, path, or some id). Remaining symbols are filled with nulls.
 pub type Texture = [u8; MAX_TEXTURE_NAME_LEN];
+
+// Currently it is just a simple diffuse colored light.
+pub type LightmapElement = [f32; 3];
 
 // Conversion functions.
 //
 
 pub fn convert_bsp_map_to_compact_format(
 	bsp_tree: &bsp_builder::BSPTree,
-	submodels: &[map_polygonizer::Entity],
+	entities: &[map_polygonizer::Entity],
 ) -> BSPMap
 {
 	let mut out_map = BSPMap::default();
@@ -99,11 +142,18 @@ pub fn convert_bsp_map_to_compact_format(
 
 	fill_portals_leafs(&bsp_tree.portals, &leaf_ptr_to_index_map, &mut out_map);
 
-	convert_submodels_to_compact_format(submodels, &mut out_map, &mut texture_name_to_index_map);
+	// Skip model for entity 0 - world model.
+	convert_submodels_to_compact_format(&entities[1 ..], &mut out_map, &mut texture_name_to_index_map);
+	convert_entities_to_compact_format(entities, &mut out_map);
 
 	fill_textures(&texture_name_to_index_map, &mut out_map);
 
 	out_map
+}
+
+pub fn get_map_string(s: StringRef, map: &BSPMap) -> &str
+{
+	std::str::from_utf8(&map.strings_data[(s.offset as usize) .. ((s.offset + s.size) as usize)]).unwrap_or("")
 }
 
 type PortalPtrToIndexMap = HashMap<*const bsp_builder::LeafsPortal, u32>;
@@ -254,11 +304,41 @@ fn convert_polygon_to_compact_format(
 {
 	let first_vertex = out_map.vertices.len() as u32;
 	out_map.vertices.extend_from_slice(&polygon.vertices);
+
+	let inf = (1 << 29) as f32;
+	let mut tc_min = [inf, inf];
+	let mut tc_max = [-inf, -inf];
+	for &vertex in &polygon.vertices
+	{
+		for i in 0 .. 2
+		{
+			let tc = polygon.texture_info.tex_coord_equation[i].vec.dot(vertex) +
+				polygon.texture_info.tex_coord_equation[i].dist;
+			if tc < tc_min[i]
+			{
+				tc_min[i] = tc;
+			}
+			if tc > tc_max[i]
+			{
+				tc_max[i] = tc;
+			}
+		}
+	}
+
+	let tex_coord_min = [tc_min[0].floor() as i32, tc_min[1].floor() as i32];
+	let tex_coord_max = [
+		(tc_max[0].ceil() as i32).max(tex_coord_min[0] + 1),
+		(tc_max[1].ceil() as i32).max(tex_coord_min[1] + 1),
+	];
+
 	Polygon {
 		first_vertex,
 		num_vertices: polygon.vertices.len() as u32,
 		plane: polygon.plane,
 		tex_coord_equation: polygon.texture_info.tex_coord_equation,
+		tex_coord_min,
+		tex_coord_max,
+		lightmap_data_offset: 0, // Fill this later, during lightmaps build.
 		texture: get_texture_index(&polygon.texture_info.texture, texture_name_to_index_map),
 	}
 }
@@ -351,4 +431,64 @@ fn convert_submodel_to_compact_format(
 		first_polygon,
 		num_polygons: submodel.polygons.len() as u32,
 	}
+}
+
+fn convert_entities_to_compact_format(entities: &[map_polygonizer::Entity], out_map: &mut BSPMap)
+{
+	let mut strings_cache = StringsCache::new();
+	for entity in entities
+	{
+		let entity_converted = convert_entity_to_compact_format(entity, out_map, &mut strings_cache);
+		out_map.entities.push(entity_converted);
+	}
+}
+
+type StringsCache = std::collections::HashMap<String, StringRef>;
+
+fn convert_entity_to_compact_format(
+	entity: &map_polygonizer::Entity,
+	out_map: &mut BSPMap,
+	strings_cache: &mut StringsCache,
+) -> Entity
+{
+	let first_key_value_pair = out_map.key_value_pairs.len() as u32;
+
+	for (key, value) in &entity.keys
+	{
+		let key_value_pair = KeyValuePair {
+			key: convert_string_to_compect_format(key, out_map, strings_cache),
+			value: convert_string_to_compect_format(value, out_map, strings_cache),
+		};
+		out_map.key_value_pairs.push(key_value_pair);
+	}
+
+	Entity {
+		first_key_value_pair,
+		num_key_value_pairs: entity.keys.len() as u32,
+	}
+}
+
+fn convert_string_to_compect_format(s: &String, out_map: &mut BSPMap, strings_cache: &mut StringsCache) -> StringRef
+{
+	if let Some(prev_string) = strings_cache.get(s)
+	{
+		return *prev_string;
+	}
+
+	// Strings data overflow.
+	if out_map.strings_data.len() > 65535
+	{
+		return StringRef { offset: 0, size: 0 };
+	}
+
+	let offset = out_map.strings_data.len();
+	out_map.strings_data.extend_from_slice(s.as_bytes());
+	let size = out_map.strings_data.len() - offset;
+	let result = StringRef {
+		offset: offset as u16,
+		size: size as u16,
+	};
+
+	strings_cache.insert(s.clone(), result);
+	result
 }

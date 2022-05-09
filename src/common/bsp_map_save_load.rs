@@ -71,6 +71,30 @@ pub fn save_map(bsp_map: &BSPMap, file_path: &Path) -> Result<(), std::io::Error
 		&mut header.lumps[LUMP_SUBMODELS],
 		&mut offset,
 	)?;
+	write_lump(
+		&bsp_map.entities,
+		&mut file,
+		&mut header.lumps[LUMP_ENTITIES],
+		&mut offset,
+	)?;
+	write_lump(
+		&bsp_map.key_value_pairs,
+		&mut file,
+		&mut header.lumps[LUMP_KEY_VALUE_PAIRS],
+		&mut offset,
+	)?;
+	write_lump(
+		&bsp_map.strings_data,
+		&mut file,
+		&mut header.lumps[LUMP_STRINGS_DATA],
+		&mut offset,
+	)?;
+	write_lump(
+		&bsp_map.lightmaps_data,
+		&mut file,
+		&mut header.lumps[LUMP_LIGHTMAPS_DATA],
+		&mut offset,
+	)?;
 
 	// Write header again to update lumps headers.
 	file.seek(std::io::SeekFrom::Start(0))?;
@@ -104,10 +128,10 @@ pub fn load_map(file_path: &Path) -> Result<Option<BSPMap>, std::io::Error>
 		println!("File is not a valid BSP map");
 		return Ok(None);
 	}
-	if header.version > BSP_MAP_VERSION
+	if header.version != BSP_MAP_VERSION
 	{
 		println!(
-			"Can't load newer map version: {}, expected {}",
+			"Can't load incompatible map version: {}, expected {}",
 			header.version, BSP_MAP_VERSION
 		);
 		return Ok(None);
@@ -122,6 +146,10 @@ pub fn load_map(file_path: &Path) -> Result<Option<BSPMap>, std::io::Error>
 		vertices: read_lump(&mut file, &header.lumps[LUMP_VERTICES])?,
 		textures: read_lump(&mut file, &header.lumps[LUMP_TEXTURES])?,
 		submodels: read_lump(&mut file, &header.lumps[LUMP_SUBMODELS])?,
+		entities: read_lump(&mut file, &header.lumps[LUMP_ENTITIES])?,
+		key_value_pairs: read_lump(&mut file, &header.lumps[LUMP_KEY_VALUE_PAIRS])?,
+		strings_data: read_lump(&mut file, &header.lumps[LUMP_STRINGS_DATA])?,
+		lightmaps_data: read_lump(&mut file, &header.lumps[LUMP_LIGHTMAPS_DATA])?,
 	};
 
 	Ok(Some(map))
@@ -144,7 +172,7 @@ struct Lump
 }
 
 const BSP_MAP_ID: [u8; 4] = ['S' as u8, 'q' as u8, 'w' as u8, 'M' as u8];
-const BSP_MAP_VERSION: u32 = 2; // Change each time when format is changed!
+const BSP_MAP_VERSION: u32 = 5; // Change each time when format is changed!
 
 const MAX_LUMPS: usize = 16;
 
@@ -156,6 +184,10 @@ const LUMP_LEAFS_PORTALS: usize = 4;
 const LUMP_VERTICES: usize = 5;
 const LUMP_TEXTURES: usize = 6;
 const LUMP_SUBMODELS: usize = 7;
+const LUMP_ENTITIES: usize = 8;
+const LUMP_KEY_VALUE_PAIRS: usize = 9;
+const LUMP_STRINGS_DATA: usize = 10;
+const LUMP_LIGHTMAPS_DATA: usize = 11;
 
 fn write_lump<T>(
 	data: &[T],

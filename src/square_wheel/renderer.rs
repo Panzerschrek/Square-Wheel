@@ -3,8 +3,8 @@ use super::{
 	map_visibility_calculator::*, rasterizer::*, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
 };
 use common::{
-	bbox::*, bsp_map_compact, clipping::*, color::*, fixed_math::*, math_types::*, matrix::*, performance_counter::*,
-	plane::*, system_window,
+	bbox::*, bsp_map_compact, clipping::*, color::*, fixed_math::*, lightmaps_builder, math_types::*, matrix::*,
+	performance_counter::*, plane::*, system_window,
 };
 use std::rc::Rc;
 
@@ -55,10 +55,6 @@ impl RendererPerformanceCounters
 #[derive(Default, Copy, Clone)]
 struct DrawPolygonData
 {
-	// Precalculated during map loading min/max texture coordinates
-	tc_min: [f32; 2],
-	tc_max: [f32; 2],
-
 	// Frame last time this polygon was visible.
 	visible_frame: FrameNumber,
 	depth_equation: DepthEquation,
@@ -75,9 +71,6 @@ impl Renderer
 	{
 		let textures = load_textures(&map.textures);
 
-		let mut polygons_data = vec![DrawPolygonData::default(); map.polygons.len()];
-		precalculate_polygons_tex_coords_bounds(&map, &mut polygons_data);
-
 		let config_parsed = RendererConfig::from_app_config(&app_config);
 		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
 
@@ -86,7 +79,7 @@ impl Renderer
 			config: config_parsed,
 			config_is_durty: false,
 			current_frame: FrameNumber::default(),
-			polygons_data,
+			polygons_data: vec![DrawPolygonData::default(); map.polygons.len()],
 			vertices_transformed: vec![Vec3f::new(0.0, 0.0, 0.0); map.vertices.len()],
 			surfaces_pixels: Vec::new(),
 			num_visible_surfaces_pixels: 0,
@@ -486,34 +479,42 @@ impl Renderer
 			}
 		}
 
-		// Reduce min/max texture coordinates slightly to avoid adding extra pixels
-		// in case if min/max tex coord is exact integer, but slightly changed due to computational errors.
-		// Clamp also coordinates to min/max polygon coordinates (they may be out of range because of computational errors).
-		let tc_reduce_eps = 1.0 / 32.0;
+		let mut surface_tc_min = [0, 0];
+		let mut surface_size = [0, 0];
 		for i in 0 .. 2
 		{
+			// Reduce min/max texture coordinates slightly to avoid adding extra pixels
+			// in case if min/max tex coord is exact integer, but slightly changed due to computational errors.
+			let tc_reduce_eps = 1.0 / 32.0;
 			tc_min[i] += tc_reduce_eps;
 			tc_max[i] -= tc_reduce_eps;
-			let polygon_tc_min = polygon_data.tc_min[i] * tc_equation_scale;
-			let polygon_tc_max = polygon_data.tc_max[i] * tc_equation_scale;
-			if tc_min[i] < polygon_tc_min
-			{
-				tc_min[i] = polygon_tc_min;
-			}
-			if tc_max[i] > polygon_tc_max
-			{
-				tc_max[i] = polygon_tc_max;
-			}
-		}
 
-		let max_surface_size = 2048; // Limit max size in case of computational errors.
-							 // TODO - split long polygons during export to avoid reducing size for such polygons.
-		let tc_min_int = [tc_min[0].floor() as i32, tc_min[1].floor() as i32];
-		let tc_max_int = [tc_max[0].ceil() as i32, tc_max[1].ceil() as i32];
-		let surface_size = [
-			(tc_max_int[0] - tc_min_int[0]).max(1).min(max_surface_size),
-			(tc_max_int[1] - tc_min_int[1]).max(1).min(max_surface_size),
-		];
+			// Clamp coordinates to min/max polygon coordinates (they may be out of range because of computational errors).
+			// It's important to clamp texture coordinates to avoid reading lightmap outside borders.
+			let round_mask = !((lightmaps_builder::LIGHTMAP_SCALE as i32) - 1);
+			let tc_min_round_down = (polygon.tex_coord_min[i] & round_mask) >> mip;
+			let tc_max_round_up =
+				((polygon.tex_coord_max[i] + (lightmaps_builder::LIGHTMAP_SCALE as i32) - 1) & round_mask) >> mip;
+
+			let mut tc_min_int = (tc_min[i].max(-inf).floor() as i32).max(tc_min_round_down);
+			let mut tc_max_int = (tc_max[i].min(inf).ceil() as i32).min(tc_max_round_up);
+
+			if tc_min_int >= tc_max_int
+			{
+				// Degenerte case - correct surface size.
+				tc_min_int = tc_min_int.min(tc_max_round_up - 1);
+				tc_max_int = tc_min_int + 1;
+			}
+
+			// Limit max size in case of computational errors.
+			// TODO - split long polygons during export to avoid reducing size for such polygons.
+			let max_surface_size = 2048;
+
+			surface_tc_min[i] = tc_min_int;
+			surface_size[i] = (tc_max_int - tc_min_int).min(max_surface_size);
+			debug_assert!(tc_min_int >= tc_min_round_down);
+			debug_assert!(tc_max_int <= tc_max_round_up);
+		}
 
 		let surface_pixels_offset = *surfaces_pixels_accumulated_offset;
 		*surfaces_pixels_accumulated_offset += (surface_size[0] * surface_size[1]) as usize;
@@ -524,12 +525,12 @@ impl Renderer
 		polygon_data.surface_pixels_offset = surface_pixels_offset;
 		polygon_data.surface_size = [surface_size[0] as u32, surface_size[1] as u32];
 		polygon_data.mip = mip;
-		polygon_data.surface_tc_min = tc_min_int;
+		polygon_data.surface_tc_min = surface_tc_min;
 
 		// Correct texture coordinates equation to compensate shift to surface rect.
 		for i in 0 .. 2
 		{
-			let tc_min = tc_min_int[i] as f32;
+			let tc_min = surface_tc_min[i] as f32;
 			polygon_data.tex_coord_equation.d_tc_dx[i] -= tc_min * depth_equation.d_inv_z_dx;
 			polygon_data.tex_coord_equation.d_tc_dy[i] -= tc_min * depth_equation.d_inv_z_dy;
 			polygon_data.tex_coord_equation.k[i] -= tc_min * depth_equation.k;
@@ -542,13 +543,21 @@ impl Renderer
 		// Remember (somehow) list of visible in current frame polygons.
 		for i in 0 .. self.polygons_data.len()
 		{
-			if self.polygons_data[i].visible_frame == self.current_frame
+			let polygon_data = &self.polygons_data[i];
+			if polygon_data.visible_frame != self.current_frame
 			{
-				let polygon = &self.map.polygons[i];
-				let polygon_data = &self.polygons_data[i];
-				let surface_pixels_offset = polygon_data.surface_pixels_offset;
-				let surface_size = polygon_data.surface_size;
+				continue;
+			}
+			let polygon = &self.map.polygons[i];
+			let surface_pixels_offset = polygon_data.surface_pixels_offset;
+			let surface_size = polygon_data.surface_size;
 
+			let texture = &self.textures[polygon.texture as usize][polygon_data.mip as usize];
+			let surface_data = &mut self.surfaces_pixels
+				[surface_pixels_offset .. (surface_pixels_offset + ((surface_size[0] * surface_size[1]) as usize))];
+
+			if self.map.lightmaps_data.is_empty()
+			{
 				let mip_scale = 1.0 / (1 << polygon_data.mip) as f32;
 				let tex_coord_equation_scaled = [
 					Plane {
@@ -564,12 +573,36 @@ impl Renderer
 				build_surface(
 					surface_size,
 					polygon_data.surface_tc_min,
-					&self.textures[polygon.texture as usize][polygon_data.mip as usize],
+					texture,
 					&polygon.plane,
 					&tex_coord_equation_scaled,
 					lights,
-					&mut self.surfaces_pixels[surface_pixels_offset ..
-						(surface_pixels_offset + ((surface_size[0] * surface_size[1]) as usize))],
+					surface_data,
+				);
+			}
+			else
+			{
+				let mut lightmap_tc_shift: [u32; 2] = [0, 0];
+				for i in 0 .. 2
+				{
+					let round_mask = !((lightmaps_builder::LIGHTMAP_SCALE as i32) - 1);
+					let shift =
+						polygon_data.surface_tc_min[i] - ((polygon.tex_coord_min[i] & round_mask) >> polygon_data.mip);
+					debug_assert!(shift >= 0);
+					lightmap_tc_shift[i] = shift as u32;
+				}
+
+				let lightmap_size = lightmaps_builder::get_polygon_lightmap_size(polygon);
+				build_surface_with_lightmap(
+					surface_size,
+					polygon_data.surface_tc_min,
+					texture,
+					lightmap_size,
+					lightmaps_builder::LIGHTMAP_SCALE_LOG2 - polygon_data.mip,
+					lightmap_tc_shift,
+					&self.map.lightmaps_data[polygon.lightmap_data_offset as usize ..
+						((polygon.lightmap_data_offset + lightmap_size[0] * lightmap_size[1]) as usize)],
+					surface_data,
 				);
 			}
 		}
@@ -851,50 +884,6 @@ fn draw_background(pixels: &mut [Color32])
 fn draw_crosshair(pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo)
 {
 	pixels[surface_info.width / 2 + surface_info.height / 2 * surface_info.pitch] = Color32::from_rgb(255, 255, 255);
-}
-
-fn precalculate_polygons_tex_coords_bounds(map: &bsp_map_compact::BSPMap, polygons_data: &mut [DrawPolygonData])
-{
-	for (polygon, polygon_data) in map.polygons.iter().zip(polygons_data.iter_mut())
-	{
-		let inf = (1 << 29) as f32;
-		let mut tc_min = [inf, inf];
-		let mut tc_max = [-inf, -inf];
-
-		for vertex in
-			&map.vertices[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)]
-		{
-			for i in 0 .. 2
-			{
-				let tc = polygon.tex_coord_equation[i].vec.dot(*vertex) + polygon.tex_coord_equation[i].dist;
-				if tc < tc_min[i]
-				{
-					tc_min[i] = tc;
-				}
-				if tc > tc_max[i]
-				{
-					tc_max[i] = tc;
-				}
-			}
-		}
-
-		// Limit result by very large values that still fits inside integer.
-		// Thisi is needed to avoid integer overflows if something is wrong with texture coordinates.
-		for i in 0 .. 2
-		{
-			if tc_min[i] < -inf
-			{
-				tc_min[i] = inf;
-			}
-			if tc_max[i] > inf
-			{
-				tc_max[i] = inf;
-			}
-		}
-
-		polygon_data.tc_min = tc_min;
-		polygon_data.tc_max = tc_max;
-	}
 }
 
 fn draw_polygon(
