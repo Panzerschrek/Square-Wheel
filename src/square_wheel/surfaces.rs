@@ -101,8 +101,38 @@ pub fn build_surface_with_lightmap(
 	out_surface_data: &mut [Color32],
 )
 {
+	// TODO - make sure surface is not bigger than this limit.
+	const MAX_LIGHTMAP_SAMPLES: usize = 64;
+	// TODO - use uninitialized memory.
+	let mut line_lightmap = [[0.0, 0.0, 0.0]; MAX_LIGHTMAP_SAMPLES];
+	let lightmap_scale_f = (1 << lightmap_scale_log2) as f32;
+	let inv_lightmap_scale_f = 1.0 / lightmap_scale_f;
+
 	for dst_v in 0 .. surface_size[1]
 	{
+		// Prepare interpolated lightmap values for current line.
+		// TODO - skip samples outside current surface borders.
+		// TODO - optimize this, use unchecked index function.
+		{
+			let lightmap_v = (dst_v + lightmap_tc_shift[1]) >> lightmap_scale_log2;
+			let lightmap_v_plus_one = lightmap_v + 1;
+			debug_assert!(lightmap_v_plus_one < lightmap_size[1]);
+			let k = ((dst_v + lightmap_tc_shift[1] - (lightmap_v << lightmap_scale_log2)) as f32) *
+				inv_lightmap_scale_f +
+				0.5 * inv_lightmap_scale_f;
+			let k_minus_one = 1.0 - k;
+			for lightmap_u in 0 .. lightmap_size[0]
+			{
+				let l0 = lightmap_data[(lightmap_u + lightmap_v * lightmap_size[0]) as usize];
+				let l1 = lightmap_data[(lightmap_u + lightmap_v_plus_one * lightmap_size[0]) as usize];
+				let dst = &mut line_lightmap[lightmap_u as usize];
+				for i in 0 .. 3
+				{
+					dst[i] = l0[i] * k_minus_one + l1[i] * k;
+				}
+			}
+		}
+
 		let dst_line_start = (dst_v * surface_size[0]) as usize;
 		let dst_line = &mut out_surface_data[dst_line_start .. dst_line_start + (surface_size[0] as usize)];
 
@@ -114,12 +144,31 @@ pub fn build_surface_with_lightmap(
 		for dst_texel in dst_line.iter_mut()
 		{
 			// TODO - optimize this, use unchecked index function.
-			// TODO - interpolate lightmaps.
 			let lightmap_u = (dst_u + lightmap_tc_shift[0]) >> lightmap_scale_log2;
-			let lightmap_v = (dst_v + lightmap_tc_shift[1]) >> lightmap_scale_log2;
-			let lightmap_value = lightmap_data[(lightmap_u + lightmap_v * lightmap_size[0]) as usize];
+			let lightmap_u_plus_one = lightmap_u + 1;
+			debug_assert!(lightmap_u_plus_one < lightmap_size[0]);
+			let l0 = line_lightmap[lightmap_u as usize];
+			let l1 = line_lightmap[lightmap_u_plus_one as usize];
+			let k = ((dst_u + lightmap_tc_shift[0] - (lightmap_u << lightmap_scale_log2)) as f32) * inv_lightmap_scale_f + 0.5 * inv_lightmap_scale_f;
+			let k_minus_one = 1.0 - k;
+			let mut lightmap_value = [0.0, 0.0, 0.0];
+			for i in 0 .. 3
+			{
+				lightmap_value[i] = l0[i] * k_minus_one + l1[i] * k;
+			};
 
 			let texel_value = src_line[src_u as usize];
+
+			/*
+			if lightmap_scale_log2 < 4
+			{
+				let shift = 1 << (lightmap_scale_log2) >> 1;
+				let lightmap_u = (dst_u + lightmap_tc_shift[0] + shift) >> lightmap_scale_log2;
+				let lightmap_v = (dst_v + lightmap_tc_shift[1] + shift) >> lightmap_scale_log2;
+				lightmap_value = lightmap_data[(lightmap_u + lightmap_v * lightmap_size[0]) as usize];
+			}
+			let texel_value = Color32::from_rgb(100, 100, 100);
+			*/
 
 			let components = texel_value.unpack_to_rgb_f32();
 			let components_modulated = [

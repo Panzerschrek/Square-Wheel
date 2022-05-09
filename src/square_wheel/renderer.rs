@@ -501,12 +501,32 @@ impl Renderer
 
 		let max_surface_size = 2048; // Limit max size in case of computational errors.
 							 // TODO - split long polygons during export to avoid reducing size for such polygons.
-		let tc_min_int = [tc_min[0].floor() as i32, tc_min[1].floor() as i32];
+		let mut tc_min_int = [tc_min[0].floor() as i32, tc_min[1].floor() as i32];
 		let tc_max_int = [tc_max[0].ceil() as i32, tc_max[1].ceil() as i32];
-		let surface_size = [
-			(tc_max_int[0] - tc_min_int[0]).max(1).min(max_surface_size),
-			(tc_max_int[1] - tc_min_int[1]).max(1).min(max_surface_size),
+		let mut surface_size = [
+			(tc_max_int[0] - tc_min_int[0]).min(max_surface_size),
+			(tc_max_int[1] - tc_min_int[1]).min(max_surface_size),
 		];
+		for i in 0 .. 2
+		{
+			if surface_size[i] <= 0
+			{
+				if tc_max_int[i] < polygon.tex_coord_max[i] >> mip
+				{
+					surface_size[i] = 1;
+				}
+				else if tc_min_int[i] > polygon.tex_coord_min[i] >> mip
+				{
+					surface_size[i] = 1;
+					tc_min_int[i] -= 1;
+				}
+				else
+				{
+					// Stragne situation - just skip this surface.
+					return;
+				}
+			}
+		}
 
 		let surface_pixels_offset = *surfaces_pixels_accumulated_offset;
 		*surfaces_pixels_accumulated_offset += (surface_size[0] * surface_size[1]) as usize;
