@@ -4,14 +4,22 @@ use std::io::Write;
 pub struct LightmappingSettings
 {
 	pub sample_grid_size: u32,
+	pub light_scale: f32,
 }
 
 pub fn build_lightmaps(settings: &LightmappingSettings, map: &mut bsp_map_compact::BSPMap)
 {
 	let sample_grid_size = settings.sample_grid_size.min(MAX_SAMPLE_GRID_SIZE);
 
-	let lights = extract_map_lights(map);
+	let mut lights = extract_map_lights(map);
 	println!("Point lights: {}", lights.len());
+
+	for l in &mut lights
+	{
+		l.color[0] *= settings.light_scale;
+		l.color[1] *= settings.light_scale;
+		l.color[2] *= settings.light_scale;
+	}
 
 	allocate_lightmaps(map);
 	println!("Lightmap texels: {}", map.lightmaps_data.len());

@@ -14,8 +14,13 @@ struct Opt
 	#[structopt(parse(from_os_str), short = "o", required(true))]
 	output: PathBuf,
 
+	/// Size of sample grid. For sample-grid-size=N NxN calculations for each lightmap texel will be performed.
 	#[structopt(long)]
 	sample_grid_size: Option<u32>,
+
+	/// Set scale for all light sources. Default scale is 1.
+	#[structopt(long)]
+	light_scale: Option<f32>,
 }
 
 fn main()
@@ -27,6 +32,7 @@ fn main()
 	lightmaps_builder::build_lightmaps(
 		&lightmaps_builder::LightmappingSettings {
 			sample_grid_size: opt.sample_grid_size.unwrap_or(1),
+			light_scale: opt.light_scale.unwrap_or(1.0),
 		},
 		&mut map,
 	);
