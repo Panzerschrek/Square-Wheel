@@ -1,4 +1,5 @@
 use super::{bsp_map_compact, map_file, math_types::*};
+use std::io::Write;
 
 pub struct LightmappingSettings
 {
@@ -10,10 +11,16 @@ pub fn build_lightmaps(settings: &LightmappingSettings, map: &mut bsp_map_compac
 	let sample_grid_size = settings.sample_grid_size.min(MAX_SAMPLE_GRID_SIZE);
 
 	let lights = extract_map_lights(map);
+	println!("Point lights: {}", lights.len());
+
 	allocate_lightmaps(map);
+	println!("Lightmap texels: {}", map.lightmaps_data.len());
+
 	test_fill_lightmaps(map);
 
 	build_primary_lightmaps(sample_grid_size, &lights, map);
+
+	println!("\nDone!");
 }
 
 // If this chaged, map file version must be changed too!
@@ -126,8 +133,6 @@ fn allocate_lightmaps(map: &mut bsp_map_compact::BSPMap)
 
 	map.lightmaps_data.clear();
 	map.lightmaps_data.resize(offset, [0.0, 0.0, 0.0]);
-
-	println!("Lightmap texels: {}", offset);
 }
 
 fn test_fill_lightmaps(map: &mut bsp_map_compact::BSPMap)
@@ -149,9 +154,31 @@ fn test_fill_lightmaps(map: &mut bsp_map_compact::BSPMap)
 
 fn build_primary_lightmaps(sample_grid_size: u32, lights: &[PointLight], map: &mut bsp_map_compact::BSPMap)
 {
+	let mut texels_complete = 0;
+	let texels_total = map.lightmaps_data.len();
 	for i in 0 .. map.polygons.len()
 	{
 		build_primary_lightmap(sample_grid_size, lights, i, map);
+
+		// Calculate and show progress.
+		let lightmap_size = get_polygon_lightmap_size(&map.polygons[i]);
+		let lightmap_texels = (lightmap_size[0] * lightmap_size[1]) as usize;
+
+		let ratio_before = texels_complete * 256 / texels_total;
+		texels_complete += lightmap_texels;
+		let ratio_after = texels_complete * 256 / texels_total;
+		if ratio_after > ratio_before
+		{
+			print!(
+				"\r{:03.2}% complete ({} of {} texels),  {} of {} polygons",
+				(texels_complete as f32) * 100.0 / (texels_total as f32),
+				texels_complete,
+				texels_total,
+				i,
+				map.polygons.len()
+			);
+			let _ignore_errors = std::io::stdout().flush();
+		}
 	}
 }
 
