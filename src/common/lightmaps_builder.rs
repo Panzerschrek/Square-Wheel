@@ -1,11 +1,19 @@
 use super::{bsp_map_compact, map_file, math_types::*};
 
-pub fn build_lightmaps(map: &mut bsp_map_compact::BSPMap)
+pub struct LightmappingSettings
 {
+	pub sample_grid_size: u32,
+}
+
+pub fn build_lightmaps(settings: &LightmappingSettings, map: &mut bsp_map_compact::BSPMap)
+{
+	let sample_grid_size = settings.sample_grid_size.min(MAX_SAMPLE_GRID_SIZE);
+
 	let lights = extract_map_lights(map);
 	allocate_lightmaps(map);
 	test_fill_lightmaps(map);
-	build_primary_lightmaps(&lights, map);
+
+	build_primary_lightmaps(sample_grid_size, &lights, map);
 }
 
 // If this chaged, map file version must be changed too!
@@ -139,15 +147,20 @@ fn test_fill_lightmaps(map: &mut bsp_map_compact::BSPMap)
 	}
 }
 
-fn build_primary_lightmaps(lights: &[PointLight], map: &mut bsp_map_compact::BSPMap)
+fn build_primary_lightmaps(sample_grid_size: u32, lights: &[PointLight], map: &mut bsp_map_compact::BSPMap)
 {
 	for i in 0 .. map.polygons.len()
 	{
-		build_primary_lightmap(lights, i, map);
+		build_primary_lightmap(sample_grid_size, lights, i, map);
 	}
 }
 
-fn build_primary_lightmap(lights: &[PointLight], polygon_index: usize, map: &mut bsp_map_compact::BSPMap)
+fn build_primary_lightmap(
+	sample_grid_size: u32,
+	lights: &[PointLight],
+	polygon_index: usize,
+	map: &mut bsp_map_compact::BSPMap,
+)
 {
 	let polygon = &map.polygons[polygon_index];
 	let lightmap_size = get_polygon_lightmap_size(polygon);
@@ -187,87 +200,115 @@ fn build_primary_lightmap(lights: &[PointLight], polygon_index: usize, map: &mut
 		v_vec * ((polygon.tex_coord_min[1] >> LIGHTMAP_SCALE_LOG2) as f32) +
 		plane_normal_normalized * TEXEL_NORMAL_SHIFT;
 
+	// Prepare sample grid shifts.
+	let mut sample_grid = [Vec3f::zero(); (MAX_SAMPLE_GRID_SIZE * MAX_SAMPLE_GRID_SIZE) as usize];
+	if sample_grid_size > 1
+	{
+		let grid_size_f = sample_grid_size as f32;
+		let u_step = u_vec / grid_size_f;
+		let v_step = v_vec / grid_size_f;
+		let grid_start = (-0.5 * (grid_size_f - 1.0)) * (v_step + u_step);
+		for v in 0 .. sample_grid_size
+		{
+			let v_vec = grid_start + (v as f32) * v_step;
+			for u in 0 .. sample_grid_size
+			{
+				let vec = (u as f32) * u_step + v_vec;
+				sample_grid[(u + v * sample_grid_size) as usize] = vec;
+			}
+		}
+	}
+	let num_sample_grid_samples = (sample_grid_size * sample_grid_size) as usize;
+	let multi_sampling_scale = 1.0 / (num_sample_grid_samples as f32);
+
 	for v in 0 .. lightmap_size[1]
 	{
 		let start_pos_v = start_pos + (v as f32) * v_vec;
 		let line_dst_start = polygon.lightmap_data_offset + v * lightmap_size[0];
 		for u in 0 .. lightmap_size[0]
 		{
-			let mut pos = start_pos_v + (u as f32) * u_vec;
-			// Correct texel position if can't see from texel to polygon center.
-			// TODO - improve this. Fix cases where texel position is exactly on some polygon plane.
-			for i in 0 .. 16
-			{
-				if can_see(&pos, &polygon_center, map)
-				{
-					break;
-				}
-				if i < 4
-				{
-					// Special cases - shift postion along U/V axis for texels on border.
-					if u == 0
-					{
-						pos += 0.5 * u_vec;
-					}
-					if u == lightmap_size[0] - 1
-					{
-						pos -= 0.5 * u_vec;
-					}
-					if v == 0
-					{
-						pos += 0.5 * v_vec;
-					}
-					if v == lightmap_size[1] - 1
-					{
-						pos -= 0.5 * v_vec;
-					}
-				}
-				else
-				{
-					// Hard case - shift towards center.
-					let vec_to_center = polygon_center - pos;
-					let vec_to_center_len = vec_to_center.magnitude().max(MIN_POSITIVE_VALUE);
-					let vec_to_center_normalized = vec_to_center / vec_to_center_len;
-					pos += vec_to_center_normalized * u_vec.magnitude().max(v_vec.magnitude()).min(vec_to_center_len);
-				}
-			}
-
 			let mut total_light = [0.0, 0.0, 0.0];
-			for light in lights
+			let texel_pos = start_pos_v + (u as f32) * u_vec;
+			// Calculate light for multiple samples withing current texel, than use average value.
+			// This allow us to get (reltively) soft shadows.
+			for &sample_shift in &sample_grid[.. num_sample_grid_samples]
 			{
-				let vec_to_light = light.pos - pos;
-				let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
-				let angle_cos = plane_normal_normalized.dot(vec_to_light) / vec_to_light_len2.sqrt();
-
-				if angle_cos <= 0.0
+				let mut pos = texel_pos + sample_shift;
+				// Correct texel position if can't see from texel to polygon center.
+				// TODO - improve this. Fix cases where texel position is exactly on some polygon plane.
+				for i in 0 .. 16
 				{
-					// Do not determine visibility for light behind polygon plane.
-					continue;
+					if can_see(&pos, &polygon_center, map)
+					{
+						break;
+					}
+					if i < 4
+					{
+						// Special cases - shift postion along U/V axis for texels on border.
+						if u == 0
+						{
+							pos += 0.5 * u_vec;
+						}
+						if u == lightmap_size[0] - 1
+						{
+							pos -= 0.5 * u_vec;
+						}
+						if v == 0
+						{
+							pos += 0.5 * v_vec;
+						}
+						if v == lightmap_size[1] - 1
+						{
+							pos -= 0.5 * v_vec;
+						}
+					}
+					else
+					{
+						// Hard case - shift towards center.
+						let vec_to_center = polygon_center - pos;
+						let vec_to_center_len = vec_to_center.magnitude().max(MIN_POSITIVE_VALUE);
+						let vec_to_center_normalized = vec_to_center / vec_to_center_len;
+						pos +=
+							vec_to_center_normalized * u_vec.magnitude().max(v_vec.magnitude()).min(vec_to_center_len);
+					}
 				}
 
-				let light_scale = angle_cos / vec_to_light_len2;
-				let color_scaled = [
-					light.color[0] * light_scale,
-					light.color[1] * light_scale,
-					light.color[2] * light_scale,
-				];
-
-				if color_scaled[0].max(color_scaled[1]).max(color_scaled[2]) <= MIN_LIGHT_VALUE
+				for light in lights
 				{
-					// Light value is too small. Do not perform shadow check.
-					// This check allows us to significantly reduce light computation time by skipping shadow check for distant lights.
-					continue;
-				}
+					let vec_to_light = light.pos - pos;
+					let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
+					let angle_cos = plane_normal_normalized.dot(vec_to_light) / vec_to_light_len2.sqrt();
 
-				if !can_see(&light.pos, &pos, map)
-				{
-					// In shadow.
-					continue;
-				}
+					if angle_cos <= 0.0
+					{
+						// Do not determine visibility for light behind polygon plane.
+						continue;
+					}
 
-				total_light[0] += color_scaled[0];
-				total_light[1] += color_scaled[1];
-				total_light[2] += color_scaled[2];
+					let light_scale = angle_cos / vec_to_light_len2;
+					let color_scaled = [
+						light.color[0] * light_scale,
+						light.color[1] * light_scale,
+						light.color[2] * light_scale,
+					];
+
+					if color_scaled[0].max(color_scaled[1]).max(color_scaled[2]) <= MIN_LIGHT_VALUE
+					{
+						// Light value is too small. Do not perform shadow check.
+						// This check allows us to significantly reduce light computation time by skipping shadow check for distant lights.
+						continue;
+					}
+
+					if !can_see(&light.pos, &pos, map)
+					{
+						// In shadow.
+						continue;
+					}
+
+					total_light[0] += multi_sampling_scale * color_scaled[0];
+					total_light[1] += multi_sampling_scale * color_scaled[1];
+					total_light[2] += multi_sampling_scale * color_scaled[2];
+				}
 			}
 
 			map.lightmaps_data[(u + line_dst_start) as usize] = total_light;
@@ -278,6 +319,7 @@ fn build_primary_lightmap(lights: &[PointLight], polygon_index: usize, map: &mut
 const MIN_POSITIVE_VALUE: f32 = 1.0 / ((1 << 30) as f32);
 const MAP_LIGHTS_SCALE: f32 = 32.0; // TODO - tune this.
 const MIN_LIGHT_VALUE: f32 = 1.0 / 256.0; // TODO - tune this.
+const MAX_SAMPLE_GRID_SIZE: u32 = 8;
 
 fn can_see(from: &Vec3f, to: &Vec3f, map: &bsp_map_compact::BSPMap) -> bool
 {
