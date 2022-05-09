@@ -102,7 +102,7 @@ pub fn build_surface_with_lightmap(
 )
 {
 	// TODO - make sure surface is not bigger than this limit.
-	const MAX_LIGHTMAP_SAMPLES: usize = 64;
+	const MAX_LIGHTMAP_SAMPLES: usize = 128;
 	// TODO - use uninitialized memory.
 	let mut line_lightmap = [[0.0, 0.0, 0.0]; MAX_LIGHTMAP_SAMPLES];
 	let lightmap_scale_f = (1 << lightmap_scale_log2) as f32;

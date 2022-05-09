@@ -479,53 +479,41 @@ impl Renderer
 			}
 		}
 
-		// Reduce min/max texture coordinates slightly to avoid adding extra pixels
-		// in case if min/max tex coord is exact integer, but slightly changed due to computational errors.
-		// Clamp also coordinates to min/max polygon coordinates (they may be out of range because of computational errors).
-		let tc_reduce_eps = 1.0 / 32.0;
+		let mut surface_tc_min = [0, 0];
+		let mut surface_size = [0, 0];
 		for i in 0 .. 2
 		{
+			// Reduce min/max texture coordinates slightly to avoid adding extra pixels
+			// in case if min/max tex coord is exact integer, but slightly changed due to computational errors.
+			let tc_reduce_eps = 1.0 / 32.0;
 			tc_min[i] += tc_reduce_eps;
 			tc_max[i] -= tc_reduce_eps;
-			let polygon_tc_min = (polygon.tex_coord_min[i] as f32) * tc_equation_scale;
-			let polygon_tc_max = (polygon.tex_coord_max[i] as f32) * tc_equation_scale;
-			if tc_min[i] < polygon_tc_min
-			{
-				tc_min[i] = polygon_tc_min;
-			}
-			if tc_max[i] > polygon_tc_max
-			{
-				tc_max[i] = polygon_tc_max;
-			}
-		}
 
-		let max_surface_size = 2048; // Limit max size in case of computational errors.
-							 // TODO - split long polygons during export to avoid reducing size for such polygons.
-		let mut tc_min_int = [tc_min[0].floor() as i32, tc_min[1].floor() as i32];
-		let tc_max_int = [tc_max[0].ceil() as i32, tc_max[1].ceil() as i32];
-		let mut surface_size = [
-			(tc_max_int[0] - tc_min_int[0]).min(max_surface_size),
-			(tc_max_int[1] - tc_min_int[1]).min(max_surface_size),
-		];
-		for i in 0 .. 2
-		{
-			if surface_size[i] <= 0
+			// Clamp coordinates to min/max polygon coordinates (they may be out of range because of computational errors).
+			// It's important to clamp texture coordinates to avoid reading lightmap outside borders.
+			let round_mask = !((lightmaps_builder::LIGHTMAP_SCALE as i32) - 1);
+			let tc_min_round_down = (polygon.tex_coord_min[i] & round_mask) >> mip;
+			let tc_max_round_up =
+				((polygon.tex_coord_max[i] + (lightmaps_builder::LIGHTMAP_SCALE as i32) - 1) & round_mask) >> mip;
+
+			let mut tc_min_int = (tc_min[i].max(-inf).floor() as i32).max(tc_min_round_down);
+			let mut tc_max_int = (tc_max[i].min(inf).ceil() as i32).min(tc_max_round_up);
+
+			if tc_min_int >= tc_max_int
 			{
-				if tc_max_int[i] < polygon.tex_coord_max[i] >> mip
-				{
-					surface_size[i] = 1;
-				}
-				else if tc_min_int[i] > polygon.tex_coord_min[i] >> mip
-				{
-					surface_size[i] = 1;
-					tc_min_int[i] -= 1;
-				}
-				else
-				{
-					// Stragne situation - just skip this surface.
-					return;
-				}
+				// Degenerte case - correct surface size.
+				tc_min_int = tc_min_int.min(tc_max_round_up - 1);
+				tc_max_int = tc_min_int + 1;
 			}
+
+			// Limit max size in case of computational errors.
+			// TODO - split long polygons during export to avoid reducing size for such polygons.
+			let max_surface_size = 2048;
+
+			surface_tc_min[i] = tc_min_int;
+			surface_size[i] = (tc_max_int - tc_min_int).min(max_surface_size);
+			debug_assert!(tc_min_int >= tc_min_round_down);
+			debug_assert!(tc_max_int <= tc_max_round_up);
 		}
 
 		let surface_pixels_offset = *surfaces_pixels_accumulated_offset;
@@ -537,12 +525,12 @@ impl Renderer
 		polygon_data.surface_pixels_offset = surface_pixels_offset;
 		polygon_data.surface_size = [surface_size[0] as u32, surface_size[1] as u32];
 		polygon_data.mip = mip;
-		polygon_data.surface_tc_min = tc_min_int;
+		polygon_data.surface_tc_min = surface_tc_min;
 
 		// Correct texture coordinates equation to compensate shift to surface rect.
 		for i in 0 .. 2
 		{
-			let tc_min = tc_min_int[i] as f32;
+			let tc_min = surface_tc_min[i] as f32;
 			polygon_data.tex_coord_equation.d_tc_dx[i] -= tc_min * depth_equation.d_inv_z_dx;
 			polygon_data.tex_coord_equation.d_tc_dy[i] -= tc_min * depth_equation.d_inv_z_dy;
 			polygon_data.tex_coord_equation.k[i] -= tc_min * depth_equation.k;
