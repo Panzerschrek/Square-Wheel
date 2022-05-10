@@ -1032,7 +1032,6 @@ fn split_long_polygon_r(polygon: &Polygon, out_polygons: &mut Vec<Polygon>, recu
 	}
 
 	let inf = (1 << 29) as f32;
-	const MAX_LIGHTMAP_SIZE: u32 = 17;
 	for i in 0 .. 2
 	{
 		let mut tc_min = inf;
@@ -1054,7 +1053,7 @@ fn split_long_polygon_r(polygon: &Polygon, out_polygons: &mut Vec<Polygon>, recu
 		let tc_min_int = tc_min.floor() as i32;
 		let tc_max_int = tc_max.ceil() as i32;
 		let lightmap_size = lightmaps_builder::get_lightmap_size(tc_min_int, tc_max_int);
-		if lightmap_size <= MAX_LIGHTMAP_SIZE
+		if lightmap_size <= lightmaps_builder::MAX_LIGHTMAP_SIZE
 		{
 			continue;
 		}

@@ -35,6 +35,10 @@ pub fn build_lightmaps(settings: &LightmappingSettings, map: &mut bsp_map_compac
 pub const LIGHTMAP_SCALE_LOG2: u32 = 4;
 pub const LIGHTMAP_SCALE: u32 = 1 << LIGHTMAP_SCALE_LOG2;
 
+// Limit used for polygons splitting.
+// Actual size may be a little big greater.
+pub const MAX_LIGHTMAP_SIZE: u32 = 17;
+
 pub fn get_polygon_lightmap_size(polygon: &bsp_map_compact::Polygon) -> [u32; 2]
 {
 	[
