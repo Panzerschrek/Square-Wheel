@@ -271,8 +271,10 @@ fn convert_leaf_to_compact_format(
 {
 	let leaf = leaf_ptr.borrow();
 
+	let polygons_splitted = bsp_builder::split_long_polygons(&leaf.polygons);
+
 	let first_polygon = out_map.polygons.len() as u32;
-	for polygon in &leaf.polygons
+	for polygon in &polygons_splitted
 	{
 		let polygon_converted = convert_polygon_to_compact_format(&polygon, out_map, texture_name_to_index_map);
 		out_map.polygons.push(polygon_converted);
@@ -290,7 +292,7 @@ fn convert_leaf_to_compact_format(
 
 	BSPLeaf {
 		first_polygon,
-		num_polygons: leaf.polygons.len() as u32,
+		num_polygons: polygons_splitted.len() as u32,
 		first_leaf_portal,
 		num_leaf_portals: leaf.portals.len() as u32,
 	}
@@ -323,6 +325,15 @@ fn convert_polygon_to_compact_format(
 				tc_max[i] = tc;
 			}
 		}
+	}
+
+	for i in 0 .. 2
+	{
+		// Reduce min/max texture coordinates slightly to avoid adding extra pixels
+		// in case if min/max tex coord is exact integer, but slightly changed due to computational errors.
+		let tc_reduce_eps = 1.0 / 32.0;
+		tc_min[i] += tc_reduce_eps;
+		tc_max[i] -= tc_reduce_eps;
 	}
 
 	let tex_coord_min = [tc_min[0].floor() as i32, tc_min[1].floor() as i32];
@@ -421,7 +432,8 @@ fn convert_submodel_to_compact_format(
 {
 	let first_polygon = out_map.polygons.len() as u32;
 
-	for polygon in &submodel.polygons
+	let polygons_splitted = bsp_builder::split_long_polygons(&submodel.polygons);
+	for polygon in &polygons_splitted
 	{
 		let polygon_converted = convert_polygon_to_compact_format(&polygon, out_map, texture_name_to_index_map);
 		out_map.polygons.push(polygon_converted);
@@ -429,7 +441,7 @@ fn convert_submodel_to_compact_format(
 
 	Submodel {
 		first_polygon,
-		num_polygons: submodel.polygons.len() as u32,
+		num_polygons: polygons_splitted.len() as u32,
 	}
 }
 

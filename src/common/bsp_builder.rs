@@ -1,4 +1,4 @@
-use super::{bbox::*, clipping, map_file, map_polygonizer, math_types::*, plane::*};
+use super::{bbox::*, clipping, lightmaps_builder, map_file, map_polygonizer, math_types::*, plane::*};
 use std::{cell, rc};
 
 pub use map_polygonizer::Polygon;
@@ -1006,4 +1006,75 @@ fn remove_expired_portals_from_leafs_r(node_child: &mut BSPNodeChild)
 				.retain(|portal_weak_ptr| portal_weak_ptr.strong_count() > 0);
 		},
 	}
+}
+
+pub fn split_long_polygons(polygons: &[Polygon]) -> Vec<Polygon>
+{
+	let mut result = Vec::new();
+	for polygon in polygons
+	{
+		split_long_polygon_r(polygon, &mut result, 0)
+	}
+	result
+}
+
+fn split_long_polygon_r(polygon: &Polygon, out_polygons: &mut Vec<Polygon>, recursion_depth: usize)
+{
+	if polygon.vertices.len() < 3
+	{
+		// Something is broken.
+		return;
+	}
+	if recursion_depth > 10
+	{
+		// Something is really broken.
+		return;
+	}
+
+	let inf = (1 << 29) as f32;
+	for i in 0 .. 2
+	{
+		let mut tc_min = inf;
+		let mut tc_max = -inf;
+		for &v in &polygon.vertices
+		{
+			let tc =
+				polygon.texture_info.tex_coord_equation[i].vec.dot(v) + polygon.texture_info.tex_coord_equation[i].dist;
+			if tc < tc_min
+			{
+				tc_min = tc;
+			}
+			if tc > tc_max
+			{
+				tc_max = tc;
+			}
+		}
+
+		let tc_min_int = tc_min.floor() as i32;
+		let tc_max_int = tc_max.ceil() as i32;
+		let lightmap_size = lightmaps_builder::get_lightmap_size(tc_min_int, tc_max_int);
+		if lightmap_size <= lightmaps_builder::MAX_LIGHTMAP_SIZE
+		{
+			continue;
+		}
+
+		// Split this polygon recursively.
+
+		// Round split plane position to lightmap grid.
+		let middle_tc = (tc_max_int + tc_min_int) >> 1;
+		let split_plane_shift = (middle_tc & !((lightmaps_builder::LIGHTMAP_SCALE - 1) as i32)) as f32;
+
+		let split_plane = Plane {
+			vec: polygon.texture_info.tex_coord_equation[i].vec,
+			dist: -polygon.texture_info.tex_coord_equation[i].dist + split_plane_shift,
+		};
+
+		let (p0, p1) = split_polygon(polygon, &split_plane);
+		split_long_polygon_r(&p0, out_polygons, recursion_depth + 1);
+		split_long_polygon_r(&p1, out_polygons, recursion_depth + 1);
+		return;
+	}
+
+	// No need to split this polygon.
+	out_polygons.push(polygon.clone());
 }

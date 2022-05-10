@@ -1,5 +1,5 @@
 use super::{light::*, shadow_map::*};
-use common::{bsp_map_compact, color::*, image, math_types::*, plane::*};
+use common::{bsp_map_compact, color::*, image, lightmaps_builder, math_types::*, plane::*};
 
 pub type LightWithShadowMap<'a, 'b> = (&'a PointLight, &'b CubeShadowMap);
 
@@ -101,10 +101,8 @@ pub fn build_surface_with_lightmap(
 	out_surface_data: &mut [Color32],
 )
 {
-	// TODO - make sure surface is not bigger than this limit.
-	const MAX_LIGHTMAP_SAMPLES: usize = 128;
 	// TODO - use uninitialized memory.
-	let mut line_lightmap = [[0.0, 0.0, 0.0]; MAX_LIGHTMAP_SAMPLES];
+	let mut line_lightmap = [[0.0, 0.0, 0.0]; (lightmaps_builder::MAX_LIGHTMAP_SIZE + 2) as usize];
 	let lightmap_scale_f = (1 << lightmap_scale_log2) as f32;
 	let inv_lightmap_scale_f = 1.0 / lightmap_scale_f;
 	let k_shift = 0.5 * inv_lightmap_scale_f;
