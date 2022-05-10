@@ -327,6 +327,15 @@ fn convert_polygon_to_compact_format(
 		}
 	}
 
+	for i in 0 .. 2
+	{
+		// Reduce min/max texture coordinates slightly to avoid adding extra pixels
+		// in case if min/max tex coord is exact integer, but slightly changed due to computational errors.
+		let tc_reduce_eps = 1.0 / 32.0;
+		tc_min[i] += tc_reduce_eps;
+		tc_max[i] -= tc_reduce_eps;
+	}
+
 	let tex_coord_min = [tc_min[0].floor() as i32, tc_min[1].floor() as i32];
 	let tex_coord_max = [
 		(tc_max[0].ceil() as i32).max(tex_coord_min[0] + 1),
