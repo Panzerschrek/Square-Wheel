@@ -1061,8 +1061,10 @@ fn split_long_polygon_r(polygon: &Polygon, out_polygons: &mut Vec<Polygon>, recu
 
 		// Split this polygon recursively.
 
-		// TODO - round shift to lightmap grid.
-		let split_plane_shift = ((tc_max_int + tc_min_int) as f32) * 0.5;
+		// Round split plane position to lightmap grid.
+		let middle_tc = (tc_max_int + tc_min_int) >> 1;
+		let split_plane_shift = (middle_tc & !((lightmaps_builder::LIGHTMAP_SCALE - 1) as i32)) as f32;
+
 		let split_plane = Plane {
 			vec: polygon.texture_info.tex_coord_equation[i].vec,
 			dist: -polygon.texture_info.tex_coord_equation[i].dist + split_plane_shift,
