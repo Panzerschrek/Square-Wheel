@@ -1007,3 +1007,21 @@ fn remove_expired_portals_from_leafs_r(node_child: &mut BSPNodeChild)
 		},
 	}
 }
+
+pub fn split_long_polygons(polygons: &[Polygon]) -> Vec<Polygon>
+{
+	let mut result = Vec::new();
+	for polygon in polygons
+	{
+		split_long_polygon_r(polygon, &mut result)
+	}
+	result
+}
+
+fn split_long_polygon_r(polygon: &Polygon, out_polygons: &mut Vec<Polygon>)
+{
+	// TODO - perform actual recursive splitting.
+
+	// No need to split this polygon.
+	out_polygons.push(polygon.clone());
+}

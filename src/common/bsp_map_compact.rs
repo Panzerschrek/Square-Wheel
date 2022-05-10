@@ -271,8 +271,10 @@ fn convert_leaf_to_compact_format(
 {
 	let leaf = leaf_ptr.borrow();
 
+	let polygons_splitted = bsp_builder::split_long_polygons(&leaf.polygons);
+
 	let first_polygon = out_map.polygons.len() as u32;
-	for polygon in &leaf.polygons
+	for polygon in &polygons_splitted
 	{
 		let polygon_converted = convert_polygon_to_compact_format(&polygon, out_map, texture_name_to_index_map);
 		out_map.polygons.push(polygon_converted);
@@ -290,7 +292,7 @@ fn convert_leaf_to_compact_format(
 
 	BSPLeaf {
 		first_polygon,
-		num_polygons: leaf.polygons.len() as u32,
+		num_polygons: polygons_splitted.len() as u32,
 		first_leaf_portal,
 		num_leaf_portals: leaf.portals.len() as u32,
 	}
@@ -421,7 +423,8 @@ fn convert_submodel_to_compact_format(
 {
 	let first_polygon = out_map.polygons.len() as u32;
 
-	for polygon in &submodel.polygons
+	let polygons_splitted = bsp_builder::split_long_polygons(&submodel.polygons);
+	for polygon in &polygons_splitted
 	{
 		let polygon_converted = convert_polygon_to_compact_format(&polygon, out_map, texture_name_to_index_map);
 		out_map.polygons.push(polygon_converted);
@@ -429,7 +432,7 @@ fn convert_submodel_to_compact_format(
 
 	Submodel {
 		first_polygon,
-		num_polygons: submodel.polygons.len() as u32,
+		num_polygons: polygons_splitted.len() as u32,
 	}
 }
 
