@@ -814,9 +814,9 @@ fn draw_portal(
 fn get_pseudo_random_color(num: usize) -> Color32
 {
 	Color32::from_rgb(
-		((num * 11) & 255) as u8,
-		((num * 17) & 255) as u8,
-		((num * 23) & 255) as u8,
+		((num * 97) & 255) as u8,
+		((num * 131) & 255) as u8,
+		((num * 163) & 255) as u8,
 	)
 }
 

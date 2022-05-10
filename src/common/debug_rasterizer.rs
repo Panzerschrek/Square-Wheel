@@ -475,7 +475,7 @@ impl<'a> DebugRasterizer<'a>
 				if inv_z >= self.depth_buffer[pix_address]
 				{
 					let z = 1.0 / inv_z;
-					let pix_tc = [(z * tc[0]) as i32, (z * tc[1]) as i32];
+					let pix_tc = [(z * tc[0]).floor() as i32, (z * tc[1]).floor() as i32];
 
 					if (((pix_tc[0] ^ pix_tc[1]) >> 4) & 1) != 0
 					{
