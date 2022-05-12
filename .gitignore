@@ -1,1 +1,7 @@
-src/target
+src/target/
+screenshots/
+other/
+textures/
+
+*.dll
+*.exe
