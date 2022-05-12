@@ -261,7 +261,7 @@ fn parse_plane_equation(it: &mut Iterator) -> ParseResult<Plane>
 
 	let result = Plane {
 		vec: Vec3f::new(parse_number(it)?, parse_number(it)?, parse_number(it)?),
-		dist: parse_number(it)?,
+		dist: -parse_number(it)?,
 	};
 
 	skip_whitespaces(it);
