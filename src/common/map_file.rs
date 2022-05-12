@@ -32,7 +32,7 @@ impl ParseError
 	fn build(it: Iterator) -> Self
 	{
 		ParseError {
-			text_left: it.to_string(),
+			text_left: it[.. std::cmp::min(it.len(), 128)].to_string(),
 		}
 	}
 }
