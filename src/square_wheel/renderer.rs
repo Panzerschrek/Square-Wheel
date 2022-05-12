@@ -506,12 +506,8 @@ impl Renderer
 				tc_max_int = tc_min_int + 1;
 			}
 
-			// Limit max size in case of computational errors.
-			// TODO - split long polygons during export to avoid reducing size for such polygons.
-			let max_surface_size = 2048;
-
 			surface_tc_min[i] = tc_min_int;
-			surface_size[i] = (tc_max_int - tc_min_int).min(max_surface_size);
+			surface_size[i] = tc_max_int - tc_min_int;
 			debug_assert!(tc_min_int >= tc_min_round_down);
 			debug_assert!(tc_max_int <= tc_max_round_up);
 		}
