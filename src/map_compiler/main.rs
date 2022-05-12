@@ -17,6 +17,10 @@ struct Opt
 	/// Print stats of input/result map
 	#[structopt(long)]
 	print_stats: bool,
+
+	/// Input map file format.
+	#[structopt(long)]
+	input_format: Option<String>,
 }
 
 fn main()
@@ -25,15 +29,27 @@ fn main()
 
 	let opt = Opt::from_args();
 	let file_contents_str = std::fs::read_to_string(opt.input).unwrap();
-	let map_file_parsed = map_file::parse_map_file_content(&file_contents_str).unwrap();
-	let map_polygonized = map_polygonizer::polygonize_map(&map_file_parsed);
-	let bsp_tree = bsp_builder::build_leaf_bsp_tree(&map_polygonized);
-	let map_compact = bsp_map_compact::convert_bsp_map_to_compact_format(&bsp_tree, &map_polygonized);
-	bsp_map_save_load::save_map(&map_compact, &opt.output).unwrap();
 
-	if opt.print_stats
+	match opt.input_format.unwrap_or_default().as_str()
 	{
-		print_stats(&map_polygonized, &bsp_tree, &map_compact);
+		"quake4" =>
+		{
+			let map_file_parsed = map_file::parse_map_file_content_q4(&file_contents_str).unwrap();
+			println!("Map file: {:?}", map_file_parsed);
+		},
+		"" | "quake" | _ =>
+		{
+			let map_file_parsed = map_file::parse_map_file_content(&file_contents_str).unwrap();
+			let map_polygonized = map_polygonizer::polygonize_map(&map_file_parsed);
+			let bsp_tree = bsp_builder::build_leaf_bsp_tree(&map_polygonized);
+			let map_compact = bsp_map_compact::convert_bsp_map_to_compact_format(&bsp_tree, &map_polygonized);
+			bsp_map_save_load::save_map(&map_compact, &opt.output).unwrap();
+
+			if opt.print_stats
+			{
+				print_stats(&map_polygonized, &bsp_tree, &map_compact);
+			}
+		},
 	}
 }
 

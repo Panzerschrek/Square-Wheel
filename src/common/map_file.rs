@@ -1,4 +1,4 @@
-use super::math_types::*;
+use super::{math_types::*, plane::*};
 
 #[derive(Debug)]
 pub struct BrushPlane
@@ -20,6 +20,23 @@ pub struct Entity
 }
 
 pub type MapFileParsed = Vec<Entity>;
+
+#[derive(Debug)]
+pub struct BrushPlaneQ4
+{
+	pub plane: Plane,
+}
+
+pub type BrushQ4 = Vec<BrushPlaneQ4>;
+
+#[derive(Default, Debug)]
+pub struct EntityQ4
+{
+	pub brushes: Vec<BrushQ4>,
+	pub keys: std::collections::HashMap<String, String>,
+}
+
+pub type MapFileParsedQ4 = Vec<EntityQ4>;
 
 #[derive(Debug)]
 pub struct ParseError
@@ -60,6 +77,13 @@ pub fn parse_map_file_content(content: Iterator) -> ParseResult<MapFileParsed>
 		}
 		skip_whitespaces(&mut it);
 	}
+
+	Ok(result)
+}
+
+pub fn parse_map_file_content_q4(content: Iterator) -> ParseResult<MapFileParsedQ4>
+{
+	let mut result = MapFileParsedQ4::new();
 
 	Ok(result)
 }
