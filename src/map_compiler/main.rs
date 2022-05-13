@@ -120,7 +120,7 @@ fn get_material_texture_size(
 
 	// TODO - for plain texture try to use different file extensions.
 
-	println!("Can't find image for material {}", texture);
+	println!("Can't find image for material {}, using path {:?}", texture, file_path);
 	[128, 128]
 }
 
