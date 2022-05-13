@@ -3,8 +3,8 @@ use super::{
 	map_visibility_calculator::*, rasterizer::*, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
 };
 use common::{
-	bbox::*, bsp_map_compact, clipping::*, color::*, fixed_math::*, lightmaps_builder, math_types::*, matrix::*,
-	performance_counter::*, plane::*, system_window,
+	bbox::*, bsp_map_compact, clipping::*, color::*, fixed_math::*, lightmaps_builder, material, math_types::*,
+	matrix::*, performance_counter::*, plane::*, system_window,
 };
 use std::rc::Rc;
 
@@ -72,9 +72,12 @@ impl Renderer
 		let config_parsed = RendererConfig::from_app_config(&app_config);
 		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
 
+		// TODO - cache materials globally.
+		let materials = material::load_materials(&std::path::PathBuf::from(config_parsed.materials_path.clone()));
+
 		let textures = load_textures(
-			&config_parsed.textures_path_prefix,
-			&config_parsed.textures_suffix,
+			&materials,
+			&std::path::PathBuf::from(config_parsed.textures_path.clone()),
 			&map.textures,
 		);
 
