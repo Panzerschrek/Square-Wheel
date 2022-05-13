@@ -1,4 +1,4 @@
-use super::{bbox::*, clipping, lightmaps_builder, map_file, map_polygonizer, math_types::*, plane::*};
+use super::{bbox::*, clipping, lightmaps_builder, map_file_common, map_polygonizer, math_types::*, plane::*};
 use std::{cell, rc};
 
 pub use map_polygonizer::Polygon;
@@ -893,7 +893,7 @@ fn collect_entities_positions(map_entities: &[map_polygonizer::Entity]) -> Vec<V
 	{
 		if let Some(origin_str) = entity.keys.get("origin")
 		{
-			if let Ok(origin) = map_file::parse_vec3(origin_str)
+			if let Ok(origin) = map_file_common::parse_vec3(origin_str)
 			{
 				result.push(origin);
 			}

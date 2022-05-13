@@ -1,4 +1,4 @@
-use common::{bsp_builder, bsp_map_compact, bsp_map_save_load, map_file, map_polygonizer};
+use common::{bsp_builder, bsp_map_compact, bsp_map_save_load, map_file_q1, map_file_q4, map_polygonizer};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -34,7 +34,7 @@ fn main()
 	{
 		"quake4" =>
 		{
-			let map_file_parsed = map_file::parse_map_file_content_q4(&file_contents_str).unwrap();
+			let map_file_parsed = map_file_q4::parse_map_file_content(&file_contents_str).unwrap();
 
 			let mut textures_size_cache = std::collections::HashMap::<String, [u32; 2]>::new();
 
@@ -50,7 +50,7 @@ fn main()
 		},
 		"" | "quake" | _ =>
 		{
-			let map_file_parsed = map_file::parse_map_file_content(&file_contents_str).unwrap();
+			let map_file_parsed = map_file_q1::parse_map_file_content(&file_contents_str).unwrap();
 			map_polygonizer::polygonize_map(&map_file_parsed)
 		},
 	};

@@ -1,4 +1,4 @@
-use super::{map_file, math_types::*, plane::Plane};
+use super::{map_file_q1, map_file_q4, math_types::*, plane::Plane};
 
 #[derive(Debug, Clone)]
 pub struct TextureInfo
@@ -24,13 +24,13 @@ pub struct Entity
 
 pub type MapPolygonized = Vec<Entity>;
 
-pub fn polygonize_map(input_map: &[map_file::Entity]) -> MapPolygonized
+pub fn polygonize_map(input_map: &[map_file_q1::Entity]) -> MapPolygonized
 {
 	input_map.iter().map(polygonize_entity).collect()
 }
 
 pub fn polygonize_map_q4<TextureSizeGetter: FnMut(&str) -> [u32; 2]>(
-	input_map: &[map_file::EntityQ4],
+	input_map: &[map_file_q4::Entity],
 	texture_size_getter: &mut TextureSizeGetter,
 ) -> MapPolygonized
 {
@@ -43,7 +43,7 @@ pub fn polygonize_map_q4<TextureSizeGetter: FnMut(&str) -> [u32; 2]>(
 	result
 }
 
-fn polygonize_entity(input_entity: &map_file::Entity) -> Entity
+fn polygonize_entity(input_entity: &map_file_q1::Entity) -> Entity
 {
 	let mut polygons = Vec::new();
 	for brush in &input_entity.brushes
@@ -57,7 +57,7 @@ fn polygonize_entity(input_entity: &map_file::Entity) -> Entity
 	}
 }
 
-fn polygonize_entity_q4(input_entity: &map_file::EntityQ4) -> Entity
+fn polygonize_entity_q4(input_entity: &map_file_q4::Entity) -> Entity
 {
 	let mut polygons = Vec::new();
 	for brush in &input_entity.brushes
@@ -89,7 +89,7 @@ fn correct_texture_basis_scale_q4<TextureSizeGetter: FnMut(&str) -> [u32; 2]>(
 	}
 }
 
-fn polygonize_brush(brush: &[map_file::BrushPlane]) -> Vec<Polygon>
+fn polygonize_brush(brush: &[map_file_q1::BrushPlane]) -> Vec<Polygon>
 {
 	let mut result = Vec::new();
 
@@ -194,7 +194,7 @@ fn polygonize_brush(brush: &[map_file::BrushPlane]) -> Vec<Polygon>
 	result
 }
 
-fn polygonize_brush_q4(brush: &[map_file::BrushPlaneQ4]) -> Vec<Polygon>
+fn polygonize_brush_q4(brush: &[map_file_q4::BrushPlane]) -> Vec<Polygon>
 {
 	let mut result = Vec::new();
 
@@ -279,7 +279,7 @@ fn polygonize_brush_q4(brush: &[map_file::BrushPlaneQ4]) -> Vec<Polygon>
 	result
 }
 
-fn get_brush_side_plane(brush_side: &map_file::BrushPlane) -> Option<Plane>
+fn get_brush_side_plane(brush_side: &map_file_q1::BrushPlane) -> Option<Plane>
 {
 	let vec = (brush_side.vertices[0] - brush_side.vertices[1]).cross(brush_side.vertices[2] - brush_side.vertices[1]);
 	if vec.is_zero()
@@ -385,7 +385,7 @@ pub fn sort_convex_polygon_vertices(mut in_vertices: Vec<Vec3f>, plane: &Plane) 
 	result
 }
 
-fn get_polygon_texture_info(brush_plane: &map_file::BrushPlane, polygon_normal: &Vec3f) -> TextureInfo
+fn get_polygon_texture_info(brush_plane: &map_file_q1::BrushPlane, polygon_normal: &Vec3f) -> TextureInfo
 {
 	let basis = get_texture_basis(polygon_normal);
 
@@ -412,7 +412,7 @@ fn get_polygon_texture_info(brush_plane: &map_file::BrushPlane, polygon_normal: 
 	}
 }
 
-fn get_polygon_texture_info_q4(brush_plane: &map_file::BrushPlaneQ4) -> TextureInfo
+fn get_polygon_texture_info_q4(brush_plane: &map_file_q4::BrushPlane) -> TextureInfo
 {
 	let basis = get_texture_basis(&brush_plane.plane.vec);
 
