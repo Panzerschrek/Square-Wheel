@@ -6,7 +6,7 @@ pub type MaterialsMap = std::collections::HashMap<String, Material>;
 pub struct Material
 {
 	/// Diffuse texture path.
-	pub diffuse: String,
+	pub diffuse: Option<String>,
 
 	/// If false - totally exclude from BSP build. Completely removes all polygons with such materials.
 	#[serde(default = "default_true")]

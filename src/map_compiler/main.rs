@@ -1,4 +1,6 @@
-use common::{bsp_builder, bsp_map_compact, bsp_map_save_load, map_file_q1, map_file_q4, map_polygonizer};
+use common::{
+	bsp_builder, bsp_map_compact, bsp_map_save_load, image, map_file_q1, map_file_q4, map_polygonizer, material,
+};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -21,6 +23,14 @@ struct Opt
 	/// Input map file format.
 	#[structopt(long)]
 	input_format: Option<String>,
+
+	/// Path to directory containing materials.
+	#[structopt(parse(from_os_str), long)]
+	materials_dir: Option<PathBuf>,
+
+	/// Path to directory containing textures.
+	#[structopt(parse(from_os_str), long)]
+	textures_dir: Option<PathBuf>,
 }
 
 fn main()
@@ -28,6 +38,18 @@ fn main()
 	// use "unwrap" in this function. It's fine to abort application if something is wrong.
 
 	let opt = Opt::from_args();
+
+	let materials = if let Some(dir) = opt.materials_dir
+	{
+		material::load_materials(&dir)
+	}
+	else
+	{
+		material::MaterialsMap::new()
+	};
+
+	let textures_dir = opt.textures_dir;
+
 	let file_contents_str = std::fs::read_to_string(opt.input).unwrap();
 
 	let map_polygonized = match opt.input_format.unwrap_or_default().as_str()
@@ -43,7 +65,7 @@ fn main()
 				{
 					return *value;
 				}
-				let value = get_texture_size(texture);
+				let value = get_material_texture_size(&materials, textures_dir.as_ref(), texture);
 				textures_size_cache.insert(texture.to_string(), value);
 				value
 			})
@@ -65,9 +87,40 @@ fn main()
 	}
 }
 
-fn get_texture_size(_texture: &str) -> [u32; 2]
+fn get_material_texture_size(
+	materials: &material::MaterialsMap,
+	textures_dir: Option<&PathBuf>,
+	texture: &str,
+) -> [u32; 2]
 {
-	// TODO - extract real size of texture.
+	let mut file_name = texture.to_string();
+	if let Some(material) = materials.get(texture)
+	{
+		if let Some(diffuse) = &material.diffuse
+		{
+			file_name = diffuse.clone();
+		}
+	}
+
+	let file_path = if let Some(dir) = textures_dir
+	{
+		let mut p = dir.clone();
+		p.push(file_name);
+		p
+	}
+	else
+	{
+		PathBuf::from(file_name)
+	};
+
+	if let Some(image) = image::load(&file_path)
+	{
+		return image.size;
+	}
+
+	// TODO - for plain texture try to use different file extensions.
+
+	println!("Can't find image for material {}", texture);
 	[128, 128]
 }
 
