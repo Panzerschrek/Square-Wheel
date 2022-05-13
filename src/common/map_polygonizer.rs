@@ -29,9 +29,18 @@ pub fn polygonize_map(input_map: &[map_file::Entity]) -> MapPolygonized
 	input_map.iter().map(polygonize_entity).collect()
 }
 
-pub fn polygonize_map_q4(input_map: &[map_file::EntityQ4]) -> MapPolygonized
+pub fn polygonize_map_q4<TextureSizeGetter: FnMut(&str) -> [u32; 2]>(
+	input_map: &[map_file::EntityQ4],
+	texture_size_getter: &mut TextureSizeGetter,
+) -> MapPolygonized
 {
-	input_map.iter().map(polygonize_entity_q4).collect()
+	let mut result = input_map.iter().map(polygonize_entity_q4).collect();
+	for entity in &mut result
+	{
+		correct_texture_basis_scale_q4(entity, texture_size_getter);
+	}
+
+	result
 }
 
 fn polygonize_entity(input_entity: &map_file::Entity) -> Entity
@@ -59,6 +68,24 @@ fn polygonize_entity_q4(input_entity: &map_file::EntityQ4) -> Entity
 	Entity {
 		polygons,
 		keys: input_entity.keys.clone(),
+	}
+}
+
+fn correct_texture_basis_scale_q4<TextureSizeGetter: FnMut(&str) -> [u32; 2]>(
+	entity: &mut Entity,
+	texture_size_getter: &mut TextureSizeGetter,
+)
+{
+	// Quake IV uses normailzed texture coordinates, but we need to use absolute coordinates.
+	// So, perform such conversion.
+	for polygon in &mut entity.polygons
+	{
+		let texture_size = texture_size_getter(&polygon.texture_info.texture);
+		for i in 0 .. 2
+		{
+			polygon.texture_info.tex_coord_equation[i].vec *= texture_size[i] as f32;
+			polygon.texture_info.tex_coord_equation[i].dist *= texture_size[i] as f32;
+		}
 	}
 }
 
@@ -387,18 +414,17 @@ fn get_polygon_texture_info(brush_plane: &map_file::BrushPlane, polygon_normal: 
 
 fn get_polygon_texture_info_q4(brush_plane: &map_file::BrushPlaneQ4) -> TextureInfo
 {
-	// TODO - fix this. Use proper brush texture info.
 	let basis = get_texture_basis(&brush_plane.plane.vec);
 
 	TextureInfo {
 		tex_coord_equation: [
 			Plane {
-				vec: basis[0],
-				dist: 0.0,
+				vec: basis[0] * brush_plane.tex_axis[0].scale.x + basis[1] * brush_plane.tex_axis[0].scale.y,
+				dist: brush_plane.tex_axis[0].offset,
 			},
 			Plane {
-				vec: basis[1],
-				dist: 0.0,
+				vec: basis[0] * brush_plane.tex_axis[1].scale.x + basis[1] * brush_plane.tex_axis[1].scale.y,
+				dist: brush_plane.tex_axis[1].offset,
 			},
 		],
 		texture: brush_plane.texture.clone(),

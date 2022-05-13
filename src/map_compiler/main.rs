@@ -35,7 +35,18 @@ fn main()
 		"quake4" =>
 		{
 			let map_file_parsed = map_file::parse_map_file_content_q4(&file_contents_str).unwrap();
-			map_polygonizer::polygonize_map_q4(&map_file_parsed)
+
+			let mut textures_size_cache = std::collections::HashMap::<String, [u32; 2]>::new();
+
+			map_polygonizer::polygonize_map_q4(&map_file_parsed, &mut |texture| {
+				if let Some(value) = textures_size_cache.get(texture)
+				{
+					return *value;
+				}
+				let value = get_texture_size(texture);
+				textures_size_cache.insert(texture.to_string(), value);
+				value
+			})
 		},
 		"" | "quake" | _ =>
 		{
@@ -52,6 +63,12 @@ fn main()
 	{
 		print_stats(&map_polygonized, &bsp_tree, &map_compact);
 	}
+}
+
+fn get_texture_size(_texture: &str) -> [u32; 2]
+{
+	// TODO - extract real size of texture.
+	[128, 128]
 }
 
 fn print_stats(
