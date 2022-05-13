@@ -69,10 +69,14 @@ impl Renderer
 {
 	pub fn new(app_config: config::ConfigSharedPtr, map: Rc<bsp_map_compact::BSPMap>) -> Self
 	{
-		let textures = load_textures(&map.textures);
-
 		let config_parsed = RendererConfig::from_app_config(&app_config);
 		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
+
+		let textures = load_textures(
+			&config_parsed.textures_path_prefix,
+			&config_parsed.textures_suffix,
+			&map.textures,
+		);
 
 		Renderer {
 			app_config,

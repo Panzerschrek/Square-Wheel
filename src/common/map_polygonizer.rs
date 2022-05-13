@@ -1,4 +1,4 @@
-use super::{map_file, math_types::*, plane::Plane};
+use super::{map_file_q1, map_file_q4, math_types::*, plane::Plane};
 
 #[derive(Debug, Clone)]
 pub struct TextureInfo
@@ -24,12 +24,26 @@ pub struct Entity
 
 pub type MapPolygonized = Vec<Entity>;
 
-pub fn polygonize_map(input_map: &[map_file::Entity]) -> MapPolygonized
+pub fn polygonize_map(input_map: &[map_file_q1::Entity]) -> MapPolygonized
 {
 	input_map.iter().map(polygonize_entity).collect()
 }
 
-fn polygonize_entity(input_entity: &map_file::Entity) -> Entity
+pub fn polygonize_map_q4<TextureSizeGetter: FnMut(&str) -> [u32; 2]>(
+	input_map: &[map_file_q4::Entity],
+	texture_size_getter: &mut TextureSizeGetter,
+) -> MapPolygonized
+{
+	let mut result = input_map.iter().map(polygonize_entity_q4).collect();
+	for entity in &mut result
+	{
+		correct_texture_basis_scale_q4(entity, texture_size_getter);
+	}
+
+	result
+}
+
+fn polygonize_entity(input_entity: &map_file_q1::Entity) -> Entity
 {
 	let mut polygons = Vec::new();
 	for brush in &input_entity.brushes
@@ -43,7 +57,39 @@ fn polygonize_entity(input_entity: &map_file::Entity) -> Entity
 	}
 }
 
-fn polygonize_brush(brush: &[map_file::BrushPlane]) -> Vec<Polygon>
+fn polygonize_entity_q4(input_entity: &map_file_q4::Entity) -> Entity
+{
+	let mut polygons = Vec::new();
+	for brush in &input_entity.brushes
+	{
+		polygons.append(&mut polygonize_brush_q4(brush));
+	}
+
+	Entity {
+		polygons,
+		keys: input_entity.keys.clone(),
+	}
+}
+
+fn correct_texture_basis_scale_q4<TextureSizeGetter: FnMut(&str) -> [u32; 2]>(
+	entity: &mut Entity,
+	texture_size_getter: &mut TextureSizeGetter,
+)
+{
+	// Quake IV uses normailzed texture coordinates, but we need to use absolute coordinates.
+	// So, perform such conversion.
+	for polygon in &mut entity.polygons
+	{
+		let texture_size = texture_size_getter(&polygon.texture_info.texture);
+		for i in 0 .. 2
+		{
+			polygon.texture_info.tex_coord_equation[i].vec *= texture_size[i] as f32;
+			polygon.texture_info.tex_coord_equation[i].dist *= texture_size[i] as f32;
+		}
+	}
+}
+
+fn polygonize_brush(brush: &[map_file_q1::BrushPlane]) -> Vec<Polygon>
 {
 	let mut result = Vec::new();
 
@@ -148,7 +194,92 @@ fn polygonize_brush(brush: &[map_file::BrushPlane]) -> Vec<Polygon>
 	result
 }
 
-fn get_brush_side_plane(brush_side: &map_file::BrushPlane) -> Option<Plane>
+fn polygonize_brush_q4(brush: &[map_file_q4::BrushPlane]) -> Vec<Polygon>
+{
+	let mut result = Vec::new();
+
+	// Iterate over all brush planes "i".
+	// For each brush plane iterate over all possible pairs of planes and build point of intersection.
+	// Than check if this point is lies behind brush plane. If so - add point to result.
+	for i in 0 .. brush.len()
+	{
+		let plane_i = &brush[i].plane;
+
+		let mut vertices = Vec::new();
+		for j in 0 .. brush.len()
+		{
+			if j == i
+			{
+				continue;
+			}
+			let plane_j = &brush[j].plane;
+
+			for k in j + 1 .. brush.len()
+			{
+				if k == i
+				{
+					continue;
+				}
+				let plane_k = &brush[k].plane;
+
+				// Find intersection point by solving system of 3 linear equations.
+				// Do this using approach with inverse matrix calculation.
+				let mat = Mat3f::from_cols(plane_i.vec, plane_j.vec, plane_k.vec).transpose();
+				let inv_mat_opt = mat.invert();
+				if inv_mat_opt.is_none()
+				{
+					continue; // No solution - some planes are parallel.
+				}
+				let intersection_point = inv_mat_opt.unwrap() * Vec3f::new(plane_i.dist, plane_j.dist, plane_k.dist);
+
+				let mut is_behind_another_plane = false;
+				for l in 0 .. brush.len()
+				{
+					if l == i || l == j || l == k
+					{
+						continue;
+					}
+					let plane_l = &brush[l].plane;
+
+					if intersection_point.dot(plane_l.vec) > plane_l.dist
+					{
+						is_behind_another_plane = true;
+						break;
+					}
+				} // for l
+
+				if !is_behind_another_plane
+				{
+					vertices.push(intersection_point);
+				}
+			} // for k
+		} // for j
+
+		vertices = remove_duplicate_vertices(&vertices);
+		if vertices.len() < 3
+		{
+			println!("Wrong polygon with only {} vertices", vertices.len());
+			continue;
+		}
+
+		let vertices_sorted = sort_convex_polygon_vertices(vertices, &plane_i);
+		if vertices_sorted.len() < 3
+		{
+			println!("Wrong polygon with only {} vertices_sorted", vertices_sorted.len());
+			continue;
+		}
+
+		result.push(Polygon {
+			plane: *plane_i,
+			texture_info: get_polygon_texture_info_q4(&brush[i]),
+			vertices: vertices_sorted,
+		});
+	} // for i
+
+	result
+}
+
+fn get_brush_side_plane(brush_side: &map_file_q1::BrushPlane) -> Option<Plane>
 {
 	let vec = (brush_side.vertices[0] - brush_side.vertices[1]).cross(brush_side.vertices[2] - brush_side.vertices[1]);
 	if vec.is_zero()
@@ -254,7 +385,7 @@ pub fn sort_convex_polygon_vertices(mut in_vertices: Vec<Vec3f>, plane: &Plane) 
 	result
 }
 
-fn get_polygon_texture_info(brush_plane: &map_file::BrushPlane, polygon_normal: &Vec3f) -> TextureInfo
+fn get_polygon_texture_info(brush_plane: &map_file_q1::BrushPlane, polygon_normal: &Vec3f) -> TextureInfo
 {
 	let basis = get_texture_basis(polygon_normal);
 
@@ -275,6 +406,25 @@ fn get_polygon_texture_info(brush_plane: &map_file::BrushPlane, polygon_normal: 
 			Plane {
 				vec: basis_rotated[1] / brush_plane.tc_scale[1],
 				dist: brush_plane.tc_offset[1],
+			},
+		],
+		texture: brush_plane.texture.clone(),
+	}
+}
+
+fn get_polygon_texture_info_q4(brush_plane: &map_file_q4::BrushPlane) -> TextureInfo
+{
+	let basis = get_texture_basis(&brush_plane.plane.vec);
+
+	TextureInfo {
+		tex_coord_equation: [
+			Plane {
+				vec: basis[0] * brush_plane.tex_axis[0].scale.x + basis[1] * brush_plane.tex_axis[0].scale.y,
+				dist: brush_plane.tex_axis[0].offset,
+			},
+			Plane {
+				vec: basis[0] * brush_plane.tex_axis[1].scale.x + basis[1] * brush_plane.tex_axis[1].scale.y,
+				dist: brush_plane.tex_axis[1].offset,
 			},
 		],
 		texture: brush_plane.texture.clone(),

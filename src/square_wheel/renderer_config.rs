@@ -25,6 +25,12 @@ pub struct RendererConfig
 
 	#[serde(default)]
 	pub dynamic_mip_bias: bool,
+
+	#[serde(default)]
+	pub textures_path_prefix: String,
+
+	#[serde(default)]
+	pub textures_suffix: String,
 }
 
 impl RendererConfig

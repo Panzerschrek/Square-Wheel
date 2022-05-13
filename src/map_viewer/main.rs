@@ -1,5 +1,5 @@
 use common::{
-	bsp_builder, bsp_map_compact, bsp_map_save_load, debug_renderer, map_file, map_polygonizer, matrix::*,
+	bsp_builder, bsp_map_compact, bsp_map_save_load, debug_renderer, map_file_q1, map_polygonizer, matrix::*,
 	system_window,
 };
 use sdl2::{event::Event, keyboard::Keycode};
@@ -57,7 +57,7 @@ pub fn main()
 	if let Some(path) = &opt.input
 	{
 		let file_contents_str = std::fs::read_to_string(path).unwrap();
-		map_file_parsed_opt = map_file::parse_map_file_content(&file_contents_str).ok();
+		map_file_parsed_opt = map_file_q1::parse_map_file_content(&file_contents_str).ok();
 		if opt.draw_polygonized_map ||
 			opt.draw_bsp_map ||
 			opt.draw_bsp_map_compact ||

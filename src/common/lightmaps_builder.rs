@@ -1,4 +1,4 @@
-use super::{bsp_map_compact, map_file, math_types::*};
+use super::{bsp_map_compact, map_file_common, math_types::*};
 use std::io::Write;
 
 pub struct LightmappingSettings
@@ -88,21 +88,21 @@ fn extract_map_lights(map: &bsp_map_compact::BSPMap) -> Vec<PointLight>
 			}
 			if key == "origin"
 			{
-				if let Ok(o) = map_file::parse_vec3(value)
+				if let Ok(o) = map_file_common::parse_vec3(value)
 				{
 					origin = Some(o);
 				}
 			}
 			if key.starts_with("light") || key == "_light"
 			{
-				if let Ok(i) = map_file::parse_number(&mut value.clone())
+				if let Ok(i) = map_file_common::parse_number(&mut value.clone())
 				{
 					intensity = Some(i);
 				}
 			}
 			if key == "color"
 			{
-				if let Ok(c) = map_file::parse_vec3(value)
+				if let Ok(c) = map_file_common::parse_vec3(value)
 				{
 					color = Some(c);
 				}

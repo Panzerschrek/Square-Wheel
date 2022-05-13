@@ -1,6 +1,6 @@
 use super::{
-	bsp_builder, bsp_map_compact, clipping::*, color::*, debug_rasterizer::*, fixed_math::*, map_file, map_polygonizer,
-	math_types::*, matrix::*, plane::*, system_window,
+	bsp_builder, bsp_map_compact, clipping::*, color::*, debug_rasterizer::*, fixed_math::*, map_file_q1,
+	map_polygonizer, math_types::*, matrix::*, plane::*, system_window,
 };
 
 #[derive(Default)]
@@ -22,7 +22,7 @@ pub fn draw_frame(
 	surface_info: &system_window::SurfaceInfo,
 	draw_options: &DrawOptions,
 	camera_matrices: &CameraMatrices,
-	map: Option<&map_file::MapFileParsed>,
+	map: Option<&map_file_q1::MapFileParsed>,
 	map_polygonized: Option<&map_polygonizer::MapPolygonized>,
 	map_bsp: Option<&bsp_builder::BSPTree>,
 	map_bsp_compact: Option<&bsp_map_compact::BSPMap>,
@@ -56,7 +56,7 @@ fn draw_map(
 	surface_info: &system_window::SurfaceInfo,
 	draw_options: &DrawOptions,
 	camera_matrices: &CameraMatrices,
-	map: Option<&map_file::MapFileParsed>,
+	map: Option<&map_file_q1::MapFileParsed>,
 	map_polygonized: Option<&map_polygonizer::MapPolygonized>,
 	map_bsp: Option<&bsp_builder::BSPTree>,
 	map_bsp_compact: Option<&bsp_map_compact::BSPMap>,
@@ -158,7 +158,7 @@ fn draw_map(
 fn draw_map_brushes(
 	rasterizer: &mut DebugRasterizer,
 	camera_matrices: &CameraMatrices,
-	map: &map_file::MapFileParsed,
+	map: &map_file_q1::MapFileParsed,
 	draw_only_first_entity: bool,
 )
 {

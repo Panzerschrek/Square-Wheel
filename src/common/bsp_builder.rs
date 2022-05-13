@@ -1,4 +1,4 @@
-use super::{bbox::*, clipping, lightmaps_builder, map_file, map_polygonizer, math_types::*, plane::*};
+use super::{bbox::*, clipping, lightmaps_builder, map_file_common, map_polygonizer, math_types::*, plane::*};
 use std::{cell, rc};
 
 pub use map_polygonizer::Polygon;
@@ -53,7 +53,7 @@ pub fn build_leaf_bsp_tree(map_entities: &[map_polygonizer::Entity]) -> BSPTree
 	let bbox = build_bounding_box(&world_entity);
 
 	// Build BSP tree for world entity.
-	let mut tree_root = build_leaf_bsp_tree_r(world_entity.polygons.clone());
+	let mut tree_root = build_leaf_bsp_tree_r(filter_out_invisible_polygons(&world_entity.polygons));
 
 	// Build portals as links between BSP leafs.
 	let mut portals = build_protals(&tree_root, &bbox);
@@ -84,6 +84,30 @@ pub fn build_leaf_bsp_tree(map_entities: &[map_polygonizer::Entity]) -> BSPTree
 		root: tree_root,
 		portals,
 	}
+}
+
+fn filter_out_invisible_polygons(polygons: &[Polygon]) -> Vec<Polygon>
+{
+	let mut result = Vec::new();
+
+	for polygon in polygons
+	{
+		// HACK!
+		// Just skip polygons with materials specific for Quake IV.
+		// TODO - introduce own materials system.
+		if !is_q4_invisible_material(&polygon.texture_info.texture)
+		{
+			result.push(polygon.clone());
+		}
+	}
+	result
+}
+
+fn is_q4_invisible_material(material: &str) -> bool
+{
+	material == "textures/common/player_clip" ||
+		material == "textures/editor/visportal" ||
+		material == "textures/common/nodraw"
 }
 
 fn build_bounding_box(entity: &map_polygonizer::Entity) -> BBox
@@ -869,7 +893,7 @@ fn collect_entities_positions(map_entities: &[map_polygonizer::Entity]) -> Vec<V
 	{
 		if let Some(origin_str) = entity.keys.get("origin")
 		{
-			if let Ok(origin) = map_file::parse_vec3(origin_str)
+			if let Ok(origin) = map_file_common::parse_vec3(origin_str)
 			{
 				result.push(origin);
 			}
