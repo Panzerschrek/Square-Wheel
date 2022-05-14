@@ -21,7 +21,12 @@ pub fn build_surface(
 		plane.vec.extend(-plane.dist),
 		Vec4f::new(0.0, 0.0, 0.0, 1.0),
 	);
-	let tex_coord_basis_inverted = tex_coord_basis.transpose().invert().unwrap(); // TODO - avoid "unwrap"?
+	let tex_coord_basis_inverted_opt = tex_coord_basis.transpose().invert();
+	if tex_coord_basis_inverted_opt.is_none()
+	{
+		return;
+	}
+	let tex_coord_basis_inverted = tex_coord_basis_inverted_opt.unwrap();
 
 	let u_vec = tex_coord_basis_inverted.x.truncate();
 	let v_vec = tex_coord_basis_inverted.y.truncate();
