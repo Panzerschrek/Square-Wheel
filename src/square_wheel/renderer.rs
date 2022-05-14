@@ -26,6 +26,7 @@ pub struct Renderer
 	num_visible_surfaces_pixels: usize,
 	mip_bias: f32,
 	textures: Vec<TextureWithMips>,
+	map_materials: Vec<material::Material>,
 	performance_counters: RendererPerformanceCounters,
 }
 
@@ -75,10 +76,31 @@ impl Renderer
 		// TODO - cache materials globally.
 		let materials = material::load_materials(&std::path::PathBuf::from(config_parsed.materials_path.clone()));
 
+		let mut map_materials = Vec::with_capacity(map.textures.len());
+		for texture_name in &map.textures
+		{
+			let null_pos = texture_name
+				.iter()
+				.position(|x| *x == 0_u8)
+				.unwrap_or(texture_name.len());
+			let range = &texture_name[0 .. null_pos];
+
+			let material_name_string = std::str::from_utf8(range).unwrap_or("").to_string();
+			let material = if let Some(material) = materials.get(&material_name_string)
+			{
+				material.clone()
+			}
+			else
+			{
+				println!("Failed to find material \"{}\"", material_name_string);
+				material::Material::default()
+			};
+			map_materials.push(material);
+		}
+
 		let textures = load_textures(
-			&materials,
+			&map_materials,
 			&std::path::PathBuf::from(config_parsed.textures_path.clone()),
-			&map.textures,
 		);
 
 		Renderer {
@@ -95,6 +117,7 @@ impl Renderer
 			shadows_maps_renderer: DepthRenderer::new(map.clone()),
 			map,
 			textures,
+			map_materials,
 			performance_counters: RendererPerformanceCounters::new(),
 		}
 	}
@@ -670,6 +693,10 @@ impl Renderer
 			{
 				continue;
 			}
+			if !self.map_materials[polygon.texture as usize].draw
+			{
+				continue;
+			}
 
 			draw_polygon(
 				rasterizer,
@@ -746,6 +773,10 @@ impl Renderer
 		let polygon = &self.map.polygons[polygon_index as usize];
 		let polygon_data = &self.polygons_data[polygon_index as usize];
 		if polygon_data.visible_frame != self.current_frame
+		{
+			return;
+		}
+		if !self.map_materials[polygon.texture as usize].draw
 		{
 			return;
 		}

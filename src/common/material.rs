@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 pub type MaterialsMap = std::collections::HashMap<String, Material>;
 
-#[derive(Serialize, Deserialize, Default, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Material
 {
 	/// Diffuse texture path.
@@ -24,6 +24,20 @@ pub struct Material
 	/// If true - polygon is affected by light and has lightmap.
 	#[serde(default = "default_true")]
 	pub light: bool,
+}
+
+impl Default for Material
+{
+	fn default() -> Self
+	{
+		Self {
+			diffuse: None,
+			bsp: true,
+			draw: true,
+			blocks_view: true,
+			light: true,
+		}
+	}
 }
 
 pub fn load_materials(dir_path: &std::path::Path) -> MaterialsMap

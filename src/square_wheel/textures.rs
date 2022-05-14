@@ -1,50 +1,30 @@
-use common::{bsp_map_compact, color::*, image, material};
+use common::{color::*, image, material};
 
 // MAX_MIP must be not greater, than LIGHTMAP_SCALE_LOG2
 pub const MAX_MIP: usize = 3;
 pub const NUM_MIPS: usize = MAX_MIP + 1;
 pub type TextureWithMips = [image::Image; NUM_MIPS];
 
-pub fn load_textures(
-	materials: &material::MaterialsMap,
-	textures_path: &std::path::Path,
-	in_textures: &[bsp_map_compact::Texture],
-) -> Vec<TextureWithMips>
+pub fn load_textures(materials: &[material::Material], textures_path: &std::path::Path) -> Vec<TextureWithMips>
 {
 	let mut result = Vec::new();
 
-	for texture_name in in_textures
+	for material in materials
 	{
-		let null_pos = texture_name
-			.iter()
-			.position(|x| *x == 0_u8)
-			.unwrap_or(texture_name.len());
-		let range = &texture_name[0 .. null_pos];
+		let mut texture_path = std::path::PathBuf::from(textures_path);
+		texture_path.push(material.diffuse.clone().unwrap_or_else(|| String::new()));
 
-		let material_name_string = std::str::from_utf8(range).unwrap_or("").to_string();
-
-		if let Some(material) = materials.get(&material_name_string)
+		let mip0 = if let Some(image) = image::load(&texture_path)
 		{
-			let mut texture_path = std::path::PathBuf::from(textures_path);
-			texture_path.push(material.diffuse.clone().unwrap_or_else(|| String::new()));
-
-			let mip0 = if let Some(image) = image::load(&texture_path)
-			{
-				image
-			}
-			else
-			{
-				println!("Failed to load texture {:?}", texture_path);
-				make_stub_texture()
-			};
-
-			result.push(build_mips(mip0));
+			image
 		}
 		else
 		{
-			println!("Failed to find material {:?}", material_name_string);
-			result.push(build_mips(make_stub_texture()));
-		}
+			println!("Failed to load texture {:?}", texture_path);
+			make_stub_texture()
+		};
+
+		result.push(build_mips(mip0));
 	}
 
 	result

@@ -6,5 +6,12 @@
 		"draw" : false,
 		"blocks_view": false,
 		"light": false
+	},
+	"TRIGGER":
+	{
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
 	}
 }
