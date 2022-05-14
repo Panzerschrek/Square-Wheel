@@ -61,6 +61,7 @@ pub struct Polygon
 	// We can't recalculate this values after map loading since calculation result may be different due to floating-point calculation errors.
 	pub tex_coord_min: [i32; 2],
 	pub tex_coord_max: [i32; 2],
+	// Offset is zero if this polygon hs no lightmap.
 	pub lightmap_data_offset: u32,
 	pub texture: u32,
 }

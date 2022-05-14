@@ -1,4 +1,4 @@
-use super::{bsp_map_compact, map_file_common, math_types::*};
+use super::{bsp_map_compact, map_file_common, material, math_types::*};
 use std::io::Write;
 
 pub struct LightmappingSettings
@@ -7,7 +7,11 @@ pub struct LightmappingSettings
 	pub light_scale: f32,
 }
 
-pub fn build_lightmaps(settings: &LightmappingSettings, map: &mut bsp_map_compact::BSPMap)
+pub fn build_lightmaps(
+	settings: &LightmappingSettings,
+	materials: &material::MaterialsMap,
+	map: &mut bsp_map_compact::BSPMap,
+)
 {
 	let sample_grid_size = settings.sample_grid_size.min(MAX_SAMPLE_GRID_SIZE);
 
@@ -21,7 +25,7 @@ pub fn build_lightmaps(settings: &LightmappingSettings, map: &mut bsp_map_compac
 		l.color[2] *= settings.light_scale;
 	}
 
-	allocate_lightmaps(map);
+	allocate_lightmaps(materials, map);
 	println!("Lightmap texels: {}", map.lightmaps_data.len());
 
 	test_fill_lightmaps(map);
@@ -133,18 +137,47 @@ fn extract_map_lights(map: &bsp_map_compact::BSPMap) -> Vec<PointLight>
 	result
 }
 
-fn allocate_lightmaps(map: &mut bsp_map_compact::BSPMap)
+fn allocate_lightmaps(materials: &material::MaterialsMap, map: &mut bsp_map_compact::BSPMap)
 {
-	let mut offset = 0;
+	// Reserve offset=0 as "no lightmap" flag.
+
+	let mut offset = 1;
 	for polygon in &mut map.polygons
 	{
-		let size = get_polygon_lightmap_size(polygon);
-		polygon.lightmap_data_offset = offset as u32;
-		offset += (size[0] * size[1]) as usize;
+		let has_lightmap = if let Some(material) = materials.get(get_map_texture_string(&map.textures, polygon.texture))
+		{
+			material.light
+		}
+		else
+		{
+			true
+		};
+
+		if has_lightmap
+		{
+			let size = get_polygon_lightmap_size(polygon);
+			polygon.lightmap_data_offset = offset as u32;
+			offset += (size[0] * size[1]) as usize;
+		}
+		else
+		{
+			polygon.lightmap_data_offset = 0;
+		}
 	}
 
 	map.lightmaps_data.clear();
 	map.lightmaps_data.resize(offset, [0.0, 0.0, 0.0]);
+}
+
+fn get_map_texture_string(map_textures: &[bsp_map_compact::Texture], texture_index: u32) -> &str
+{
+	let texture_name = &map_textures[texture_index as usize];
+	let null_pos = texture_name
+		.iter()
+		.position(|x| *x == 0_u8)
+		.unwrap_or(texture_name.len());
+	let range = &texture_name[0 .. null_pos];
+	std::str::from_utf8(range).unwrap_or("")
 }
 
 fn test_fill_lightmaps(map: &mut bsp_map_compact::BSPMap)
@@ -170,6 +203,11 @@ fn build_primary_lightmaps(sample_grid_size: u32, lights: &[PointLight], map: &m
 	let texels_total = map.lightmaps_data.len();
 	for i in 0 .. map.polygons.len()
 	{
+		if map.polygons[i].lightmap_data_offset == 0
+		{
+			// No lightmap for this polygon.
+			continue;
+		}
 		build_primary_lightmap(sample_grid_size, lights, i, map);
 
 		// Calculate and show progress.
