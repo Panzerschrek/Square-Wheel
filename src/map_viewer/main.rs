@@ -1,5 +1,5 @@
 use common::{
-	bsp_builder, bsp_map_compact, bsp_map_save_load, debug_renderer, map_file_q1, map_polygonizer, matrix::*,
+	bsp_builder, bsp_map_compact, bsp_map_save_load, debug_renderer, map_file_q1, map_polygonizer, material, matrix::*,
 	system_window,
 };
 use sdl2::{event::Event, keyboard::Keycode};
@@ -72,7 +72,10 @@ pub fn main()
 					opt.draw_map_sectors_graph ||
 					opt.draw_map_sectors_graph_compact
 				{
-					map_bsp_tree_opt = Some(bsp_builder::build_leaf_bsp_tree(&map_polygonized));
+					map_bsp_tree_opt = Some(bsp_builder::build_leaf_bsp_tree(
+						&map_polygonized,
+						&material::MaterialsMap::new(),
+					));
 					if opt.draw_bsp_map_compact || opt.draw_map_sectors_graph_compact
 					{
 						map_bsp_compact_opt = Some(bsp_map_compact::convert_bsp_map_to_compact_format(

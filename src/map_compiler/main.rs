@@ -77,7 +77,7 @@ fn main()
 		},
 	};
 
-	let bsp_tree = bsp_builder::build_leaf_bsp_tree(&map_polygonized);
+	let bsp_tree = bsp_builder::build_leaf_bsp_tree(&map_polygonized, &materials);
 	let map_compact = bsp_map_compact::convert_bsp_map_to_compact_format(&bsp_tree, &map_polygonized);
 	bsp_map_save_load::save_map(&map_compact, &opt.output).unwrap();
 
