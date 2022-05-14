@@ -1,0 +1,10 @@
+{
+	"CLIP":
+	{
+		"comment": "TODO - add such polygons into BPS for collisions detection",
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	}
+}
