@@ -406,6 +406,12 @@ impl Renderer
 			return;
 		}
 
+		if !self.map_materials[polygon.texture as usize].draw
+		{
+			// Do not prepare surfaces for invisible polygons.
+			return;
+		}
+
 		// Transform polygon vertices once and put transformation result into transformed vertices container.
 		// Use these vertices later also for rasterization.
 		let polygon_vertices_range =
@@ -693,10 +699,6 @@ impl Renderer
 			{
 				continue;
 			}
-			if !self.map_materials[polygon.texture as usize].draw
-			{
-				continue;
-			}
 
 			draw_polygon(
 				rasterizer,
@@ -773,10 +775,6 @@ impl Renderer
 		let polygon = &self.map.polygons[polygon_index as usize];
 		let polygon_data = &self.polygons_data[polygon_index as usize];
 		if polygon_data.visible_frame != self.current_frame
-		{
-			return;
-		}
-		if !self.map_materials[polygon.texture as usize].draw
 		{
 			return;
 		}
