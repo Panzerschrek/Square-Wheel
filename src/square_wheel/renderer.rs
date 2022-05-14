@@ -3,8 +3,8 @@ use super::{
 	map_visibility_calculator::*, rasterizer::*, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
 };
 use common::{
-	bbox::*, bsp_map_compact, clipping::*, color::*, fixed_math::*, lightmaps_builder, math_types::*, matrix::*,
-	performance_counter::*, plane::*, system_window,
+	bbox::*, bsp_map_compact, clipping::*, color::*, fixed_math::*, lightmaps_builder, material, math_types::*,
+	matrix::*, performance_counter::*, plane::*, system_window,
 };
 use std::rc::Rc;
 
@@ -26,6 +26,7 @@ pub struct Renderer
 	num_visible_surfaces_pixels: usize,
 	mip_bias: f32,
 	textures: Vec<TextureWithMips>,
+	map_materials: Vec<material::Material>,
 	performance_counters: RendererPerformanceCounters,
 }
 
@@ -72,10 +73,34 @@ impl Renderer
 		let config_parsed = RendererConfig::from_app_config(&app_config);
 		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
 
+		// TODO - cache materials globally.
+		let materials = material::load_materials(&std::path::PathBuf::from(config_parsed.materials_path.clone()));
+
+		let mut map_materials = Vec::with_capacity(map.textures.len());
+		for texture_name in &map.textures
+		{
+			let null_pos = texture_name
+				.iter()
+				.position(|x| *x == 0_u8)
+				.unwrap_or(texture_name.len());
+			let range = &texture_name[0 .. null_pos];
+
+			let material_name_string = std::str::from_utf8(range).unwrap_or("").to_string();
+			let material = if let Some(material) = materials.get(&material_name_string)
+			{
+				material.clone()
+			}
+			else
+			{
+				println!("Failed to find material \"{}\"", material_name_string);
+				material::Material::default()
+			};
+			map_materials.push(material);
+		}
+
 		let textures = load_textures(
-			&config_parsed.textures_path_prefix,
-			&config_parsed.textures_suffix,
-			&map.textures,
+			&map_materials,
+			&std::path::PathBuf::from(config_parsed.textures_path.clone()),
 		);
 
 		Renderer {
@@ -92,6 +117,7 @@ impl Renderer
 			shadows_maps_renderer: DepthRenderer::new(map.clone()),
 			map,
 			textures,
+			map_materials,
 			performance_counters: RendererPerformanceCounters::new(),
 		}
 	}
@@ -556,7 +582,7 @@ impl Renderer
 			let surface_data = &mut self.surfaces_pixels
 				[surface_pixels_offset .. (surface_pixels_offset + ((surface_size[0] * surface_size[1]) as usize))];
 
-			if self.map.lightmaps_data.is_empty()
+			if polygon.lightmap_data_offset == 0
 			{
 				let mip_scale = 1.0 / (1 << polygon_data.mip) as f32;
 				let tex_coord_equation_scaled = [
@@ -667,6 +693,10 @@ impl Renderer
 			{
 				continue;
 			}
+			if !self.map_materials[polygon.texture as usize].draw
+			{
+				continue;
+			}
 
 			draw_polygon(
 				rasterizer,
@@ -743,6 +773,10 @@ impl Renderer
 		let polygon = &self.map.polygons[polygon_index as usize];
 		let polygon_data = &self.polygons_data[polygon_index as usize];
 		if polygon_data.visible_frame != self.current_frame
+		{
+			return;
+		}
+		if !self.map_materials[polygon.texture as usize].draw
 		{
 			return;
 		}

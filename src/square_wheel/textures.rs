@@ -1,32 +1,18 @@
-use common::{bsp_map_compact, color::*, image};
+use common::{color::*, image, material};
 
 // MAX_MIP must be not greater, than LIGHTMAP_SCALE_LOG2
 pub const MAX_MIP: usize = 3;
 pub const NUM_MIPS: usize = MAX_MIP + 1;
 pub type TextureWithMips = [image::Image; NUM_MIPS];
 
-pub fn load_textures(
-	path_prefix: &str,
-	file_suffix: &str,
-	in_textures: &[bsp_map_compact::Texture],
-) -> Vec<TextureWithMips>
+pub fn load_textures(materials: &[material::Material], textures_path: &std::path::Path) -> Vec<TextureWithMips>
 {
-	let textures_dir = std::path::PathBuf::from(path_prefix);
 	let mut result = Vec::new();
 
-	for texture_name in in_textures
+	for material in materials
 	{
-		let null_pos = texture_name
-			.iter()
-			.position(|x| *x == 0_u8)
-			.unwrap_or(texture_name.len());
-		let range = &texture_name[0 .. null_pos];
-
-		let texture_name_string = std::str::from_utf8(range).unwrap_or("").to_string();
-		let texture_name_with_extension = texture_name_string + file_suffix;
-
-		let mut texture_path = textures_dir.clone();
-		texture_path.push(texture_name_with_extension);
+		let mut texture_path = std::path::PathBuf::from(textures_path);
+		texture_path.push(material.diffuse.clone().unwrap_or_else(|| String::new()));
 
 		let mip0 = if let Some(image) = image::load(&texture_path)
 		{

@@ -1,0 +1,268 @@
+{
+	"comment" : "this file is based on invisible.mtr file",
+
+	"textures/common/aasobstacle":
+	{
+		"comment": "TODO - add such polygons into BPS for collisions detection",
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/aassolid":
+	{
+		"comment": "TODO - add such polygons into BPS for collisions detection",
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/caulk":
+	{
+		"bsp" : true,
+		"draw" : false,
+		"blocks_view": true,
+		"light": false
+	},
+
+	"textures/common/clip":
+	{
+		"comment": "TODO - add such polygons into BPS for collisions detection",
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/clip_movable":
+	{
+		"comment": "TODO - add such polygons into BPS for collisions detection",
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/cushion":
+	{
+		"comment": "TODO - add such polygons into BPS for collisions detection",
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/full_clip":
+	{
+		"comment": "TODO - add such polygons into BPS for collisions detection",
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+
+	"textures/common/largeshot_clip":
+	{
+		"comment": "TODO - add such polygons into BPS for collisions detection",
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/monster_clip":
+	{
+		"comment": "TODO - add such polygons into BPS for collisions detection",
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/monster_full_clip":
+	{
+		"comment": "TODO - add such polygons into BPS for collisions detection",
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/moveable_clip":
+	{
+		"comment": "TODO - add such polygons into BPS for collisions detection",
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/nodraw":
+	{
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/nodrawsolid":
+	{
+		"comment": "TODO - add such polygons into BPS for collisions detection",
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/noimpact":
+	{
+		"comment": "TODO - add such polygons into BPS for collisions detection",
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/player_clip":
+	{
+		"comment": "TODO - add such polygons into BPS for collisions detection",
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/shot_clip":
+	{
+		"comment": "TODO - add such polygons into BPS for collisions detection",
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/skycaulk":
+	{
+		"bsp" : true,
+		"draw" : false,
+		"blocks_view": true,
+		"light": false
+	},
+
+	"textures/common/slick":
+	{
+		"comment": "TODO - add such polygons into BPS for collisions detection",
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/trigfade":
+	{
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/trigger":
+	{
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/triggui":
+	{
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/trigentityname":
+	{
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/trigentityname_once":
+	{
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/trighurt":
+	{
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/trigmulti":
+	{
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/trigonce":
+	{
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/trigrelay":
+	{
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/trigshotclip":
+	{
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/trigtimer":
+	{
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/common/vehicle_clip":
+	{
+		"comment": "TODO - add such polygons into BPS for collisions detection",
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	},
+
+	"textures/editor/visportal":
+	{
+		"bsp" : false,
+		"draw" : false,
+		"blocks_view": false,
+		"light": false
+	}
+}

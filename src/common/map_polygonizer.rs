@@ -414,7 +414,7 @@ fn get_polygon_texture_info(brush_plane: &map_file_q1::BrushPlane, polygon_norma
 
 fn get_polygon_texture_info_q4(brush_plane: &map_file_q4::BrushPlane) -> TextureInfo
 {
-	let basis = get_texture_basis(&brush_plane.plane.vec);
+	let basis = get_texture_basis_q4(&brush_plane.plane.vec);
 
 	TextureInfo {
 		tex_coord_equation: [
@@ -480,4 +480,32 @@ fn get_texture_basis(polygon_normal: &Vec3f) -> [Vec3f; 2]
 	}
 
 	[best_basis[1], best_basis[2]]
+}
+
+// See MapFile.cpp:67 ComputeAxisBase.
+fn get_texture_basis_q4(polygon_normal: &Vec3f) -> [Vec3f; 2]
+{
+	let mut normal_corrected = *polygon_normal;
+	if normal_corrected.x.abs() < 1.0e-6
+	{
+		normal_corrected.x = 0.0;
+	}
+	if normal_corrected.y.abs() < 1.0e-6
+	{
+		normal_corrected.y = 0.0;
+	}
+	if normal_corrected.z.abs() < 1.0e-6
+	{
+		normal_corrected.z = 0.0;
+	}
+
+	let rot_y = -normal_corrected
+		.z
+		.atan2((normal_corrected.x * normal_corrected.x + normal_corrected.y * normal_corrected.y).sqrt());
+	let rot_z = normal_corrected.y.atan2(normal_corrected.x);
+
+	[
+		Vec3f::new(-rot_z.sin(), rot_z.cos(), 0.0),
+		Vec3f::new(-rot_y.sin() * rot_z.cos(), -rot_y.sin() * rot_z.sin(), -rot_y.cos()),
+	]
 }
