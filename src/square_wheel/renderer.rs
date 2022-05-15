@@ -381,7 +381,7 @@ impl Renderer
 		if self.surfaces_pixels.len() < surfaces_pixels_accumulated_offset
 		{
 			self.surfaces_pixels
-				.resize(surfaces_pixels_accumulated_offset, Color32::from_rgb(0, 0, 0));
+				.resize(surfaces_pixels_accumulated_offset, Color32::black());
 		}
 
 		self.num_visible_surfaces_pixels = surfaces_pixels_accumulated_offset;
@@ -588,7 +588,7 @@ impl Renderer
 			let surface_data = &mut self.surfaces_pixels
 				[surface_pixels_offset .. (surface_pixels_offset + ((surface_size[0] * surface_size[1]) as usize))];
 
-			if polygon.lightmap_data_offset == 0
+			if polygon.lightmap_data_offset == 0 || !lights.is_empty()
 			{
 				let mip_scale = 1.0 / (1 << polygon_data.mip) as f32;
 				let tex_coord_equation_scaled = [

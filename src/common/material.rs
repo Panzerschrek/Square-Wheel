@@ -8,6 +8,9 @@ pub struct Material
 	/// Diffuse texture path.
 	pub diffuse: Option<String>,
 
+	/// Normal map texture path.
+	pub normal_map: Option<String>,
+
 	/// If false - totally exclude from BSP build. Completely removes all polygons with such materials.
 	#[serde(default = "default_true")]
 	pub bsp: bool,
@@ -32,6 +35,7 @@ impl Default for Material
 	{
 		Self {
 			diffuse: None,
+			normal_map: None,
 			bsp: true,
 			draw: true,
 			blocks_view: true,

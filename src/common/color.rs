@@ -3,6 +3,16 @@ pub struct Color32(u32);
 
 impl Color32
 {
+	pub fn black() -> Self
+	{
+		Color32(0)
+	}
+
+	pub fn white() -> Self
+	{
+		Color32(0xFFFFFFFF)
+	}
+
 	pub fn from_rgb(r: u8, g: u8, b: u8) -> Self
 	{
 		Color32(((r as u32) << 16) | ((g as u32) << 8) | (b as u32))
@@ -38,6 +48,15 @@ impl Color32
 				((components_sum[2] >> 2) & 0x00FF0000) |
 				(components_sum[3] & 0xFF000000),
 		)
+	}
+
+	pub fn get_rgb(&self) -> [u8; 3]
+	{
+		[
+			((self.0 & 0x00FF0000) >> 16) as u8,
+			((self.0 & 0x0000FF00) >> 8) as u8,
+			(self.0 & 0x000000FF) as u8,
+		]
 	}
 
 	pub const MAX_RGB_F32_COMPONENTS: [f32; 3] = [255.0 * (256.0 * 256.0), 255.0 * 256.0, 255.0];
