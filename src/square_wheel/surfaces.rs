@@ -36,7 +36,12 @@ pub fn build_surface(
 
 	let plane_normal_normalized = plane.vec * inv_sqrt_fast(plane.vec.magnitude2());
 
-	let constant_light = [1.5, 1.4, 1.3];
+	// Use texture basis vectors as basis for normal transformation.
+	// This may be inaccurate if texture is non-uniformly stretched or shifted, but it is still fine for most cases.
+	let u_vec_normalized = u_vec * inv_sqrt_fast(u_vec.magnitude2().max(MIN_POSITIVE_VALUE));
+	let v_vec_normalized = v_vec * inv_sqrt_fast(v_vec.magnitude2().max(MIN_POSITIVE_VALUE));
+
+	let constant_light = [0.1, 0.1, 0.1];
 
 	for dst_v in 0 .. surface_size[1]
 	{
@@ -53,6 +58,12 @@ pub fn build_surface(
 		{
 			let pos = start_pos_v + (dst_u as f32) * u_vec;
 
+			let texel_value = src_line[src_u as usize];
+			// Normal transformed to world space.
+			let normal = texel_value.normal.x * u_vec_normalized +
+				texel_value.normal.y * v_vec_normalized +
+				texel_value.normal.z * plane_normal_normalized;
+
 			let mut total_light = constant_light;
 
 			for (light, shadow_cube_map) in lights
@@ -62,15 +73,13 @@ pub fn build_surface(
 				let shadow_factor = cube_shadow_map_fetch(shadow_cube_map, &vec_to_light);
 
 				let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
-				let angle_cos = plane_normal_normalized.dot(vec_to_light) * inv_sqrt_fast(vec_to_light_len2);
+				let angle_cos = normal.dot(vec_to_light) * inv_sqrt_fast(vec_to_light_len2);
 				let light_scale = shadow_factor * angle_cos.max(0.0) / vec_to_light_len2;
 
 				total_light[0] += light.color[0] * light_scale;
 				total_light[1] += light.color[1] * light_scale;
 				total_light[2] += light.color[2] * light_scale;
 			}
-
-			let texel_value = src_line[src_u as usize];
 
 			let components = texel_value.diffuse.unpack_to_rgb_f32();
 			let components_modulated = [

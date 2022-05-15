@@ -118,9 +118,9 @@ fn make_texture(diffuse: image::Image, normals: Option<image::Image>) -> Texture
 			let rgb = src.get_rgb();
 			let zero_level = 128;
 			let normal = Vec3f::new(
-				(rgb[0] - zero_level) as f32,
-				(rgb[1] - zero_level) as f32,
-				(rgb[2] - zero_level) as f32,
+				((rgb[0] as i32) - zero_level) as f32,
+				((rgb[1] as i32) - zero_level) as f32,
+				((rgb[2] as i32) - zero_level) as f32,
 			);
 			dst.normal = renormalize_normal(normal);
 		}
