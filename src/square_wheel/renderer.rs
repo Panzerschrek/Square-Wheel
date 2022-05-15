@@ -381,7 +381,7 @@ impl Renderer
 		if self.surfaces_pixels.len() < surfaces_pixels_accumulated_offset
 		{
 			self.surfaces_pixels
-				.resize(surfaces_pixels_accumulated_offset, Color32::from_rgb(0, 0, 0));
+				.resize(surfaces_pixels_accumulated_offset, Color32::black());
 		}
 
 		self.num_visible_surfaces_pixels = surfaces_pixels_accumulated_offset;

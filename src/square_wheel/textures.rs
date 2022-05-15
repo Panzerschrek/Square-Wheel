@@ -20,6 +20,17 @@ pub struct TextureElement
 	pub normal: Vec3f,
 }
 
+impl Default for TextureElement
+{
+	fn default() -> Self
+	{
+		Self {
+			diffuse: Color32::black(),
+			normal: Vec3f::unit_z(),
+		}
+	}
+}
+
 pub fn load_textures(materials: &[material::Material], textures_path: &std::path::Path) -> Vec<TextureWithMips>
 {
 	let mut result = Vec::new();
@@ -92,13 +103,7 @@ fn make_texture(diffuse: image::Image, normals: Option<image::Image>) -> Texture
 {
 	let mut result = Texture {
 		size: diffuse.size,
-		pixels: vec![
-			TextureElement {
-				diffuse: Color32::from_rgb(0, 0, 0),
-				normal: Vec3f::new(0.0, 0.0, 1.0)
-			};
-			(diffuse.size[0] * diffuse.size[1]) as usize
-		],
+		pixels: vec![TextureElement::default(); (diffuse.size[0] * diffuse.size[1]) as usize],
 	};
 
 	for (dst, src) in result.pixels.iter_mut().zip(diffuse.pixels.iter())
@@ -108,6 +113,8 @@ fn make_texture(diffuse: image::Image, normals: Option<image::Image>) -> Texture
 
 	if let Some(mut n) = normals
 	{
+		// Normally normal map must have same size as diffuse texture.
+		// But in case if it is not true - reseze normal map.
 		if n.size != diffuse.size
 		{
 			let n_resized = resize_image(&n, diffuse.size);
@@ -164,13 +171,7 @@ fn build_mips(mip0: Texture) -> TextureWithMips
 			pixels: Vec::new(),
 		};
 
-		mip.pixels = vec![
-			TextureElement {
-				diffuse: Color32::from_rgb(0, 0, 0),
-				normal: Vec3f::new(0.0, 0.0, 1.0)
-			};
-			(mip.size[0] * mip.size[1]) as usize
-		];
+		mip.pixels = vec![TextureElement::default(); (mip.size[0] * mip.size[1]) as usize];
 		for y in 0 .. mip.size[1] as usize
 		{
 			for x in 0 .. mip.size[0] as usize
@@ -195,7 +196,7 @@ fn renormalize_normal(normal: Vec3f) -> Vec3f
 	let len = normal.magnitude();
 	if len <= 0.000001
 	{
-		Vec3f::new(0.0, 0.0, 1.0)
+		Vec3f::unit_z()
 	}
 	else
 	{
