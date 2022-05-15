@@ -1,12 +1,12 @@
-use super::{light::*, shadow_map::*};
-use common::{bsp_map_compact, color::*, image, lightmaps_builder, math_types::*, plane::*};
+use super::{light::*, shadow_map::*, textures};
+use common::{bsp_map_compact, color::*, lightmaps_builder, math_types::*, plane::*};
 
 pub type LightWithShadowMap<'a, 'b> = (&'a PointLight, &'b CubeShadowMap);
 
 pub fn build_surface(
 	surface_size: [u32; 2],
 	surface_tc_min: [i32; 2],
-	texture: &image::Image,
+	texture: &textures::Texture,
 	plane: &Plane,
 	tex_coord_equation: &[Plane; 2],
 	lights: &[LightWithShadowMap],
@@ -72,7 +72,7 @@ pub fn build_surface(
 
 			let texel_value = src_line[src_u as usize];
 
-			let components = texel_value.unpack_to_rgb_f32();
+			let components = texel_value.diffuse.unpack_to_rgb_f32();
 			let components_modulated = [
 				(components[0] * total_light[0]).min(Color32::MAX_RGB_F32_COMPONENTS[0]),
 				(components[1] * total_light[1]).min(Color32::MAX_RGB_F32_COMPONENTS[1]),
@@ -98,7 +98,7 @@ pub fn build_surface(
 pub fn build_surface_with_lightmap(
 	surface_size: [u32; 2],
 	surface_tc_min: [i32; 2],
-	texture: &image::Image,
+	texture: &textures::Texture,
 	lightmap_size: [u32; 2],
 	lightmap_scale_log2: u32,
 	lightmap_tc_shift: [u32; 2],
@@ -181,7 +181,7 @@ pub fn build_surface_with_lightmap(
 			let texel_value = Color32::from_rgb(100, 100, 100);
 			*/
 
-			let components = texel_value.unpack_to_rgb_f32();
+			let components = texel_value.diffuse.unpack_to_rgb_f32();
 			let components_modulated = [
 				(components[0] * lightmap_value[0]).min(Color32::MAX_RGB_F32_COMPONENTS[0]),
 				(components[1] * lightmap_value[1]).min(Color32::MAX_RGB_F32_COMPONENTS[1]),
