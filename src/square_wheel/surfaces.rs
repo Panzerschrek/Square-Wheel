@@ -115,12 +115,72 @@ pub fn build_surface_with_lightmap(
 	out_surface_data: &mut [Color32],
 )
 {
+	if lightmap_scale_log2 == 1
+	{
+		build_surface_with_lightmap_const_scale::<1>(
+			surface_size,
+			surface_tc_min,
+			texture,
+			lightmap_size,
+			lightmap_tc_shift,
+			lightmap_data,
+			out_surface_data);
+	}
+	else if lightmap_scale_log2 == 2
+	{
+		build_surface_with_lightmap_const_scale::<2>(
+			surface_size,
+			surface_tc_min,
+			texture,
+			lightmap_size,
+			lightmap_tc_shift,
+			lightmap_data,
+			out_surface_data);
+	}
+	else if lightmap_scale_log2 == 3
+	{
+		build_surface_with_lightmap_const_scale::<3>(
+			surface_size,
+			surface_tc_min,
+			texture,
+			lightmap_size,
+			lightmap_tc_shift,
+			lightmap_data,
+			out_surface_data);
+	}
+	else if lightmap_scale_log2 == 4
+	{
+		build_surface_with_lightmap_const_scale::<4>(
+			surface_size,
+			surface_tc_min,
+			texture,
+			lightmap_size,
+			lightmap_tc_shift,
+			lightmap_data,
+			out_surface_data);
+	}
+	else
+	{
+		panic!("Wrong lightmap_scale_log2, expected value in range [1; 4]!");
+	}
+}
+
+pub fn build_surface_with_lightmap_const_scale<const LIGHTAP_SCALE_LOG2 : u32>(
+	surface_size: [u32; 2],
+	surface_tc_min: [i32; 2],
+	texture: &textures::Texture,
+	lightmap_size: [u32; 2],
+	lightmap_tc_shift: [u32; 2],
+	lightmap_data: &[bsp_map_compact::LightmapElement],
+	out_surface_data: &mut [Color32],
+)
+{
 	// TODO - use uninitialized memory.
 	let mut line_lightmap = [[0.0, 0.0, 0.0]; (lightmaps_builder::MAX_LIGHTMAP_SIZE + 2) as usize];
-	let lightmap_scale_f = (1 << lightmap_scale_log2) as f32;
+	let lightmap_scale_f = (1 << LIGHTAP_SCALE_LOG2) as f32;
 	let inv_lightmap_scale_f = 1.0 / lightmap_scale_f;
 	let k_shift = 0.5 * inv_lightmap_scale_f;
-	let lightmap_fetch_mask = (1 << lightmap_scale_log2) - 1;
+	let lightmap_fetch_mask = (1 << LIGHTAP_SCALE_LOG2) - 1;
 
 	for dst_v in 0 .. surface_size[1]
 	{
@@ -128,7 +188,7 @@ pub fn build_surface_with_lightmap(
 		// TODO - skip samples outside current surface borders.
 		{
 			let lightmap_base_v = dst_v + lightmap_tc_shift[1];
-			let lightmap_v = lightmap_base_v >> lightmap_scale_log2;
+			let lightmap_v = lightmap_base_v >> LIGHTAP_SCALE_LOG2;
 			let lightmap_v_plus_one = lightmap_v + 1;
 			debug_assert!(lightmap_v_plus_one < lightmap_size[1]);
 			let k = ((lightmap_base_v & lightmap_fetch_mask) as f32) * inv_lightmap_scale_f + k_shift;
@@ -164,7 +224,7 @@ pub fn build_surface_with_lightmap(
 		{
 			// TODO - optimize this, use unchecked index function.
 			let lightmap_base_u = dst_u + lightmap_tc_shift[0];
-			let lightmap_u = lightmap_base_u >> lightmap_scale_log2;
+			let lightmap_u = lightmap_base_u >> LIGHTAP_SCALE_LOG2;
 			let lightmap_u_plus_one = lightmap_u + 1;
 			debug_assert!(lightmap_u_plus_one < lightmap_size[0]);
 			let l0 = line_lightmap[lightmap_u as usize];
