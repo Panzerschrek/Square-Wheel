@@ -1,5 +1,5 @@
 use super::{clipping_polygon::*, frame_number::*};
-use common::{bsp_map_compact, clipping::*, math_types::*, matrix::*};
+use common::{bsp_map_compact, clipping::*, math_types::*, matrix::*, pvs};
 use std::rc::Rc;
 
 pub struct MapVisibilityCalculator
@@ -55,7 +55,12 @@ impl MapVisibilityCalculator
 		let current_leaf = self.find_current_leaf(root_node, &camera_matrices.planes_matrix);
 
 		let recursive_visible_leafs_marking = false; // TODO - read from config.
-		if recursive_visible_leafs_marking
+		let pvs_leafs_marking = true;
+		if pvs_leafs_marking
+		{
+			mark_reachable_leafs_pvs(&self.map, self.current_frame, current_leaf, &mut self.leafs_data);
+		}
+		else if recursive_visible_leafs_marking
 		{
 			mark_reachable_leafs_recursive(
 				current_leaf,
@@ -217,6 +222,19 @@ impl MapVisibilityCalculator
 				break;
 			}
 		}
+	}
+}
+
+fn mark_reachable_leafs_pvs(
+	map: &bsp_map_compact::BSPMap,
+	current_frame: FrameNumber,
+	start_leaf_index: u32,
+	leafs_data: &mut [LeafData],
+)
+{
+	for leaf_index in pvs::calculate_pvs_for_leaf(map, start_leaf_index)
+	{
+		leafs_data[leaf_index as usize].visible_frame = current_frame;
 	}
 }
 
