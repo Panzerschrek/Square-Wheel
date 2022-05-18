@@ -58,7 +58,7 @@ pub fn build_surface(
 		{
 			let pos = start_pos_v + (dst_u as f32) * u_vec;
 
-			let texel_value = src_line[src_u as usize];
+			let texel_value = unsafe{ debug_only_checked_fetch(src_line, src_u as usize) };
 			// Normal transformed to world space.
 			let normal = texel_value.normal.x * u_vec_normalized +
 				texel_value.normal.y * v_vec_normalized +
@@ -222,13 +222,12 @@ pub fn build_surface_with_lightmap_const_scale<const LIGHTAP_SCALE_LOG2 : u32>(
 		let mut dst_u = 0;
 		for dst_texel in dst_line.iter_mut()
 		{
-			// TODO - optimize this, use unchecked index function.
 			let lightmap_base_u = dst_u + lightmap_tc_shift[0];
 			let lightmap_u = lightmap_base_u >> LIGHTAP_SCALE_LOG2;
 			let lightmap_u_plus_one = lightmap_u + 1;
 			debug_assert!(lightmap_u_plus_one < lightmap_size[0]);
-			let l0 = line_lightmap[lightmap_u as usize];
-			let l1 = line_lightmap[lightmap_u_plus_one as usize];
+			let l0 = unsafe{ debug_only_checked_fetch(&line_lightmap, lightmap_u as usize) };
+			let l1 = unsafe{ debug_only_checked_fetch(&line_lightmap, lightmap_u_plus_one as usize) };
 			let k = ((lightmap_base_u & lightmap_fetch_mask) as f32) * inv_lightmap_scale_f + k_shift;
 			let k_minus_one = 1.0 - k;
 			let mut lightmap_value = [0.0, 0.0, 0.0];
@@ -237,7 +236,7 @@ pub fn build_surface_with_lightmap_const_scale<const LIGHTAP_SCALE_LOG2 : u32>(
 				lightmap_value[i] = l0[i] * k_minus_one + l1[i] * k;
 			};
 
-			let texel_value = src_line[src_u as usize];
+			let texel_value = unsafe{ debug_only_checked_fetch(src_line, src_u as usize) };
 
 			/*
 			if lightmap_scale_log2 < 4
@@ -328,7 +327,7 @@ fn cube_shadow_map_side_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f, side
 	debug_assert!(u < cube_shadow_map.size);
 	debug_assert!(v < cube_shadow_map.size);
 	let texel_address = (u + v * cube_shadow_map.size) as usize;
-	let value = unchecked_shadow_map_fetch(&cube_shadow_map.sides[side as usize], texel_address);
+	let value = unsafe{ debug_only_checked_fetch(&cube_shadow_map.sides[side as usize], texel_address) };
 	return if depth >= value { 1.0 } else { 0.0 };
 }
 
@@ -353,17 +352,17 @@ fn inv_sqrt_fast(x: f32) -> f32
 	1.0 / sqrt(x)
 }
 
-fn unchecked_shadow_map_fetch(shadow_map_data: &[f32], texel_address: usize) -> f32
+unsafe fn debug_only_checked_fetch<T: Copy>(data : &[T], address : usize) -> T
 {
 	// operator [] checks bounds and calls panic! handler in case if index is out of bounds.
 	// This check is useless here since we clamp coordnates properly.
 	// So, use "get_unchecked" in release mode.
 	#[cfg(debug_assertions)]
 	{
-		shadow_map_data[texel_address]
+		data[address]
 	}
 	#[cfg(not(debug_assertions))]
-	unsafe {
-		*shadow_map_data.get_unchecked(texel_address)
+	{
+		*data.get_unchecked(address)
 	}
 }
