@@ -156,7 +156,7 @@ fn mark_visible_leafs_r(
 	recursion_depth: usize,
 )
 {
-	if recursion_depth > 4
+	if recursion_depth > 8
 	{
 		return;
 	}
@@ -253,15 +253,16 @@ fn cut_portal_polygon_by_view_through_two_previous_portals(
 {
 	// Check all combonation of planes, based on portal0 edge and portal1 vertex.
 	// If portal0 is at back of this plane and portal1 is at front of this plane - perform portal2 clipping.
-	let prev_edge_v = portal0.vertices.last().unwrap();
+	let mut prev_edge_v = portal0.vertices.last().unwrap();
 	for edge_v in &portal0.vertices
 	{
 		// TODO - check plane direction.
 		let vec0 = edge_v - prev_edge_v;
+		prev_edge_v = edge_v;
 
 		for v in &portal1.vertices
 		{
-			let vec1 = v - edge_v;
+			let vec1 = edge_v - v;
 			let plane_vec = vec0.cross(vec1);
 			let cut_plane = Plane {
 				vec: plane_vec,
@@ -277,6 +278,21 @@ fn cut_portal_polygon_by_view_through_two_previous_portals(
 				PortalPolygonPositionRelativePlane::Front
 			{
 				continue;
+			}
+
+			let pos = get_portal_polygon_position_relative_plane(&portal2, &cut_plane);
+			if pos == PortalPolygonPositionRelativePlane::Front
+			{
+				// No clipping required.
+				continue;
+			}
+			if pos == PortalPolygonPositionRelativePlane::Back || pos == PortalPolygonPositionRelativePlane::Coplanar
+			{
+				// Fully clipped.
+				return PortalPolygon {
+					vertices: Vec::new(),
+					plane: portal2.plane,
+				};
 			}
 
 			portal2 = cut_portal_polygon_by_plane(&portal2, &cut_plane);
