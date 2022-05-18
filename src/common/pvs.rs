@@ -111,6 +111,7 @@ fn calculate_pvs_for_leaf_portal(
 			next_leaf_portal_index,
 			next_next_leaf_index,
 			visible_leafs_bit_set,
+			0,
 		);
 	}
 }
@@ -152,8 +153,14 @@ fn mark_visible_leafs_r(
 	prev_portal_index: u32,
 	leaf_index: u32,
 	visible_leafs_bit_set: &mut VisibleLeafsBitSet,
+	recursion_depth: usize,
 )
 {
+	if recursion_depth > 4
+	{
+		return;
+	}
+
 	visible_leafs_bit_set[leaf_index as usize] = true;
 
 	let leaf = &map.leafs[leaf_index as usize];
@@ -232,6 +239,7 @@ fn mark_visible_leafs_r(
 			leaf_portal_index,
 			next_leaf_index,
 			visible_leafs_bit_set,
+			recursion_depth + 1,
 		);
 	}
 }

@@ -58,7 +58,13 @@ impl MapVisibilityCalculator
 		let pvs_leafs_marking = true;
 		if pvs_leafs_marking
 		{
-			mark_reachable_leafs_pvs(&self.map, self.current_frame, current_leaf, &mut self.leafs_data);
+			mark_reachable_leafs_pvs(
+				&self.map,
+				self.current_frame,
+				&frame_bounds,
+				current_leaf,
+				&mut self.leafs_data,
+			);
 		}
 		else if recursive_visible_leafs_marking
 		{
@@ -228,13 +234,17 @@ impl MapVisibilityCalculator
 fn mark_reachable_leafs_pvs(
 	map: &bsp_map_compact::BSPMap,
 	current_frame: FrameNumber,
+	bounds: &ClippingPolygon,
 	start_leaf_index: u32,
 	leafs_data: &mut [LeafData],
 )
 {
+	leafs_data[start_leaf_index as usize].visible_frame = current_frame;
+	leafs_data[start_leaf_index as usize].current_frame_bounds = *bounds;
 	for leaf_index in pvs::calculate_pvs_for_leaf(map, start_leaf_index)
 	{
 		leafs_data[leaf_index as usize].visible_frame = current_frame;
+		leafs_data[leaf_index as usize].current_frame_bounds = *bounds;
 	}
 }
 
