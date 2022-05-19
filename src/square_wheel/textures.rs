@@ -172,15 +172,20 @@ fn build_mips(mip0: Texture) -> TextureWithMips
 		};
 
 		mip.pixels = vec![TextureElement::default(); (mip.size[0] * mip.size[1]) as usize];
+
+		let prev_mip_width = prev_mip.size[0] as usize;
+		let mip_width = mip.size[0] as usize;
 		for y in 0 .. mip.size[1] as usize
 		{
-			for x in 0 .. mip.size[0] as usize
+			let src_offset0 = (y * 2) * prev_mip_width;
+			let src_offset1 = (y * 2 + 1) * prev_mip_width;
+			for (dst, x) in mip.pixels[y * mip_width .. (y + 1) * mip_width].iter_mut().zip(0 .. mip_width)
 			{
-				let p00 = prev_mip.pixels[(x * 2) + (y * 2) * (prev_mip.size[0] as usize)];
-				let p01 = prev_mip.pixels[(x * 2) + (y * 2 + 1) * (prev_mip.size[0] as usize)];
-				let p10 = prev_mip.pixels[(x * 2 + 1) + (y * 2) * (prev_mip.size[0] as usize)];
-				let p11 = prev_mip.pixels[(x * 2 + 1) + (y * 2 + 1) * (prev_mip.size[0] as usize)];
-				let dst = &mut mip.pixels[x + y * (mip.size[0] as usize)];
+				let src_x = x * 2;
+				let p00 = prev_mip.pixels[src_x + src_offset0];
+				let p01 = prev_mip.pixels[src_x + src_offset1];
+				let p10 = prev_mip.pixels[src_x + 1 + src_offset0];
+				let p11 = prev_mip.pixels[src_x + 1 + src_offset1];
 				dst.diffuse = Color32::get_average_4([p00.diffuse, p01.diffuse, p10.diffuse, p11.diffuse]);
 				dst.normal = renormalize_normal(p00.normal + p01.normal + p10.normal + p11.normal);
 			}
