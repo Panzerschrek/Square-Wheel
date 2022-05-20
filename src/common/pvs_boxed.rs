@@ -142,7 +142,7 @@ fn mark_visible_leafs_r(
 	recursion_depth: usize,
 )
 {
-	if recursion_depth > 8
+	if recursion_depth > 6
 	{
 		return;
 	}
@@ -173,7 +173,7 @@ fn mark_visible_leafs_r(
 
 		// Cut leaf portal using start portal and prev portal.
 		leaf_portal_box = if let Some(b) =
-			cut_view_box_by_view_through_two_previous_boxes(start_portal_box, prev_portal_box, leaf_portal_box, false)
+			cut_view_box_by_view_through_two_previous_boxes(start_portal_box, prev_portal_box, leaf_portal_box)
 		{
 			b
 		}
@@ -186,12 +186,8 @@ fn mark_visible_leafs_r(
 		if false
 		{
 			// Cut start portal using leaf portal and prev portal.
-			let start_box_clipped = if let Some(b) = cut_view_box_by_view_through_two_previous_boxes(
-				&leaf_portal_box,
-				prev_portal_box,
-				*start_portal_box,
-				true,
-			)
+			let start_box_clipped = if let Some(b) =
+				cut_view_box_by_view_through_two_previous_boxes(&leaf_portal_box, prev_portal_box, *start_portal_box)
 			{
 				b
 			}
@@ -213,12 +209,7 @@ fn mark_visible_leafs_r(
 	}
 }
 
-fn cut_view_box_by_view_through_two_previous_boxes(
-	box0: &VisBox,
-	box1: &VisBox,
-	mut box2: VisBox,
-	reverse: bool,
-) -> Option<VisBox>
+fn cut_view_box_by_view_through_two_previous_boxes(box0: &VisBox, box1: &VisBox, mut box2: VisBox) -> Option<VisBox>
 {
 	// Check all combinations of planes, based on parallel edges of box0 and box1.
 	// Use plane as cut plane, if box0 is behind it and box1 is at front of it.
@@ -263,11 +254,7 @@ fn cut_view_box_by_view_through_two_previous_boxes(
 
 	for edge0 in &edges0
 	{
-		let mut vec0 = edge0[1] - edge0[0];
-		if reverse
-		{
-			vec0 = -vec0;
-		}
+		let vec0 = edge0[1] - edge0[0];
 
 		for edge1 in &edges1
 		{
@@ -278,23 +265,29 @@ fn cut_view_box_by_view_through_two_previous_boxes(
 				continue;
 			}
 
-			let cut_plane = Plane {
+			let mut cut_plane = Plane {
 				vec: plane_vec,
 				dist: plane_vec.dot(edge0[0]),
 			};
 
-			if get_vis_box_position_relative_plane(box0, &cut_plane) != PortalPolygonPositionRelativePlane::Back
+			let ok = get_vis_box_position_relative_plane(box0, &cut_plane) != PortalPolygonPositionRelativePlane::Back &&
+				get_vis_box_position_relative_plane(box1, &cut_plane) != PortalPolygonPositionRelativePlane::Front;
+			if !ok
 			{
-				continue;
-			}
-			if get_vis_box_position_relative_plane(box1, &cut_plane) != PortalPolygonPositionRelativePlane::Front
-			{
-				continue;
+				cut_plane = cut_plane.get_inverted();
+				let ok = get_vis_box_position_relative_plane(box0, &cut_plane) !=
+					PortalPolygonPositionRelativePlane::Back &&
+					get_vis_box_position_relative_plane(box1, &cut_plane) !=
+						PortalPolygonPositionRelativePlane::Front;
+				if !ok
+				{
+					continue;
+				}
 			}
 
 			if let Some(b) = cut_vis_box_by_plane(&box2, &cut_plane)
 			{
-				box2 = b
+				box2 = b;
 			}
 			else
 			{
