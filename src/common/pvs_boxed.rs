@@ -1,4 +1,4 @@
-use super::{bsp_map_compact, clipping, math_types::*, plane::*};
+use super::{bbox::*, bsp_map_compact, clipping, math_types::*, plane::*};
 
 // List of visible BSP leafs tree for each leaf.
 pub type LeafsVisibilityInfo = Vec<VisibleLeafsList>;
@@ -77,7 +77,7 @@ fn calculate_pvs_for_leaf_portal(
 	// Leaf next to current is always visible.
 	visible_leafs_bit_set[next_leaf_index as usize] = true;
 
-	let portal_box = vis_box_from_map_portal(map, portal, portal.leafs[0] == leaf_index);
+	let portal_box = vis_box_from_map_portal(map, portal);
 
 	let next_leaf = &map.leafs[next_leaf_index as usize];
 	for &next_leaf_portal_index in &map.leafs_portals
@@ -98,24 +98,7 @@ fn calculate_pvs_for_leaf_portal(
 			next_leaf_portal.leafs[0]
 		};
 
-		let mut next_leaf_portal_box =
-			vis_box_from_map_portal(map, next_leaf_portal, next_leaf_portal.leafs[0] == next_leaf_index);
-
-		let portal_box_pos =
-			get_view_box_position_relative_plane(&next_leaf_portal_box, &portal_box.plane);
-		if portal_box_pos == PortalPolygonPositionRelativePlane::Back ||
-			portal_box_pos == PortalPolygonPositionRelativePlane::Coplanar
-		{
-			continue;
-		}
-		if portal_box_pos == PortalPolygonPositionRelativePlane::Splitted
-		{
-			next_leaf_portal_box = cut_portal_polygon_by_plane(&next_leaf_portal_box, &portal_box.plane);
-			if next_leaf_portal_box.vertices.len() < 3
-			{
-				continue;
-			}
-		}
+		let next_leaf_portal_box = vis_box_from_map_portal(map, next_leaf_portal);
 
 		mark_visible_leafs_r(
 			map,
@@ -129,34 +112,24 @@ fn calculate_pvs_for_leaf_portal(
 	}
 }
 
-#[derive(Clone)]
-struct VisBox
-{
-	plane: Plane,
-	vertices: Vec<Vec3f>,
-}
+type VisBox = BBox;
 
-fn vis_box_from_map_portal(
-	map: &bsp_map_compact::BSPMap,
-	portal: &bsp_map_compact::Portal,
-	invert: bool,
-) -> VisBox
+fn vis_box_from_map_portal(map: &bsp_map_compact::BSPMap, portal: &bsp_map_compact::Portal) -> VisBox
 {
-	let mut portal_polygon = VisBox {
-		vertices: map.vertices[portal.first_vertex as usize .. (portal.first_vertex + portal.num_vertices) as usize]
-			.iter()
-			.cloned()
-			.collect(),
-		plane: portal.plane,
-	};
-
-	if invert
+	let mut bbox: Option<VisBox> = None;
+	for v in &map.vertices[portal.first_vertex as usize .. (portal.first_vertex + portal.num_vertices) as usize]
 	{
-		portal_polygon.plane = portal_polygon.plane.get_inverted();
-		portal_polygon.vertices.reverse();
+		if let Some(b) = &mut bbox
+		{
+			b.extend_with_point(v);
+		}
+		else
+		{
+			bbox = Some(VisBox::from_point(v))
+		}
 	}
 
-	portal_polygon
+	bbox.unwrap()
 }
 
 fn mark_visible_leafs_r(
@@ -196,74 +169,33 @@ fn mark_visible_leafs_r(
 			leaf_portal.leafs[0]
 		};
 
-		let mut leaf_portal_box =
-			vis_box_from_map_portal(map, leaf_portal, leaf_portal.leafs[0] == leaf_index);
-
-		let start_box_pos =
-			get_view_box_position_relative_plane(start_portal_box, &leaf_portal_box.plane);
-		if start_box_pos == PortalPolygonPositionRelativePlane::Front ||
-			start_box_pos == PortalPolygonPositionRelativePlane::Coplanar
-		{
-			continue;
-		}
-
-		// Cut portal polygon using start portal plane.
-		let portal_box_pos =
-			get_view_box_position_relative_plane(&leaf_portal_box, &start_portal_box.plane);
-		if portal_box_pos == PortalPolygonPositionRelativePlane::Back ||
-			portal_box_pos == PortalPolygonPositionRelativePlane::Coplanar
-		{
-			continue;
-		}
-		if portal_box_pos == PortalPolygonPositionRelativePlane::Splitted
-		{
-			leaf_portal_box = cut_portal_polygon_by_plane(&leaf_portal_box, &start_portal_box.plane);
-			if leaf_portal_box.vertices.len() < 3
-			{
-				continue;
-			}
-		}
-
-		// Cut portal polygon using prev portal plane
-		let portal_box_pos =
-			get_view_box_position_relative_plane(&leaf_portal_box, &prev_portal_box.plane);
-		if portal_box_pos == PortalPolygonPositionRelativePlane::Back ||
-			portal_box_pos == PortalPolygonPositionRelativePlane::Coplanar
-		{
-			continue;
-		}
-		if portal_box_pos == PortalPolygonPositionRelativePlane::Splitted
-		{
-			leaf_portal_box = cut_portal_polygon_by_plane(&leaf_portal_box, &prev_portal_box.plane);
-			if leaf_portal_box.vertices.len() < 3
-			{
-				continue;
-			}
-		}
+		let mut leaf_portal_box = vis_box_from_map_portal(map, leaf_portal);
 
 		// Cut leaf portal using start portal and prev portal.
-		leaf_portal_box = cut_view_box_by_view_through_two_previous_boxes(
-			start_portal_box,
-			prev_portal_box,
-			leaf_portal_box,
-			false,
-		);
-		if leaf_portal_box.vertices.len() < 3
+		leaf_portal_box = if let Some(b) =
+			cut_view_box_by_view_through_two_previous_boxes(start_portal_box, prev_portal_box, leaf_portal_box, false)
+		{
+			b
+		}
+		else
 		{
 			continue;
-		}
+		};
 
 		// Cut start portal using leaf portal and prev portal.
-		let start_box_clipped = cut_view_box_by_view_through_two_previous_boxes(
+		let start_box_clipped = if let Some(b) = cut_view_box_by_view_through_two_previous_boxes(
 			&leaf_portal_box,
 			prev_portal_box,
 			start_portal_box.clone(),
 			true,
-		);
-		if start_box_clipped.vertices.len() < 3
+		)
+		{
+			b
+		}
+		else
 		{
 			continue;
-		}
+		};
 
 		mark_visible_leafs_r(
 			map,
@@ -277,72 +209,15 @@ fn mark_visible_leafs_r(
 	}
 }
 
-// Returns polygon with less than 3 vertices is completely clipped.
 fn cut_view_box_by_view_through_two_previous_boxes(
 	portal0: &VisBox,
 	portal1: &VisBox,
 	mut portal2: VisBox,
 	reverse: bool,
-) -> VisBox
+) -> Option<VisBox>
 {
-	// Check all combonation of planes, based on portal0 edge and portal1 vertex.
-	// If portal0 is at back of this plane and portal1 is at front of this plane - perform portal2 clipping.
-	let mut prev_edge_v = portal0.vertices.last().unwrap();
-	for edge_v in &portal0.vertices
-	{
-		// TODO - check plane direction.
-		let mut vec0 = edge_v - prev_edge_v;
-		prev_edge_v = edge_v;
-
-		if reverse
-		{
-			vec0 = -vec0;
-		}
-
-		for v in &portal1.vertices
-		{
-			let vec1 = edge_v - v;
-			let plane_vec = vec0.cross(vec1);
-			let cut_plane = Plane {
-				vec: plane_vec,
-				dist: plane_vec.dot(*v),
-			};
-
-			if get_view_box_position_relative_plane(portal0, &cut_plane) !=
-				PortalPolygonPositionRelativePlane::Back
-			{
-				continue;
-			}
-			if get_view_box_position_relative_plane(portal1, &cut_plane) !=
-				PortalPolygonPositionRelativePlane::Front
-			{
-				continue;
-			}
-
-			let pos = get_view_box_position_relative_plane(&portal2, &cut_plane);
-			if pos == PortalPolygonPositionRelativePlane::Front
-			{
-				// No clipping required.
-				continue;
-			}
-			if pos == PortalPolygonPositionRelativePlane::Back || pos == PortalPolygonPositionRelativePlane::Coplanar
-			{
-				// Fully clipped.
-				return VisBox {
-					vertices: Vec::new(),
-					plane: portal2.plane,
-				};
-			}
-
-			portal2 = cut_portal_polygon_by_plane(&portal2, &cut_plane);
-			if portal2.vertices.len() < 3
-			{
-				return portal2;
-			}
-		}
-	}
-
-	portal2
+	// TODO
+	Some(portal2)
 }
 
 #[derive(PartialEq, Eq)]
@@ -354,24 +229,30 @@ enum PortalPolygonPositionRelativePlane
 	Splitted,
 }
 
-fn get_view_box_position_relative_plane(
-	portal_polygon: &VisBox,
-	plane: &Plane,
-) -> PortalPolygonPositionRelativePlane
+fn get_view_box_position_relative_plane(vis_box: &VisBox, plane: &Plane) -> PortalPolygonPositionRelativePlane
 {
 	let mut vertices_front = 0;
 	let mut vertices_back = 0;
 	let normal_inv_len = 1.0 / plane.vec.magnitude();
-	for v in &portal_polygon.vertices
+	for i in 0 .. 2
 	{
-		let dist = (v.dot(plane.vec) - plane.dist) * normal_inv_len;
-		if dist > PLANE_DIST_EPS
+		let x = if i == 0 { vis_box.min.x } else { vis_box.max.x };
+		for j in 0 .. 2
 		{
-			vertices_front += 1;
-		}
-		else if dist < -PLANE_DIST_EPS
-		{
-			vertices_back += 1;
+			let y = if j == 0 { vis_box.min.y } else { vis_box.max.y };
+			for k in 0 .. 2
+			{
+				let z = if k == 0 { vis_box.min.z } else { vis_box.max.z };
+				let dist = (Vec3f::new(x, y, z).dot(plane.vec) - plane.dist) * normal_inv_len;
+				if dist > PLANE_DIST_EPS
+				{
+					vertices_front += 1;
+				}
+				else if dist < -PLANE_DIST_EPS
+				{
+					vertices_back += 1;
+				}
+			}
 		}
 	}
 
@@ -393,47 +274,111 @@ fn get_view_box_position_relative_plane(
 	}
 }
 
-// Returns polygon with less than 3 vertices is completely clipped.
-fn cut_portal_polygon_by_plane(portal_polygon: &VisBox, plane: &Plane) -> VisBox
+fn cut_vis_box_by_plane(vis_box: &VisBox, plane: &Plane) -> Option<VisBox>
 {
-	let mut result = VisBox {
-		vertices: Vec::new(),
-		plane: portal_polygon.plane,
-	};
+	// TODO - check this
+	let edges = [
+		[
+			Vec3f::new(vis_box.min.x, vis_box.min.y, vis_box.min.z),
+			Vec3f::new(vis_box.min.x, vis_box.min.y, vis_box.max.z),
+		],
+		[
+			Vec3f::new(vis_box.min.x, vis_box.max.y, vis_box.min.z),
+			Vec3f::new(vis_box.min.x, vis_box.max.y, vis_box.max.z),
+		],
+		[
+			Vec3f::new(vis_box.max.x, vis_box.min.y, vis_box.min.z),
+			Vec3f::new(vis_box.max.x, vis_box.min.y, vis_box.max.z),
+		],
+		[
+			Vec3f::new(vis_box.max.x, vis_box.max.y, vis_box.min.z),
+			Vec3f::new(vis_box.max.x, vis_box.max.y, vis_box.max.z),
+		],
+		[
+			Vec3f::new(vis_box.min.x, vis_box.min.y, vis_box.min.z),
+			Vec3f::new(vis_box.min.x, vis_box.max.y, vis_box.min.z),
+		],
+		[
+			Vec3f::new(vis_box.min.x, vis_box.min.y, vis_box.max.z),
+			Vec3f::new(vis_box.min.x, vis_box.max.y, vis_box.max.z),
+		],
+		[
+			Vec3f::new(vis_box.max.x, vis_box.min.y, vis_box.min.z),
+			Vec3f::new(vis_box.max.x, vis_box.max.y, vis_box.min.z),
+		],
+		[
+			Vec3f::new(vis_box.max.x, vis_box.min.y, vis_box.max.z),
+			Vec3f::new(vis_box.max.x, vis_box.max.y, vis_box.max.z),
+		],
+		[
+			Vec3f::new(vis_box.min.x, vis_box.min.y, vis_box.min.z),
+			Vec3f::new(vis_box.max.x, vis_box.min.y, vis_box.min.z),
+		],
+		[
+			Vec3f::new(vis_box.min.x, vis_box.min.y, vis_box.max.z),
+			Vec3f::new(vis_box.max.x, vis_box.min.y, vis_box.max.z),
+		],
+		[
+			Vec3f::new(vis_box.min.x, vis_box.max.y, vis_box.min.z),
+			Vec3f::new(vis_box.max.x, vis_box.max.y, vis_box.min.z),
+		],
+		[
+			Vec3f::new(vis_box.min.x, vis_box.max.y, vis_box.max.z),
+			Vec3f::new(vis_box.max.x, vis_box.max.y, vis_box.max.z),
+		],
+	];
 
-	let normal_inv_len = 1.0 / plane.vec.magnitude();
+	let mut result: Option<VisBox> = None;
 
-	let mut prev_v = portal_polygon.vertices.last().unwrap();
-	let mut prev_dist = (plane.vec.dot(*prev_v) - plane.dist) * normal_inv_len;
-	for v in &portal_polygon.vertices
+	for edge in &edges
 	{
-		let dist = (plane.vec.dot(*v) - plane.dist) * normal_inv_len;
-		if dist > PLANE_DIST_EPS
+		if let Some(e) = cut_edge_by_plane(edge, plane)
 		{
-			if prev_dist < -PLANE_DIST_EPS
+			if let Some(r) = &mut result
 			{
-				result
-					.vertices
-					.push(clipping::get_line_plane_intersection(prev_v, v, plane));
+				r.extend_with_point(&e[0]);
+				r.extend_with_point(&e[1]);
 			}
-			result.vertices.push(*v);
+			else
+			{
+				let mut r = VisBox::from_point(&e[0]);
+				r.extend_with_point(&e[1]);
+				result = Some(r);
+			}
 		}
-		else if dist > -PLANE_DIST_EPS
-		{
-			result.vertices.push(*v);
-		}
-		else if prev_dist > PLANE_DIST_EPS
-		{
-			result
-				.vertices
-				.push(clipping::get_line_plane_intersection(prev_v, v, plane));
-		}
-
-		prev_v = v;
-		prev_dist = dist;
 	}
 
 	result
+}
+
+type Edge = [Vec3f; 2];
+
+fn cut_edge_by_plane(edge: &Edge, plane: &Plane) -> Option<Edge>
+{
+	let dist0 = edge[0].dot(plane.vec) - plane.dist;
+	let dist1 = edge[1].dot(plane.vec) - plane.dist;
+	if dist0 >= 0.0 && dist1 >= 0.0
+	{
+		return Some(*edge);
+	}
+	if dist0 <= 0.0 && dist1 <= 0.0
+	{
+		return None;
+	}
+
+	let dist_sum = dist1 - dist0;
+	let k0 = dist0 / dist_sum;
+	let k1 = dist1 / dist_sum;
+	let middle_point = edge[0] * k1 - edge[1] * k0;
+
+	if dist0 >= 0.0
+	{
+		Some([edge[0], middle_point])
+	}
+	else
+	{
+		Some([middle_point, edge[1]])
+	}
 }
 
 const PLANE_DIST_EPS: f32 = 1.0 / 16.0;
