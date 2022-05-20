@@ -9,6 +9,7 @@ pub struct MapVisibilityCalculator
 	leafs_data: Vec<LeafData>,
 	portals_data: Vec<PortalData>,
 	leafs_search_waves: LeafsSearchWavesPair,
+	prev_leaf: Option<u32>,
 }
 
 #[derive(Default, Copy, Clone)]
@@ -44,15 +45,22 @@ impl MapVisibilityCalculator
 			portals_data: vec![PortalData::default(); map.portals.len()],
 			leafs_search_waves: LeafsSearchWavesPair::default(),
 			map,
+			prev_leaf: None,
 		}
 	}
 
 	pub fn update_visibility(&mut self, camera_matrices: &CameraMatrices, frame_bounds: &ClippingPolygon)
 	{
-		self.current_frame.next();
-
 		let root_node = (self.map.nodes.len() - 1) as u32;
 		let current_leaf = self.find_current_leaf(root_node, &camera_matrices.planes_matrix);
+
+		if self.prev_leaf == Some(current_leaf)
+		{
+			return;
+		}
+		self.prev_leaf = Some(current_leaf);
+
+		self.current_frame.next();
 
 		let recursive_visible_leafs_marking = false; // TODO - read from config.
 		let pvs_leafs_marking = true;
