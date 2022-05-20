@@ -10,7 +10,20 @@ pub fn caclulate_pvs(map: &bsp_map_compact::BSPMap) -> LeafsVisibilityInfo
 	for leaf_index in 0 .. map.leafs.len() as u32
 	{
 		result.push(calculate_pvs_for_leaf(map, leaf_index));
+
+		let ratio_before = leaf_index * 256 / (map.leafs.len() as u32);
+		let ratio_after = (leaf_index + 1) * 256 / (map.leafs.len() as u32);
+		if ratio_after != ratio_before
+		{
+			print!(
+				"\r{:03.2}% complete ({} of {} leafs)",
+				((leaf_index + 1) as f32) * 100.0 / (map.leafs.len() as f32),
+				leaf_index + 1,
+				map.leafs.len()
+			);
+		}
 	}
+	println!("\nDone!");
 	result
 }
 
@@ -156,7 +169,7 @@ fn mark_visible_leafs_r(
 	recursion_depth: usize,
 )
 {
-	if recursion_depth > 8
+	if recursion_depth > 24
 	{
 		return;
 	}
