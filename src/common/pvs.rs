@@ -228,21 +228,33 @@ fn mark_visible_leafs_r(
 			}
 		}
 
+		// Cut leaf portal using start portal and prev portal.
 		leaf_portal_polygon = cut_portal_polygon_by_view_through_two_previous_portals(
 			start_portal_polygon,
 			prev_portal_polygon,
 			leaf_portal_polygon,
+			false,
 		);
 		if leaf_portal_polygon.vertices.len() < 3
 		{
 			continue;
 		}
 
-		// TODO - cut also start polygon?
+		// Cut start portal using leaf portal and prev portal.
+		let start_polygon_clipped = cut_portal_polygon_by_view_through_two_previous_portals(
+			&leaf_portal_polygon,
+			prev_portal_polygon,
+			start_portal_polygon.clone(),
+			true,
+		);
+		if start_polygon_clipped.vertices.len() < 3
+		{
+			continue;
+		}
 
 		mark_visible_leafs_r(
 			map,
-			start_portal_polygon,
+			&start_polygon_clipped,
 			&leaf_portal_polygon,
 			leaf_portal_index,
 			next_leaf_index,
@@ -257,6 +269,7 @@ fn cut_portal_polygon_by_view_through_two_previous_portals(
 	portal0: &PortalPolygon,
 	portal1: &PortalPolygon,
 	mut portal2: PortalPolygon,
+	reverse: bool,
 ) -> PortalPolygon
 {
 	// Check all combonation of planes, based on portal0 edge and portal1 vertex.
@@ -265,8 +278,13 @@ fn cut_portal_polygon_by_view_through_two_previous_portals(
 	for edge_v in &portal0.vertices
 	{
 		// TODO - check plane direction.
-		let vec0 = edge_v - prev_edge_v;
+		let mut vec0 = edge_v - prev_edge_v;
 		prev_edge_v = edge_v;
+
+		if reverse
+		{
+			vec0 = -vec0;
+		}
 
 		for v in &portal1.vertices
 		{
