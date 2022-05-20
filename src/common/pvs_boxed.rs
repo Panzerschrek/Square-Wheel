@@ -29,27 +29,32 @@ pub fn caclulate_pvs(map: &bsp_map_compact::BSPMap) -> LeafsVisibilityInfo
 
 pub fn calculate_pvs_for_leaf(map: &bsp_map_compact::BSPMap, leaf_index: u32) -> VisibleLeafsList
 {
-	let mut visible_leafs_bit_set = vec![false; map.leafs.len()];
+	let mut vis_leafs_data = vec![VisLeafData::default(); map.leafs.len()];
 
 	let leaf = &map.leafs[leaf_index as usize];
 	for &portal_index in
 		&map.leafs_portals[leaf.first_leaf_portal as usize .. (leaf.first_leaf_portal + leaf.num_leaf_portals) as usize]
 	{
-		calculate_pvs_for_leaf_portal(map, leaf_index, portal_index, &mut visible_leafs_bit_set)
+		calculate_pvs_for_leaf_portal(map, leaf_index, portal_index, &mut vis_leafs_data)
 	}
 
-	visible_leafs_bit_set_to_leafs_list(&visible_leafs_bit_set)
+	make_leafs_list(&vis_leafs_data)
 }
 
-// TODO - use more advanced collection.
-type VisibleLeafsBitSet = Vec<bool>;
+#[derive(Default, Copy, Clone)]
+struct VisLeafData
+{
+	vis_box: Option<VisBox>,
+}
 
-fn visible_leafs_bit_set_to_leafs_list(visible_leafs_bit_set: &VisibleLeafsBitSet) -> VisibleLeafsList
+type VisLeafsData = Vec<VisLeafData>;
+
+fn make_leafs_list(vis_leafs_data: &VisLeafsData) -> VisibleLeafsList
 {
 	let mut result = VisibleLeafsList::new();
-	for (i, &visible) in visible_leafs_bit_set.iter().enumerate()
+	for (i, &vis_leaf_data) in vis_leafs_data.iter().enumerate()
 	{
-		if visible
+		if vis_leaf_data.vis_box.is_some()
 		{
 			result.push(i as u32);
 		}
@@ -61,7 +66,7 @@ fn calculate_pvs_for_leaf_portal(
 	map: &bsp_map_compact::BSPMap,
 	leaf_index: u32,
 	portal_index: u32,
-	visible_leafs_bit_set: &mut VisibleLeafsBitSet,
+	vis_leafs_data: &mut VisLeafsData,
 )
 {
 	let portal = &map.portals[portal_index as usize];
@@ -74,42 +79,8 @@ fn calculate_pvs_for_leaf_portal(
 		portal.leafs[0]
 	};
 
-	// Leaf next to current is always visible.
-	visible_leafs_bit_set[next_leaf_index as usize] = true;
-
 	let portal_box = vis_box_from_map_portal(map, portal);
-
-	let next_leaf = &map.leafs[next_leaf_index as usize];
-	for &next_leaf_portal_index in &map.leafs_portals
-		[next_leaf.first_leaf_portal as usize .. (next_leaf.first_leaf_portal + next_leaf.num_leaf_portals) as usize]
-	{
-		if next_leaf_portal_index == portal_index
-		{
-			continue;
-		}
-		let next_leaf_portal = &map.portals[next_leaf_portal_index as usize];
-
-		let next_next_leaf_index = if next_leaf_portal.leafs[0] == next_leaf_index
-		{
-			next_leaf_portal.leafs[1]
-		}
-		else
-		{
-			next_leaf_portal.leafs[0]
-		};
-
-		let next_leaf_portal_box = vis_box_from_map_portal(map, next_leaf_portal);
-
-		mark_visible_leafs_r(
-			map,
-			&portal_box,
-			&next_leaf_portal_box,
-			next_leaf_portal_index,
-			next_next_leaf_index,
-			visible_leafs_bit_set,
-			0,
-		);
-	}
+	mark_visible_leafs_iterative(map, &portal_box, next_leaf_index, vis_leafs_data);
 }
 
 type VisBox = BBox;
@@ -132,80 +103,86 @@ fn vis_box_from_map_portal(map: &bsp_map_compact::BSPMap, portal: &bsp_map_compa
 	bbox.unwrap()
 }
 
-fn mark_visible_leafs_r(
+type SearchWaveElement = u32; // Leaf index.
+type SearchWave = Vec<SearchWaveElement>;
+
+fn mark_visible_leafs_iterative(
 	map: &bsp_map_compact::BSPMap,
 	start_portal_box: &VisBox,
-	prev_portal_box: &VisBox,
-	prev_portal_index: u32,
-	leaf_index: u32,
-	visible_leafs_bit_set: &mut VisibleLeafsBitSet,
-	recursion_depth: usize,
+	start_leaf_index: u32,
+	vis_leafs_data: &mut VisLeafsData,
 )
 {
-	if recursion_depth > 6
+	let mut cur_wave = SearchWave::new();
+	let mut next_wave = SearchWave::new();
+
+	cur_wave.push(start_leaf_index);
+	vis_leafs_data[start_leaf_index as usize].vis_box = Some(*start_portal_box);
+
+	let max_itertions = 16;
+	let mut num_iterations = 0;
+	while !cur_wave.is_empty()
 	{
-		return;
-	}
-
-	visible_leafs_bit_set[leaf_index as usize] = true;
-
-	let leaf = &map.leafs[leaf_index as usize];
-
-	for &leaf_portal_index in
-		&map.leafs_portals[leaf.first_leaf_portal as usize .. (leaf.first_leaf_portal + leaf.num_leaf_portals) as usize]
-	{
-		if leaf_portal_index == prev_portal_index
+		for &leaf_index in &cur_wave
 		{
-			continue;
-		}
-		let leaf_portal = &map.portals[leaf_portal_index as usize];
+			let prev_portal_box = vis_leafs_data[leaf_index as usize].vis_box.unwrap();
 
-		let next_leaf_index = if leaf_portal.leafs[0] == leaf_index
-		{
-			leaf_portal.leafs[1]
-		}
-		else
-		{
-			leaf_portal.leafs[0]
-		};
-
-		let mut leaf_portal_box = vis_box_from_map_portal(map, leaf_portal);
-
-		// Cut leaf portal using start portal and prev portal.
-		leaf_portal_box = if let Some(b) =
-			cut_view_box_by_view_through_two_previous_boxes(start_portal_box, prev_portal_box, leaf_portal_box)
-		{
-			b
-		}
-		else
-		{
-			continue;
-		};
-
-		// TODO - eable this check.
-		if false
-		{
-			// Cut start portal using leaf portal and prev portal.
-			let start_box_clipped = if let Some(b) =
-				cut_view_box_by_view_through_two_previous_boxes(&leaf_portal_box, prev_portal_box, *start_portal_box)
+			let leaf = &map.leafs[leaf_index as usize];
+			for &portal_index in &map.leafs_portals
+				[leaf.first_leaf_portal as usize .. (leaf.first_leaf_portal + leaf.num_leaf_portals) as usize]
 			{
-				b
-			}
-			else
-			{
-				continue;
-			};
-		}
+				let portal = &map.portals[portal_index as usize];
 
-		mark_visible_leafs_r(
-			map,
-			start_portal_box,
-			&leaf_portal_box,
-			leaf_portal_index,
-			next_leaf_index,
-			visible_leafs_bit_set,
-			recursion_depth + 1,
-		);
+				let next_leaf_index = if portal.leafs[0] == leaf_index
+				{
+					portal.leafs[1]
+				}
+				else
+				{
+					portal.leafs[0]
+				};
+
+				let mut portal_box = vis_box_from_map_portal(map, portal);
+
+				// Cut leaf portal using start portal and prev portal.
+				portal_box = if let Some(b) =
+					cut_view_box_by_view_through_two_previous_boxes(start_portal_box, &prev_portal_box, portal_box)
+				{
+					b
+				}
+				else
+				{
+					continue;
+				};
+
+				let vis_leaf_data = &mut vis_leafs_data[next_leaf_index as usize];
+				if let Some(prev_box) = &mut vis_leaf_data.vis_box
+				{
+					// This leaf was already visited.
+					if prev_box.contains(&portal_box)
+					{
+						// No need to continue search - it can't find more visible leafs.
+						continue;
+					}
+					prev_box.extend(&portal_box);
+				}
+				else
+				{
+					vis_leaf_data.vis_box = Some(portal_box);
+				}
+
+				next_wave.push(next_leaf_index);
+			} // for portals.
+		} // for wave elements
+
+		cur_wave.clear();
+		std::mem::swap(&mut cur_wave, &mut next_wave);
+
+		num_iterations += 1;
+		if num_iterations >= max_itertions
+		{
+			break;
+		}
 	}
 }
 
