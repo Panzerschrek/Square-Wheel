@@ -52,7 +52,6 @@ impl BBox
 		{
 			self.max.x = other.max.x;
 		}
-
 		if other.min.y < self.min.y
 		{
 			self.min.y = other.min.y;

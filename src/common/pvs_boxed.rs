@@ -80,7 +80,38 @@ fn calculate_pvs_for_leaf_portal(
 	};
 
 	let portal_box = vis_box_from_map_portal(map, portal);
-	mark_visible_leafs_iterative(map, &portal_box, next_leaf_index, vis_leafs_data);
+
+	vis_leafs_data[next_leaf_index as usize].vis_box = Some(portal_box);
+
+	let next_leaf = &map.leafs[next_leaf_index as usize];
+	for &next_leaf_portal_index in &map.leafs_portals
+		[next_leaf.first_leaf_portal as usize .. (next_leaf.first_leaf_portal + next_leaf.num_leaf_portals) as usize]
+	{
+		if next_leaf_portal_index == portal_index
+		{
+			continue;
+		}
+		let next_leaf_portal = &map.portals[next_leaf_portal_index as usize];
+
+		let next_next_leaf_index = if next_leaf_portal.leafs[0] == next_leaf_index
+		{
+			next_leaf_portal.leafs[1]
+		}
+		else
+		{
+			next_leaf_portal.leafs[0]
+		};
+
+		let next_leaf_portal_box = vis_box_from_map_portal(map, next_leaf_portal);
+
+		mark_visible_leafs_iterative(
+			map,
+			&portal_box,
+			&next_leaf_portal_box,
+			next_next_leaf_index,
+			vis_leafs_data,
+		);
+	}
 }
 
 type VisBox = BBox;
@@ -109,6 +140,7 @@ type SearchWave = Vec<SearchWaveElement>;
 fn mark_visible_leafs_iterative(
 	map: &bsp_map_compact::BSPMap,
 	start_portal_box: &VisBox,
+	start_leaf_portal_box: &VisBox,
 	start_leaf_index: u32,
 	vis_leafs_data: &mut VisLeafsData,
 )
@@ -117,9 +149,9 @@ fn mark_visible_leafs_iterative(
 	let mut next_wave = SearchWave::new();
 
 	cur_wave.push(start_leaf_index);
-	vis_leafs_data[start_leaf_index as usize].vis_box = Some(*start_portal_box);
+	vis_leafs_data[start_leaf_index as usize].vis_box = Some(*start_leaf_portal_box);
 
-	let max_itertions = 16;
+	let max_itertions = 64;
 	let mut num_iterations = 0;
 	while !cur_wave.is_empty()
 	{
@@ -146,7 +178,7 @@ fn mark_visible_leafs_iterative(
 
 				// Cut leaf portal using start portal and prev portal.
 				portal_box = if let Some(b) =
-					cut_view_box_by_view_through_two_previous_boxes(start_portal_box, &prev_portal_box, portal_box)
+					cut_vis_box_by_view_through_two_previous_boxes(start_portal_box, &prev_portal_box, portal_box)
 				{
 					b
 				}
@@ -183,10 +215,10 @@ fn mark_visible_leafs_iterative(
 		{
 			break;
 		}
-	}
+	} // For wave steps.
 }
 
-fn cut_view_box_by_view_through_two_previous_boxes(box0: &VisBox, box1: &VisBox, mut box2: VisBox) -> Option<VisBox>
+fn cut_vis_box_by_view_through_two_previous_boxes(box0: &VisBox, box1: &VisBox, mut box2: VisBox) -> Option<VisBox>
 {
 	// Check all combinations of planes, based on parallel edges of box0 and box1.
 	// Use plane as cut plane, if box0 is behind it and box1 is at front of it.
@@ -229,6 +261,8 @@ fn cut_view_box_by_view_through_two_previous_boxes(box0: &VisBox, box1: &VisBox,
 		],
 	];
 
+	let box0_center = box0.get_center();
+
 	for edge0 in &edges0
 	{
 		let vec0 = edge0[1] - edge0[0];
@@ -237,7 +271,7 @@ fn cut_view_box_by_view_through_two_previous_boxes(box0: &VisBox, box1: &VisBox,
 		{
 			let vec1 = edge0[0] - edge1[0];
 			let plane_vec = vec0.cross(vec1);
-			if plane_vec.magnitude2() <= 0.0000000001
+			if plane_vec.magnitude2() <= 0.000000000001
 			{
 				continue;
 			}
@@ -246,20 +280,16 @@ fn cut_view_box_by_view_through_two_previous_boxes(box0: &VisBox, box1: &VisBox,
 				vec: plane_vec,
 				dist: plane_vec.dot(edge0[0]),
 			};
-
-			let ok = get_vis_box_position_relative_plane(box0, &cut_plane) != PortalPolygonPositionRelativePlane::Back &&
-				get_vis_box_position_relative_plane(box1, &cut_plane) != PortalPolygonPositionRelativePlane::Front;
-			if !ok
+			if cut_plane.vec.dot(box0_center) > cut_plane.dist
 			{
 				cut_plane = cut_plane.get_inverted();
-				let ok = get_vis_box_position_relative_plane(box0, &cut_plane) !=
-					PortalPolygonPositionRelativePlane::Back &&
-					get_vis_box_position_relative_plane(box1, &cut_plane) !=
-						PortalPolygonPositionRelativePlane::Front;
-				if !ok
-				{
-					continue;
-				}
+			}
+
+			let ok = get_vis_box_position_relative_plane(box0, &cut_plane) == PortalPolygonPositionRelativePlane::Back &&
+				get_vis_box_position_relative_plane(box1, &cut_plane) == PortalPolygonPositionRelativePlane::Front;
+			if !ok
+			{
+				continue;
 			}
 
 			if let Some(b) = cut_vis_box_by_plane(&box2, &cut_plane)
