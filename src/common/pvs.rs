@@ -186,6 +186,14 @@ fn mark_visible_leafs_r(
 		let mut leaf_portal_polygon =
 			portal_polygon_from_map_portal(map, leaf_portal, leaf_portal.leafs[0] == leaf_index);
 
+		let start_polygon_pos =
+			get_portal_polygon_position_relative_plane(start_portal_polygon, &leaf_portal_polygon.plane);
+		if start_polygon_pos == PortalPolygonPositionRelativePlane::Front ||
+			start_polygon_pos == PortalPolygonPositionRelativePlane::Coplanar
+		{
+			continue;
+		}
+
 		// Cut portal polygon using start portal plane.
 		let portal_polygon_pos =
 			get_portal_polygon_position_relative_plane(&leaf_portal_polygon, &start_portal_polygon.plane);
