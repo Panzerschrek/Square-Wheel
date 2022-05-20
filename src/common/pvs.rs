@@ -120,6 +120,7 @@ fn calculate_pvs_for_leaf_portal(
 		mark_visible_leafs_r(
 			map,
 			&portal_polygon,
+			None,
 			&next_leaf_portal_polygon,
 			next_leaf_portal_index,
 			next_next_leaf_index,
@@ -162,6 +163,7 @@ fn portal_polygon_from_map_portal(
 fn mark_visible_leafs_r(
 	map: &bsp_map_compact::BSPMap,
 	start_portal_polygon: &PortalPolygon,
+	prev_prev_portal_polygon: Option<&PortalPolygon>,
 	prev_portal_polygon: &PortalPolygon,
 	prev_portal_index: u32,
 	leaf_index: u32,
@@ -253,8 +255,23 @@ fn mark_visible_leafs_r(
 			continue;
 		}
 
+		// Cut leaf portal using two previous portals.
+		if let Some(p) = prev_prev_portal_polygon
+		{
+			leaf_portal_polygon = cut_portal_polygon_by_view_through_two_previous_portals(
+				p,
+				prev_portal_polygon,
+				leaf_portal_polygon,
+				false,
+			);
+			if leaf_portal_polygon.vertices.len() < 3
+			{
+				continue;
+			}
+		}
+
 		// Cut start portal using leaf portal and prev portal.
-		let start_polygon_clipped = cut_portal_polygon_by_view_through_two_previous_portals(
+		let mut start_polygon_clipped = cut_portal_polygon_by_view_through_two_previous_portals(
 			&leaf_portal_polygon,
 			prev_portal_polygon,
 			start_portal_polygon.clone(),
@@ -265,9 +282,25 @@ fn mark_visible_leafs_r(
 			continue;
 		}
 
+		// Cut start portal using leaf portal and prev prev portal.
+		if let Some(p) = prev_prev_portal_polygon
+		{
+			start_polygon_clipped = cut_portal_polygon_by_view_through_two_previous_portals(
+				&leaf_portal_polygon,
+				p,
+				start_polygon_clipped,
+				true,
+			);
+			if start_polygon_clipped.vertices.len() < 3
+			{
+				continue;
+			}
+		}
+
 		mark_visible_leafs_r(
 			map,
 			&start_polygon_clipped,
+			Some(prev_portal_polygon),
 			&leaf_portal_polygon,
 			leaf_portal_index,
 			next_leaf_index,

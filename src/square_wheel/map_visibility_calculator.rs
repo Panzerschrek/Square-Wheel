@@ -1,5 +1,5 @@
 use super::{clipping_polygon::*, frame_number::*};
-use common::{bsp_map_compact, clipping::*, math_types::*, matrix::*, pvs_boxed};
+use common::{bsp_map_compact, clipping::*, math_types::*, matrix::*, pvs};
 use std::rc::Rc;
 
 pub struct MapVisibilityCalculator
@@ -249,7 +249,7 @@ fn mark_reachable_leafs_pvs(
 {
 	leafs_data[start_leaf_index as usize].visible_frame = current_frame;
 	leafs_data[start_leaf_index as usize].current_frame_bounds = *bounds;
-	for leaf_index in pvs_boxed::calculate_pvs_for_leaf(map, start_leaf_index)
+	for leaf_index in pvs::calculate_pvs_for_leaf(map, start_leaf_index)
 	{
 		leafs_data[leaf_index as usize].visible_frame = current_frame;
 		leafs_data[leaf_index as usize].current_frame_bounds = *bounds;
