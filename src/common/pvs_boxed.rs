@@ -44,17 +44,25 @@ pub fn calculate_pvs_for_leaf(map: &bsp_map_compact::BSPMap, leaf_index: u32) ->
 #[derive(Default, Copy, Clone)]
 struct VisLeafData
 {
-	vis_box: Option<VisBox>,
+	path_element: Option<VisPathElement>,
+	last_push_iteration: usize,
 }
 
 type VisLeafsData = Vec<VisLeafData>;
+
+#[derive(Copy, Clone)]
+struct VisPathElement
+{
+	prev_vis_box: VisBox,
+	vis_box: VisBox,
+}
 
 fn make_leafs_list(vis_leafs_data: &VisLeafsData) -> VisibleLeafsList
 {
 	let mut result = VisibleLeafsList::new();
 	for (i, &vis_leaf_data) in vis_leafs_data.iter().enumerate()
 	{
-		if vis_leaf_data.vis_box.is_some()
+		if vis_leaf_data.path_element.is_some()
 		{
 			result.push(i as u32);
 		}
@@ -81,7 +89,10 @@ fn calculate_pvs_for_leaf_portal(
 
 	let portal_box = vis_box_from_map_portal(map, portal);
 
-	vis_leafs_data[next_leaf_index as usize].vis_box = Some(portal_box);
+	vis_leafs_data[next_leaf_index as usize].path_element = Some(VisPathElement {
+		prev_vis_box: portal_box,
+		vis_box: portal_box,
+	});
 
 	let next_leaf = &map.leafs[next_leaf_index as usize];
 	for &next_leaf_portal_index in &map.leafs_portals
@@ -149,15 +160,19 @@ fn mark_visible_leafs_iterative(
 	let mut next_wave = SearchWave::new();
 
 	cur_wave.push(start_leaf_index);
-	vis_leafs_data[start_leaf_index as usize].vis_box = Some(*start_leaf_portal_box);
+	vis_leafs_data[start_leaf_index as usize].path_element = Some(VisPathElement {
+		prev_vis_box: *start_portal_box,
+		vis_box: *start_leaf_portal_box,
+	});
 
-	let max_itertions = 64;
-	let mut num_iterations = 0;
+	let max_itertions = 32;
+	let mut num_iterations = 1;
 	while !cur_wave.is_empty()
 	{
 		for &leaf_index in &cur_wave
 		{
-			let prev_portal_box = vis_leafs_data[leaf_index as usize].vis_box.unwrap();
+			let prev_prev_portal_box = vis_leafs_data[leaf_index as usize].path_element.unwrap().prev_vis_box;
+			let prev_portal_box = vis_leafs_data[leaf_index as usize].path_element.unwrap().vis_box;
 
 			let leaf = &map.leafs[leaf_index as usize];
 			for &portal_index in &map.leafs_portals
@@ -187,23 +202,58 @@ fn mark_visible_leafs_iterative(
 					continue;
 				};
 
-				let vis_leaf_data = &mut vis_leafs_data[next_leaf_index as usize];
-				if let Some(prev_box) = &mut vis_leaf_data.vis_box
+				// Cut leaf portal using two previous portals.
+				portal_box = if let Some(b) =
+					cut_vis_box_by_view_through_two_previous_boxes(&prev_prev_portal_box, &prev_portal_box, portal_box)
 				{
-					// This leaf was already visited.
-					if prev_box.contains(&portal_box)
+					b
+				}
+				else
+				{
+					continue;
+				};
+
+				if cut_vis_box_by_view_through_two_previous_boxes(&portal_box, &prev_portal_box, *start_portal_box)
+					.is_none() || cut_vis_box_by_view_through_two_previous_boxes(
+					&portal_box,
+					&prev_prev_portal_box,
+					*start_portal_box,
+				)
+				.is_none() || cut_vis_box_by_view_through_two_previous_boxes(
+					&portal_box,
+					&prev_portal_box,
+					prev_prev_portal_box,
+				)
+				.is_none()
+				{
+					continue;
+				}
+
+				let vis_leaf_data = &mut vis_leafs_data[next_leaf_index as usize];
+				if let Some(path_element) = &mut vis_leaf_data.path_element
+				{
+					if path_element.prev_vis_box.contains(&prev_portal_box) &&
+						path_element.vis_box.contains(&portal_box)
 					{
 						// No need to continue search - it can't find more visible leafs.
 						continue;
 					}
-					prev_box.extend(&portal_box);
+					path_element.prev_vis_box.extend(&prev_portal_box);
+					path_element.vis_box = portal_box;
 				}
 				else
 				{
-					vis_leaf_data.vis_box = Some(portal_box);
+					vis_leaf_data.path_element = Some(VisPathElement {
+						prev_vis_box: prev_portal_box,
+						vis_box: portal_box,
+					});
 				}
 
-				next_wave.push(next_leaf_index);
+				if vis_leaf_data.last_push_iteration < num_iterations
+				{
+					vis_leaf_data.last_push_iteration = num_iterations;
+					next_wave.push(next_leaf_index);
+				}
 			} // for portals.
 		} // for wave elements
 
@@ -216,6 +266,11 @@ fn mark_visible_leafs_iterative(
 			break;
 		}
 	} // For wave steps.
+
+	for vis_leaf_data in vis_leafs_data
+	{
+		vis_leaf_data.last_push_iteration = 0;
+	}
 }
 
 fn cut_vis_box_by_view_through_two_previous_boxes(box0: &VisBox, box1: &VisBox, mut box2: VisBox) -> Option<VisBox>
