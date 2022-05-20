@@ -1,4 +1,4 @@
-use super::{bbox::*, bsp_map_compact, clipping, math_types::*, plane::*};
+use super::{bbox::*, bsp_map_compact, math_types::*, plane::*};
 
 // List of visible BSP leafs tree for each leaf.
 pub type LeafsVisibilityInfo = Vec<VisibleLeafsList>;
@@ -142,7 +142,7 @@ fn mark_visible_leafs_r(
 	recursion_depth: usize,
 )
 {
-	if recursion_depth > 16
+	if recursion_depth > 8
 	{
 		return;
 	}
@@ -182,24 +182,28 @@ fn mark_visible_leafs_r(
 			continue;
 		};
 
-		// Cut start portal using leaf portal and prev portal.
-		let start_box_clipped = if let Some(b) = cut_view_box_by_view_through_two_previous_boxes(
-			&leaf_portal_box,
-			prev_portal_box,
-			start_portal_box.clone(),
-			true,
-		)
+		// TODO - eable this check.
+		if false
 		{
-			b
+			// Cut start portal using leaf portal and prev portal.
+			let start_box_clipped = if let Some(b) = cut_view_box_by_view_through_two_previous_boxes(
+				&leaf_portal_box,
+				prev_portal_box,
+				*start_portal_box,
+				true,
+			)
+			{
+				b
+			}
+			else
+			{
+				continue;
+			};
 		}
-		else
-		{
-			continue;
-		};
 
 		mark_visible_leafs_r(
 			map,
-			&start_box_clipped,
+			start_portal_box,
 			&leaf_portal_box,
 			leaf_portal_index,
 			next_leaf_index,
@@ -210,14 +214,97 @@ fn mark_visible_leafs_r(
 }
 
 fn cut_view_box_by_view_through_two_previous_boxes(
-	portal0: &VisBox,
-	portal1: &VisBox,
-	mut portal2: VisBox,
+	box0: &VisBox,
+	box1: &VisBox,
+	mut box2: VisBox,
 	reverse: bool,
 ) -> Option<VisBox>
 {
-	// TODO
-	Some(portal2)
+	// Check all combinations of planes, based on parallel edges of box0 and box1.
+	// Use plane as cut plane, if box0 is behind it and box1 is at front of it.
+
+	let edges0 = [
+		[
+			Vec3f::new(box0.min.x, box0.min.y, box0.min.z),
+			Vec3f::new(box0.min.x, box0.min.y, box0.max.z),
+		],
+		[
+			Vec3f::new(box0.min.x, box0.max.y, box0.min.z),
+			Vec3f::new(box0.min.x, box0.max.y, box0.max.z),
+		],
+		[
+			Vec3f::new(box0.max.x, box0.min.y, box0.min.z),
+			Vec3f::new(box0.max.x, box0.min.y, box0.max.z),
+		],
+		[
+			Vec3f::new(box0.max.x, box0.max.y, box0.min.z),
+			Vec3f::new(box0.max.x, box0.max.y, box0.max.z),
+		],
+	];
+
+	let edges1 = [
+		[
+			Vec3f::new(box1.min.x, box1.min.y, box1.min.z),
+			Vec3f::new(box1.min.x, box1.min.y, box1.max.z),
+		],
+		[
+			Vec3f::new(box1.min.x, box1.max.y, box1.min.z),
+			Vec3f::new(box1.min.x, box1.max.y, box1.max.z),
+		],
+		[
+			Vec3f::new(box1.max.x, box1.min.y, box1.min.z),
+			Vec3f::new(box1.max.x, box1.min.y, box1.max.z),
+		],
+		[
+			Vec3f::new(box1.max.x, box1.max.y, box1.min.z),
+			Vec3f::new(box1.max.x, box1.max.y, box1.max.z),
+		],
+	];
+
+	for edge0 in &edges0
+	{
+		let mut vec0 = edge0[1] - edge0[0];
+		if reverse
+		{
+			vec0 = -vec0;
+		}
+
+		for edge1 in &edges1
+		{
+			let vec1 = edge0[0] - edge1[0];
+			let plane_vec = vec0.cross(vec1);
+			if plane_vec.magnitude2() <= 0.0000000001
+			{
+				continue;
+			}
+
+			let cut_plane = Plane {
+				vec: plane_vec,
+				dist: plane_vec.dot(edge0[0]),
+			};
+
+			if get_vis_box_position_relative_plane(box0, &cut_plane) != PortalPolygonPositionRelativePlane::Back
+			{
+				continue;
+			}
+			if get_vis_box_position_relative_plane(box1, &cut_plane) != PortalPolygonPositionRelativePlane::Front
+			{
+				continue;
+			}
+
+			if let Some(b) = cut_vis_box_by_plane(&box2, &cut_plane)
+			{
+				box2 = b
+			}
+			else
+			{
+				// Totally clipped.
+				return None;
+			}
+		} // for edge1
+	} // for edge0
+
+	Some(box2)
 }
 
 #[derive(PartialEq, Eq)]
@@ -229,7 +316,7 @@ enum PortalPolygonPositionRelativePlane
 	Splitted,
 }
 
-fn get_view_box_position_relative_plane(vis_box: &VisBox, plane: &Plane) -> PortalPolygonPositionRelativePlane
+fn get_vis_box_position_relative_plane(vis_box: &VisBox, plane: &Plane) -> PortalPolygonPositionRelativePlane
 {
 	let mut vertices_front = 0;
 	let mut vertices_back = 0;
