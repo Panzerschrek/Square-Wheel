@@ -1,6 +1,5 @@
 #![cfg_attr(feature = "rasterizer_unchecked_div", feature(core_intrinsics))]
 
-mod clipping_polygon;
 mod commands_processor;
 mod commands_queue;
 mod config;

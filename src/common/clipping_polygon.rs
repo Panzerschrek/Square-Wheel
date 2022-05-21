@@ -1,4 +1,4 @@
-use common::math_types::*;
+use super::math_types::*;
 
 // 2d Clipping polygon. Has small number of fixed sizes.
 #[derive(Copy, Clone, Default)]

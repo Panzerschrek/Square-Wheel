@@ -1,5 +1,5 @@
-use super::{clipping_polygon::*, frame_number::*};
-use common::{bsp_map_compact, clipping::*, math_types::*, matrix::*, pvs};
+use super::frame_number::*;
+use common::{bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, matrix::*, pvs};
 use std::rc::Rc;
 
 pub struct MapVisibilityCalculator
