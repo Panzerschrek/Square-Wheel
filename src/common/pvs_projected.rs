@@ -28,25 +28,16 @@ pub fn caclulate_pvs(map: &bsp_map_compact::BSPMap) -> LeafsVisibilityInfo
 
 pub fn calculate_pvs_for_leaf(map: &bsp_map_compact::BSPMap, leaf_index: u32) -> VisibleLeafsList
 {
-	let mut visible_leafs_set = vec![false; map.leafs.len()];
+	let mut visible_leafs_bit_set = vec![false; map.leafs.len()];
 
 	let leaf = &map.leafs[leaf_index as usize];
 	for &portal_index in
 		&map.leafs_portals[leaf.first_leaf_portal as usize .. (leaf.first_leaf_portal + leaf.num_leaf_portals) as usize]
 	{
-		let mut vis_leafs_data = vec![VisLeafData::default(); map.leafs.len()];
-		calculate_pvs_for_leaf_portal(map, leaf_index, portal_index, &mut vis_leafs_data);
-
-		for (index, vis_leaf_data) in vis_leafs_data.iter().enumerate()
-		{
-			if vis_leaf_data.bounds.is_some()
-			{
-				visible_leafs_set[index] = true;
-			}
-		}
+		calculate_pvs_for_leaf_portal(map, leaf_index, portal_index, &mut visible_leafs_bit_set);
 	}
 
-	visible_leafs_bit_set_to_leafs_list(&visible_leafs_set)
+	visible_leafs_bit_set_to_leafs_list(&visible_leafs_bit_set)
 }
 
 // TODO - use more advanced collection.
@@ -71,8 +62,6 @@ struct VisLeafData
 	bounds: Option<ClippingPolygon>,
 }
 
-type VisLeafsData = Vec<VisLeafData>;
-
 type SearchWaveElement = u32; // Leaf index.
 type SearchWave = Vec<SearchWaveElement>;
 
@@ -80,21 +69,32 @@ fn calculate_pvs_for_leaf_portal(
 	map: &bsp_map_compact::BSPMap,
 	start_leaf_index: u32,
 	start_portal_index: u32,
-	vis_leafs_data: &mut VisLeafsData,
+	visible_leafs_bit_set: &mut VisibleLeafsBitSet,
 )
 {
 	let portal = &map.portals[start_portal_index as usize];
-	let view_matrices = calculate_portal_view_matrices(map, start_leaf_index, portal);
+	let next_leaf_index = if portal.leafs[0] == start_leaf_index
+	{
+		portal.leafs[1]
+	}
+	else
+	{
+		portal.leafs[0]
+	};
 
 	let mut cur_wave = SearchWave::new();
 	let mut next_wave = SearchWave::new();
 
-	cur_wave.push(start_leaf_index);
+	cur_wave.push(next_leaf_index);
+
+	let mut vis_leafs_data = vec![VisLeafData::default(); map.leafs.len()];
 
 	let inf = 1e30;
-	vis_leafs_data[start_leaf_index as usize].bounds = Some(ClippingPolygon::from_box(-inf, -inf, inf, inf));
+	vis_leafs_data[next_leaf_index as usize].bounds = Some(ClippingPolygon::from_box(-inf, -inf, inf, inf));
 
-	let max_itertions = 32;
+	let view_matrices = calculate_portal_view_matrices(map, start_leaf_index, portal);
+
+	let max_itertions = 256;
 	let mut num_iterations = 1;
 	while !cur_wave.is_empty()
 	{
@@ -158,6 +158,14 @@ fn calculate_pvs_for_leaf_portal(
 			break;
 		}
 	} // For wave steps.
+
+	for (index, vis_leaf_data) in vis_leafs_data.iter().enumerate()
+	{
+		if vis_leaf_data.bounds.is_some()
+		{
+			visible_leafs_bit_set[index] = true;
+		}
+	}
 }
 
 fn calculate_portal_view_matrices(
@@ -166,19 +174,16 @@ fn calculate_portal_view_matrices(
 	portal: &bsp_map_compact::Portal,
 ) -> Vec<Mat4f>
 {
-	let mut plane = portal.plane;
+	let mut dir = portal.plane.vec;
 	if portal.leafs[0] == leaf_index
 	{
-		plane = plane.get_inverted();
+		dir = -dir;
 	}
 
-	// Build set of projection matrices for each portal vertex. Camera points in direction of portal plane normal.
+	// Build set of projection matrices for each portal vertex. Camera looks in direction of portal plane normal.
 
-	let azimuth = plane.vec.y.atan2(plane.vec.x);
-	let elevation = plane
-		.vec
-		.z
-		.atan2((plane.vec.x * plane.vec.x + plane.vec.y * plane.vec.y).sqrt());
+	let azimuth = (-dir.x).atan2(dir.y);
+	let elevation = dir.z.atan2((dir.x * dir.x + dir.y * dir.y).sqrt());
 
 	let mut result = Vec::with_capacity(portal.num_vertices as usize);
 	for vertex in &map.vertices[portal.first_vertex as usize .. (portal.first_vertex + portal.num_vertices) as usize]
