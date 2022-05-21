@@ -10,7 +10,7 @@ pub struct MapVisibilityCalculator
 	portals_data: Vec<PortalData>,
 	leafs_search_waves: LeafsSearchWavesPair,
 	prev_leaf: Option<u32>,
-	visibility_matrix: pvs_projected::VisibilityMatrix,
+	visibility_matrix: Option<pvs_projected::VisibilityMatrix>,
 }
 
 #[derive(Default, Copy, Clone)]
@@ -40,7 +40,7 @@ impl MapVisibilityCalculator
 {
 	pub fn new(map: Rc<bsp_map_compact::BSPMap>) -> Self
 	{
-		let visibility_matrix = pvs_projected::calculate_visibility_matrix(&map);
+		let visibility_matrix = None;//pvs_projected::calculate_visibility_matrix(&map);
 
 		Self {
 			current_frame: FrameNumber::default(),
@@ -68,13 +68,12 @@ impl MapVisibilityCalculator
 
 		let recursive_visible_leafs_marking = false; // TODO - read from config.
 		let pvs_leafs_marking = true;
-		let pvs_matrix_marking = true;
-		if pvs_matrix_marking
+		if let Some(mat) = &self.visibility_matrix
 		{
 			let row_offset = (current_leaf as usize) * self.map.leafs.len();
 			for i in 0 .. self.map.leafs.len()
 			{
-				if self.visibility_matrix[row_offset + i]
+				if mat[row_offset + i]
 				{
 					self.leafs_data[i].visible_frame = self.current_frame;
 					self.leafs_data[i].current_frame_bounds = *frame_bounds;

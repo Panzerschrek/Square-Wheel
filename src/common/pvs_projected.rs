@@ -53,7 +53,7 @@ pub fn calculate_visibility_matrix(map: &bsp_map_compact::BSPMap) -> VisibilityM
 		}
 	}
 
-	println!("\nCaclulationg final visibility matrix");
+	println!("\nCaclulating final visibility matrix");
 	for x in 0 .. map.leafs.len()
 	{
 		for y in 0 .. map.leafs.len()
@@ -123,6 +123,7 @@ fn visible_leafs_bit_set_to_leafs_list(visible_leafs_bit_set: &VisibleLeafsBitSe
 struct VisLeafData
 {
 	bounds: Option<ClippingPolygon>,
+	last_push_iteration: usize,
 }
 
 type SearchWaveElement = u32; // Leaf index.
@@ -142,6 +143,8 @@ fn calculate_pvs_for_leaf_portal(
 	//
 	// Such approach may produce some false-positives, but it is pretty fast.
 	// Some false-positive cases may be fixed by checking visibility in both directions.
+
+	// TODO - split too big portals and perform search idividually for each portal part in order to decrease false-positive rate.
 
 	let portal = &map.portals[start_portal_index as usize];
 	let next_leaf_index = if portal.leafs[0] == start_leaf_index
@@ -216,7 +219,12 @@ fn calculate_pvs_for_leaf_portal(
 				{
 					vis_leaf_data.bounds = Some(portal_bounds);
 				}
-				next_wave.push(next_leaf_index);
+
+				if vis_leaf_data.last_push_iteration < num_iterations
+				{
+					vis_leaf_data.last_push_iteration = num_iterations;
+					next_wave.push(next_leaf_index);
+				}
 			} // for portals.
 		} // for wave elements.
 
