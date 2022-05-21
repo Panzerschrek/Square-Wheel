@@ -3,6 +3,11 @@ use super::{bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, ma
 // List of visible BSP leafs tree for each leaf.
 pub type LeafsVisibilityInfo = Vec<VisibleLeafsList>;
 pub type VisibleLeafsList = Vec<u32>;
+
+// leafs.len() * leafs.len() elements.
+// TODO - use more compact form.
+pub type VisibilityMatrix = Vec<bool>;
+
 pub fn caclulate_pvs(map: &bsp_map_compact::BSPMap) -> LeafsVisibilityInfo
 {
 	let mut result = LeafsVisibilityInfo::with_capacity(map.leafs.len());
@@ -26,9 +31,39 @@ pub fn caclulate_pvs(map: &bsp_map_compact::BSPMap) -> LeafsVisibilityInfo
 	result
 }
 
+pub fn calculate_visibility_matrix(map: &bsp_map_compact::BSPMap) -> VisibilityMatrix
+{
+	let mut mat = vec![false; map.leafs.len() * map.leafs.len()];
+
+	let mut bit_sets = Vec::with_capacity(map.leafs.len());
+	for leaf_index in 0 .. map.leafs.len() as u32
+	{
+		bit_sets.push(calculate_pvs_bit_set_for_leaf(map, leaf_index));
+	}
+
+	for x in 0 .. map.leafs.len()
+	{
+		for y in 0 .. map.leafs.len()
+		{
+			// Set visibility to "true" only if visibility is "true" in both directions.
+			// Such approach allows to reject some false-positives.
+			mat[x + y * map.leafs.len()] = bit_sets[x][y] & bit_sets[y][x];
+		}
+	}
+
+	mat
+}
+
 pub fn calculate_pvs_for_leaf(map: &bsp_map_compact::BSPMap, leaf_index: u32) -> VisibleLeafsList
 {
+	visible_leafs_bit_set_to_leafs_list(&calculate_pvs_bit_set_for_leaf(map, leaf_index))
+}
+
+fn calculate_pvs_bit_set_for_leaf(map: &bsp_map_compact::BSPMap, leaf_index: u32) -> VisibleLeafsBitSet
+{
 	let mut visible_leafs_bit_set = vec![false; map.leafs.len()];
+
+	visible_leafs_bit_set[leaf_index as usize] = true;
 
 	let leaf = &map.leafs[leaf_index as usize];
 	for &portal_index in
@@ -37,7 +72,7 @@ pub fn calculate_pvs_for_leaf(map: &bsp_map_compact::BSPMap, leaf_index: u32) ->
 		calculate_pvs_for_leaf_portal(map, leaf_index, portal_index, &mut visible_leafs_bit_set);
 	}
 
-	visible_leafs_bit_set_to_leafs_list(&visible_leafs_bit_set)
+	visible_leafs_bit_set
 }
 
 // TODO - use more advanced collection.
@@ -72,6 +107,14 @@ fn calculate_pvs_for_leaf_portal(
 	visible_leafs_bit_set: &mut VisibleLeafsBitSet,
 )
 {
+	// Use tricky projection-based algorithm.
+	// For each leaf portal build set of projection matrices (for each vertex) facing away from leaf.
+	// Calculate projection of portals using these matrices and calculate combined projected polygon from projected polygons for each matrix.
+	// Perform boolean operations for projection polygons.
+	//
+	// Such approach may produce some false-positives, but it is pretty fast.
+	// Some false-positive cases may be fixed by checking visibility in both directions.
+
 	let portal = &map.portals[start_portal_index as usize];
 	let next_leaf_index = if portal.leafs[0] == start_leaf_index
 	{
@@ -89,7 +132,7 @@ fn calculate_pvs_for_leaf_portal(
 
 	let mut vis_leafs_data = vec![VisLeafData::default(); map.leafs.len()];
 
-	let inf = 1e30;
+	let inf = 1e36;
 	vis_leafs_data[next_leaf_index as usize].bounds = Some(ClippingPolygon::from_box(-inf, -inf, inf, inf));
 
 	let view_matrices = calculate_portal_view_matrices(map, start_leaf_index, portal);
