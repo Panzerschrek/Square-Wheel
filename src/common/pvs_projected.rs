@@ -39,8 +39,21 @@ pub fn calculate_visibility_matrix(map: &bsp_map_compact::BSPMap) -> VisibilityM
 	for leaf_index in 0 .. map.leafs.len() as u32
 	{
 		bit_sets.push(calculate_pvs_bit_set_for_leaf(map, leaf_index));
+
+		let ratio_before = leaf_index * 256 / (map.leafs.len() as u32);
+		let ratio_after = (leaf_index + 1) * 256 / (map.leafs.len() as u32);
+		if ratio_after != ratio_before
+		{
+			print!(
+				"\r{:03.2}% complete ({} of {} leafs)",
+				((leaf_index + 1) as f32) * 100.0 / (map.leafs.len() as f32),
+				leaf_index + 1,
+				map.leafs.len()
+			);
+		}
 	}
 
+	println!("\nCaclulationg final visibility matrix");
 	for x in 0 .. map.leafs.len()
 	{
 		for y in 0 .. map.leafs.len()
@@ -50,6 +63,21 @@ pub fn calculate_visibility_matrix(map: &bsp_map_compact::BSPMap) -> VisibilityM
 			mat[x + y * map.leafs.len()] = bit_sets[x][y] & bit_sets[y][x];
 		}
 	}
+
+	let mut num_non_zero_visibility = 0;
+	for &v in &mat
+	{
+		if v
+		{
+			num_non_zero_visibility += 1;
+		}
+	}
+	println!("Done!");
+	println!(
+		"Average visibility {}% ({} leafs)",
+		100.0 * (num_non_zero_visibility as f32) / (mat.len() as f32),
+		num_non_zero_visibility / map.leafs.len()
+	);
 
 	mat
 }
