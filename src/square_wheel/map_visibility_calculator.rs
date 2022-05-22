@@ -1,5 +1,5 @@
 use super::frame_number::*;
-use common::{bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, matrix::*, pvs};
+use common::{bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, matrix::*};
 use std::rc::Rc;
 
 pub struct MapVisibilityCalculator
@@ -9,8 +9,6 @@ pub struct MapVisibilityCalculator
 	leafs_data: Vec<LeafData>,
 	portals_data: Vec<PortalData>,
 	leafs_search_waves: LeafsSearchWavesPair,
-	prev_leaf: Option<u32>,
-	visibility_matrix: Option<pvs::VisibilityMatrix>,
 }
 
 #[derive(Default, Copy, Clone)]
@@ -40,46 +38,24 @@ impl MapVisibilityCalculator
 {
 	pub fn new(map: Rc<bsp_map_compact::BSPMap>) -> Self
 	{
-		let visibility_matrix = Some(pvs::calculate_visibility_matrix(&map));
-
 		Self {
 			current_frame: FrameNumber::default(),
 			leafs_data: vec![LeafData::default(); map.leafs.len()],
 			portals_data: vec![PortalData::default(); map.portals.len()],
 			leafs_search_waves: LeafsSearchWavesPair::default(),
 			map,
-			prev_leaf: None,
-			visibility_matrix,
 		}
 	}
 
 	pub fn update_visibility(&mut self, camera_matrices: &CameraMatrices, frame_bounds: &ClippingPolygon)
 	{
+		self.current_frame.next();
+
 		let root_node = (self.map.nodes.len() - 1) as u32;
 		let current_leaf = self.find_current_leaf(root_node, &camera_matrices.planes_matrix);
 
-		if self.prev_leaf == Some(current_leaf)
-		{
-			return;
-		}
-		self.prev_leaf = Some(current_leaf);
-
-		self.current_frame.next();
-
 		let recursive_visible_leafs_marking = false; // TODO - read from config.
-		if let Some(mat) = &self.visibility_matrix
-		{
-			let row_offset = (current_leaf as usize) * self.map.leafs.len();
-			for i in 0 .. self.map.leafs.len()
-			{
-				if mat[row_offset + i]
-				{
-					self.leafs_data[i].visible_frame = self.current_frame;
-					self.leafs_data[i].current_frame_bounds = *frame_bounds;
-				}
-			}
-		}
-		else if recursive_visible_leafs_marking
+		if recursive_visible_leafs_marking
 		{
 			mark_reachable_leafs_recursive(
 				current_leaf,

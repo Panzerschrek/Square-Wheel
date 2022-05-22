@@ -41,7 +41,7 @@ pub fn build_surface(
 	let u_vec_normalized = u_vec * inv_sqrt_fast(u_vec.magnitude2().max(MIN_POSITIVE_VALUE));
 	let v_vec_normalized = v_vec * inv_sqrt_fast(v_vec.magnitude2().max(MIN_POSITIVE_VALUE));
 
-	let constant_light = [1.1, 1.1, 1.1];
+	let constant_light = [0.1, 0.1, 0.1];
 
 	for dst_v in 0 .. surface_size[1]
 	{
