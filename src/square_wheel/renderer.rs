@@ -1,10 +1,10 @@
 use super::{
-	clipping_polygon::*, config, depth_renderer::*, draw_ordering, frame_number::*, inline_models_index::*, light::*,
+	config, depth_renderer::*, draw_ordering, frame_number::*, inline_models_index::*, light::*,
 	map_visibility_calculator::*, rasterizer::*, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
 };
 use common::{
-	bbox::*, bsp_map_compact, clipping::*, color::*, fixed_math::*, lightmaps_builder, material, math_types::*,
-	matrix::*, performance_counter::*, plane::*, system_window,
+	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, color::*, fixed_math::*, lightmaps_builder, material,
+	math_types::*, matrix::*, performance_counter::*, plane::*, system_window,
 };
 use std::rc::Rc;
 

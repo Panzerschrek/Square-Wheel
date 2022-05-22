@@ -28,7 +28,6 @@ path = "common/lib.rs"
 name = "map_compiler"
 path = "map_compiler/main.rs"
 
-
 # Lightmapper executable.
 [[bin]]
 name = "lightmapper"

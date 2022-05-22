@@ -17,9 +17,57 @@ impl BBox
 		}
 	}
 
+	pub fn is_empty_or_invalid(&self) -> bool
+	{
+		!self.is_valid_and_non_empty()
+	}
+
+	pub fn is_valid_and_non_empty(&self) -> bool
+	{
+		self.min.x < self.max.x && self.min.y < self.max.y && self.min.z < self.max.z
+	}
+
+	pub fn contains(&self, other: &BBox) -> bool
+	{
+		self.min.x <= other.min.x &&
+			self.max.x >= other.max.x &&
+			self.min.y <= other.min.y &&
+			self.max.y >= other.max.y &&
+			self.min.z <= other.min.z &&
+			self.max.z >= other.max.z
+	}
+
 	pub fn get_center(&self) -> Vec3f
 	{
 		(self.min + self.max) * 0.5
+	}
+
+	pub fn extend(&mut self, other: &BBox)
+	{
+		if other.min.x < self.min.x
+		{
+			self.min.x = other.min.x;
+		}
+		if other.max.x > self.max.x
+		{
+			self.max.x = other.max.x;
+		}
+		if other.min.y < self.min.y
+		{
+			self.min.y = other.min.y;
+		}
+		if other.max.y > self.max.y
+		{
+			self.max.y = other.max.y;
+		}
+		if other.min.z < self.min.z
+		{
+			self.min.z = other.min.z;
+		}
+		if other.max.z > self.max.z
+		{
+			self.max.z = other.max.z;
+		}
 	}
 
 	pub fn extend_with_point(&mut self, point: &Vec3f)
