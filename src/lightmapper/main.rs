@@ -22,6 +22,10 @@ struct Opt
 	#[structopt(long)]
 	light_scale: Option<f32>,
 
+	/// Force add ambinet light with provided power.
+	#[structopt(long)]
+	ambient_light: Option<f32>,
+
 	/// Path to directory containing materials.
 	#[structopt(parse(from_os_str), long)]
 	materials_dir: Option<PathBuf>,
@@ -47,6 +51,7 @@ fn main()
 		&lightmaps_builder::LightmappingSettings {
 			sample_grid_size: opt.sample_grid_size.unwrap_or(1),
 			light_scale: opt.light_scale.unwrap_or(1.0),
+			ambient_light: opt.ambient_light.unwrap_or(0.0),
 		},
 		&materials,
 		&mut map,

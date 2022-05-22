@@ -5,6 +5,7 @@ pub struct LightmappingSettings
 {
 	pub sample_grid_size: u32,
 	pub light_scale: f32,
+	pub ambient_light: f32,
 }
 
 pub fn build_lightmaps(
@@ -25,16 +26,27 @@ pub fn build_lightmaps(
 		l.color[2] *= settings.light_scale;
 	}
 
-	let mut lightmaps_data = allocate_lightmaps(materials, map);
-	println!("Lightmap texels: {}", lightmaps_data.len());
+	let mut primary_lightmaps_data = allocate_lightmaps(materials, map);
+	println!("Lightmap texels: {}", primary_lightmaps_data.len());
 
-	build_primary_lightmaps(sample_grid_size, &lights, map, &mut lightmaps_data);
+	build_primary_lightmaps(sample_grid_size, &lights, map, &mut primary_lightmaps_data);
 
 	// TODO - calculate secondary lightmap (third, forth, etc.) and combine it with primary lightmap.
-	// Now just use primary lightmap.
-	map.lightmaps_data = lightmaps_data;
 
-	println!("\nDone!");
+	println!("\nCombining lightmaps");
+	map.lightmaps_data =
+		vec![[settings.ambient_light, settings.ambient_light, settings.ambient_light]; primary_lightmaps_data.len()];
+	for i in 0 .. primary_lightmaps_data.len()
+	{
+		let dst = &mut map.lightmaps_data[i];
+		let src = &primary_lightmaps_data[i];
+		for j in 0 .. 3
+		{
+			dst[j] += src[j];
+		}
+	}
+
+	println!("Done!");
 }
 
 // If this chaged, map file version must be changed too!
