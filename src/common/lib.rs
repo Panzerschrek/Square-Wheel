@@ -21,8 +21,6 @@ pub mod matrix;
 pub mod performance_counter;
 pub mod plane;
 pub mod pvs;
-pub mod pvs_boxed;
-pub mod pvs_projected;
 pub mod system_window;
 pub mod text_printer;
 pub mod ticks_counter;

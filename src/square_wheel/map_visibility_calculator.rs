@@ -1,5 +1,5 @@
 use super::frame_number::*;
-use common::{bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, matrix::*, pvs_projected};
+use common::{bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, matrix::*, pvs};
 use std::rc::Rc;
 
 pub struct MapVisibilityCalculator
@@ -10,7 +10,7 @@ pub struct MapVisibilityCalculator
 	portals_data: Vec<PortalData>,
 	leafs_search_waves: LeafsSearchWavesPair,
 	prev_leaf: Option<u32>,
-	visibility_matrix: Option<pvs_projected::VisibilityMatrix>,
+	visibility_matrix: Option<pvs::VisibilityMatrix>,
 }
 
 #[derive(Default, Copy, Clone)]
@@ -40,7 +40,7 @@ impl MapVisibilityCalculator
 {
 	pub fn new(map: Rc<bsp_map_compact::BSPMap>) -> Self
 	{
-		let visibility_matrix = None;//pvs_projected::calculate_visibility_matrix(&map);
+		let visibility_matrix = Some(pvs::calculate_visibility_matrix(&map));
 
 		Self {
 			current_frame: FrameNumber::default(),
@@ -265,7 +265,7 @@ fn mark_reachable_leafs_pvs(
 {
 	leafs_data[start_leaf_index as usize].visible_frame = current_frame;
 	leafs_data[start_leaf_index as usize].current_frame_bounds = *bounds;
-	for leaf_index in pvs_projected::calculate_pvs_for_leaf(map, start_leaf_index)
+	for leaf_index in pvs::calculate_pvs_for_leaf(map, start_leaf_index)
 	{
 		leafs_data[leaf_index as usize].visible_frame = current_frame;
 		leafs_data[leaf_index as usize].current_frame_bounds = *bounds;

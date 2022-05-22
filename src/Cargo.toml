@@ -35,12 +35,6 @@ name = "lightmapper"
 path = "lightmapper/main.rs"
 
 
-# Vis executable.
-[[bin]]
-name = "vis"
-path = "vis/main.rs"
-
-
 # Helper tool for map visualisation.
 [[bin]]
 name = "map_viewer"

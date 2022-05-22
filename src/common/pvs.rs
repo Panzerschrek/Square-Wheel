@@ -1,8 +1,12 @@
-use super::{bsp_map_compact, clipping, math_types::*, plane::*};
+use super::{bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, matrix};
 
 // List of visible BSP leafs tree for each leaf.
 pub type LeafsVisibilityInfo = Vec<VisibleLeafsList>;
 pub type VisibleLeafsList = Vec<u32>;
+
+// leafs.len() * leafs.len() elements.
+// TODO - use more compact form.
+pub type VisibilityMatrix = Vec<bool>;
 
 pub fn caclulate_pvs(map: &bsp_map_compact::BSPMap) -> LeafsVisibilityInfo
 {
@@ -27,18 +31,76 @@ pub fn caclulate_pvs(map: &bsp_map_compact::BSPMap) -> LeafsVisibilityInfo
 	result
 }
 
+pub fn calculate_visibility_matrix(map: &bsp_map_compact::BSPMap) -> VisibilityMatrix
+{
+	let mut mat = vec![false; map.leafs.len() * map.leafs.len()];
+
+	let mut bit_sets = Vec::with_capacity(map.leafs.len());
+	for leaf_index in 0 .. map.leafs.len() as u32
+	{
+		bit_sets.push(calculate_pvs_bit_set_for_leaf(map, leaf_index));
+
+		let ratio_before = leaf_index * 256 / (map.leafs.len() as u32);
+		let ratio_after = (leaf_index + 1) * 256 / (map.leafs.len() as u32);
+		if ratio_after != ratio_before
+		{
+			print!(
+				"\r{:03.2}% complete ({} of {} leafs)",
+				((leaf_index + 1) as f32) * 100.0 / (map.leafs.len() as f32),
+				leaf_index + 1,
+				map.leafs.len()
+			);
+		}
+	}
+
+	println!("\nCaclulating final visibility matrix");
+	for x in 0 .. map.leafs.len()
+	{
+		for y in 0 .. map.leafs.len()
+		{
+			// Set visibility to "true" only if visibility is "true" in both directions.
+			// Such approach allows to reject some false-positives.
+			mat[x + y * map.leafs.len()] = bit_sets[x][y] & bit_sets[y][x];
+		}
+	}
+
+	let mut num_non_zero_visibility = 0;
+	for &v in &mat
+	{
+		if v
+		{
+			num_non_zero_visibility += 1;
+		}
+	}
+	println!("Done!");
+	println!(
+		"Average visibility {}% ({} leafs)",
+		100.0 * (num_non_zero_visibility as f32) / (mat.len() as f32),
+		num_non_zero_visibility / map.leafs.len()
+	);
+
+	mat
+}
+
 pub fn calculate_pvs_for_leaf(map: &bsp_map_compact::BSPMap, leaf_index: u32) -> VisibleLeafsList
 {
+	visible_leafs_bit_set_to_leafs_list(&calculate_pvs_bit_set_for_leaf(map, leaf_index))
+}
+
+fn calculate_pvs_bit_set_for_leaf(map: &bsp_map_compact::BSPMap, leaf_index: u32) -> VisibleLeafsBitSet
+{
 	let mut visible_leafs_bit_set = vec![false; map.leafs.len()];
+
+	visible_leafs_bit_set[leaf_index as usize] = true;
 
 	let leaf = &map.leafs[leaf_index as usize];
 	for &portal_index in
 		&map.leafs_portals[leaf.first_leaf_portal as usize .. (leaf.first_leaf_portal + leaf.num_leaf_portals) as usize]
 	{
-		calculate_pvs_for_leaf_portal(map, leaf_index, portal_index, &mut visible_leafs_bit_set)
+		calculate_pvs_for_leaf_portal(map, leaf_index, portal_index, &mut visible_leafs_bit_set);
 	}
 
-	visible_leafs_bit_set_to_leafs_list(&visible_leafs_bit_set)
+	visible_leafs_bit_set
 }
 
 // TODO - use more advanced collection.
@@ -57,15 +119,35 @@ fn visible_leafs_bit_set_to_leafs_list(visible_leafs_bit_set: &VisibleLeafsBitSe
 	result
 }
 
+#[derive(Default, Copy, Clone)]
+struct VisLeafData
+{
+	bounds: Option<ClippingPolygon>,
+	last_push_iteration: usize,
+}
+
+type SearchWaveElement = u32; // Leaf index.
+type SearchWave = Vec<SearchWaveElement>;
+
 fn calculate_pvs_for_leaf_portal(
 	map: &bsp_map_compact::BSPMap,
-	leaf_index: u32,
-	portal_index: u32,
+	start_leaf_index: u32,
+	start_portal_index: u32,
 	visible_leafs_bit_set: &mut VisibleLeafsBitSet,
 )
 {
-	let portal = &map.portals[portal_index as usize];
-	let next_leaf_index = if portal.leafs[0] == leaf_index
+	// Use tricky projection-based algorithm.
+	// For each leaf portal build set of projection matrices (for each vertex) facing away from leaf.
+	// Calculate projection of portals using these matrices and calculate combined projected polygon from projected polygons for each matrix.
+	// Perform boolean operations for projection polygons.
+	//
+	// Such approach may produce some false-positives, but it is pretty fast.
+	// Some false-positive cases may be fixed by checking visibility in both directions.
+
+	// TODO - split too big portals and perform search idividually for each portal part in order to decrease false-positive rate.
+
+	let portal = &map.portals[start_portal_index as usize];
+	let next_leaf_index = if portal.leafs[0] == start_leaf_index
 	{
 		portal.leafs[1]
 	}
@@ -74,399 +156,183 @@ fn calculate_pvs_for_leaf_portal(
 		portal.leafs[0]
 	};
 
-	// Leaf next to current is always visible.
-	visible_leafs_bit_set[next_leaf_index as usize] = true;
+	let mut cur_wave = SearchWave::new();
+	let mut next_wave = SearchWave::new();
 
-	let portal_polygon = portal_polygon_from_map_portal(map, portal, portal.leafs[0] == leaf_index);
+	cur_wave.push(next_leaf_index);
 
-	let next_leaf = &map.leafs[next_leaf_index as usize];
-	for &next_leaf_portal_index in &map.leafs_portals
-		[next_leaf.first_leaf_portal as usize .. (next_leaf.first_leaf_portal + next_leaf.num_leaf_portals) as usize]
+	let mut vis_leafs_data = vec![VisLeafData::default(); map.leafs.len()];
+
+	let inf = 1e36;
+	vis_leafs_data[next_leaf_index as usize].bounds = Some(ClippingPolygon::from_box(-inf, -inf, inf, inf));
+
+	let view_matrices = calculate_portal_view_matrices(map, start_leaf_index, portal);
+
+	let max_itertions = 256;
+	let mut num_iterations = 1;
+	while !cur_wave.is_empty()
 	{
-		if next_leaf_portal_index == portal_index
+		for &leaf_index in &cur_wave
 		{
-			continue;
-		}
-		let next_leaf_portal = &map.portals[next_leaf_portal_index as usize];
+			let prev_leaf_bounds = vis_leafs_data[leaf_index as usize].bounds.unwrap();
 
-		let next_next_leaf_index = if next_leaf_portal.leafs[0] == next_leaf_index
-		{
-			next_leaf_portal.leafs[1]
-		}
-		else
-		{
-			next_leaf_portal.leafs[0]
-		};
-
-		let mut next_leaf_portal_polygon =
-			portal_polygon_from_map_portal(map, next_leaf_portal, next_leaf_portal.leafs[0] == next_leaf_index);
-
-		let portal_polygon_pos =
-			get_portal_polygon_position_relative_plane(&next_leaf_portal_polygon, &portal_polygon.plane);
-		if portal_polygon_pos == PortalPolygonPositionRelativePlane::Back ||
-			portal_polygon_pos == PortalPolygonPositionRelativePlane::Coplanar
-		{
-			continue;
-		}
-		if portal_polygon_pos == PortalPolygonPositionRelativePlane::Splitted
-		{
-			next_leaf_portal_polygon = cut_portal_polygon_by_plane(&next_leaf_portal_polygon, &portal_polygon.plane);
-			if next_leaf_portal_polygon.vertices.len() < 3
+			let leaf = &map.leafs[leaf_index as usize];
+			for &portal_index in &map.leafs_portals
+				[leaf.first_leaf_portal as usize .. (leaf.first_leaf_portal + leaf.num_leaf_portals) as usize]
 			{
-				continue;
-			}
-		}
+				let portal = &map.portals[portal_index as usize];
 
-		mark_visible_leafs_r(
-			map,
-			&portal_polygon,
-			None,
-			&next_leaf_portal_polygon,
-			next_leaf_portal_index,
-			next_next_leaf_index,
-			visible_leafs_bit_set,
-			0,
-		);
-	}
-}
-
-#[derive(Clone)]
-struct PortalPolygon
-{
-	plane: Plane,
-	vertices: Vec<Vec3f>,
-}
-
-fn portal_polygon_from_map_portal(
-	map: &bsp_map_compact::BSPMap,
-	portal: &bsp_map_compact::Portal,
-	invert: bool,
-) -> PortalPolygon
-{
-	let mut portal_polygon = PortalPolygon {
-		vertices: map.vertices[portal.first_vertex as usize .. (portal.first_vertex + portal.num_vertices) as usize]
-			.iter()
-			.cloned()
-			.collect(),
-		plane: portal.plane,
-	};
-
-	if invert
-	{
-		portal_polygon.plane = portal_polygon.plane.get_inverted();
-		portal_polygon.vertices.reverse();
-	}
-
-	portal_polygon
-}
-
-fn mark_visible_leafs_r(
-	map: &bsp_map_compact::BSPMap,
-	start_portal_polygon: &PortalPolygon,
-	prev_prev_portal_polygon: Option<&PortalPolygon>,
-	prev_portal_polygon: &PortalPolygon,
-	prev_portal_index: u32,
-	leaf_index: u32,
-	visible_leafs_bit_set: &mut VisibleLeafsBitSet,
-	recursion_depth: usize,
-)
-{
-	if recursion_depth > 24
-	{
-		return;
-	}
-
-	visible_leafs_bit_set[leaf_index as usize] = true;
-
-	let leaf = &map.leafs[leaf_index as usize];
-
-	for &leaf_portal_index in
-		&map.leafs_portals[leaf.first_leaf_portal as usize .. (leaf.first_leaf_portal + leaf.num_leaf_portals) as usize]
-	{
-		if leaf_portal_index == prev_portal_index
-		{
-			continue;
-		}
-		let leaf_portal = &map.portals[leaf_portal_index as usize];
-
-		let next_leaf_index = if leaf_portal.leafs[0] == leaf_index
-		{
-			leaf_portal.leafs[1]
-		}
-		else
-		{
-			leaf_portal.leafs[0]
-		};
-
-		let mut leaf_portal_polygon =
-			portal_polygon_from_map_portal(map, leaf_portal, leaf_portal.leafs[0] == leaf_index);
-
-		let start_polygon_pos =
-			get_portal_polygon_position_relative_plane(start_portal_polygon, &leaf_portal_polygon.plane);
-		if start_polygon_pos == PortalPolygonPositionRelativePlane::Front ||
-			start_polygon_pos == PortalPolygonPositionRelativePlane::Coplanar
-		{
-			continue;
-		}
-
-		// Cut portal polygon using start portal plane.
-		let portal_polygon_pos =
-			get_portal_polygon_position_relative_plane(&leaf_portal_polygon, &start_portal_polygon.plane);
-		if portal_polygon_pos == PortalPolygonPositionRelativePlane::Back ||
-			portal_polygon_pos == PortalPolygonPositionRelativePlane::Coplanar
-		{
-			continue;
-		}
-		if portal_polygon_pos == PortalPolygonPositionRelativePlane::Splitted
-		{
-			leaf_portal_polygon = cut_portal_polygon_by_plane(&leaf_portal_polygon, &start_portal_polygon.plane);
-			if leaf_portal_polygon.vertices.len() < 3
-			{
-				continue;
-			}
-		}
-
-		// Cut portal polygon using prev portal plane
-		let portal_polygon_pos =
-			get_portal_polygon_position_relative_plane(&leaf_portal_polygon, &prev_portal_polygon.plane);
-		if portal_polygon_pos == PortalPolygonPositionRelativePlane::Back ||
-			portal_polygon_pos == PortalPolygonPositionRelativePlane::Coplanar
-		{
-			continue;
-		}
-		if portal_polygon_pos == PortalPolygonPositionRelativePlane::Splitted
-		{
-			leaf_portal_polygon = cut_portal_polygon_by_plane(&leaf_portal_polygon, &prev_portal_polygon.plane);
-			if leaf_portal_polygon.vertices.len() < 3
-			{
-				continue;
-			}
-		}
-
-		// Cut leaf portal using start portal and prev portal.
-		leaf_portal_polygon = cut_portal_polygon_by_view_through_two_previous_portals(
-			start_portal_polygon,
-			prev_portal_polygon,
-			leaf_portal_polygon,
-			false,
-		);
-		if leaf_portal_polygon.vertices.len() < 3
-		{
-			continue;
-		}
-
-		// Cut leaf portal using two previous portals.
-		if let Some(p) = prev_prev_portal_polygon
-		{
-			leaf_portal_polygon = cut_portal_polygon_by_view_through_two_previous_portals(
-				p,
-				prev_portal_polygon,
-				leaf_portal_polygon,
-				false,
-			);
-			if leaf_portal_polygon.vertices.len() < 3
-			{
-				continue;
-			}
-		}
-
-		// Cut start portal using leaf portal and prev portal.
-		let mut start_polygon_clipped = cut_portal_polygon_by_view_through_two_previous_portals(
-			&leaf_portal_polygon,
-			prev_portal_polygon,
-			start_portal_polygon.clone(),
-			true,
-		);
-		if start_polygon_clipped.vertices.len() < 3
-		{
-			continue;
-		}
-
-		// Cut start portal using leaf portal and prev prev portal.
-		if let Some(p) = prev_prev_portal_polygon
-		{
-			start_polygon_clipped = cut_portal_polygon_by_view_through_two_previous_portals(
-				&leaf_portal_polygon,
-				p,
-				start_polygon_clipped,
-				true,
-			);
-			if start_polygon_clipped.vertices.len() < 3
-			{
-				continue;
-			}
-		}
-
-		mark_visible_leafs_r(
-			map,
-			&start_polygon_clipped,
-			Some(prev_portal_polygon),
-			&leaf_portal_polygon,
-			leaf_portal_index,
-			next_leaf_index,
-			visible_leafs_bit_set,
-			recursion_depth + 1,
-		);
-	}
-}
-
-// Returns polygon with less than 3 vertices is completely clipped.
-fn cut_portal_polygon_by_view_through_two_previous_portals(
-	portal0: &PortalPolygon,
-	portal1: &PortalPolygon,
-	mut portal2: PortalPolygon,
-	reverse: bool,
-) -> PortalPolygon
-{
-	// Check all combonation of planes, based on portal0 edge and portal1 vertex.
-	// If portal0 is at back of this plane and portal1 is at front of this plane - perform portal2 clipping.
-	let mut prev_edge_v = portal0.vertices.last().unwrap();
-	for edge_v in &portal0.vertices
-	{
-		// TODO - check plane direction.
-		let mut vec0 = edge_v - prev_edge_v;
-		prev_edge_v = edge_v;
-
-		if reverse
-		{
-			vec0 = -vec0;
-		}
-
-		for v in &portal1.vertices
-		{
-			let vec1 = edge_v - v;
-			let plane_vec = vec0.cross(vec1);
-			let cut_plane = Plane {
-				vec: plane_vec,
-				dist: plane_vec.dot(*v),
-			};
-
-			if get_portal_polygon_position_relative_plane(portal0, &cut_plane) !=
-				PortalPolygonPositionRelativePlane::Back
-			{
-				continue;
-			}
-			if get_portal_polygon_position_relative_plane(portal1, &cut_plane) !=
-				PortalPolygonPositionRelativePlane::Front
-			{
-				continue;
-			}
-
-			let pos = get_portal_polygon_position_relative_plane(&portal2, &cut_plane);
-			if pos == PortalPolygonPositionRelativePlane::Front
-			{
-				// No clipping required.
-				continue;
-			}
-			if pos == PortalPolygonPositionRelativePlane::Back || pos == PortalPolygonPositionRelativePlane::Coplanar
-			{
-				// Fully clipped.
-				return PortalPolygon {
-					vertices: Vec::new(),
-					plane: portal2.plane,
+				let next_leaf_index = if portal.leafs[0] == leaf_index
+				{
+					portal.leafs[1]
+				}
+				else
+				{
+					portal.leafs[0]
 				};
-			}
 
-			portal2 = cut_portal_polygon_by_plane(&portal2, &cut_plane);
-			if portal2.vertices.len() < 3
-			{
-				return portal2;
-			}
-		}
-	}
+				let mut portal_bounds = if let Some(b) = project_portal(map, portal, &view_matrices)
+				{
+					b
+				}
+				else
+				{
+					continue;
+				};
 
-	portal2
-}
+				portal_bounds.intersect(&prev_leaf_bounds);
+				if portal_bounds.is_empty_or_invalid()
+				{
+					continue;
+				}
 
-#[derive(PartialEq, Eq)]
-enum PortalPolygonPositionRelativePlane
-{
-	Front,
-	Back,
-	Coplanar,
-	Splitted,
-}
+				let vis_leaf_data = &mut vis_leafs_data[next_leaf_index as usize];
+				if let Some(prev_bounds) = &mut vis_leaf_data.bounds
+				{
+					if prev_bounds.contains(&portal_bounds)
+					{
+						continue;
+					}
+					prev_bounds.extend(&portal_bounds);
+				}
+				else
+				{
+					vis_leaf_data.bounds = Some(portal_bounds);
+				}
 
-fn get_portal_polygon_position_relative_plane(
-	portal_polygon: &PortalPolygon,
-	plane: &Plane,
-) -> PortalPolygonPositionRelativePlane
-{
-	let mut vertices_front = 0;
-	let mut vertices_back = 0;
-	let normal_inv_len = 1.0 / plane.vec.magnitude();
-	for v in &portal_polygon.vertices
-	{
-		let dist = (v.dot(plane.vec) - plane.dist) * normal_inv_len;
-		if dist > PLANE_DIST_EPS
+				if vis_leaf_data.last_push_iteration < num_iterations
+				{
+					vis_leaf_data.last_push_iteration = num_iterations;
+					next_wave.push(next_leaf_index);
+				}
+			} // for portals.
+		} // for wave elements.
+
+		cur_wave.clear();
+		std::mem::swap(&mut cur_wave, &mut next_wave);
+
+		num_iterations += 1;
+		if num_iterations >= max_itertions
 		{
-			vertices_front += 1;
+			break;
 		}
-		else if dist < -PLANE_DIST_EPS
-		{
-			vertices_back += 1;
-		}
-	}
+	} // For wave steps.
 
-	if vertices_front != 0 && vertices_back != 0
+	for (index, vis_leaf_data) in vis_leafs_data.iter().enumerate()
 	{
-		PortalPolygonPositionRelativePlane::Splitted
-	}
-	else if vertices_front != 0
-	{
-		PortalPolygonPositionRelativePlane::Front
-	}
-	else if vertices_back != 0
-	{
-		PortalPolygonPositionRelativePlane::Back
-	}
-	else
-	{
-		PortalPolygonPositionRelativePlane::Coplanar
+		if vis_leaf_data.bounds.is_some()
+		{
+			visible_leafs_bit_set[index] = true;
+		}
 	}
 }
 
-// Returns polygon with less than 3 vertices is completely clipped.
-fn cut_portal_polygon_by_plane(portal_polygon: &PortalPolygon, plane: &Plane) -> PortalPolygon
+fn calculate_portal_view_matrices(
+	map: &bsp_map_compact::BSPMap,
+	leaf_index: u32,
+	portal: &bsp_map_compact::Portal,
+) -> Vec<Mat4f>
 {
-	let mut result = PortalPolygon {
-		vertices: Vec::new(),
-		plane: portal_polygon.plane,
-	};
-
-	let normal_inv_len = 1.0 / plane.vec.magnitude();
-
-	let mut prev_v = portal_polygon.vertices.last().unwrap();
-	let mut prev_dist = (plane.vec.dot(*prev_v) - plane.dist) * normal_inv_len;
-	for v in &portal_polygon.vertices
+	let mut dir = portal.plane.vec;
+	if portal.leafs[0] == leaf_index
 	{
-		let dist = (plane.vec.dot(*v) - plane.dist) * normal_inv_len;
-		if dist > PLANE_DIST_EPS
-		{
-			if prev_dist < -PLANE_DIST_EPS
-			{
-				result
-					.vertices
-					.push(clipping::get_line_plane_intersection(prev_v, v, plane));
-			}
-			result.vertices.push(*v);
-		}
-		else if dist > -PLANE_DIST_EPS
-		{
-			result.vertices.push(*v);
-		}
-		else if prev_dist > PLANE_DIST_EPS
-		{
-			result
-				.vertices
-				.push(clipping::get_line_plane_intersection(prev_v, v, plane));
-		}
+		dir = -dir;
+	}
 
-		prev_v = v;
-		prev_dist = dist;
+	// Build set of projection matrices for each portal vertex. Camera looks in direction of portal plane normal.
+
+	let azimuth = (-dir.x).atan2(dir.y);
+	let elevation = dir.z.atan2((dir.x * dir.x + dir.y * dir.y).sqrt());
+
+	let mut result = Vec::with_capacity(portal.num_vertices as usize);
+	for vertex in &map.vertices[portal.first_vertex as usize .. (portal.first_vertex + portal.num_vertices) as usize]
+	{
+		// It's not important what exact FOV and viewport size to use.
+		let viewport_size = 1.0;
+		let mat = matrix::build_view_matrix(
+			*vertex,
+			Rad(azimuth),
+			Rad(elevation),
+			std::f32::consts::PI * 0.5,
+			viewport_size,
+			viewport_size,
+		);
+		result.push(mat.view_matrix);
 	}
 
 	result
 }
 
-const PLANE_DIST_EPS: f32 = 1.0 / 16.0;
+fn project_portal(
+	map: &bsp_map_compact::BSPMap,
+	portal: &bsp_map_compact::Portal,
+	view_matrices: &[Mat4f],
+) -> Option<ClippingPolygon>
+{
+	const MAX_VERTICES: usize = 24;
+	let mut vertices_transformed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
+	let mut vertices_transformed_z_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
+
+	let mut result: Option<ClippingPolygon> = None;
+	for view_matrix in view_matrices
+	{
+		let mut vertex_count = std::cmp::min(portal.num_vertices as usize, MAX_VERTICES);
+
+		// Perform initial matrix tranformation, obtain 3d vertices in camera-aligned space.
+		for (in_vertex, out_vertex) in map.vertices
+			[(portal.first_vertex as usize) .. (portal.first_vertex as usize) + vertex_count]
+			.iter()
+			.zip(vertices_transformed.iter_mut())
+		{
+			let vertex_transformed = view_matrix * in_vertex.extend(1.0);
+			*out_vertex = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
+		}
+
+		// Perform z_near clipping. Use very small z_near to avoid clipping portals.
+		const Z_NEAR: f32 = 1.0 / 4096.0;
+		vertex_count = clip_3d_polygon_by_z_plane(
+			&vertices_transformed[.. vertex_count],
+			Z_NEAR,
+			&mut vertices_transformed_z_clipped,
+		);
+		if vertex_count < 3
+		{
+			continue;
+		}
+
+		for vertex_transformed in &vertices_transformed_z_clipped[.. vertex_count]
+		{
+			let point = vertex_transformed.truncate() / vertex_transformed.z;
+			if let Some(r) = &mut result
+			{
+				r.extend_with_point(&point);
+			}
+			else
+			{
+				result = Some(ClippingPolygon::from_point(&point));
+			}
+		}
+	}
+
+	result
+}
