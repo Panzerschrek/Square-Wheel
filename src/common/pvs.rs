@@ -1,38 +1,14 @@
 use super::{bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, matrix};
-
-// List of visible BSP leafs tree for each leaf.
-pub type LeafsVisibilityInfo = Vec<VisibleLeafsList>;
-pub type VisibleLeafsList = Vec<u32>;
+use std::io::Write;
 
 // leafs.len() * leafs.len() elements.
 // TODO - use more compact form.
 pub type VisibilityMatrix = Vec<bool>;
 
-pub fn caclulate_pvs(map: &bsp_map_compact::BSPMap) -> LeafsVisibilityInfo
-{
-	let mut result = LeafsVisibilityInfo::with_capacity(map.leafs.len());
-	for leaf_index in 0 .. map.leafs.len() as u32
-	{
-		result.push(calculate_pvs_for_leaf(map, leaf_index));
-
-		let ratio_before = leaf_index * 256 / (map.leafs.len() as u32);
-		let ratio_after = (leaf_index + 1) * 256 / (map.leafs.len() as u32);
-		if ratio_after != ratio_before
-		{
-			print!(
-				"\r{:03.2}% complete ({} of {} leafs)",
-				((leaf_index + 1) as f32) * 100.0 / (map.leafs.len() as f32),
-				leaf_index + 1,
-				map.leafs.len()
-			);
-		}
-	}
-	println!("\nDone!");
-	result
-}
-
 pub fn calculate_visibility_matrix(map: &bsp_map_compact::BSPMap) -> VisibilityMatrix
 {
+	println!("Caclulating visibility matrix for {} leafs", map.leafs.len());
+
 	let mut mat = vec![false; map.leafs.len() * map.leafs.len()];
 
 	let mut bit_sets = Vec::with_capacity(map.leafs.len());
@@ -50,6 +26,7 @@ pub fn calculate_visibility_matrix(map: &bsp_map_compact::BSPMap) -> VisibilityM
 				leaf_index + 1,
 				map.leafs.len()
 			);
+			let _ignore_errors = std::io::stdout().flush();
 		}
 	}
 
@@ -82,10 +59,8 @@ pub fn calculate_visibility_matrix(map: &bsp_map_compact::BSPMap) -> VisibilityM
 	mat
 }
 
-pub fn calculate_pvs_for_leaf(map: &bsp_map_compact::BSPMap, leaf_index: u32) -> VisibleLeafsList
-{
-	visible_leafs_bit_set_to_leafs_list(&calculate_pvs_bit_set_for_leaf(map, leaf_index))
-}
+// TODO - use more advanced collection.
+type VisibleLeafsBitSet = Vec<bool>;
 
 fn calculate_pvs_bit_set_for_leaf(map: &bsp_map_compact::BSPMap, leaf_index: u32) -> VisibleLeafsBitSet
 {
@@ -101,22 +76,6 @@ fn calculate_pvs_bit_set_for_leaf(map: &bsp_map_compact::BSPMap, leaf_index: u32
 	}
 
 	visible_leafs_bit_set
-}
-
-// TODO - use more advanced collection.
-type VisibleLeafsBitSet = Vec<bool>;
-
-fn visible_leafs_bit_set_to_leafs_list(visible_leafs_bit_set: &VisibleLeafsBitSet) -> VisibleLeafsList
-{
-	let mut result = VisibleLeafsList::new();
-	for (i, &visible) in visible_leafs_bit_set.iter().enumerate()
-	{
-		if visible
-		{
-			result.push(i as u32);
-		}
-	}
-	result
 }
 
 #[derive(Default, Copy, Clone)]
