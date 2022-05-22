@@ -1,4 +1,4 @@
-use super::{bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, matrix};
+use super::{bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, matrix, plane::*};
 
 // List of visible BSP leafs tree for each leaf.
 pub type LeafsVisibilityInfo = Vec<VisibleLeafsList>;
@@ -136,16 +136,6 @@ fn calculate_pvs_for_leaf_portal(
 	visible_leafs_bit_set: &mut VisibleLeafsBitSet,
 )
 {
-	// Use tricky projection-based algorithm.
-	// For each leaf portal build set of projection matrices (for each vertex) facing away from leaf.
-	// Calculate projection of portals using these matrices and calculate combined projected polygon from projected polygons for each matrix.
-	// Perform boolean operations for projection polygons.
-	//
-	// Such approach may produce some false-positives, but it is pretty fast.
-	// Some false-positive cases may be fixed by checking visibility in both directions.
-
-	// TODO - split too big portals and perform search idividually for each portal part in order to decrease false-positive rate.
-
 	let portal = &map.portals[start_portal_index as usize];
 	let next_leaf_index = if portal.leafs[0] == start_leaf_index
 	{
@@ -155,6 +145,47 @@ fn calculate_pvs_for_leaf_portal(
 	{
 		portal.leafs[0]
 	};
+
+	let mut portal_polygon = PortalPolygon {
+		vertices: map.vertices[portal.first_vertex as usize .. (portal.first_vertex + portal.num_vertices) as usize]
+			.iter()
+			.cloned()
+			.collect(),
+		plane: portal.plane,
+	};
+	if portal.leafs[0] == start_leaf_index
+	{
+		portal_polygon.plane = portal_polygon.plane.get_inverted();
+	}
+
+	// Split portal polygon into smaller pieces and perform search individually for each piece.
+	// This is needed to avoid big rate of false-positives for large portals.
+
+	let mut portal_polygon_tesselated = Vec::new();
+	split_portal_polygons_r(portal_polygon, &mut portal_polygon_tesselated, 0);
+
+	for portal_polygon in &portal_polygon_tesselated
+	{
+		calculate_pvs_for_leaf_portal_polygon(map, portal_polygon, next_leaf_index, visible_leafs_bit_set);
+	}
+}
+
+fn calculate_pvs_for_leaf_portal_polygon(
+	map: &bsp_map_compact::BSPMap,
+	portal_polygon: &PortalPolygon,
+	next_leaf_index: u32,
+	visible_leafs_bit_set: &mut VisibleLeafsBitSet,
+)
+{
+	// Use tricky projection-based algorithm.
+	// For each leaf portal build set of projection matrices (for each vertex) facing away from leaf.
+	// Calculate projection of portals using these matrices and calculate combined projected polygon from projected polygons for each matrix.
+	// Perform boolean operations for projection polygons.
+	//
+	// Such approach may produce some false-positives, but it is pretty fast.
+	// Some false-positive cases may be fixed by checking visibility in both directions.
+
+	// TODO - split too big portals and perform search idividually for each portal part in order to decrease false-positive rate.
 
 	let mut cur_wave = SearchWave::new();
 	let mut next_wave = SearchWave::new();
@@ -166,7 +197,7 @@ fn calculate_pvs_for_leaf_portal(
 	let inf = 1e36;
 	vis_leafs_data[next_leaf_index as usize].bounds = Some(ClippingPolygon::from_box(-inf, -inf, inf, inf));
 
-	let view_matrices = calculate_portal_view_matrices(map, start_leaf_index, portal);
+	let view_matrices = calculate_portal_polygon_view_matrices(portal_polygon);
 
 	let max_itertions = 256;
 	let mut num_iterations = 1;
@@ -247,25 +278,17 @@ fn calculate_pvs_for_leaf_portal(
 	}
 }
 
-fn calculate_portal_view_matrices(
-	map: &bsp_map_compact::BSPMap,
-	leaf_index: u32,
-	portal: &bsp_map_compact::Portal,
-) -> Vec<Mat4f>
+fn calculate_portal_polygon_view_matrices(portal_polygon: &PortalPolygon) -> Vec<Mat4f>
 {
-	let mut dir = portal.plane.vec;
-	if portal.leafs[0] == leaf_index
-	{
-		dir = -dir;
-	}
+	let dir = portal_polygon.plane.vec;
 
 	// Build set of projection matrices for each portal vertex. Camera looks in direction of portal plane normal.
 
 	let azimuth = (-dir.x).atan2(dir.y);
 	let elevation = dir.z.atan2((dir.x * dir.x + dir.y * dir.y).sqrt());
 
-	let mut result = Vec::with_capacity(portal.num_vertices as usize);
-	for vertex in &map.vertices[portal.first_vertex as usize .. (portal.first_vertex + portal.num_vertices) as usize]
+	let mut result = Vec::with_capacity(portal_polygon.vertices.len() as usize);
+	for vertex in &portal_polygon.vertices
 	{
 		// It's not important what exact FOV and viewport size to use.
 		let viewport_size = 1.0;
@@ -336,3 +359,117 @@ fn project_portal(
 
 	result
 }
+
+struct PortalPolygon
+{
+	plane: Plane,
+	vertices: Vec<Vec3f>,
+}
+
+fn split_portal_polygons_r(polygon: PortalPolygon, out_polygons: &mut Vec<PortalPolygon>, recursion_depth: usize)
+{
+	if polygon.vertices.len() < 3
+	{
+		return;
+	}
+
+	if recursion_depth > 16
+	{
+		out_polygons.push(polygon);
+		return;
+	}
+
+	const MAX_SIZE: f32 = 64.0;
+
+	let split_planes_vecs = [Vec3f::unit_x(), Vec3f::unit_y(), Vec3f::unit_z()];
+	for vec in split_planes_vecs
+	{
+		let inf = 1e30;
+		let mut coord_min = inf;
+		let mut coord_max = -inf;
+
+		for &v in &polygon.vertices
+		{
+			let coord = v.dot(vec);
+			if coord < coord_min
+			{
+				coord_min = coord;
+			}
+			if coord > coord_max
+			{
+				coord_max = coord;
+			}
+		}
+
+		let size = coord_max - coord_min;
+		if size < MAX_SIZE
+		{
+			continue;
+		}
+
+		let split_plane = Plane {
+			vec: vec,
+			dist: (coord_min + coord_max) * 0.5,
+		};
+		let (polygon_front, polygon_back) = split_portal_polygon(&polygon, &split_plane);
+		split_portal_polygons_r(polygon_front, out_polygons, recursion_depth + 1);
+		split_portal_polygons_r(polygon_back, out_polygons, recursion_depth + 1);
+	}
+
+	out_polygons.push(polygon);
+}
+
+// Returns pair of front and back polygons.
+fn split_portal_polygon(in_polygon: &PortalPolygon, plane: &Plane) -> (PortalPolygon, PortalPolygon)
+{
+	let mut polygon_front = PortalPolygon {
+		plane: in_polygon.plane,
+		vertices: Vec::new(),
+	};
+	let mut polygon_back = PortalPolygon {
+		plane: in_polygon.plane,
+		vertices: Vec::new(),
+	};
+
+	let inv_vec_len = 1.0 / plane.vec.magnitude();
+
+	let mut prev_vert = in_polygon.vertices.last().unwrap();
+	let mut prev_vert_dist = inv_vec_len * (prev_vert.dot(plane.vec) - plane.dist);
+	for vert in &in_polygon.vertices
+	{
+		let vert_dist = inv_vec_len * (vert.dot(plane.vec) - plane.dist);
+
+		if vert_dist > PLANE_DIST_EPS
+		{
+			if prev_vert_dist < -PLANE_DIST_EPS
+			{
+				let intersection = get_line_plane_intersection(prev_vert, vert, plane);
+				polygon_back.vertices.push(intersection);
+				polygon_front.vertices.push(intersection);
+			}
+			polygon_front.vertices.push(*vert);
+		}
+		else if vert_dist < -PLANE_DIST_EPS
+		{
+			if prev_vert_dist > PLANE_DIST_EPS
+			{
+				let intersection = get_line_plane_intersection(prev_vert, vert, plane);
+				polygon_front.vertices.push(intersection);
+				polygon_back.vertices.push(intersection);
+			}
+			polygon_back.vertices.push(*vert);
+		}
+		else
+		{
+			polygon_front.vertices.push(*vert);
+			polygon_back.vertices.push(*vert);
+		}
+
+		prev_vert = vert;
+		prev_vert_dist = vert_dist;
+	}
+
+	(polygon_front, polygon_back)
+}
+
+const PLANE_DIST_EPS: f32 = 1.0 / 16.0;

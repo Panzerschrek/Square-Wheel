@@ -40,7 +40,7 @@ impl MapVisibilityCalculator
 {
 	pub fn new(map: Rc<bsp_map_compact::BSPMap>) -> Self
 	{
-		let visibility_matrix = None;//pvs_projected::calculate_visibility_matrix(&map);
+		let visibility_matrix = None; // pvs_projected::calculate_visibility_matrix(&map);
 
 		Self {
 			current_frame: FrameNumber::default(),
