@@ -25,12 +25,14 @@ pub fn build_lightmaps(
 		l.color[2] *= settings.light_scale;
 	}
 
-	allocate_lightmaps(materials, map);
-	println!("Lightmap texels: {}", map.lightmaps_data.len());
+	let mut lightmaps_data = allocate_lightmaps(materials, map);
+	println!("Lightmap texels: {}", lightmaps_data.len());
 
-	test_fill_lightmaps(map);
+	build_primary_lightmaps(sample_grid_size, &lights, map, &mut lightmaps_data);
 
-	build_primary_lightmaps(sample_grid_size, &lights, map);
+	// TODO - calculate secondary lightmap (third, forth, etc.) and combine it with primary lightmap.
+	// Now just use primary lightmap.
+	map.lightmaps_data = lightmaps_data;
 
 	println!("\nDone!");
 }
@@ -137,11 +139,13 @@ fn extract_map_lights(map: &bsp_map_compact::BSPMap) -> Vec<PointLight>
 	result
 }
 
-fn allocate_lightmaps(materials: &material::MaterialsMap, map: &mut bsp_map_compact::BSPMap)
+type LightmapsData = Vec<bsp_map_compact::LightmapElement>;
+
+fn allocate_lightmaps(materials: &material::MaterialsMap, map: &mut bsp_map_compact::BSPMap) -> LightmapsData
 {
 	// Reserve offset=0 as "no lightmap" flag.
-
 	let mut offset = 1;
+
 	for polygon in &mut map.polygons
 	{
 		let has_lightmap = if let Some(material) = materials.get(get_map_texture_string(&map.textures, polygon.texture))
@@ -165,8 +169,7 @@ fn allocate_lightmaps(materials: &material::MaterialsMap, map: &mut bsp_map_comp
 		}
 	}
 
-	map.lightmaps_data.clear();
-	map.lightmaps_data.resize(offset, [0.0, 0.0, 0.0]);
+	vec![[0.0, 0.0, 0.0]; offset]
 }
 
 fn get_map_texture_string(map_textures: &[bsp_map_compact::Texture], texture_index: u32) -> &str
@@ -180,27 +183,15 @@ fn get_map_texture_string(map_textures: &[bsp_map_compact::Texture], texture_ind
 	std::str::from_utf8(range).unwrap_or("")
 }
 
-fn test_fill_lightmaps(map: &mut bsp_map_compact::BSPMap)
-{
-	for polygon in &map.polygons
-	{
-		let size = get_polygon_lightmap_size(polygon);
-		for v in 0 .. size[1]
-		{
-			for u in 0 .. size[0]
-			{
-				let r = (u as f32) / 8.0;
-				let g = (v as f32) / 8.0;
-				map.lightmaps_data[(polygon.lightmap_data_offset + u + v * size[0]) as usize] = [r, g, 0.1];
-			}
-		}
-	}
-}
-
-fn build_primary_lightmaps(sample_grid_size: u32, lights: &[PointLight], map: &mut bsp_map_compact::BSPMap)
+fn build_primary_lightmaps(
+	sample_grid_size: u32,
+	lights: &[PointLight],
+	map: &bsp_map_compact::BSPMap,
+	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
+)
 {
 	let mut texels_complete = 0;
-	let texels_total = map.lightmaps_data.len();
+	let texels_total = lightmaps_data.len();
 	for i in 0 .. map.polygons.len()
 	{
 		if map.polygons[i].lightmap_data_offset == 0
@@ -208,7 +199,7 @@ fn build_primary_lightmaps(sample_grid_size: u32, lights: &[PointLight], map: &m
 			// No lightmap for this polygon.
 			continue;
 		}
-		build_primary_lightmap(sample_grid_size, lights, i, map);
+		build_primary_lightmap(sample_grid_size, lights, i, map, lightmaps_data);
 
 		// Calculate and show progress.
 		let lightmap_size = get_polygon_lightmap_size(&map.polygons[i]);
@@ -236,7 +227,8 @@ fn build_primary_lightmap(
 	sample_grid_size: u32,
 	lights: &[PointLight],
 	polygon_index: usize,
-	map: &mut bsp_map_compact::BSPMap,
+	map: &bsp_map_compact::BSPMap,
+	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
 )
 {
 	let polygon = &map.polygons[polygon_index];
@@ -388,7 +380,7 @@ fn build_primary_lightmap(
 				}
 			}
 
-			map.lightmaps_data[(u + line_dst_start) as usize] = total_light;
+			lightmaps_data[(u + line_dst_start) as usize] = total_light;
 		}
 	}
 }
