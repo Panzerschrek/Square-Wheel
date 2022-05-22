@@ -50,28 +50,9 @@ impl MapVisibilityCalculator
 	pub fn update_visibility(&mut self, camera_matrices: &CameraMatrices, frame_bounds: &ClippingPolygon)
 	{
 		self.current_frame.next();
-
 		let root_node = (self.map.nodes.len() - 1) as u32;
 		let current_leaf = self.find_current_leaf(root_node, &camera_matrices.planes_matrix);
-
-		let recursive_visible_leafs_marking = false; // TODO - read from config.
-		if recursive_visible_leafs_marking
-		{
-			mark_reachable_leafs_recursive(
-				current_leaf,
-				&self.map,
-				self.current_frame,
-				camera_matrices,
-				0,
-				&frame_bounds,
-				&mut self.leafs_data,
-				&mut self.portals_data,
-			);
-		}
-		else
-		{
-			self.mark_reachable_leafs_iterative(current_leaf, camera_matrices, &frame_bounds);
-		}
+		self.mark_reachable_leafs_iterative(current_leaf, camera_matrices, &frame_bounds);
 	}
 
 	pub fn get_current_frame_leaf_bounds(&self, leaf_index: u32) -> Option<ClippingPolygon>
@@ -217,107 +198,6 @@ impl MapVisibilityCalculator
 				break;
 			}
 		}
-	}
-}
-
-fn mark_reachable_leafs_recursive(
-	leaf: u32,
-	map: &bsp_map_compact::BSPMap,
-	current_frame: FrameNumber,
-	camera_matrices: &CameraMatrices,
-	depth: u32,
-	bounds: &ClippingPolygon,
-	leafs_data: &mut [LeafData],
-	portals_data: &mut [PortalData],
-)
-{
-	let max_depth = 1024; // Prevent stack overflow in case of broken graph.
-	if depth > max_depth
-	{
-		return;
-	}
-
-	let leaf_data = &mut leafs_data[leaf as usize];
-
-	if leaf_data.visible_frame != current_frame
-	{
-		leaf_data.visible_frame = current_frame;
-		leaf_data.current_frame_bounds = *bounds;
-	}
-	else
-	{
-		// If we visit this leaf not first time, check if bounds is inside current.
-		// If so - we can skip it.
-		if leaf_data.current_frame_bounds.contains(bounds)
-		{
-			return;
-		}
-		// Perform clipping of portals of this leaf using combined bounds to ensure that we visit all possible paths with such bounds.
-		leaf_data.current_frame_bounds.extend(bounds);
-	}
-	let bound_for_portals_clipping = leaf_data.current_frame_bounds;
-
-	let leaf_value = map.leafs[leaf as usize];
-	for portal in &map.leafs_portals[(leaf_value.first_leaf_portal as usize) ..
-		((leaf_value.first_leaf_portal + leaf_value.num_leaf_portals) as usize)]
-	{
-		let portal_value = &map.portals[(*portal) as usize];
-
-		// Do not look through portals that are facing from camera.
-		let portal_plane_pos =
-			(camera_matrices.planes_matrix * portal_value.plane.vec.extend(-portal_value.plane.dist)).w;
-
-		let next_leaf;
-		if portal_value.leafs[0] == leaf
-		{
-			if portal_plane_pos <= 0.0
-			{
-				continue;
-			}
-			next_leaf = portal_value.leafs[1];
-		}
-		else
-		{
-			if portal_plane_pos >= 0.0
-			{
-				continue;
-			}
-			next_leaf = portal_value.leafs[0];
-		}
-
-		// Same portal may be visited multiple times.
-		// So, cache calculation of portal bounds.
-		let portal_data = &mut portals_data[(*portal) as usize];
-		if portal_data.visible_frame != current_frame
-		{
-			portal_data.visible_frame = current_frame;
-			portal_data.current_frame_projection = project_portal(portal_value, map, &camera_matrices.view_matrix);
-		}
-
-		let mut bounds_intersection = if let Some(b) = portal_data.current_frame_projection
-		{
-			b
-		}
-		else
-		{
-			continue;
-		};
-		bounds_intersection.intersect(&bound_for_portals_clipping);
-		if bounds_intersection.is_empty_or_invalid()
-		{
-			continue;
-		}
-
-		mark_reachable_leafs_recursive(
-			next_leaf,
-			map,
-			current_frame,
-			camera_matrices,
-			depth + 1,
-			&bounds_intersection,
-			leafs_data,
-			portals_data,
-		);
 	}
 }
 
