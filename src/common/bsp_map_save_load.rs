@@ -196,18 +196,20 @@ fn write_lump<T>(
 	offset: &mut usize,
 ) -> Result<(), std::io::Error>
 {
+	let element_size = std::mem::size_of::<T>();
+
+	lump.offset = (*offset) as u32;
+	lump.element_size = element_size as u32;
+	lump.element_count = data.len() as u32;
+
 	if data.is_empty()
 	{
 		return Ok(());
 	}
 
-	let element_size = std::mem::size_of::<T>();
 	let bytes = unsafe { std::slice::from_raw_parts((&data[0]) as *const T as *const u8, element_size * data.len()) };
 	file.write_all(bytes)?;
 
-	lump.offset = (*offset) as u32;
-	lump.element_size = element_size as u32;
-	lump.element_count = data.len() as u32;
 	*offset += bytes.len();
 
 	Ok(())
