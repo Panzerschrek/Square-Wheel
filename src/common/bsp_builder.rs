@@ -58,7 +58,7 @@ pub fn build_leaf_bsp_tree(map_entities: &[map_polygonizer::Entity], materials: 
 	let mut tree_root = build_leaf_bsp_tree_r(filter_out_invisible_polygons(&world_entity.polygons, materials));
 
 	// Build portals as links between BSP leafs.
-	let mut portals = build_protals(&tree_root, &bbox);
+	let mut portals = build_protals(&tree_root, &bbox, materials);
 	set_leafs_portals(&portals);
 
 	// Now we have graph of leafs and portals.
@@ -432,16 +432,16 @@ fn get_point_position_relative_plane(point: &Vec3f, plane: &Plane) -> PointPosit
 	}
 }
 
-fn build_protals(node: &BSPNodeChild, map_bbox: &BBox) -> Vec<LeafsPortalPtr>
+fn build_protals(node: &BSPNodeChild, map_bbox: &BBox,  materials : &material::MaterialsMap) -> Vec<LeafsPortalPtr>
 {
 	let mut splitter_nodes = Vec::new();
 	let mut leaf_portals_by_node = LeafPortalsInitialByNode::new();
-	build_protals_r(node, &mut splitter_nodes, &mut leaf_portals_by_node, map_bbox);
+	build_protals_r(node, &mut splitter_nodes, &mut leaf_portals_by_node, map_bbox, materials);
 
 	let mut result = Vec::new();
 	for (_node, portals) in leaf_portals_by_node
 	{
-		for result_portal in build_leafs_portals(&portals)
+		for result_portal in build_leafs_portals(&portals, materials)
 		{
 			result.push(rc::Rc::new(cell::RefCell::new(result_portal)));
 		}
@@ -470,6 +470,7 @@ fn build_protals_r(
 	splitter_nodes: &mut Vec<NodeForPortalsBuild>,
 	leaf_portals_by_node: &mut LeafPortalsInitialByNode,
 	map_bbox: &BBox,
+	materials : &material::MaterialsMap,
 )
 {
 	match node_child
@@ -485,6 +486,7 @@ fn build_protals_r(
 				splitter_nodes,
 				leaf_portals_by_node,
 				map_bbox,
+				materials,
 			);
 			splitter_nodes.pop();
 
@@ -497,12 +499,13 @@ fn build_protals_r(
 				splitter_nodes,
 				leaf_portals_by_node,
 				map_bbox,
+				materials,
 			);
 			splitter_nodes.pop();
 		},
 		BSPNodeChild::LeafChild(leaf_ptr) =>
 		{
-			build_leaf_portals(leaf_ptr, &splitter_nodes, map_bbox, leaf_portals_by_node);
+			build_leaf_portals(leaf_ptr, &splitter_nodes, map_bbox, materials, leaf_portals_by_node);
 		},
 	}
 }
@@ -511,6 +514,7 @@ fn build_leaf_portals(
 	leaf_ptr: &BSPLeafPtr,
 	splitter_nodes: &[NodeForPortalsBuild],
 	map_bbox: &BBox,
+	materials : &material::MaterialsMap,
 	leaf_portals_by_node: &mut LeafPortalsInitialByNode,
 )
 {
@@ -532,6 +536,13 @@ fn build_leaf_portals(
 	}
 	for polygon in &leaf.polygons
 	{
+		if let Some(material) = materials.get(&polygon.texture_info.texture)
+		{
+			if !material.blocks_view
+			{
+				continue;
+			}
+		}
 		cut_planes.push(Plane {
 			vec: -polygon.plane.vec,
 			dist: -polygon.plane.dist,
@@ -679,7 +690,7 @@ fn build_leaf_portals(
 
 // Iterate over all pairs of portals of same node.
 // Search for intersection of such portals.
-fn build_leafs_portals(in_portals: &[LeafPortalInitial]) -> Vec<LeafsPortal>
+fn build_leafs_portals(in_portals: &[LeafPortalInitial], materials : &material::MaterialsMap) -> Vec<LeafsPortal>
 {
 	let mut result = Vec::new();
 	for portal_front in in_portals
@@ -705,8 +716,8 @@ fn build_leafs_portals(in_portals: &[LeafPortalInitial]) -> Vec<LeafsPortal>
 				continue;
 			}
 
-			if portal_is_fully_covered_by_leaf_polygons(&plane, &portals_intersection, &portal_front.leaf.borrow()) ||
-				portal_is_fully_covered_by_leaf_polygons(&plane, &portals_intersection, &portal_back.leaf.borrow())
+			if portal_is_fully_covered_by_leaf_polygons(&plane, &portals_intersection, &portal_front.leaf.borrow(), materials) ||
+				portal_is_fully_covered_by_leaf_polygons(&plane, &portals_intersection, &portal_back.leaf.borrow(), materials)
 			{
 				continue;
 			}
@@ -811,7 +822,7 @@ fn build_portals_intersection(plane: &Plane, vertices0: &[Vec3f], vertices1: &[V
 	map_polygonizer::sort_convex_polygon_vertices(vertices_deduplicated, &plane)
 }
 
-fn portal_is_fully_covered_by_leaf_polygons(portal_plane: &Plane, portal_vertices: &[Vec3f], leaf: &BSPLeaf) -> bool
+fn portal_is_fully_covered_by_leaf_polygons(portal_plane: &Plane, portal_vertices: &[Vec3f], leaf: &BSPLeaf, materials : &material::MaterialsMap) -> bool
 {
 	// Perform basic portals filtering.
 	// Remove portals that are fully covered by one of leaf polygons.
@@ -821,6 +832,14 @@ fn portal_is_fully_covered_by_leaf_polygons(portal_plane: &Plane, portal_vertice
 
 	for polygon in &leaf.polygons
 	{
+		if let Some(material) = materials.get(&polygon.texture_info.texture)
+		{
+			if !material.blocks_view
+			{
+				continue;
+			}
+		}
+
 		let polygon_position = get_polygon_position_relative_plane(polygon, portal_plane);
 		if !(polygon_position == PolygonPositionRelativePlane::CoplanarFront ||
 			polygon_position == PolygonPositionRelativePlane::CoplanarBack)
