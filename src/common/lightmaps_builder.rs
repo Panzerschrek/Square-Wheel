@@ -29,11 +29,15 @@ pub fn build_lightmaps(
 	let mut primary_lightmaps_data = allocate_lightmaps(materials, map);
 	println!("Lightmap texels: {}", primary_lightmaps_data.len());
 
+	println!("Building primary lightmap");
 	build_primary_lightmaps(sample_grid_size, &lights, map, &mut primary_lightmaps_data);
 
+	println!("\nBuilding secondary lightmap");
 	let secondary_light_sources = create_secondary_light_sources(map, &primary_lightmaps_data);
 
-	// TODO - calculate secondary lightmap (third, forth, etc.) and combine it with primary lightmap.
+	let mut secondary_lightmaps_data = vec![[0.0, 0.0, 0.0]; primary_lightmaps_data.len()];
+
+	build_secondary_lightmaps(&secondary_light_sources, map, &mut secondary_lightmaps_data);
 
 	println!("\nCombining lightmaps");
 	map.lightmaps_data =
@@ -41,10 +45,11 @@ pub fn build_lightmaps(
 	for i in 0 .. primary_lightmaps_data.len()
 	{
 		let dst = &mut map.lightmaps_data[i];
-		let src = &primary_lightmaps_data[i];
+		let src0 = &primary_lightmaps_data[i];
+		let src1 = &secondary_lightmaps_data[i];
 		for j in 0 .. 3
 		{
-			dst[j] += src[j];
+			dst[j] += src0[j] + src1[j];
 		}
 	}
 
@@ -385,6 +390,142 @@ fn build_primary_lightmap(
 					total_light[1] += multi_sampling_scale * color_scaled[1];
 					total_light[2] += multi_sampling_scale * color_scaled[2];
 				}
+			}
+
+			lightmaps_data[(u + line_dst_start) as usize] = total_light;
+		}
+	}
+}
+
+fn build_secondary_lightmaps(
+	lights: &[SecondaryLightSource],
+	map: &bsp_map_compact::BSPMap,
+	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
+)
+{
+	let mut texels_complete = 0;
+	let texels_total = lightmaps_data.len();
+	for i in 0 .. map.polygons.len()
+	{
+		if map.polygons[i].lightmap_data_offset == 0
+		{
+			// No lightmap for this polygon.
+			continue;
+		}
+		build_secondary_lightmap(lights, i, map, lightmaps_data);
+
+		// Calculate and show progress.
+		let lightmap_size = get_polygon_lightmap_size(&map.polygons[i]);
+		let lightmap_texels = (lightmap_size[0] * lightmap_size[1]) as usize;
+
+		let ratio_before = texels_complete * 256 / texels_total;
+		texels_complete += lightmap_texels;
+		let ratio_after = texels_complete * 256 / texels_total;
+		if ratio_after > ratio_before
+		{
+			print!(
+				"\r{:03.2}% complete ({} of {} texels),  {} of {} polygons",
+				(texels_complete as f32) * 100.0 / (texels_total as f32),
+				texels_complete,
+				texels_total,
+				i,
+				map.polygons.len()
+			);
+			let _ignore_errors = std::io::stdout().flush();
+		}
+	}
+}
+
+fn build_secondary_lightmap(
+	lights: &[SecondaryLightSource],
+	polygon_index: usize,
+	map: &bsp_map_compact::BSPMap,
+	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
+)
+{
+	// TODO - remove copy-paste.
+
+	let polygon = &map.polygons[polygon_index];
+	let lightmap_size = get_polygon_lightmap_size(polygon);
+
+	let plane_normal_normalized = polygon.plane.vec / polygon.plane.vec.magnitude();
+
+	let polygon_center = get_polygon_center(map, polygon) + TEXEL_NORMAL_SHIFT * plane_normal_normalized;
+
+	// Calculate inverse matrix for tex_coord equation and plane equation in order to calculate world position for UV.
+	let tc_basis_scale = 1.0 / (LIGHTMAP_SCALE as f32);
+	let tex_coord_basis = Mat4f::from_cols(
+		polygon.tex_coord_equation[0]
+			.vec
+			.extend(polygon.tex_coord_equation[0].dist) *
+			tc_basis_scale,
+		polygon.tex_coord_equation[1]
+			.vec
+			.extend(polygon.tex_coord_equation[1].dist) *
+			tc_basis_scale,
+		polygon.plane.vec.extend(-polygon.plane.dist),
+		Vec4f::new(0.0, 0.0, 0.0, 1.0),
+	);
+	let tex_coord_basis_inverted = tex_coord_basis.transpose().invert().unwrap(); // TODO - avoid "unwrap"?
+
+	let u_vec = tex_coord_basis_inverted.x.truncate();
+	let v_vec = tex_coord_basis_inverted.y.truncate();
+	// Shift pos slightly towards direction of normal to avoid self-shadowing artifacts.
+	let start_pos = tex_coord_basis_inverted.w.truncate() +
+		u_vec * ((polygon.tex_coord_min[0] >> LIGHTMAP_SCALE_LOG2) as f32) +
+		v_vec * ((polygon.tex_coord_min[1] >> LIGHTMAP_SCALE_LOG2) as f32) +
+		plane_normal_normalized * TEXEL_NORMAL_SHIFT;
+
+	for v in 0 .. lightmap_size[1]
+	{
+		let start_pos_v = start_pos + (v as f32) * v_vec;
+		let line_dst_start = polygon.lightmap_data_offset + v * lightmap_size[0];
+		for u in 0 .. lightmap_size[0]
+		{
+			let mut total_light = [0.0, 0.0, 0.0];
+			let pos = start_pos_v + (u as f32) * u_vec;
+			// TODO - correct texel position.
+
+			for light in lights
+			{
+				// TODO - check this. Make sure we use correct math here.
+				// TODO - check for normalization rules.
+				// Light intencity in white room with intencity = 1 should be = 1 too.
+
+				let vec_to_light = light.pos - pos;
+				let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
+				let vec_to_light_normalized = vec_to_light / vec_to_light_len2.sqrt();
+				let angle_cos = plane_normal_normalized.dot(vec_to_light_normalized);
+
+				if angle_cos <= 0.0
+				{
+					// Do not determine visibility for light behind polygon plane.
+					continue;
+				}
+
+				let angle_cos_src = light.normal.dot(vec_to_light_normalized);
+				if angle_cos_src <= 0.0
+				{
+					// Do not determine visibility for texels behind light source plane.
+					continue;
+				}
+
+				let light_scale = angle_cos * angle_cos_src / vec_to_light_len2;
+				let color_scaled = [
+					light.color[0] * light_scale,
+					light.color[1] * light_scale,
+					light.color[2] * light_scale,
+				];
+
+				if !can_see(&light.pos, &pos, map)
+				{
+					// In shadow.
+					continue;
+				}
+
+				total_light[0] += color_scaled[0];
+				total_light[1] += color_scaled[1];
+				total_light[2] += color_scaled[2];
 			}
 
 			lightmaps_data[(u + line_dst_start) as usize] = total_light;
