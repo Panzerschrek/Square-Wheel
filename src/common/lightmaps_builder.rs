@@ -546,7 +546,7 @@ fn build_polygon_secondary_lightmap(
 						continue;
 					}
 
-					let angle_cos_src = light.normal.dot(vec_to_light_normalized);
+					let angle_cos_src = -(light.normal.dot(vec_to_light_normalized));
 					if angle_cos_src <= 0.0
 					{
 						// Do not determine visibility for texels behind light source plane.
