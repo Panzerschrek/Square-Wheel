@@ -31,6 +31,7 @@ pub fn build_lightmaps(
 
 	println!("Building primary lightmap");
 	build_primary_lightmaps(sample_grid_size, &lights, map, &mut primary_lightmaps_data);
+	println!("");
 
 	let visibility_matrix = pvs::calculate_visibility_matrix(&map);
 
@@ -417,11 +418,22 @@ fn build_secondary_lightmaps(
 
 	// TODO - process also submodels polygons.
 
+	let mut visible_leafs_list = Vec::new();
 	for leaf_index in 0 .. map.leafs.len()
 	{
 		let leaf = &map.leafs[leaf_index];
 		let visibility_matrix_row =
 			&visibility_matrix[leaf_index * map.leafs.len() .. (leaf_index + 1) * map.leafs.len()];
+
+		visible_leafs_list.clear();
+		for other_leaf_index in 0 .. map.leafs.len()
+		{
+			if visibility_matrix_row[other_leaf_index]
+			{
+				visible_leafs_list.push(other_leaf_index as u32);
+			}
+		}
+
 		for polygon_index in leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize
 		{
 			polygons_processed += 1;
@@ -430,7 +442,7 @@ fn build_secondary_lightmaps(
 				// No lightmap for this polygon.
 				continue;
 			}
-			build_secondary_lightmap(lights, polygon_index, map, visibility_matrix_row, lightmaps_data);
+			build_polygon_secondary_lightmap(lights, polygon_index, map, &visible_leafs_list, lightmaps_data);
 
 			// Calculate and show progress.
 			let lightmap_size = get_polygon_lightmap_size(&map.polygons[polygon_index]);
@@ -455,11 +467,11 @@ fn build_secondary_lightmaps(
 	}
 }
 
-fn build_secondary_lightmap(
+fn build_polygon_secondary_lightmap(
 	lights: &[SecondaryLightSource],
 	polygon_index: usize,
 	map: &bsp_map_compact::BSPMap,
-	visibility_matrix_row: &[bool],
+	visible_leafs: &[u32], // Leafs visible for this polygon.
 	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
 )
 {
@@ -505,14 +517,9 @@ fn build_secondary_lightmap(
 			// TODO - correct texel position.
 
 			// Calculate light only from polygons in visible leafs.
-			for leaf_index in 0 .. map.leafs.len()
+			for &leaf_index in visible_leafs
 			{
-				if !visibility_matrix_row[leaf_index]
-				{
-					continue;
-				}
-
-				let leaf = &map.leafs[leaf_index];
+				let leaf = &map.leafs[leaf_index as usize];
 				for light_source_polygon_index in
 					leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize
 				{
@@ -563,7 +570,7 @@ fn build_secondary_lightmap(
 					total_light[1] += color_scaled[1];
 					total_light[2] += color_scaled[2];
 				} // for leaf polygons.
-			} // for leafs
+			} // for leafs.
 
 			lightmaps_data[(u + line_dst_start) as usize] = total_light;
 		}
