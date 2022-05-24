@@ -1,4 +1,4 @@
-use super::{bsp_map_compact, map_file_common, material, math_types::*};
+use super::{bsp_map_compact, map_file_common, material, math_types::*, pvs};
 use std::io::Write;
 
 pub struct LightmappingSettings
@@ -32,12 +32,19 @@ pub fn build_lightmaps(
 	println!("Building primary lightmap");
 	build_primary_lightmaps(sample_grid_size, &lights, map, &mut primary_lightmaps_data);
 
-	println!("\nBuilding secondary lightmap");
+	let visibility_matrix = pvs::calculate_visibility_matrix(&map);
+
+	println!("Building secondary lightmap");
 	let secondary_light_sources = create_secondary_light_sources(map, &primary_lightmaps_data);
 
 	let mut secondary_lightmaps_data = vec![[0.0, 0.0, 0.0]; primary_lightmaps_data.len()];
 
-	build_secondary_lightmaps(&secondary_light_sources, map, &mut secondary_lightmaps_data);
+	build_secondary_lightmaps(
+		&secondary_light_sources,
+		map,
+		&visibility_matrix,
+		&mut secondary_lightmaps_data,
+	);
 
 	println!("\nCombining lightmaps");
 	map.lightmaps_data =
@@ -400,38 +407,50 @@ fn build_primary_lightmap(
 fn build_secondary_lightmaps(
 	lights: &[SecondaryLightSource],
 	map: &bsp_map_compact::BSPMap,
+	visibility_matrix: &pvs::VisibilityMatrix,
 	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
 )
 {
 	let mut texels_complete = 0;
+	let mut polygons_processed = 0;
 	let texels_total = lightmaps_data.len();
-	for i in 0 .. map.polygons.len()
+
+	// TODO - process also submodels polygons.
+
+	for leaf_index in 0 .. map.leafs.len()
 	{
-		if map.polygons[i].lightmap_data_offset == 0
+		let leaf = &map.leafs[leaf_index];
+		let visibility_matrix_row =
+			&visibility_matrix[leaf_index * map.leafs.len() .. (leaf_index + 1) * map.leafs.len()];
+		for polygon_index in leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize
 		{
-			// No lightmap for this polygon.
-			continue;
-		}
-		build_secondary_lightmap(lights, i, map, lightmaps_data);
+			polygons_processed += 1;
+			if map.polygons[polygon_index].lightmap_data_offset == 0
+			{
+				// No lightmap for this polygon.
+				continue;
+			}
+			build_secondary_lightmap(lights, polygon_index, map, visibility_matrix_row, lightmaps_data);
 
-		// Calculate and show progress.
-		let lightmap_size = get_polygon_lightmap_size(&map.polygons[i]);
-		let lightmap_texels = (lightmap_size[0] * lightmap_size[1]) as usize;
+			// Calculate and show progress.
+			let lightmap_size = get_polygon_lightmap_size(&map.polygons[polygon_index]);
+			let lightmap_texels = (lightmap_size[0] * lightmap_size[1]) as usize;
 
-		let ratio_before = texels_complete * 256 / texels_total;
-		texels_complete += lightmap_texels;
-		let ratio_after = texels_complete * 256 / texels_total;
-		if ratio_after > ratio_before
-		{
-			print!(
-				"\r{:03.2}% complete ({} of {} texels),  {} of {} polygons",
-				(texels_complete as f32) * 100.0 / (texels_total as f32),
-				texels_complete,
-				texels_total,
-				i,
-				map.polygons.len()
-			);
-			let _ignore_errors = std::io::stdout().flush();
+			let ratio_before = polygons_processed * 256 / texels_total;
+			texels_complete += lightmap_texels;
+			let ratio_after = (polygons_processed + 1) * 256 / texels_total;
+			if ratio_after > ratio_before
+			{
+				print!(
+					"\r{:03.2}% complete ({} of {} texels),  {} of {} polygons",
+					(texels_complete as f32) * 100.0 / (texels_total as f32),
+					texels_complete,
+					texels_total,
+					polygons_processed,
+					map.polygons.len()
+				);
+				let _ignore_errors = std::io::stdout().flush();
+			}
 		}
 	}
 }
@@ -440,6 +459,7 @@ fn build_secondary_lightmap(
 	lights: &[SecondaryLightSource],
 	polygon_index: usize,
 	map: &bsp_map_compact::BSPMap,
+	visibility_matrix_row: &[bool],
 	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
 )
 {
@@ -449,8 +469,6 @@ fn build_secondary_lightmap(
 	let lightmap_size = get_polygon_lightmap_size(polygon);
 
 	let plane_normal_normalized = polygon.plane.vec / polygon.plane.vec.magnitude();
-
-	let polygon_center = get_polygon_center(map, polygon) + TEXEL_NORMAL_SHIFT * plane_normal_normalized;
 
 	// Calculate inverse matrix for tex_coord equation and plane equation in order to calculate world position for UV.
 	let tc_basis_scale = 1.0 / (LIGHTMAP_SCALE as f32);
@@ -486,47 +504,66 @@ fn build_secondary_lightmap(
 			let pos = start_pos_v + (u as f32) * u_vec;
 			// TODO - correct texel position.
 
-			for light in lights
+			// Calculate light only from polygons in visible leafs.
+			for leaf_index in 0 .. map.leafs.len()
 			{
-				// TODO - check this. Make sure we use correct math here.
-				// TODO - check for normalization rules.
-				// Light intencity in white room with intencity = 1 should be = 1 too.
-
-				let vec_to_light = light.pos - pos;
-				let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
-				let vec_to_light_normalized = vec_to_light / vec_to_light_len2.sqrt();
-				let angle_cos = plane_normal_normalized.dot(vec_to_light_normalized);
-
-				if angle_cos <= 0.0
+				if !visibility_matrix_row[leaf_index]
 				{
-					// Do not determine visibility for light behind polygon plane.
 					continue;
 				}
 
-				let angle_cos_src = light.normal.dot(vec_to_light_normalized);
-				if angle_cos_src <= 0.0
+				let leaf = &map.leafs[leaf_index];
+				for light_source_polygon_index in
+					leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize
 				{
-					// Do not determine visibility for texels behind light source plane.
-					continue;
-				}
+					if light_source_polygon_index == polygon_index
+					{
+						// Ignore lights from this polygon.
+						continue;
+					}
 
-				let light_scale = angle_cos * angle_cos_src / vec_to_light_len2;
-				let color_scaled = [
-					light.color[0] * light_scale,
-					light.color[1] * light_scale,
-					light.color[2] * light_scale,
-				];
+					let light = &lights[light_source_polygon_index];
 
-				if !can_see(&light.pos, &pos, map)
-				{
-					// In shadow.
-					continue;
-				}
+					// TODO - check this. Make sure we use correct math here.
+					// TODO - check for normalization rules.
+					// Light intencity in white room with intencity = 1 should be = 1 too.
 
-				total_light[0] += color_scaled[0];
-				total_light[1] += color_scaled[1];
-				total_light[2] += color_scaled[2];
-			}
+					let vec_to_light = light.pos - pos;
+					let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
+					let vec_to_light_normalized = vec_to_light / vec_to_light_len2.sqrt();
+					let angle_cos = plane_normal_normalized.dot(vec_to_light_normalized);
+
+					if angle_cos <= 0.0
+					{
+						// Do not determine visibility for light behind polygon plane.
+						continue;
+					}
+
+					let angle_cos_src = light.normal.dot(vec_to_light_normalized);
+					if angle_cos_src <= 0.0
+					{
+						// Do not determine visibility for texels behind light source plane.
+						continue;
+					}
+
+					let light_scale = angle_cos * angle_cos_src / vec_to_light_len2;
+					let color_scaled = [
+						light.color[0] * light_scale,
+						light.color[1] * light_scale,
+						light.color[2] * light_scale,
+					];
+
+					if !can_see(&light.pos, &pos, map)
+					{
+						// In shadow.
+						continue;
+					}
+
+					total_light[0] += color_scaled[0];
+					total_light[1] += color_scaled[1];
+					total_light[2] += color_scaled[2];
+				} // for leaf polygons.
+			} // for leafs
 
 			lightmaps_data[(u + line_dst_start) as usize] = total_light;
 		}
