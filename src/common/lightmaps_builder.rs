@@ -31,6 +31,8 @@ pub fn build_lightmaps(
 
 	build_primary_lightmaps(sample_grid_size, &lights, map, &mut primary_lightmaps_data);
 
+	let secondary_light_sources = create_secondary_light_sources(map, &primary_lightmaps_data);
+
 	// TODO - calculate secondary lightmap (third, forth, etc.) and combine it with primary lightmap.
 
 	println!("\nCombining lightmaps");
@@ -246,16 +248,9 @@ fn build_primary_lightmap(
 	let polygon = &map.polygons[polygon_index];
 	let lightmap_size = get_polygon_lightmap_size(polygon);
 
-	const TEXEL_NORMAL_SHIFT: f32 = 1.0 / 16.0;
 	let plane_normal_normalized = polygon.plane.vec / polygon.plane.vec.magnitude();
 
-	let mut polygon_vertices_average = Vec3f::new(0.0, 0.0, 0.0);
-	for &v in &map.vertices[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize]
-	{
-		polygon_vertices_average += v;
-	}
-	let polygon_center =
-		polygon_vertices_average / (polygon.num_vertices as f32) + TEXEL_NORMAL_SHIFT * plane_normal_normalized;
+	let polygon_center = get_polygon_center(map, polygon) + TEXEL_NORMAL_SHIFT * plane_normal_normalized;
 
 	// Calculate inverse matrix for tex_coord equation and plane equation in order to calculate world position for UV.
 	let tc_basis_scale = 1.0 / (LIGHTMAP_SCALE as f32);
@@ -401,6 +396,18 @@ const MIN_POSITIVE_VALUE: f32 = 1.0 / ((1 << 30) as f32);
 const MAP_LIGHTS_SCALE: f32 = 32.0; // TODO - tune this.
 const MIN_LIGHT_VALUE: f32 = 1.0 / 256.0; // TODO - tune this.
 const MAX_SAMPLE_GRID_SIZE: u32 = 8;
+const TEXEL_NORMAL_SHIFT: f32 = 1.0 / 16.0;
+
+fn get_polygon_center(map: &bsp_map_compact::BSPMap, polygon: &bsp_map_compact::Polygon) -> Vec3f
+{
+	let mut polygon_vertices_average = Vec3f::new(0.0, 0.0, 0.0);
+	for &v in &map.vertices[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize]
+	{
+		polygon_vertices_average += v;
+	}
+
+	polygon_vertices_average / (polygon.num_vertices as f32)
+}
 
 fn can_see(from: &Vec3f, to: &Vec3f, map: &bsp_map_compact::BSPMap) -> bool
 {
@@ -512,4 +519,61 @@ fn edge_intersects_with_polygon(v0: &Vec3f, v1: &Vec3f, polygon_index: usize, ma
 	}
 
 	true
+}
+
+struct SecondaryLightSource
+{
+	pos: Vec3f,
+	normal: Vec3f,   // Normalized.
+	color: [f32; 3], // Color scaled by intensity.
+}
+
+// Secondary light sources are mapped 1 to 1 to source polygons.
+// Light sources for polygons withoult lightmap have zero intensity.
+fn create_secondary_light_sources(
+	map: &bsp_map_compact::BSPMap,
+	primary_lightmaps_data: &LightmapsData,
+) -> Vec<SecondaryLightSource>
+{
+	let mut result = Vec::with_capacity(map.polygons.len());
+	for polygon in &map.polygons
+	{
+		result.push(create_secondary_light_source(map, primary_lightmaps_data, polygon));
+	}
+
+	result
+}
+
+fn create_secondary_light_source(
+	map: &bsp_map_compact::BSPMap,
+	primary_lightmaps_data: &LightmapsData,
+	polygon: &bsp_map_compact::Polygon,
+) -> SecondaryLightSource
+{
+	// TODO - fix this. Count only texels inside polygon bounds and handle partially-covered texels properly.
+	// TODO - scale texels sum to texel size.
+
+	let mut texels_sum = [0.0, 0.0, 0.0];
+	if polygon.lightmap_data_offset != 0
+	{
+		let lightmap_size = get_polygon_lightmap_size(polygon);
+		for i in 0 .. (lightmap_size[0] * lightmap_size[1])
+		{
+			let texel = primary_lightmaps_data[(polygon.lightmap_data_offset + i) as usize];
+			for j in 0 .. 3
+			{
+				texels_sum[j] += texel[j];
+			}
+		}
+	}
+
+	let plane_normal_normalized = polygon.plane.vec / polygon.plane.vec.magnitude();
+
+	let polygon_center = get_polygon_center(map, polygon) + TEXEL_NORMAL_SHIFT * plane_normal_normalized;
+
+	SecondaryLightSource {
+		pos: polygon_center,
+		normal: plane_normal_normalized,
+		color: texels_sum,
+	}
 }
