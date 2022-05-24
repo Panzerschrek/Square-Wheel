@@ -6,6 +6,8 @@ pub struct LightmappingSettings
 	pub sample_grid_size: u32,
 	pub light_scale: f32,
 	pub ambient_light: f32,
+	pub save_primary_light: bool,
+	pub save_secondary_light: bool,
 }
 
 pub fn build_lightmaps(
@@ -50,14 +52,16 @@ pub fn build_lightmaps(
 	println!("\nCombining lightmaps");
 	map.lightmaps_data =
 		vec![[settings.ambient_light, settings.ambient_light, settings.ambient_light]; primary_lightmaps_data.len()];
+	let primary_light_scale = if settings.save_primary_light { 1.0 } else { 0.0 };
+	let secondary_light_scale = if settings.save_secondary_light { 1.0 } else { 0.0 };
 	for i in 0 .. primary_lightmaps_data.len()
 	{
 		let dst = &mut map.lightmaps_data[i];
-		let src0 = &primary_lightmaps_data[i];
-		let src1 = &secondary_lightmaps_data[i];
+		let src_primary = &primary_lightmaps_data[i];
+		let src_seconday = &secondary_lightmaps_data[i];
 		for j in 0 .. 3
 		{
-			dst[j] += src0[j] + src1[j];
+			dst[j] += src_primary[j] * primary_light_scale + src_seconday[j] * secondary_light_scale;
 		}
 	}
 
@@ -737,6 +741,8 @@ fn create_secondary_light_source(
 {
 	// TODO - fix this. Count only texels inside polygon bounds and handle partially-covered texels properly.
 	// TODO - scale texels sum to texel size.
+
+	// TODO - multiply value by material albedo.
 
 	let mut texels_sum = [0.0, 0.0, 0.0];
 	if polygon.lightmap_data_offset != 0

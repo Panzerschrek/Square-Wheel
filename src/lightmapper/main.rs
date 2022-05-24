@@ -29,6 +29,14 @@ struct Opt
 	/// Path to directory containing materials.
 	#[structopt(parse(from_os_str), long)]
 	materials_dir: Option<PathBuf>,
+
+	/// Disable export of primary light.
+	#[structopt(long)]
+	no_primary_light: bool,
+
+	/// Disable export of secondary light.
+	#[structopt(long)]
+	no_secondary_light: bool,
 }
 
 fn main()
@@ -52,6 +60,8 @@ fn main()
 			sample_grid_size: opt.sample_grid_size.unwrap_or(1),
 			light_scale: opt.light_scale.unwrap_or(1.0),
 			ambient_light: opt.ambient_light.unwrap_or(0.0),
+			save_primary_light: !opt.no_primary_light,
+			save_secondary_light: !opt.no_secondary_light,
 		},
 		&materials,
 		&mut map,
