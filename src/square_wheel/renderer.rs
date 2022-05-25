@@ -324,13 +324,15 @@ impl Renderer
 					{
 						let start_line = thread_index * surface_info.height / num_threads;
 						let end_line = (thread_index + 1) * surface_info.height / num_threads;
-						let height = end_line - start_line;
-						let surface_info_cur = system_window::SurfaceInfo{ width : surface_info.width, height, pitch: surface_info.pitch };
-						let pixels_ptr_cur = unsafe{ pixels_ptr.0.add(start_line * surface_info.pitch) };
-						let pixels_cur = unsafe{ std::slice::from_raw_parts_mut(pixels_ptr_cur, height * surface_info.pitch) };
+						let pixels_cur = unsafe{ std::slice::from_raw_parts_mut(pixels_ptr.0, surface_info.width * surface_info.pitch) };
 
-						let mut rasterizer = Rasterizer::new(pixels_cur, &surface_info_cur);
-						self.draw_tree_r(&mut rasterizer, camera_matrices, inline_models_index, root_node);
+						// Draw using same frame buffer, but performing cliping of all polygons to rect of current thead.
+						// Such approach still may lead to rare pixels overdraw on borderd of each thread viewport, but it is acceptible
+						// TODO - extend it a little bit?
+						let viewport_clippung_polygon = ClippingPolygon::from_box(0.0, start_line as f32, surface_info.width as f32, end_line as f32);
+
+						let mut rasterizer = Rasterizer::new(pixels_cur, &surface_info);
+						self.draw_tree_r(&mut rasterizer, camera_matrices, &viewport_clippung_polygon, inline_models_index, root_node);
 					});
 			}
 		});
@@ -677,6 +679,7 @@ impl Renderer
 		&self,
 		rasterizer: &mut Rasterizer,
 		camera_matrices: &CameraMatrices,
+		viewport_clippung_polygon : &ClippingPolygon,
 		inline_models_index: &InlineModelsIndex,
 		current_index: u32,
 	)
@@ -684,9 +687,13 @@ impl Renderer
 		if current_index >= bsp_map_compact::FIRST_LEAF_INDEX
 		{
 			let leaf = current_index - bsp_map_compact::FIRST_LEAF_INDEX;
-			if let Some(leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf)
+			if let Some(mut leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf)
 			{
-				self.draw_leaf(rasterizer, camera_matrices, &leaf_bounds, inline_models_index, leaf);
+				leaf_bounds.intersect(viewport_clippung_polygon);
+				if leaf_bounds.is_valid_and_non_empty()
+				{
+					self.draw_leaf(rasterizer, camera_matrices, &leaf_bounds, inline_models_index, leaf);
+				}
 			}
 		}
 		else
@@ -703,6 +710,7 @@ impl Renderer
 				self.draw_tree_r(
 					rasterizer,
 					camera_matrices,
+					viewport_clippung_polygon,
 					inline_models_index,
 					node.children[(i ^ mask) as usize],
 				);
