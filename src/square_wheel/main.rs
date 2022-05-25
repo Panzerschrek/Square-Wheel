@@ -13,6 +13,7 @@ mod inline_models_index;
 mod light;
 mod map_visibility_calculator;
 mod rasterizer;
+mod rect_splitting;
 mod renderer;
 mod renderer_config;
 mod shadow_map;

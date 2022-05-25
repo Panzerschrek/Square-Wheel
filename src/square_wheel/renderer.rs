@@ -1,6 +1,6 @@
 use super::{
 	config, depth_renderer::*, draw_ordering, frame_number::*, inline_models_index::*, light::*,
-	map_visibility_calculator::*, rasterizer::*, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
+	map_visibility_calculator::*, rasterizer::*, rect_splitting, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
 };
 use common::{
 	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, color::*, fixed_math::*, lightmaps_builder, material,
@@ -316,20 +316,29 @@ impl Renderer
 		let pixels_ptr = DamnColorSyncWrapper(pixels.as_mut_ptr());
 
 		let num_threads = rayon::current_num_threads();
+
+		// Split viewport rect into several rects for each thread.
+		// Use tricky splitting method that avoid creation of thin rects.
+		// This is needed to speed-up rasterization - reject as much polygons outside given rect, as possible.
+		// TODO - avoid doing allocation each frame.
+		let rects = rect_splitting::split_rect(
+			&rect_splitting::Rect{
+				min: Vec2f::new(0.0, 0.0),
+				max: Vec2f::new(surface_info.width as f32, surface_info.height as f32)},
+				num_threads as u32);
+
 		rayon::in_place_scope(|s|
 		{
-			for thread_index in 0 ..num_threads
+			for rect in rects
 			{
 				s.spawn( move |_| 
 					{
-						let start_line = thread_index * surface_info.height / num_threads;
-						let end_line = (thread_index + 1) * surface_info.height / num_threads;
-						let pixels_cur = unsafe{ std::slice::from_raw_parts_mut(pixels_ptr.0, surface_info.width * surface_info.pitch) };
+						let pixels_cur = unsafe{ std::slice::from_raw_parts_mut(pixels_ptr.0, surface_info.height * surface_info.pitch) };
 
 						// Draw using same frame buffer, but performing cliping of all polygons to rect of current thead.
 						// Such approach still may lead to rare pixels overdraw on borderd of each thread viewport, but it is acceptible
 						// TODO - extend it a little bit?
-						let viewport_clippung_polygon = ClippingPolygon::from_box(0.0, start_line as f32, surface_info.width as f32, end_line as f32);
+						let viewport_clippung_polygon = ClippingPolygon::from_box(rect.min.x, rect.min.y, rect.max.x, rect.max.y);
 
 						let mut rasterizer = Rasterizer::new(pixels_cur, &surface_info);
 						self.draw_tree_r(&mut rasterizer, camera_matrices, &viewport_clippung_polygon, inline_models_index, root_node);
