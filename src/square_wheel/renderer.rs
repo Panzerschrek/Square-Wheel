@@ -317,43 +317,22 @@ impl Renderer
 		root_node: u32,
 	)
 	{
-		let pixels_ptr = DamnColorSyncWrapper(pixels.as_mut_ptr());
+		let screen_rect = rect_splitting::Rect {
+			min: Vec2f::new(0.0, 0.0),
+			max: Vec2f::new(surface_info.width as f32, surface_info.height as f32),
+		};
 
 		let num_threads = rayon::current_num_threads();
-
-		// Split viewport rect into several rects for each thread.
-		// Use tricky splitting method that avoid creation of thin rects.
-		// This is needed to speed-up rasterization - reject as much polygons outside given rect, as possible.
-		// TODO - avoid doing allocation each frame.
-		let rects = rect_splitting::split_rect(
-			&rect_splitting::Rect {
-				min: Vec2f::new(0.0, 0.0),
-				max: Vec2f::new(surface_info.width as f32, surface_info.height as f32),
-			},
-			num_threads as u32,
-		);
-
-		rects.par_iter().for_each(|rect| {
-			let pixels_cur =
-				unsafe { std::slice::from_raw_parts_mut(pixels_ptr.0, surface_info.height * surface_info.pitch) };
-
-			// Extend it just a bit to fix possible gaps.
-			// TODO - this approach doesn't work in some cases.
-			// Perform exact pixel-perfect clipping instead.
-			let mut rect_corrected = *rect;
-			rect_corrected.min -= Vec2f::new(0.5, 0.5);
-			rect_corrected.max += Vec2f::new(0.5, 0.5);
-
-			// Draw using same frame buffer, but performing cliping of all polygons to rect of current thead.
-			// Such approach still may lead to rare pixels overdraw on borderd of each thread viewport, but it is acceptible
+		if num_threads == 1
+		{
 			let viewport_clippung_polygon = ClippingPolygon::from_box(
-				rect_corrected.min.x,
-				rect_corrected.min.y,
-				rect_corrected.max.x,
-				rect_corrected.max.y,
+				screen_rect.min.x,
+				screen_rect.min.y,
+				screen_rect.max.x,
+				screen_rect.max.y,
 			);
 
-			let mut rasterizer = Rasterizer::new(pixels_cur, &surface_info);
+			let mut rasterizer = Rasterizer::new(pixels, &surface_info);
 			self.draw_tree_r(
 				&mut rasterizer,
 				camera_matrices,
@@ -361,7 +340,47 @@ impl Renderer
 				inline_models_index,
 				root_node,
 			);
-		});
+		}
+		else
+		{
+			let pixels_ptr = DamnColorSyncWrapper(pixels.as_mut_ptr());
+
+			// Split viewport rect into several rects for each thread.
+			// Use tricky splitting method that avoid creation of thin rects.
+			// This is needed to speed-up rasterization - reject as much polygons outside given rect, as possible.
+			// TODO - avoid doing allocation each frame.
+			let rects = rect_splitting::split_rect(&screen_rect, num_threads as u32);
+
+			rects.par_iter().for_each(|rect| {
+				let pixels_cur =
+					unsafe { std::slice::from_raw_parts_mut(pixels_ptr.0, surface_info.height * surface_info.pitch) };
+
+				// Extend it just a bit to fix possible gaps.
+				// TODO - this approach doesn't work in some cases.
+				// Perform exact pixel-perfect clipping instead.
+				let mut rect_corrected = *rect;
+				rect_corrected.min -= Vec2f::new(0.5, 0.5);
+				rect_corrected.max += Vec2f::new(0.5, 0.5);
+
+				// Draw using same frame buffer, but performing cliping of all polygons to rect of current thead.
+				// Such approach still may lead to rare pixels overdraw on borderd of each thread viewport, but it is acceptible
+				let viewport_clippung_polygon = ClippingPolygon::from_box(
+					rect_corrected.min.x,
+					rect_corrected.min.y,
+					rect_corrected.max.x,
+					rect_corrected.max.y,
+				);
+
+				let mut rasterizer = Rasterizer::new(pixels_cur, &surface_info);
+				self.draw_tree_r(
+					&mut rasterizer,
+					camera_matrices,
+					&viewport_clippung_polygon,
+					inline_models_index,
+					root_node,
+				);
+			});
+		}
 	}
 
 	fn prepare_polygons_surfaces(&mut self, camera_matrices: &CameraMatrices, inline_models_index: &InlineModelsIndex)
@@ -993,11 +1012,18 @@ impl Renderer
 
 fn draw_background(pixels: &mut [Color32])
 {
-	let num_pixels = pixels.len();
 	let num_threads = rayon::current_num_threads();
-	pixels.par_chunks_mut(num_pixels / num_threads).for_each(|pixels_part| {
-		draw_background_impl(pixels_part);
-	});
+	if num_threads == 1
+	{
+		draw_background_impl(pixels);
+	}
+	else
+	{
+		let num_pixels = pixels.len();
+		pixels.par_chunks_mut(num_pixels / num_threads).for_each(|pixels_part| {
+			draw_background_impl(pixels_part);
+		});
+	}
 }
 
 fn draw_background_impl(pixels: &mut [Color32])
