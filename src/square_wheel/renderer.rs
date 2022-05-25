@@ -966,10 +966,28 @@ impl Renderer
 
 fn draw_background(pixels: &mut [Color32])
 {
-	for pixel in pixels.iter_mut()
+	let pixels_ptr = DamnColorSyncWrapper(pixels.as_mut_ptr());
+	let num_pixels = pixels.len();
+
+	let num_threads = rayon::current_num_threads();
+	rayon::scope(|s|
 	{
-		*pixel = Color32::from_rgb(32, 16, 8);
-	}
+		for thread_index in 0 ..num_threads
+		{
+			s.spawn( move |_|
+			{
+				let start = thread_index * num_pixels / num_threads;
+				let end = (thread_index + 1) * num_pixels / num_threads;
+
+				let pixels_cur = unsafe{ std::slice::from_raw_parts_mut(pixels_ptr.0.add(start), end - start) };
+
+				for pixel in pixels_cur.iter_mut()
+				{
+					*pixel = Color32::from_rgb(32, 16, 8);
+				}
+			});
+		}
+	});
 }
 
 fn draw_crosshair(pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo)
