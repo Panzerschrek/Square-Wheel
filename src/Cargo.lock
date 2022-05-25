@@ -326,6 +326,7 @@ name = "square_wheel"
 version = "0.1.0"
 dependencies = [
  "cgmath",
+ "num_cpus",
  "rayon",
  "sdl2",
  "serde",
