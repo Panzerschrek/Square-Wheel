@@ -252,7 +252,7 @@ impl Host
 		{
 			Ok(Some(map)) =>
 			{
-				let map_rc = Rc::new(map);
+				let map_rc = std::sync::Arc::new(map);
 				self.active_map = Some(ActiveMap {
 					game: test_game::Game::new(self.commands_processor.clone(), self.console.clone()),
 					renderer: renderer::Renderer::new(self.app_config.clone(), map_rc.clone()),
@@ -280,6 +280,6 @@ impl Drop for Host
 {
 	fn drop(&mut self)
 	{
-		config::save(&self.app_config.borrow(), &self.config_file_path);
+		config::save(&self.app_config.lock().unwrap(), &self.config_file_path);
 	}
 }

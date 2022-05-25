@@ -33,14 +33,14 @@ impl RendererConfig
 {
 	pub fn from_app_config(app_config: &config::ConfigSharedPtr) -> Self
 	{
-		serde_json::from_value(app_config.borrow()["renderer"].clone()).unwrap_or_default()
+		serde_json::from_value(app_config.lock().unwrap()["renderer"].clone()).unwrap_or_default()
 	}
 
 	pub fn update_app_config(&self, app_config: &config::ConfigSharedPtr)
 	{
 		if let Ok(json) = serde_json::to_value(self)
 		{
-			app_config.borrow_mut()["renderer"] = json;
+			app_config.lock().unwrap()["renderer"] = json;
 		}
 	}
 }

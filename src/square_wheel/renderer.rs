@@ -6,9 +6,15 @@ use common::{
 	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, color::*, fixed_math::*, lightmaps_builder, material,
 	math_types::*, matrix::*, performance_counter::*, plane::*, system_window,
 };
-use std::rc::Rc;
+use std::sync::Arc;
 
 type Clock = std::time::Instant;
+
+#[derive(Copy, Clone)]
+struct DamnColorSyncWrapper(*mut Color32);
+
+unsafe impl Send for DamnColorSyncWrapper {}
+unsafe impl Sync for DamnColorSyncWrapper {}
 
 pub struct Renderer
 {
@@ -17,7 +23,7 @@ pub struct Renderer
 	config_is_durty: bool,
 
 	current_frame: FrameNumber,
-	map: Rc<bsp_map_compact::BSPMap>,
+	map: Arc<bsp_map_compact::BSPMap>,
 	visibility_calculator: MapVisibilityCalculator,
 	shadows_maps_renderer: DepthRenderer,
 	polygons_data: Vec<DrawPolygonData>,
@@ -68,7 +74,7 @@ struct DrawPolygonData
 
 impl Renderer
 {
-	pub fn new(app_config: config::ConfigSharedPtr, map: Rc<bsp_map_compact::BSPMap>) -> Self
+	pub fn new(app_config: config::ConfigSharedPtr, map: Arc<bsp_map_compact::BSPMap>) -> Self
 	{
 		let config_parsed = RendererConfig::from_app_config(&app_config);
 		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
@@ -235,7 +241,6 @@ impl Renderer
 			test_lights_shadow_maps.push(cube_shadow_map);
 		}
 
-		let mut rasterizer = Rasterizer::new(pixels, surface_info);
 		let root_node = (self.map.nodes.len() - 1) as u32;
 
 		// TODO - before preparing frame try to shift camera a little bit away from all planes of BSP nodes before current leaf.
@@ -276,10 +281,7 @@ impl Renderer
 			.add_value(surfaces_preparation_duration_s);
 
 		let rasterization_start_time = Clock::now();
-
-		// Draw BSP tree in back to front order, skip unreachable leafs.
-		self.draw_tree_r(&mut rasterizer, camera_matrices, inline_models_index, root_node);
-
+		self.perform_rasterization(pixels, surface_info, camera_matrices, inline_models_index, root_node);
 		let rasterization_end_time = Clock::now();
 		let rasterization_duration_s = (rasterization_end_time - rasterization_start_time).as_secs_f32();
 		self.performance_counters
@@ -301,6 +303,37 @@ impl Renderer
 				}
 			}
 		}
+	}
+
+	fn perform_rasterization(
+		&self,
+		pixels: &mut [Color32],
+		surface_info: &system_window::SurfaceInfo,
+		camera_matrices: &CameraMatrices,
+		inline_models_index: &InlineModelsIndex,
+		root_node : u32)
+	{
+		let pixels_ptr = DamnColorSyncWrapper(pixels.as_mut_ptr());
+
+		let num_threads = rayon::current_num_threads();
+		rayon::scope(|s|
+		{
+			for thread_index in 0 ..num_threads
+			{
+				s.spawn( move |_| 
+					{
+						let start_line = thread_index * surface_info.height / num_threads;
+						let end_line = (thread_index + 1) * surface_info.height / num_threads;
+						let height = end_line - start_line;
+						let surface_info_cur = system_window::SurfaceInfo{ width : surface_info.width, height, pitch: surface_info.pitch };
+						let pixels_ptr_cur = unsafe{ pixels_ptr.0.add(start_line * surface_info.pitch) };
+						let pixels_cur = unsafe{ std::slice::from_raw_parts_mut(pixels_ptr_cur, height * surface_info.pitch) };
+
+						let mut rasterizer = Rasterizer::new(pixels_cur, &surface_info_cur);
+						self.draw_tree_r(&mut rasterizer, camera_matrices, inline_models_index, root_node);
+					});
+			}
+		});
 	}
 
 	fn prepare_polygons_surfaces(&mut self, camera_matrices: &CameraMatrices, inline_models_index: &InlineModelsIndex)

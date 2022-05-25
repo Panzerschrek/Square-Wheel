@@ -46,7 +46,7 @@ impl CommandsProcessor
 			let path_without_last_component = &config_path[.. config_path.len() - 1];
 			let last_component = config_path.last().unwrap();
 
-			let config_lock = self.config.borrow();
+			let config_lock = self.config.lock().unwrap();
 			let mut cur_value: &serde_json::Value = &config_lock;
 			let mut path_found = true;
 			for config_path_component in path_without_last_component
@@ -140,7 +140,7 @@ impl CommandsProcessor
 		}
 
 		// Second, process config.
-		let mut config_lock = self.config.borrow_mut();
+		let mut config_lock = self.config.lock().unwrap();
 		let mut cur_value: &mut serde_json::Value = &mut config_lock;
 		for config_path_component in c.split(CONFIG_PATH_SEPARATOR)
 		{
