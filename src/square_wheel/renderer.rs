@@ -316,7 +316,7 @@ impl Renderer
 		let pixels_ptr = DamnColorSyncWrapper(pixels.as_mut_ptr());
 
 		let num_threads = rayon::current_num_threads();
-		rayon::scope(|s|
+		rayon::in_place_scope(|s|
 		{
 			for thread_index in 0 ..num_threads
 			{
@@ -616,7 +616,8 @@ impl Renderer
 
 		let surfaces_pixels_ptr = DamnColorSyncWrapper(self.surfaces_pixels.as_mut_ptr());
 
-		rayon::scope(|s|
+		// TODO - use parallel iterator instead?
+		rayon::in_place_scope(|s|
 		{
 			// TODO - avoid iteration over all map polygons.
 			// Remember (somehow) list of visible in current frame polygons.
@@ -970,7 +971,7 @@ fn draw_background(pixels: &mut [Color32])
 	let num_pixels = pixels.len();
 
 	let num_threads = rayon::current_num_threads();
-	rayon::scope(|s|
+	rayon::in_place_scope(|s|
 	{
 		for thread_index in 0 ..num_threads
 		{
