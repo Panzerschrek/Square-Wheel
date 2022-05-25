@@ -179,7 +179,9 @@ fn build_mips(mip0: Texture) -> TextureWithMips
 		{
 			let src_offset0 = (y * 2) * prev_mip_width;
 			let src_offset1 = (y * 2 + 1) * prev_mip_width;
-			for (dst, x) in mip.pixels[y * mip_width .. (y + 1) * mip_width].iter_mut().zip(0 .. mip_width)
+			for (dst, x) in mip.pixels[y * mip_width .. (y + 1) * mip_width]
+				.iter_mut()
+				.zip(0 .. mip_width)
 			{
 				let src_x = x * 2;
 				let p00 = prev_mip.pixels[src_x + src_offset0];

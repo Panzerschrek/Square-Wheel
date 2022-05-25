@@ -1,4 +1,8 @@
-use std::{fs, path::Path, sync::{Arc, Mutex}};
+use std::{
+	fs,
+	path::Path,
+	sync::{Arc, Mutex},
+};
 
 pub type ConfigSharedPtr = Arc<Mutex<serde_json::Value>>;
 

@@ -61,7 +61,10 @@ impl Host
 				host_config.num_threads = num_threads_max as f32;
 			}
 			println!("Initialize thread pool with {} threads", num_threads);
-			rayon::ThreadPoolBuilder::new().num_threads(num_threads).build_global().unwrap();
+			rayon::ThreadPoolBuilder::new()
+				.num_threads(num_threads)
+				.build_global()
+				.unwrap();
 		}
 
 		let commands_processor = commands_processor::CommandsProcessor::new(app_config.clone());

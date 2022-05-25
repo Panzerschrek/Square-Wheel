@@ -58,7 +58,7 @@ pub fn build_surface(
 		{
 			let pos = start_pos_v + (dst_u as f32) * u_vec;
 
-			let texel_value = unsafe{ debug_only_checked_fetch(src_line, src_u as usize) };
+			let texel_value = unsafe { debug_only_checked_fetch(src_line, src_u as usize) };
 			// Normal transformed to world space.
 			let normal = texel_value.normal.x * u_vec_normalized +
 				texel_value.normal.y * v_vec_normalized +
@@ -124,7 +124,8 @@ pub fn build_surface_with_lightmap(
 			lightmap_size,
 			lightmap_tc_shift,
 			lightmap_data,
-			out_surface_data);
+			out_surface_data,
+		);
 	}
 	else if lightmap_scale_log2 == 2
 	{
@@ -135,7 +136,8 @@ pub fn build_surface_with_lightmap(
 			lightmap_size,
 			lightmap_tc_shift,
 			lightmap_data,
-			out_surface_data);
+			out_surface_data,
+		);
 	}
 	else if lightmap_scale_log2 == 3
 	{
@@ -146,7 +148,8 @@ pub fn build_surface_with_lightmap(
 			lightmap_size,
 			lightmap_tc_shift,
 			lightmap_data,
-			out_surface_data);
+			out_surface_data,
+		);
 	}
 	else if lightmap_scale_log2 == 4
 	{
@@ -157,7 +160,8 @@ pub fn build_surface_with_lightmap(
 			lightmap_size,
 			lightmap_tc_shift,
 			lightmap_data,
-			out_surface_data);
+			out_surface_data,
+		);
 	}
 	else
 	{
@@ -165,7 +169,7 @@ pub fn build_surface_with_lightmap(
 	}
 }
 
-pub fn build_surface_with_lightmap_const_scale<const LIGHTAP_SCALE_LOG2 : u32>(
+pub fn build_surface_with_lightmap_const_scale<const LIGHTAP_SCALE_LOG2: u32>(
 	surface_size: [u32; 2],
 	surface_tc_min: [i32; 2],
 	texture: &textures::Texture,
@@ -327,7 +331,7 @@ fn cube_shadow_map_side_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f, side
 	debug_assert!(u < cube_shadow_map.size);
 	debug_assert!(v < cube_shadow_map.size);
 	let texel_address = (u + v * cube_shadow_map.size) as usize;
-	let value = unsafe{ debug_only_checked_fetch(&cube_shadow_map.sides[side as usize], texel_address) };
+	let value = unsafe { debug_only_checked_fetch(&cube_shadow_map.sides[side as usize], texel_address) };
 	return if depth >= value { 1.0 } else { 0.0 };
 }
 
@@ -352,7 +356,7 @@ fn inv_sqrt_fast(x: f32) -> f32
 	1.0 / sqrt(x)
 }
 
-unsafe fn debug_only_checked_fetch<T: Copy>(data : &[T], address : usize) -> T
+unsafe fn debug_only_checked_fetch<T: Copy>(data: &[T], address: usize) -> T
 {
 	// operator [] checks bounds and calls panic! handler in case if index is out of bounds.
 	// This check is useless here since we clamp coordnates properly.

@@ -1,6 +1,7 @@
 use super::{
 	config, depth_renderer::*, draw_ordering, frame_number::*, inline_models_index::*, light::*,
-	map_visibility_calculator::*, rasterizer::*, rect_splitting, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
+	map_visibility_calculator::*, rasterizer::*, rect_splitting, renderer_config::*, shadow_map::*, surfaces::*,
+	textures::*,
 };
 use common::{
 	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, color::*, fixed_math::*, lightmaps_builder, material,
@@ -311,7 +312,8 @@ impl Renderer
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
 		inline_models_index: &InlineModelsIndex,
-		root_node : u32)
+		root_node: u32,
+	)
 	{
 		let pixels_ptr = DamnColorSyncWrapper(pixels.as_mut_ptr());
 
@@ -322,27 +324,36 @@ impl Renderer
 		// This is needed to speed-up rasterization - reject as much polygons outside given rect, as possible.
 		// TODO - avoid doing allocation each frame.
 		let rects = rect_splitting::split_rect(
-			&rect_splitting::Rect{
+			&rect_splitting::Rect {
 				min: Vec2f::new(0.0, 0.0),
-				max: Vec2f::new(surface_info.width as f32, surface_info.height as f32)},
-				num_threads as u32);
+				max: Vec2f::new(surface_info.width as f32, surface_info.height as f32),
+			},
+			num_threads as u32,
+		);
 
-		rayon::in_place_scope(|s|
-		{
+		rayon::in_place_scope(|s| {
 			for rect in rects
 			{
-				s.spawn( move |_| 
-					{
-						let pixels_cur = unsafe{ std::slice::from_raw_parts_mut(pixels_ptr.0, surface_info.height * surface_info.pitch) };
+				s.spawn(move |_| {
+					let pixels_cur = unsafe {
+						std::slice::from_raw_parts_mut(pixels_ptr.0, surface_info.height * surface_info.pitch)
+					};
 
-						// Draw using same frame buffer, but performing cliping of all polygons to rect of current thead.
-						// Such approach still may lead to rare pixels overdraw on borderd of each thread viewport, but it is acceptible
-						// TODO - extend it a little bit?
-						let viewport_clippung_polygon = ClippingPolygon::from_box(rect.min.x, rect.min.y, rect.max.x, rect.max.y);
+					// Draw using same frame buffer, but performing cliping of all polygons to rect of current thead.
+					// Such approach still may lead to rare pixels overdraw on borderd of each thread viewport, but it is acceptible
+					// TODO - extend it a little bit?
+					let viewport_clippung_polygon =
+						ClippingPolygon::from_box(rect.min.x, rect.min.y, rect.max.x, rect.max.y);
 
-						let mut rasterizer = Rasterizer::new(pixels_cur, &surface_info);
-						self.draw_tree_r(&mut rasterizer, camera_matrices, &viewport_clippung_polygon, inline_models_index, root_node);
-					});
+					let mut rasterizer = Rasterizer::new(pixels_cur, &surface_info);
+					self.draw_tree_r(
+						&mut rasterizer,
+						camera_matrices,
+						&viewport_clippung_polygon,
+						inline_models_index,
+						root_node,
+					);
+				});
 			}
 		});
 	}
@@ -626,8 +637,7 @@ impl Renderer
 		let surfaces_pixels_ptr = DamnColorSyncWrapper(self.surfaces_pixels.as_mut_ptr());
 
 		// TODO - use parallel iterator instead?
-		rayon::in_place_scope(|s|
-		{
+		rayon::in_place_scope(|s| {
 			// TODO - avoid iteration over all map polygons.
 			// Remember (somehow) list of visible in current frame polygons.
 			for i in 0 .. self.polygons_data.len()
@@ -638,16 +648,17 @@ impl Renderer
 					continue;
 				}
 
-				s.spawn( move |_|
-				{
+				s.spawn(move |_| {
 					let polygon = &polygons[i];
 					let surface_size = polygon_data.surface_size;
 
 					let texture = &textures[polygon.texture as usize][polygon_data.mip as usize];
-					let surface_data = unsafe{
+					let surface_data = unsafe {
 						std::slice::from_raw_parts_mut(
 							surfaces_pixels_ptr.0.add(polygon_data.surface_pixels_offset),
-							(surface_size[0] * surface_size[1]) as usize) };
+							(surface_size[0] * surface_size[1]) as usize,
+						)
+					};
 
 					if polygon.lightmap_data_offset == 0 || !lights.is_empty()
 					{
@@ -679,8 +690,8 @@ impl Renderer
 						for i in 0 .. 2
 						{
 							let round_mask = !((lightmaps_builder::LIGHTMAP_SCALE as i32) - 1);
-							let shift =
-								polygon_data.surface_tc_min[i] - ((polygon.tex_coord_min[i] & round_mask) >> polygon_data.mip);
+							let shift = polygon_data.surface_tc_min[i] -
+								((polygon.tex_coord_min[i] & round_mask) >> polygon_data.mip);
 							debug_assert!(shift >= 0);
 							lightmap_tc_shift[i] = shift as u32;
 						}
@@ -707,7 +718,7 @@ impl Renderer
 		&self,
 		rasterizer: &mut Rasterizer,
 		camera_matrices: &CameraMatrices,
-		viewport_clippung_polygon : &ClippingPolygon,
+		viewport_clippung_polygon: &ClippingPolygon,
 		inline_models_index: &InlineModelsIndex,
 		current_index: u32,
 	)
@@ -980,16 +991,14 @@ fn draw_background(pixels: &mut [Color32])
 	let num_pixels = pixels.len();
 
 	let num_threads = rayon::current_num_threads();
-	rayon::in_place_scope(|s|
-	{
-		for thread_index in 0 ..num_threads
+	rayon::in_place_scope(|s| {
+		for thread_index in 0 .. num_threads
 		{
-			s.spawn( move |_|
-			{
+			s.spawn(move |_| {
 				let start = thread_index * num_pixels / num_threads;
 				let end = (thread_index + 1) * num_pixels / num_threads;
 
-				let pixels_cur = unsafe{ std::slice::from_raw_parts_mut(pixels_ptr.0.add(start), end - start) };
+				let pixels_cur = unsafe { std::slice::from_raw_parts_mut(pixels_ptr.0.add(start), end - start) };
 
 				for pixel in pixels_cur.iter_mut()
 				{
