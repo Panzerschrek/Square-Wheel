@@ -7,6 +7,7 @@ use common::{
 	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, color::*, fixed_math::*, lightmaps_builder, material,
 	math_types::*, matrix::*, performance_counter::*, plane::*, system_window,
 };
+use rayon::prelude::*;
 use std::sync::Arc;
 
 type Clock = std::time::Instant;
@@ -144,11 +145,6 @@ impl Renderer
 		let frame_start_time = Clock::now();
 		self.current_frame.next();
 
-		if self.config.clear_background
-		{
-			draw_background(pixels);
-		}
-
 		self.draw_map(pixels, surface_info, camera_matrices, inline_models_index, test_lights);
 
 		// TODO - remove such temporary fuinction.
@@ -281,6 +277,12 @@ impl Renderer
 			.surfaces_preparation
 			.add_value(surfaces_preparation_duration_s);
 
+		// Clear background (if needed) only before performing rasterization.
+		if self.config.clear_background
+		{
+			draw_background(pixels);
+		}
+
 		let rasterization_start_time = Clock::now();
 		self.perform_rasterization(pixels, surface_info, camera_matrices, inline_models_index, root_node);
 		let rasterization_end_time = Clock::now();
@@ -331,30 +333,23 @@ impl Renderer
 			num_threads as u32,
 		);
 
-		rayon::in_place_scope(|s| {
-			for rect in rects
-			{
-				s.spawn(move |_| {
-					let pixels_cur = unsafe {
-						std::slice::from_raw_parts_mut(pixels_ptr.0, surface_info.height * surface_info.pitch)
-					};
+		rects.par_iter().for_each(|rect| {
+			let pixels_cur =
+				unsafe { std::slice::from_raw_parts_mut(pixels_ptr.0, surface_info.height * surface_info.pitch) };
 
-					// Draw using same frame buffer, but performing cliping of all polygons to rect of current thead.
-					// Such approach still may lead to rare pixels overdraw on borderd of each thread viewport, but it is acceptible
-					// TODO - extend it a little bit?
-					let viewport_clippung_polygon =
-						ClippingPolygon::from_box(rect.min.x, rect.min.y, rect.max.x, rect.max.y);
+			// Draw using same frame buffer, but performing cliping of all polygons to rect of current thead.
+			// Such approach still may lead to rare pixels overdraw on borderd of each thread viewport, but it is acceptible
+			// TODO - extend it a little bit?
+			let viewport_clippung_polygon = ClippingPolygon::from_box(rect.min.x, rect.min.y, rect.max.x, rect.max.y);
 
-					let mut rasterizer = Rasterizer::new(pixels_cur, &surface_info);
-					self.draw_tree_r(
-						&mut rasterizer,
-						camera_matrices,
-						&viewport_clippung_polygon,
-						inline_models_index,
-						root_node,
-					);
-				});
-			}
+			let mut rasterizer = Rasterizer::new(pixels_cur, &surface_info);
+			self.draw_tree_r(
+				&mut rasterizer,
+				camera_matrices,
+				&viewport_clippung_polygon,
+				inline_models_index,
+				root_node,
+			);
 		});
 	}
 
@@ -987,26 +982,19 @@ impl Renderer
 
 fn draw_background(pixels: &mut [Color32])
 {
-	let pixels_ptr = DamnColorSyncWrapper(pixels.as_mut_ptr());
 	let num_pixels = pixels.len();
-
 	let num_threads = rayon::current_num_threads();
-	rayon::in_place_scope(|s| {
-		for thread_index in 0 .. num_threads
-		{
-			s.spawn(move |_| {
-				let start = thread_index * num_pixels / num_threads;
-				let end = (thread_index + 1) * num_pixels / num_threads;
-
-				let pixels_cur = unsafe { std::slice::from_raw_parts_mut(pixels_ptr.0.add(start), end - start) };
-
-				for pixel in pixels_cur.iter_mut()
-				{
-					*pixel = Color32::from_rgb(32, 16, 8);
-				}
-			});
-		}
+	pixels.par_chunks_mut(num_pixels / num_threads).for_each(|pixels_part| {
+		draw_background_impl(pixels_part);
 	});
+}
+
+fn draw_background_impl(pixels: &mut [Color32])
+{
+	for pixel in pixels
+	{
+		*pixel = Color32::from_rgb(32, 16, 8);
+	}
 }
 
 fn draw_crosshair(pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo)
