@@ -606,73 +606,91 @@ impl Renderer
 
 	fn build_polygons_surfaces(&mut self, lights: &[LightWithShadowMap])
 	{
-		// TODO - avoid iteration over all map polygons.
-		// Remember (somehow) list of visible in current frame polygons.
-		for i in 0 .. self.polygons_data.len()
+		// Perform parallel surfaces building.
+		// Use "unsage" to write into surfaces data concurrently.
+		// It is fine since each surface uses its own region.
+
+		let lightmaps_data = &self.map.lightmaps_data;
+		let polygons = &self.map.polygons;
+		let textures = &self.textures;
+
+		let surfaces_pixels_ptr = DamnColorSyncWrapper(self.surfaces_pixels.as_mut_ptr());
+
+		rayon::scope(|s|
 		{
-			let polygon_data = &self.polygons_data[i];
-			if polygon_data.visible_frame != self.current_frame
+			// TODO - avoid iteration over all map polygons.
+			// Remember (somehow) list of visible in current frame polygons.
+			for i in 0 .. self.polygons_data.len()
 			{
-				continue;
-			}
-			let polygon = &self.map.polygons[i];
-			let surface_pixels_offset = polygon_data.surface_pixels_offset;
-			let surface_size = polygon_data.surface_size;
-
-			let texture = &self.textures[polygon.texture as usize][polygon_data.mip as usize];
-			let surface_data = &mut self.surfaces_pixels
-				[surface_pixels_offset .. (surface_pixels_offset + ((surface_size[0] * surface_size[1]) as usize))];
-
-			if polygon.lightmap_data_offset == 0 || !lights.is_empty()
-			{
-				let mip_scale = 1.0 / (1 << polygon_data.mip) as f32;
-				let tex_coord_equation_scaled = [
-					Plane {
-						vec: polygon.tex_coord_equation[0].vec * mip_scale,
-						dist: polygon.tex_coord_equation[0].dist * mip_scale,
-					},
-					Plane {
-						vec: polygon.tex_coord_equation[1].vec * mip_scale,
-						dist: polygon.tex_coord_equation[1].dist * mip_scale,
-					},
-				];
-
-				build_surface(
-					surface_size,
-					polygon_data.surface_tc_min,
-					texture,
-					&polygon.plane,
-					&tex_coord_equation_scaled,
-					lights,
-					surface_data,
-				);
-			}
-			else
-			{
-				let mut lightmap_tc_shift: [u32; 2] = [0, 0];
-				for i in 0 .. 2
+				let polygon_data = &self.polygons_data[i];
+				if polygon_data.visible_frame != self.current_frame
 				{
-					let round_mask = !((lightmaps_builder::LIGHTMAP_SCALE as i32) - 1);
-					let shift =
-						polygon_data.surface_tc_min[i] - ((polygon.tex_coord_min[i] & round_mask) >> polygon_data.mip);
-					debug_assert!(shift >= 0);
-					lightmap_tc_shift[i] = shift as u32;
+					continue;
 				}
 
-				let lightmap_size = lightmaps_builder::get_polygon_lightmap_size(polygon);
-				build_surface_with_lightmap(
-					surface_size,
-					polygon_data.surface_tc_min,
-					texture,
-					lightmap_size,
-					lightmaps_builder::LIGHTMAP_SCALE_LOG2 - polygon_data.mip,
-					lightmap_tc_shift,
-					&self.map.lightmaps_data[polygon.lightmap_data_offset as usize ..
-						((polygon.lightmap_data_offset + lightmap_size[0] * lightmap_size[1]) as usize)],
-					surface_data,
-				);
+				s.spawn( move |_|
+				{
+					let polygon = &polygons[i];
+					let surface_size = polygon_data.surface_size;
+
+					let texture = &textures[polygon.texture as usize][polygon_data.mip as usize];
+					let surface_data = unsafe{
+						std::slice::from_raw_parts_mut(
+							surfaces_pixels_ptr.0.add(polygon_data.surface_pixels_offset),
+							(surface_size[0] * surface_size[1]) as usize) };
+
+					if polygon.lightmap_data_offset == 0 || !lights.is_empty()
+					{
+						let mip_scale = 1.0 / (1 << polygon_data.mip) as f32;
+						let tex_coord_equation_scaled = [
+							Plane {
+								vec: polygon.tex_coord_equation[0].vec * mip_scale,
+								dist: polygon.tex_coord_equation[0].dist * mip_scale,
+							},
+							Plane {
+								vec: polygon.tex_coord_equation[1].vec * mip_scale,
+								dist: polygon.tex_coord_equation[1].dist * mip_scale,
+							},
+						];
+
+						build_surface(
+							surface_size,
+							polygon_data.surface_tc_min,
+							texture,
+							&polygon.plane,
+							&tex_coord_equation_scaled,
+							lights,
+							surface_data,
+						);
+					}
+					else
+					{
+						let mut lightmap_tc_shift: [u32; 2] = [0, 0];
+						for i in 0 .. 2
+						{
+							let round_mask = !((lightmaps_builder::LIGHTMAP_SCALE as i32) - 1);
+							let shift =
+								polygon_data.surface_tc_min[i] - ((polygon.tex_coord_min[i] & round_mask) >> polygon_data.mip);
+							debug_assert!(shift >= 0);
+							lightmap_tc_shift[i] = shift as u32;
+						}
+
+						let lightmap_size = lightmaps_builder::get_polygon_lightmap_size(polygon);
+						build_surface_with_lightmap(
+							surface_size,
+							polygon_data.surface_tc_min,
+							texture,
+							lightmap_size,
+							lightmaps_builder::LIGHTMAP_SCALE_LOG2 - polygon_data.mip,
+							lightmap_tc_shift,
+							&lightmaps_data[polygon.lightmap_data_offset as usize ..
+								((polygon.lightmap_data_offset + lightmap_size[0] * lightmap_size[1]) as usize)],
+							surface_data,
+						);
+					}
+				});
 			}
-		}
+		});
 	}
 
 	fn draw_tree_r(
