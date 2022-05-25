@@ -337,10 +337,21 @@ impl Renderer
 			let pixels_cur =
 				unsafe { std::slice::from_raw_parts_mut(pixels_ptr.0, surface_info.height * surface_info.pitch) };
 
+			// Extend it just a bit to fix possible gaps.
+			// TODO - this approach doesn't work in some cases.
+			// Perform exact pixel-perfect clipping instead.
+			let mut rect_corrected = *rect;
+			rect_corrected.min -= Vec2f::new(0.5, 0.5);
+			rect_corrected.max += Vec2f::new(0.5, 0.5);
+
 			// Draw using same frame buffer, but performing cliping of all polygons to rect of current thead.
 			// Such approach still may lead to rare pixels overdraw on borderd of each thread viewport, but it is acceptible
-			// TODO - extend it a little bit?
-			let viewport_clippung_polygon = ClippingPolygon::from_box(rect.min.x, rect.min.y, rect.max.x, rect.max.y);
+			let viewport_clippung_polygon = ClippingPolygon::from_box(
+				rect_corrected.min.x,
+				rect_corrected.min.y,
+				rect_corrected.max.x,
+				rect_corrected.max.y,
+			);
 
 			let mut rasterizer = Rasterizer::new(pixels_cur, &surface_info);
 			self.draw_tree_r(
