@@ -10,6 +10,9 @@ pub struct HostConfig
 	// Use "f32" because of problems with "JSON" serialization.
 	#[serde(default)]
 	pub num_threads: f32,
+
+	#[serde(default)]
+	pub fullscreen_mode: f32,
 }
 
 impl HostConfig

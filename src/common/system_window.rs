@@ -37,6 +37,22 @@ impl SystemWindow
 		}
 	}
 
+	pub fn set_windowed(&mut self)
+	{
+		let _gnore = self.sdl2_window.set_fullscreen(sdl2::video::FullscreenType::Off);
+	}
+	
+	pub fn set_fullscreen_desktop(&mut self)
+	{
+		let _gnore = self.sdl2_window.set_fullscreen(sdl2::video::FullscreenType::Desktop);
+	}
+
+	pub fn set_fullscreen(&mut self)
+	{
+		// TODO - resize window properly before this?
+		let _gnore = self.sdl2_window.set_fullscreen(sdl2::video::FullscreenType::True);
+	}
+
 	pub fn get_events(&mut self) -> Vec<sdl2::event::Event>
 	{
 		self.sdl2_event_pump.poll_iter().collect()

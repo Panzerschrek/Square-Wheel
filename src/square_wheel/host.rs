@@ -118,6 +118,23 @@ impl Host
 		self.process_commands();
 		self.synchronize_config();
 
+		if self.config.fullscreen_mode == 0.0
+		{
+			self.window.borrow_mut().set_windowed();
+		}
+		else if self.config.fullscreen_mode == 1.0
+		{
+			self.window.borrow_mut().set_fullscreen_desktop();
+		}
+		else if self.config.fullscreen_mode == 2.0
+		{
+			self.window.borrow_mut().set_fullscreen();
+		}
+		else
+		{
+			self.config.fullscreen_mode = 0.0;
+		}
+
 		let cur_time = std::time::Instant::now();
 		let time_delta_s = (cur_time - self.prev_time).as_secs_f32();
 		self.prev_time = cur_time;
