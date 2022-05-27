@@ -1,9 +1,9 @@
 use common::{bbox::*, bsp_map_compact, math_types::*};
-use std::rc::Rc;
+use std::sync::Arc;
 
 pub struct InlineModelsIndex
 {
-	map: Rc<bsp_map_compact::BSPMap>,
+	map: Arc<bsp_map_compact::BSPMap>,
 	leafs_info: Vec<LeafInfo>,
 	models_info: Vec<ModelInfo>,
 }
@@ -28,7 +28,7 @@ struct ModelInfo
 #[allow(dead_code)]
 impl InlineModelsIndex
 {
-	pub fn new(map: Rc<bsp_map_compact::BSPMap>) -> Self
+	pub fn new(map: Arc<bsp_map_compact::BSPMap>) -> Self
 	{
 		let mut result = Self {
 			leafs_info: vec![LeafInfo::default(); map.leafs.len()],

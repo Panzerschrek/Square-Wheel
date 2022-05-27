@@ -1,6 +1,10 @@
-use std::{cell::RefCell, fs, path::Path, rc::Rc};
+use std::{
+	fs,
+	path::Path,
+	sync::{Arc, Mutex},
+};
 
-pub type ConfigSharedPtr = Rc<RefCell<serde_json::Value>>;
+pub type ConfigSharedPtr = Arc<Mutex<serde_json::Value>>;
 
 pub fn load(file_path: &Path) -> Option<serde_json::Value>
 {
@@ -22,5 +26,5 @@ pub fn save(config: &serde_json::Value, file_path: &Path)
 
 pub fn make_shared(config: serde_json::Value) -> ConfigSharedPtr
 {
-	Rc::new(RefCell::new(config))
+	Arc::new(Mutex::new(config))
 }

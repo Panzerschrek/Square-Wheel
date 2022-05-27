@@ -44,6 +44,28 @@ impl Host
 			serde_json::Value::Object(serde_json::Map::new())
 		};
 		let app_config = config::make_shared(config_json);
+		let mut host_config = HostConfig::from_app_config(&app_config);
+
+		// Initialize global thread pool.
+		{
+			let mut num_threads = host_config.num_threads as usize;
+			if num_threads <= 0
+			{
+				num_threads = num_cpus::get();
+				println!("Use number of threads equal to number of CPU cores");
+			}
+			let num_threads_max = 64;
+			if num_threads > num_threads_max
+			{
+				num_threads = num_threads_max;
+				host_config.num_threads = num_threads_max as f32;
+			}
+			println!("Initialize thread pool with {} threads", num_threads);
+			rayon::ThreadPoolBuilder::new()
+				.num_threads(num_threads)
+				.build_global()
+				.unwrap();
+		}
 
 		let commands_processor = commands_processor::CommandsProcessor::new(app_config.clone());
 		let console = console::Console::new(commands_processor.clone());
@@ -58,7 +80,6 @@ impl Host
 
 		let cur_time = std::time::Instant::now();
 
-		let host_config = HostConfig::from_app_config(&app_config);
 		host_config.update_app_config(&app_config); // Update JSON with struct fields.
 
 		let mut host = Host {
@@ -252,7 +273,7 @@ impl Host
 		{
 			Ok(Some(map)) =>
 			{
-				let map_rc = Rc::new(map);
+				let map_rc = std::sync::Arc::new(map);
 				self.active_map = Some(ActiveMap {
 					game: test_game::Game::new(self.commands_processor.clone(), self.console.clone()),
 					renderer: renderer::Renderer::new(self.app_config.clone(), map_rc.clone()),
@@ -280,6 +301,6 @@ impl Drop for Host
 {
 	fn drop(&mut self)
 	{
-		config::save(&self.app_config.borrow(), &self.config_file_path);
+		config::save(&self.app_config.lock().unwrap(), &self.config_file_path);
 	}
 }

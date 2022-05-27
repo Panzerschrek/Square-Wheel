@@ -1,12 +1,14 @@
 use super::{
 	config, depth_renderer::*, draw_ordering, frame_number::*, inline_models_index::*, light::*,
-	map_visibility_calculator::*, rasterizer::*, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
+	map_visibility_calculator::*, rasterizer::*, rect_splitting, renderer_config::*, shadow_map::*, surfaces::*,
+	textures::*,
 };
 use common::{
 	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, color::*, fixed_math::*, lightmaps_builder, material,
-	math_types::*, matrix::*, performance_counter::*, plane::*, system_window,
+	math_types::*, matrix::*, performance_counter::*, plane::*, shared_mut_slice::*, system_window,
 };
-use std::rc::Rc;
+use rayon::prelude::*;
+use std::sync::Arc;
 
 type Clock = std::time::Instant;
 
@@ -17,13 +19,14 @@ pub struct Renderer
 	config_is_durty: bool,
 
 	current_frame: FrameNumber,
-	map: Rc<bsp_map_compact::BSPMap>,
+	map: Arc<bsp_map_compact::BSPMap>,
 	visibility_calculator: MapVisibilityCalculator,
 	shadows_maps_renderer: DepthRenderer,
 	polygons_data: Vec<DrawPolygonData>,
 	vertices_transformed: Vec<Vec3f>,
 	surfaces_pixels: Vec<Color32>,
 	num_visible_surfaces_pixels: usize,
+	current_frame_visible_polygons: Vec<u32>,
 	mip_bias: f32,
 	textures: Vec<TextureWithMips>,
 	map_materials: Vec<material::Material>,
@@ -68,7 +71,7 @@ struct DrawPolygonData
 
 impl Renderer
 {
-	pub fn new(app_config: config::ConfigSharedPtr, map: Rc<bsp_map_compact::BSPMap>) -> Self
+	pub fn new(app_config: config::ConfigSharedPtr, map: Arc<bsp_map_compact::BSPMap>) -> Self
 	{
 		let config_parsed = RendererConfig::from_app_config(&app_config);
 		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
@@ -112,6 +115,7 @@ impl Renderer
 			vertices_transformed: vec![Vec3f::new(0.0, 0.0, 0.0); map.vertices.len()],
 			surfaces_pixels: Vec::new(),
 			num_visible_surfaces_pixels: 0,
+			current_frame_visible_polygons: Vec::with_capacity(map.polygons.len()),
 			mip_bias: 0.0,
 			visibility_calculator: MapVisibilityCalculator::new(map.clone()),
 			shadows_maps_renderer: DepthRenderer::new(map.clone()),
@@ -136,11 +140,6 @@ impl Renderer
 
 		let frame_start_time = Clock::now();
 		self.current_frame.next();
-
-		if self.config.clear_background
-		{
-			draw_background(pixels);
-		}
 
 		self.draw_map(pixels, surface_info, camera_matrices, inline_models_index, test_lights);
 
@@ -167,15 +166,6 @@ impl Renderer
 				}
 			}
 
-			let mut num_visible_polygons = 0;
-			for polygon_data in &self.polygons_data
-			{
-				if polygon_data.visible_frame == self.current_frame
-				{
-					num_visible_polygons += 1;
-				}
-			}
-
 			common::text_printer::print(
 				pixels,
 				surface_info,
@@ -190,7 +180,7 @@ impl Renderer
 					num_visible_leafs,
 					self.map.leafs.len(),
 					num_visible_models_parts,
-					num_visible_polygons,
+					self.current_frame_visible_polygons.len(),
 					(self.num_visible_surfaces_pixels + 1023) / 1024,
 					self.mip_bias,
 				),
@@ -212,6 +202,7 @@ impl Renderer
 	{
 		let depth_map_size = 256;
 		let mut test_lights_shadow_maps = Vec::with_capacity(test_lights.len());
+		// TODO - perform parallel shadowmaps build.
 		for light in test_lights
 		{
 			let mut cube_shadow_map = CubeShadowMap {
@@ -235,7 +226,6 @@ impl Renderer
 			test_lights_shadow_maps.push(cube_shadow_map);
 		}
 
-		let mut rasterizer = Rasterizer::new(pixels, surface_info);
 		let root_node = (self.map.nodes.len() - 1) as u32;
 
 		// TODO - before preparing frame try to shift camera a little bit away from all planes of BSP nodes before current leaf.
@@ -275,11 +265,14 @@ impl Renderer
 			.surfaces_preparation
 			.add_value(surfaces_preparation_duration_s);
 
+		// Clear background (if needed) only before performing rasterization.
+		if self.config.clear_background
+		{
+			draw_background(pixels);
+		}
+
 		let rasterization_start_time = Clock::now();
-
-		// Draw BSP tree in back to front order, skip unreachable leafs.
-		self.draw_tree_r(&mut rasterizer, camera_matrices, inline_models_index, root_node);
-
+		self.perform_rasterization(pixels, surface_info, camera_matrices, inline_models_index, root_node);
 		let rasterization_end_time = Clock::now();
 		let rasterization_duration_s = (rasterization_end_time - rasterization_start_time).as_secs_f32();
 		self.performance_counters
@@ -303,8 +296,103 @@ impl Renderer
 		}
 	}
 
+	fn perform_rasterization(
+		&self,
+		pixels: &mut [Color32],
+		surface_info: &system_window::SurfaceInfo,
+		camera_matrices: &CameraMatrices,
+		inline_models_index: &InlineModelsIndex,
+		root_node: u32,
+	)
+	{
+		let screen_rect = rect_splitting::Rect {
+			min: Vec2f::new(0.0, 0.0),
+			max: Vec2f::new(surface_info.width as f32, surface_info.height as f32),
+		};
+
+		let num_threads = rayon::current_num_threads();
+		if num_threads == 1
+		{
+			let mut rasterizer = Rasterizer::new(
+				pixels,
+				&surface_info,
+				ClipRect {
+					min_x: 0,
+					min_y: 0,
+					max_x: surface_info.width as i32,
+					max_y: surface_info.height as i32,
+				},
+			);
+
+			let viewport_clippung_polygon = ClippingPolygon::from_box(
+				screen_rect.min.x,
+				screen_rect.min.y,
+				screen_rect.max.x,
+				screen_rect.max.y,
+			);
+
+			self.draw_tree_r(
+				&mut rasterizer,
+				camera_matrices,
+				&viewport_clippung_polygon,
+				inline_models_index,
+				root_node,
+			);
+		}
+		else
+		{
+			let pixels_shared = SharedMutSlice::new(pixels);
+
+			// Split viewport rect into several rects for each thread.
+			// Use tricky splitting method that avoid creation of thin rects.
+			// This is needed to speed-up rasterization - reject as much polygons outside given rect, as possible.
+			let mut rects = [rect_splitting::Rect::default(); 64];
+			rect_splitting::split_rect(&screen_rect, num_threads as u32, &mut rects);
+
+			rects[.. num_threads].par_iter().for_each(|rect| {
+				let pixels_cur = unsafe { pixels_shared.get() };
+
+				// Create rasterizer with custom clip rect in order to perform pixel-perfect clipping.
+				// TODO - change this. Just create rasterizer with shifted raster and shift vertex coordinates instead.
+				let mut rasterizer = Rasterizer::new(
+					pixels_cur,
+					&surface_info,
+					ClipRect {
+						min_x: rect.min.x as i32,
+						min_y: rect.min.y as i32,
+						max_x: rect.max.x as i32,
+						max_y: rect.max.y as i32,
+					},
+				);
+
+				// Extend it just a bit to fix possible gaps.
+				let mut rect_corrected = *rect;
+				rect_corrected.min -= Vec2f::new(0.5, 0.5);
+				rect_corrected.max += Vec2f::new(0.5, 0.5);
+
+				// Use clipping polygon to totally reject whole leafs and polygons.
+				let viewport_clippung_polygon = ClippingPolygon::from_box(
+					rect_corrected.min.x,
+					rect_corrected.min.y,
+					rect_corrected.max.x,
+					rect_corrected.max.y,
+				);
+
+				self.draw_tree_r(
+					&mut rasterizer,
+					camera_matrices,
+					&viewport_clippung_polygon,
+					inline_models_index,
+					root_node,
+				);
+			});
+		}
+	}
+
 	fn prepare_polygons_surfaces(&mut self, camera_matrices: &CameraMatrices, inline_models_index: &InlineModelsIndex)
 	{
+		self.current_frame_visible_polygons.clear();
+
 		let mut surfaces_pixels_accumulated_offset = 0;
 
 		// TODO - try to speed-up iteration, do not scan all leafs.
@@ -567,26 +655,33 @@ impl Renderer
 			polygon_data.tex_coord_equation.d_tc_dy[i] -= tc_min * depth_equation.d_inv_z_dy;
 			polygon_data.tex_coord_equation.k[i] -= tc_min * depth_equation.k;
 		}
+
+		self.current_frame_visible_polygons.push(polygon_index as u32);
 	}
 
 	fn build_polygons_surfaces(&mut self, lights: &[LightWithShadowMap])
 	{
-		// TODO - avoid iteration over all map polygons.
-		// Remember (somehow) list of visible in current frame polygons.
-		for i in 0 .. self.polygons_data.len()
-		{
-			let polygon_data = &self.polygons_data[i];
-			if polygon_data.visible_frame != self.current_frame
-			{
-				continue;
-			}
-			let polygon = &self.map.polygons[i];
-			let surface_pixels_offset = polygon_data.surface_pixels_offset;
+		// Perform parallel surfaces building.
+		// Use "unsafe" to write into surfaces data concurrently.
+		// It is fine since each surface uses its own region.
+
+		let lightmaps_data = &self.map.lightmaps_data;
+		let polygons = &self.map.polygons;
+		let polygons_data = &self.polygons_data;
+		let textures = &self.textures;
+
+		let surfaces_pixels_shared = SharedMutSlice::new(&mut self.surfaces_pixels);
+
+		let func = |&polygon_index| {
+			let polygon = &polygons[polygon_index as usize];
+			let polygon_data = &polygons_data[polygon_index as usize];
 			let surface_size = polygon_data.surface_size;
 
-			let texture = &self.textures[polygon.texture as usize][polygon_data.mip as usize];
-			let surface_data = &mut self.surfaces_pixels
-				[surface_pixels_offset .. (surface_pixels_offset + ((surface_size[0] * surface_size[1]) as usize))];
+			let texture = &textures[polygon.texture as usize][polygon_data.mip as usize];
+			let surface_data = unsafe {
+				&mut surfaces_pixels_shared.get()[polygon_data.surface_pixels_offset ..
+					polygon_data.surface_pixels_offset + (surface_size[0] * surface_size[1]) as usize]
+			};
 
 			if polygon.lightmap_data_offset == 0 || !lights.is_empty()
 			{
@@ -632,11 +727,22 @@ impl Renderer
 					lightmap_size,
 					lightmaps_builder::LIGHTMAP_SCALE_LOG2 - polygon_data.mip,
 					lightmap_tc_shift,
-					&self.map.lightmaps_data[polygon.lightmap_data_offset as usize ..
+					&lightmaps_data[polygon.lightmap_data_offset as usize ..
 						((polygon.lightmap_data_offset + lightmap_size[0] * lightmap_size[1]) as usize)],
 					surface_data,
 				);
 			}
+		};
+
+		if rayon::current_num_threads() == 1
+		{
+			// Perform single-threaded surfaces build using main thread.
+			self.current_frame_visible_polygons.iter().for_each(func);
+		}
+		else
+		{
+			// Perform parallel surfaces building.
+			self.current_frame_visible_polygons.par_iter().for_each(func);
 		}
 	}
 
@@ -644,6 +750,7 @@ impl Renderer
 		&self,
 		rasterizer: &mut Rasterizer,
 		camera_matrices: &CameraMatrices,
+		viewport_clippung_polygon: &ClippingPolygon,
 		inline_models_index: &InlineModelsIndex,
 		current_index: u32,
 	)
@@ -651,9 +758,13 @@ impl Renderer
 		if current_index >= bsp_map_compact::FIRST_LEAF_INDEX
 		{
 			let leaf = current_index - bsp_map_compact::FIRST_LEAF_INDEX;
-			if let Some(leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf)
+			if let Some(mut leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf)
 			{
-				self.draw_leaf(rasterizer, camera_matrices, &leaf_bounds, inline_models_index, leaf);
+				leaf_bounds.intersect(viewport_clippung_polygon);
+				if leaf_bounds.is_valid_and_non_empty()
+				{
+					self.draw_leaf(rasterizer, camera_matrices, &leaf_bounds, inline_models_index, leaf);
+				}
 			}
 		}
 		else
@@ -670,6 +781,7 @@ impl Renderer
 				self.draw_tree_r(
 					rasterizer,
 					camera_matrices,
+					viewport_clippung_polygon,
 					inline_models_index,
 					node.children[(i ^ mask) as usize],
 				);
@@ -907,7 +1019,23 @@ impl Renderer
 
 fn draw_background(pixels: &mut [Color32])
 {
-	for pixel in pixels.iter_mut()
+	let num_threads = rayon::current_num_threads();
+	if num_threads == 1
+	{
+		draw_background_impl(pixels);
+	}
+	else
+	{
+		let num_pixels = pixels.len();
+		pixels.par_chunks_mut(num_pixels / num_threads).for_each(|pixels_part| {
+			draw_background_impl(pixels_part);
+		});
+	}
+}
+
+fn draw_background_impl(pixels: &mut [Color32])
+{
+	for pixel in pixels
 	{
 		*pixel = Color32::from_rgb(32, 16, 8);
 	}

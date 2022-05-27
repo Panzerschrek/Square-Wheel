@@ -17,20 +17,19 @@ pub enum TetureCoordinatesInterpolationMode
 pub struct Rasterizer<'a>
 {
 	color_buffer: &'a mut [Color32],
-	width: i32,
-	height: i32,
 	row_size: i32,
+	clip_rect: ClipRect,
 }
 
 impl<'a> Rasterizer<'a>
 {
-	pub fn new(color_buffer: &'a mut [Color32], surface_info: &system_window::SurfaceInfo) -> Self
+	pub fn new(color_buffer: &'a mut [Color32], surface_info: &system_window::SurfaceInfo, clip_rect: ClipRect)
+		-> Self
 	{
 		Rasterizer {
 			color_buffer,
-			width: surface_info.width as i32,
-			height: surface_info.height as i32,
 			row_size: (surface_info.pitch) as i32,
+			clip_rect,
 		}
 	}
 
@@ -200,8 +199,8 @@ impl<'a> Rasterizer<'a>
 		let texture_width = texture_info.size[0] as u32;
 
 		// TODO - avoid adding "0.5" for some calculations.
-		let y_start_int = fixed16_round_to_int(y_start).max(0);
-		let y_end_int = fixed16_round_to_int(y_end).min(self.height);
+		let y_start_int = fixed16_round_to_int(y_start).max(self.clip_rect.min_y);
+		let y_end_int = fixed16_round_to_int(y_end).min(self.clip_rect.max_y);
 		let y_start_delta = int_to_fixed16(y_start_int) + FIXED16_HALF - y_start;
 		let mut x_left = left_side.x_start + fixed16_mul(y_start_delta, left_side.dx_dy) + FIXED16_HALF;
 		let mut x_right = right_side.x_start + fixed16_mul(y_start_delta, right_side.dx_dy) + FIXED16_HALF;
@@ -213,8 +212,8 @@ impl<'a> Rasterizer<'a>
 
 		for y_int in y_start_int .. y_end_int
 		{
-			let x_start_int = fixed16_floor_to_int(x_left).max(0);
-			let x_end_int = fixed16_floor_to_int(x_right).min(self.width);
+			let x_start_int = fixed16_floor_to_int(x_left).max(self.clip_rect.min_x);
+			let x_end_int = fixed16_floor_to_int(x_right).min(self.clip_rect.max_x);
 			if x_start_int < x_end_int
 			{
 				let line_buffer_offset = y_int * self.row_size;
@@ -375,8 +374,8 @@ impl<'a> Rasterizer<'a>
 		let texture_width = texture_info.size[0] as u32;
 
 		// TODO - avoid adding "0.5" for some calculations.
-		let y_start_int = fixed16_round_to_int(y_start).max(0);
-		let y_end_int = fixed16_round_to_int(y_end).min(self.height);
+		let y_start_int = fixed16_round_to_int(y_start).max(self.clip_rect.min_y);
+		let y_end_int = fixed16_round_to_int(y_end).min(self.clip_rect.max_y);
 		let y_start_delta = int_to_fixed16(y_start_int) + FIXED16_HALF - y_start;
 		let mut x_left = left_side.x_start + fixed16_mul(y_start_delta, left_side.dx_dy) + FIXED16_HALF;
 		let mut x_right = right_side.x_start + fixed16_mul(y_start_delta, right_side.dx_dy) + FIXED16_HALF;
@@ -388,8 +387,8 @@ impl<'a> Rasterizer<'a>
 
 		for y_int in y_start_int .. y_end_int
 		{
-			let x_start_int = fixed16_floor_to_int(x_left).max(0);
-			let x_end_int = fixed16_floor_to_int(x_right).min(self.width);
+			let x_start_int = fixed16_floor_to_int(x_left).max(self.clip_rect.min_x);
+			let x_end_int = fixed16_floor_to_int(x_right).min(self.clip_rect.max_x);
 			if x_start_int < x_end_int
 			{
 				let line_buffer_offset = y_int * self.row_size;
@@ -536,8 +535,8 @@ impl<'a> Rasterizer<'a>
 		}
 
 		// TODO - avoid adding "0.5" for some calculations.
-		let y_start_int = fixed16_round_to_int(y_start).max(0);
-		let y_end_int = fixed16_round_to_int(y_end).min(self.height);
+		let y_start_int = fixed16_round_to_int(y_start).max(self.clip_rect.min_y);
+		let y_end_int = fixed16_round_to_int(y_end).min(self.clip_rect.max_y);
 		let y_start_delta = int_to_fixed16(y_start_int) + FIXED16_HALF - y_start;
 		let mut x_left = left_side.x_start + fixed16_mul(y_start_delta, left_side.dx_dy) + FIXED16_HALF;
 		let mut x_right = right_side.x_start + fixed16_mul(y_start_delta, right_side.dx_dy) + FIXED16_HALF;
@@ -549,8 +548,8 @@ impl<'a> Rasterizer<'a>
 
 		for y_int in y_start_int .. y_end_int
 		{
-			let x_start_int = fixed16_floor_to_int(x_left).max(0);
-			let x_end_int = fixed16_floor_to_int(x_right).min(self.width);
+			let x_start_int = fixed16_floor_to_int(x_left).max(self.clip_rect.min_x);
+			let x_end_int = fixed16_floor_to_int(x_right).min(self.clip_rect.max_x);
 			if x_start_int < x_end_int
 			{
 				let line_buffer_offset = y_int * self.row_size;
@@ -757,6 +756,14 @@ impl<'a> DepthRasterizer<'a>
 			line_inv_z += depth_equation.d_inv_z_dy;
 		} // for lines
 	}
+}
+
+pub struct ClipRect
+{
+	pub min_x: i32,
+	pub min_y: i32,
+	pub max_x: i32,
+	pub max_y: i32,
 }
 
 #[derive(Copy, Clone)]

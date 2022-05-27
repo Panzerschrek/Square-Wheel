@@ -4,17 +4,17 @@ use super::{
 	renderer::{project_and_clip_polygon, MAX_VERTICES},
 };
 use common::{bsp_map_compact, clipping_polygon::*, fixed_math::*, math_types::*, matrix::*};
-use std::rc::Rc;
+use std::sync::Arc;
 
 pub struct DepthRenderer
 {
-	map: Rc<bsp_map_compact::BSPMap>,
+	map: Arc<bsp_map_compact::BSPMap>,
 	visibility_calculator: MapVisibilityCalculator,
 }
 
 impl DepthRenderer
 {
-	pub fn new(map: Rc<bsp_map_compact::BSPMap>) -> Self
+	pub fn new(map: Arc<bsp_map_compact::BSPMap>) -> Self
 	{
 		Self {
 			visibility_calculator: MapVisibilityCalculator::new(map.clone()),

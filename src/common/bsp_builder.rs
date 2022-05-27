@@ -432,11 +432,17 @@ fn get_point_position_relative_plane(point: &Vec3f, plane: &Plane) -> PointPosit
 	}
 }
 
-fn build_protals(node: &BSPNodeChild, map_bbox: &BBox,  materials : &material::MaterialsMap) -> Vec<LeafsPortalPtr>
+fn build_protals(node: &BSPNodeChild, map_bbox: &BBox, materials: &material::MaterialsMap) -> Vec<LeafsPortalPtr>
 {
 	let mut splitter_nodes = Vec::new();
 	let mut leaf_portals_by_node = LeafPortalsInitialByNode::new();
-	build_protals_r(node, &mut splitter_nodes, &mut leaf_portals_by_node, map_bbox, materials);
+	build_protals_r(
+		node,
+		&mut splitter_nodes,
+		&mut leaf_portals_by_node,
+		map_bbox,
+		materials,
+	);
 
 	let mut result = Vec::new();
 	for (_node, portals) in leaf_portals_by_node
@@ -470,7 +476,7 @@ fn build_protals_r(
 	splitter_nodes: &mut Vec<NodeForPortalsBuild>,
 	leaf_portals_by_node: &mut LeafPortalsInitialByNode,
 	map_bbox: &BBox,
-	materials : &material::MaterialsMap,
+	materials: &material::MaterialsMap,
 )
 {
 	match node_child
@@ -514,7 +520,7 @@ fn build_leaf_portals(
 	leaf_ptr: &BSPLeafPtr,
 	splitter_nodes: &[NodeForPortalsBuild],
 	map_bbox: &BBox,
-	materials : &material::MaterialsMap,
+	materials: &material::MaterialsMap,
 	leaf_portals_by_node: &mut LeafPortalsInitialByNode,
 )
 {
@@ -690,7 +696,7 @@ fn build_leaf_portals(
 
 // Iterate over all pairs of portals of same node.
 // Search for intersection of such portals.
-fn build_leafs_portals(in_portals: &[LeafPortalInitial], materials : &material::MaterialsMap) -> Vec<LeafsPortal>
+fn build_leafs_portals(in_portals: &[LeafPortalInitial], materials: &material::MaterialsMap) -> Vec<LeafsPortal>
 {
 	let mut result = Vec::new();
 	for portal_front in in_portals
@@ -716,8 +722,17 @@ fn build_leafs_portals(in_portals: &[LeafPortalInitial], materials : &material::
 				continue;
 			}
 
-			if portal_is_fully_covered_by_leaf_polygons(&plane, &portals_intersection, &portal_front.leaf.borrow(), materials) ||
-				portal_is_fully_covered_by_leaf_polygons(&plane, &portals_intersection, &portal_back.leaf.borrow(), materials)
+			if portal_is_fully_covered_by_leaf_polygons(
+				&plane,
+				&portals_intersection,
+				&portal_front.leaf.borrow(),
+				materials,
+			) || portal_is_fully_covered_by_leaf_polygons(
+				&plane,
+				&portals_intersection,
+				&portal_back.leaf.borrow(),
+				materials,
+			)
 			{
 				continue;
 			}
@@ -822,7 +837,12 @@ fn build_portals_intersection(plane: &Plane, vertices0: &[Vec3f], vertices1: &[V
 	map_polygonizer::sort_convex_polygon_vertices(vertices_deduplicated, &plane)
 }
 
-fn portal_is_fully_covered_by_leaf_polygons(portal_plane: &Plane, portal_vertices: &[Vec3f], leaf: &BSPLeaf, materials : &material::MaterialsMap) -> bool
+fn portal_is_fully_covered_by_leaf_polygons(
+	portal_plane: &Plane,
+	portal_vertices: &[Vec3f],
+	leaf: &BSPLeaf,
+	materials: &material::MaterialsMap,
+) -> bool
 {
 	// Perform basic portals filtering.
 	// Remove portals that are fully covered by one of leaf polygons.

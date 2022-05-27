@@ -1,11 +1,11 @@
 use super::frame_number::*;
 use common::{bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, matrix::*};
-use std::rc::Rc;
+use std::sync::Arc;
 
 pub struct MapVisibilityCalculator
 {
 	current_frame: FrameNumber,
-	map: Rc<bsp_map_compact::BSPMap>,
+	map: Arc<bsp_map_compact::BSPMap>,
 	leafs_data: Vec<LeafData>,
 	portals_data: Vec<PortalData>,
 	leafs_search_waves: LeafsSearchWavesPair,
@@ -36,7 +36,7 @@ struct LeafsSearchWavesPair(LeafsSearchWave, LeafsSearchWave);
 
 impl MapVisibilityCalculator
 {
-	pub fn new(map: Rc<bsp_map_compact::BSPMap>) -> Self
+	pub fn new(map: Arc<bsp_map_compact::BSPMap>) -> Self
 	{
 		Self {
 			current_frame: FrameNumber::default(),
