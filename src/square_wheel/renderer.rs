@@ -5,18 +5,12 @@ use super::{
 };
 use common::{
 	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, color::*, fixed_math::*, lightmaps_builder, material,
-	math_types::*, matrix::*, performance_counter::*, plane::*, system_window,
+	math_types::*, matrix::*, performance_counter::*, plane::*, shared_mut_slice::*, system_window,
 };
 use rayon::prelude::*;
 use std::sync::Arc;
 
 type Clock = std::time::Instant;
-
-#[derive(Copy, Clone)]
-struct DamnColorSyncWrapper(*mut Color32);
-
-unsafe impl Send for DamnColorSyncWrapper {}
-unsafe impl Sync for DamnColorSyncWrapper {}
 
 pub struct Renderer
 {
@@ -337,7 +331,7 @@ impl Renderer
 		}
 		else
 		{
-			let pixels_ptr = DamnColorSyncWrapper(pixels.as_mut_ptr());
+			let pixels_shared = SharedMutSlice::new(pixels);
 
 			// Split viewport rect into several rects for each thread.
 			// Use tricky splitting method that avoid creation of thin rects.
@@ -346,8 +340,7 @@ impl Renderer
 			rect_splitting::split_rect(&screen_rect, num_threads as u32, &mut rects);
 
 			rects[.. num_threads].par_iter().for_each(|rect| {
-				let pixels_cur =
-					unsafe { std::slice::from_raw_parts_mut(pixels_ptr.0, surface_info.height * surface_info.pitch) };
+				let pixels_cur = unsafe { pixels_shared.get() };
 
 				// Extend it just a bit to fix possible gaps.
 				// TODO - this approach doesn't work in some cases.
@@ -658,7 +651,7 @@ impl Renderer
 		let polygons_data = &self.polygons_data;
 		let textures = &self.textures;
 
-		let surfaces_pixels_ptr = DamnColorSyncWrapper(self.surfaces_pixels.as_mut_ptr());
+		let surfaces_pixels_shared = SharedMutSlice::new(&mut self.surfaces_pixels);
 
 		let func = |&polygon_index| {
 			let polygon = &polygons[polygon_index as usize];
@@ -667,10 +660,8 @@ impl Renderer
 
 			let texture = &textures[polygon.texture as usize][polygon_data.mip as usize];
 			let surface_data = unsafe {
-				std::slice::from_raw_parts_mut(
-					surfaces_pixels_ptr.0.add(polygon_data.surface_pixels_offset),
-					(surface_size[0] * surface_size[1]) as usize,
-				)
+				&mut surfaces_pixels_shared.get()[polygon_data.surface_pixels_offset ..
+					polygon_data.surface_pixels_offset + (surface_size[0] * surface_size[1]) as usize]
 			};
 
 			if polygon.lightmap_data_offset == 0 || !lights.is_empty()
