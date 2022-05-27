@@ -313,6 +313,17 @@ impl Renderer
 		let num_threads = rayon::current_num_threads();
 		if num_threads == 1
 		{
+			let mut rasterizer = Rasterizer::new(
+				pixels,
+				&surface_info,
+				ClipRect {
+					min_x: 0,
+					min_y: 0,
+					max_x: surface_info.width as i32,
+					max_y: surface_info.height as i32,
+				},
+			);
+
 			let viewport_clippung_polygon = ClippingPolygon::from_box(
 				screen_rect.min.x,
 				screen_rect.min.y,
@@ -320,7 +331,6 @@ impl Renderer
 				screen_rect.max.y,
 			);
 
-			let mut rasterizer = Rasterizer::new(pixels, &surface_info);
 			self.draw_tree_r(
 				&mut rasterizer,
 				camera_matrices,
@@ -342,15 +352,25 @@ impl Renderer
 			rects[.. num_threads].par_iter().for_each(|rect| {
 				let pixels_cur = unsafe { pixels_shared.get() };
 
+				// Create rasterizer with custom clip rect in order to perform pixel-perfect clipping.
+				// TODO - change this. Just create rasterizer with shifted raster and shift vertex coordinates instead.
+				let mut rasterizer = Rasterizer::new(
+					pixels_cur,
+					&surface_info,
+					ClipRect {
+						min_x: rect.min.x as i32,
+						min_y: rect.min.y as i32,
+						max_x: rect.max.x as i32,
+						max_y: rect.max.y as i32,
+					},
+				);
+
 				// Extend it just a bit to fix possible gaps.
-				// TODO - this approach doesn't work in some cases.
-				// Perform exact pixel-perfect clipping instead.
 				let mut rect_corrected = *rect;
 				rect_corrected.min -= Vec2f::new(0.5, 0.5);
 				rect_corrected.max += Vec2f::new(0.5, 0.5);
 
-				// Draw using same frame buffer, but performing cliping of all polygons to rect of current thead.
-				// Such approach still may lead to rare pixels overdraw on borderd of each thread viewport, but it is acceptible
+				// Use clipping polygon to totally reject whole leafs and polygons.
 				let viewport_clippung_polygon = ClippingPolygon::from_box(
 					rect_corrected.min.x,
 					rect_corrected.min.y,
@@ -358,7 +378,6 @@ impl Renderer
 					rect_corrected.max.y,
 				);
 
-				let mut rasterizer = Rasterizer::new(pixels_cur, &surface_info);
 				self.draw_tree_r(
 					&mut rasterizer,
 					camera_matrices,
@@ -643,7 +662,7 @@ impl Renderer
 	fn build_polygons_surfaces(&mut self, lights: &[LightWithShadowMap])
 	{
 		// Perform parallel surfaces building.
-		// Use "unsage" to write into surfaces data concurrently.
+		// Use "unsafe" to write into surfaces data concurrently.
 		// It is fine since each surface uses its own region.
 
 		let lightmaps_data = &self.map.lightmaps_data;
