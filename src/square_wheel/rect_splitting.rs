@@ -7,20 +7,35 @@ pub struct Rect
 	pub max: Vec2f,
 }
 
-// Split rect into several subrects.
-// Try to preserve equal area and make rects as square as possible.
-pub fn split_rect(r: &Rect, num_parts: u32) -> Vec<Rect>
+impl Default for Rect
 {
-	let mut result = Vec::with_capacity(num_parts as usize);
-	split_rect_r(r, num_parts, &mut result);
-	result
+	fn default() -> Self
+	{
+		Self {
+			min: Vec2f::zero(),
+			max: Vec2f::zero(),
+		}
+	}
 }
 
-fn split_rect_r(r: &Rect, num_parts: u32, out_parts: &mut Vec<Rect>)
+// Split rect into several subrects.
+// Try to preserve equal area and make rects as square as possible.
+pub fn split_rect(r: &Rect, num_parts: u32, out_parts: &mut [Rect])
+{
+	let mut num_out_parts = 0;
+	split_rect_r(r, num_parts, out_parts, &mut num_out_parts);
+}
+
+fn split_rect_r(r: &Rect, num_parts: u32, out_parts: &mut [Rect], num_out_parts: &mut usize)
 {
 	if num_parts <= 1
 	{
-		out_parts.push(*r);
+		if *num_out_parts >= out_parts.len()
+		{
+			return;
+		}
+		out_parts[*num_out_parts] = *r;
+		*num_out_parts += 1;
 		return;
 	}
 
@@ -58,6 +73,6 @@ fn split_rect_r(r: &Rect, num_parts: u32, out_parts: &mut Vec<Rect>)
 			max: Vec2f::new(r.max.x, r.max.y),
 		};
 	}
-	split_rect_r(&r0, num_parts0, out_parts);
-	split_rect_r(&r1, num_parts1, out_parts);
+	split_rect_r(&r0, num_parts0, out_parts, num_out_parts);
+	split_rect_r(&r1, num_parts1, out_parts, num_out_parts);
 }

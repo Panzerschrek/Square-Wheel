@@ -342,10 +342,10 @@ impl Renderer
 			// Split viewport rect into several rects for each thread.
 			// Use tricky splitting method that avoid creation of thin rects.
 			// This is needed to speed-up rasterization - reject as much polygons outside given rect, as possible.
-			// TODO - avoid doing allocation each frame.
-			let rects = rect_splitting::split_rect(&screen_rect, num_threads as u32);
+			let mut rects = [rect_splitting::Rect::default(); 64];
+			rect_splitting::split_rect(&screen_rect, num_threads as u32, &mut rects);
 
-			rects.par_iter().for_each(|rect| {
+			rects[.. num_threads].par_iter().for_each(|rect| {
 				let pixels_cur =
 					unsafe { std::slice::from_raw_parts_mut(pixels_ptr.0, surface_info.height * surface_info.pitch) };
 
