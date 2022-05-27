@@ -33,6 +33,11 @@ pub fn f32_to_fixed16(x: f32) -> Fixed16
 	(x * (FIXED16_ONE as f32)) as Fixed16
 }
 
+pub unsafe fn f32_to_fixed16_unchecked(x: f32) -> Fixed16
+{
+	(x * (FIXED16_ONE as f32)).to_int_unchecked::<Fixed16>()
+}
+
 pub fn fixed16_mul(x: Fixed16, y: Fixed16) -> Fixed16
 {
 	(((x as i64) * (y as i64)) >> FIXED16_BASE) as i32

@@ -1101,11 +1101,15 @@ fn draw_polygon(
 
 	// Perform f32 to Fixed16 conversion.
 	let mut vertices_for_rasterizer = [PolygonPointProjected { x: 0, y: 0 }; MAX_VERTICES]; // TODO - use uninitialized memory
-	for (index, vertex_2d) in vertices_2d.iter().enumerate().take(vertex_count)
+	for (vertex_2d, vertex_for_rasterizer) in vertices_2d
+		.iter()
+		.take(vertex_count)
+		.zip(vertices_for_rasterizer.iter_mut())
 	{
-		vertices_for_rasterizer[index] = PolygonPointProjected {
-			x: f32_to_fixed16(vertex_2d.x),
-			y: f32_to_fixed16(vertex_2d.y),
+		// Use unchecked conversion since we know that coords are in fixed16 range.
+		*vertex_for_rasterizer = PolygonPointProjected {
+			x: unsafe { f32_to_fixed16_unchecked(vertex_2d.x) },
+			y: unsafe { f32_to_fixed16_unchecked(vertex_2d.y) },
 		};
 	}
 
