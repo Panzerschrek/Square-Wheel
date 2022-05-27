@@ -208,6 +208,7 @@ impl Renderer
 	{
 		let depth_map_size = 256;
 		let mut test_lights_shadow_maps = Vec::with_capacity(test_lights.len());
+		// TODO - perform parallel shadowmaps build.
 		for light in test_lights
 		{
 			let mut cube_shadow_map = CubeShadowMap {
@@ -659,7 +660,7 @@ impl Renderer
 
 		let surfaces_pixels_ptr = DamnColorSyncWrapper(self.surfaces_pixels.as_mut_ptr());
 
-		self.current_frame_visible_polygons.par_iter().for_each(|&polygon_index| {
+		let func = |&polygon_index| {
 			let polygon = &polygons[polygon_index as usize];
 			let polygon_data = &polygons_data[polygon_index as usize];
 			let surface_size = polygon_data.surface_size;
@@ -721,7 +722,18 @@ impl Renderer
 					surface_data,
 				);
 			}
-		});
+		};
+
+		if rayon::current_num_threads() == 1
+		{
+			// Perform single-threaded surfaces build using main thread.
+			self.current_frame_visible_polygons.iter().for_each(func);
+		}
+		else
+		{
+			// Perform parallel surfaces building.
+			self.current_frame_visible_polygons.par_iter().for_each(func);
+		}
 	}
 
 	fn draw_tree_r(
