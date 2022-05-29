@@ -1,6 +1,6 @@
 use super::{
-	bsp_builder, bsp_map_compact, clipping::*, color::*, debug_rasterizer::*, fixed_math::*, map_file_q1,
-	map_polygonizer, math_types::*, matrix::*, plane::*, system_window,
+	bsp_builder, bsp_map_compact, clipping::*, color::*, debug_rasterizer::*, fixed_math::*, lightmaps_builder,
+	map_file_q1, map_polygonizer, math_types::*, matrix::*, plane::*, system_window,
 };
 
 #[derive(Default)]
@@ -15,6 +15,7 @@ pub struct DrawOptions
 	pub draw_all_portals: bool,
 	pub draw_only_first_entity: bool,
 	pub draw_polygon_normals: bool,
+	pub draw_secondary_light_sources: bool,
 }
 
 pub fn draw_frame(
@@ -26,6 +27,7 @@ pub fn draw_frame(
 	map_polygonized: Option<&map_polygonizer::MapPolygonized>,
 	map_bsp: Option<&bsp_builder::BSPTree>,
 	map_bsp_compact: Option<&bsp_map_compact::BSPMap>,
+	secondary_light_sources: Option<&lightmaps_builder::SecondaryLightSources>,
 )
 {
 	draw_background(pixels);
@@ -38,6 +40,7 @@ pub fn draw_frame(
 		map_polygonized,
 		map_bsp,
 		map_bsp_compact,
+		secondary_light_sources,
 	);
 
 	pixels[surface_info.width / 2 + surface_info.height / 2 * surface_info.pitch] = Color32::from_rgb(255, 255, 255);
@@ -60,6 +63,7 @@ fn draw_map(
 	map_polygonized: Option<&map_polygonizer::MapPolygonized>,
 	map_bsp: Option<&bsp_builder::BSPTree>,
 	map_bsp_compact: Option<&bsp_map_compact::BSPMap>,
+	secondary_light_sources: Option<&lightmaps_builder::SecondaryLightSources>,
 )
 {
 	let mut rasterizer = DebugRasterizer::new(pixels, surface_info);
@@ -149,6 +153,17 @@ fn draw_map(
 				draw_options.draw_polygon_normals,
 				bsp_map_compact_non_opt,
 			);
+		}
+	}
+
+	if let Some(secondary_light_sources_non_opt) = secondary_light_sources
+	{
+		if draw_options.draw_secondary_light_sources
+		{
+			for source in secondary_light_sources_non_opt
+			{
+				draw_secondary_light_source(&mut rasterizer, camera_matrices, source);
+			}
 		}
 	}
 
@@ -807,6 +822,24 @@ fn draw_portal(
 			rasterizer,
 			&camera_matrices.view_matrix,
 			&(v0_sifted_plus, v0_hifted_minus, color),
+		);
+	}
+}
+
+fn draw_secondary_light_source(
+	rasterizer: &mut DebugRasterizer,
+	camera_matrices: &CameraMatrices,
+	light_source: &lightmaps_builder::SecondaryLightSource,
+)
+{
+	for sample in &light_source.samples
+	{
+		// 	let color= Color32::from_rgb(sample.color[0].min(255.0) as u8, sample.color[1].min(255.0) as u8, sample.color[2].min(255.0) as u8);
+		let color = Color32::from_rgb(255, 255, 255);
+		draw_line(
+			rasterizer,
+			&camera_matrices.view_matrix,
+			&(sample.pos, sample.pos + light_source.normal * 8.0, color),
 		);
 	}
 }

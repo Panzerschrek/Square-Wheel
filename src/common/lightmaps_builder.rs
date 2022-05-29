@@ -170,9 +170,9 @@ fn extract_map_lights(map: &bsp_map_compact::BSPMap) -> Vec<PointLight>
 	result
 }
 
-type LightmapsData = Vec<bsp_map_compact::LightmapElement>;
+pub type LightmapsData = Vec<bsp_map_compact::LightmapElement>;
 
-fn allocate_lightmaps(materials: &material::MaterialsMap, map: &mut bsp_map_compact::BSPMap) -> LightmapsData
+pub fn allocate_lightmaps(materials: &material::MaterialsMap, map: &mut bsp_map_compact::BSPMap) -> LightmapsData
 {
 	// Reserve offset=0 as "no lightmap" flag.
 	let mut offset = 1;
@@ -714,24 +714,26 @@ fn calculate_lightmap_basis(polygon: &bsp_map_compact::Polygon) -> LightmapBasis
 	LightmapBasis { pos, u_vec, v_vec }
 }
 
-struct SecondaryLightSource
+pub type SecondaryLightSources = Vec<SecondaryLightSource>;
+
+pub struct SecondaryLightSource
 {
-	samples: Vec<SecondaryLightSourceSample>,
-	normal: Vec3f, // Normalized.
+	pub samples: Vec<SecondaryLightSourceSample>,
+	pub normal: Vec3f, // Normalized.
 }
 
-struct SecondaryLightSourceSample
+pub struct SecondaryLightSourceSample
 {
-	pos: Vec3f,
-	color: [f32; 3], // Color scaled by intensity.
+	pub pos: Vec3f,
+	pub color: [f32; 3], // Color scaled by intensity.
 }
 
 // Secondary light sources are mapped 1 to 1 to source polygons.
 // Light sources for polygons withoult lightmap have zero intensity.
-fn create_secondary_light_sources(
+pub fn create_secondary_light_sources(
 	map: &bsp_map_compact::BSPMap,
 	primary_lightmaps_data: &LightmapsData,
-) -> Vec<SecondaryLightSource>
+) -> SecondaryLightSources
 {
 	let mut result = Vec::with_capacity(map.polygons.len());
 	for polygon in &map.polygons
