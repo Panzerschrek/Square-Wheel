@@ -738,13 +738,14 @@ pub fn create_secondary_light_sources(
 	let mut result = Vec::with_capacity(map.polygons.len());
 	for polygon in &map.polygons
 	{
-		result.push(create_secondary_light_source(primary_lightmaps_data, polygon));
+		result.push(create_secondary_light_source(map, primary_lightmaps_data, polygon));
 	}
 
 	result
 }
 
 fn create_secondary_light_source(
+	map: &bsp_map_compact::BSPMap,
 	primary_lightmaps_data: &LightmapsData,
 	polygon: &bsp_map_compact::Polygon,
 ) -> SecondaryLightSource
@@ -763,6 +764,9 @@ fn create_secondary_light_source(
 	// Shift pos slightly towards direction of normal to avoid self-shadowing artifacts.
 	let start_pos = lightmap_basis.pos + plane_normal_normalized * TEXEL_NORMAL_SHIFT;
 
+	let polygon_vertices =
+		&map.vertices[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize];
+
 	let mut samples = Vec::with_capacity((lightmap_size[0] * lightmap_size[1]) as usize);
 	for v in 0 .. lightmap_size[1]
 	{
@@ -771,6 +775,28 @@ fn create_secondary_light_source(
 		for u in 0 .. lightmap_size[0]
 		{
 			let pos = start_pos_v + (u as f32) * lightmap_basis.u_vec;
+
+			// Check if sample is inside polygon. Ignore sample outside polygon.
+			let mut inside_polygon = true;
+			for i in 0 .. polygon.num_vertices
+			{
+				let v0 = polygon_vertices[i as usize];
+				let v1 = polygon_vertices[((i + 1) % polygon.num_vertices) as usize];
+				let edge_vec = v0 - v1;
+				let vec = pos - v0;
+				let cross = edge_vec.cross(vec);
+				let normal_dot = plane_normal_normalized.dot(cross);
+				if normal_dot < 0.0
+				{
+					inside_polygon = false;
+					break;
+				}
+			}
+			if !inside_polygon
+			{
+				continue;
+			}
+
 			let color = primary_lightmaps_data[(line_dst_start + u) as usize];
 			samples.push(SecondaryLightSourceSample {
 				pos,
