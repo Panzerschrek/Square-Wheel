@@ -756,6 +756,8 @@ fn create_secondary_light_source(
 
 	let plane_normal_normalized = polygon.plane.vec / polygon.plane.vec.magnitude();
 
+	let texel_area = lightmap_basis.u_vec.cross(lightmap_basis.v_vec).magnitude();
+
 	// Shift pos slightly towards direction of normal to avoid self-shadowing artifacts.
 	let start_pos = lightmap_basis.pos + plane_normal_normalized * TEXEL_NORMAL_SHIFT;
 
@@ -767,9 +769,11 @@ fn create_secondary_light_source(
 		for u in 0 .. lightmap_size[0]
 		{
 			let pos = start_pos_v + (u as f32) * lightmap_basis.u_vec;
-			// TODO - scale color by texel size.
 			let color = primary_lightmaps_data[(line_dst_start + u) as usize];
-			samples.push(SecondaryLightSourceSample { pos, color });
+			samples.push(SecondaryLightSourceSample {
+				pos,
+				color: [color[0] * texel_area, color[1] * texel_area, color[2] * texel_area],
+			});
 		}
 	}
 
