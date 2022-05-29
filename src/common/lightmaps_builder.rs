@@ -437,9 +437,9 @@ fn build_secondary_lightmaps(
 			let lightmap_size = get_polygon_lightmap_size(&map.polygons[polygon_index]);
 			let lightmap_texels = (lightmap_size[0] * lightmap_size[1]) as usize;
 
-			let ratio_before = polygons_processed * 256 / texels_total;
+			let ratio_before = texels_complete * 256 / texels_total;
 			texels_complete += lightmap_texels;
-			let ratio_after = (polygons_processed + 1) * 256 / texels_total;
+			let ratio_after = texels_complete * 256 / texels_total;
 			if ratio_after > ratio_before
 			{
 				print!(
@@ -500,45 +500,47 @@ fn build_polygon_secondary_lightmap(
 					}
 
 					let light = &lights[light_source_polygon_index];
-
-					// TODO - check this. Make sure we use correct math here.
-					// TODO - check for normalization rules.
-					// Light intencity in white room with intencity = 1 should be = 1 too.
-
-					let vec_to_light = light.pos - pos;
-					let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
-					let vec_to_light_normalized = vec_to_light / vec_to_light_len2.sqrt();
-					let angle_cos = plane_normal_normalized.dot(vec_to_light_normalized);
-
-					if angle_cos <= 0.0
+					for sample in &light.samples
 					{
-						// Do not determine visibility for light behind polygon plane.
-						continue;
-					}
+						// TODO - check this. Make sure we use correct math here.
+						// TODO - check for normalization rules.
+						// Light intencity in white room with intencity = 1 should be = 1 too.
 
-					let angle_cos_src = -(light.normal.dot(vec_to_light_normalized));
-					if angle_cos_src <= 0.0
-					{
-						// Do not determine visibility for texels behind light source plane.
-						continue;
-					}
+						let vec_to_light = sample.pos - pos;
+						let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
+						let vec_to_light_normalized = vec_to_light / vec_to_light_len2.sqrt();
+						let angle_cos = plane_normal_normalized.dot(vec_to_light_normalized);
 
-					let light_scale = angle_cos * angle_cos_src / vec_to_light_len2;
-					let color_scaled = [
-						light.color[0] * light_scale,
-						light.color[1] * light_scale,
-						light.color[2] * light_scale,
-					];
+						if angle_cos <= 0.0
+						{
+							// Do not determine visibility for light behind polygon plane.
+							continue;
+						}
 
-					if !can_see(&light.pos, &pos, map)
-					{
-						// In shadow.
-						continue;
-					}
+						let angle_cos_src = -(light.normal.dot(vec_to_light_normalized));
+						if angle_cos_src <= 0.0
+						{
+							// Do not determine visibility for texels behind light source plane.
+							continue;
+						}
 
-					total_light[0] += color_scaled[0];
-					total_light[1] += color_scaled[1];
-					total_light[2] += color_scaled[2];
+						let light_scale = angle_cos * angle_cos_src / vec_to_light_len2;
+						let color_scaled = [
+							sample.color[0] * light_scale,
+							sample.color[1] * light_scale,
+							sample.color[2] * light_scale,
+						];
+
+						if !can_see(&sample.pos, &pos, map)
+						{
+							// In shadow.
+							continue;
+						}
+
+						total_light[0] += color_scaled[0];
+						total_light[1] += color_scaled[1];
+						total_light[2] += color_scaled[2];
+					} // for light samples.
 				} // for leaf polygons.
 			} // for leafs.
 
@@ -714,8 +716,13 @@ fn calculate_lightmap_basis(polygon: &bsp_map_compact::Polygon) -> LightmapBasis
 
 struct SecondaryLightSource
 {
+	samples: Vec<SecondaryLightSourceSample>,
+	normal: Vec3f, // Normalized.
+}
+
+struct SecondaryLightSourceSample
+{
 	pos: Vec3f,
-	normal: Vec3f,   // Normalized.
 	color: [f32; 3], // Color scaled by intensity.
 }
 
@@ -729,44 +736,45 @@ fn create_secondary_light_sources(
 	let mut result = Vec::with_capacity(map.polygons.len());
 	for polygon in &map.polygons
 	{
-		result.push(create_secondary_light_source(map, primary_lightmaps_data, polygon));
+		result.push(create_secondary_light_source(primary_lightmaps_data, polygon));
 	}
 
 	result
 }
 
 fn create_secondary_light_source(
-	map: &bsp_map_compact::BSPMap,
 	primary_lightmaps_data: &LightmapsData,
 	polygon: &bsp_map_compact::Polygon,
 ) -> SecondaryLightSource
 {
 	// TODO - fix this. Count only texels inside polygon bounds and handle partially-covered texels properly.
-	// TODO - scale texels sum to texel size.
 
 	// TODO - multiply value by material albedo.
 
-	let mut texels_sum = [0.0, 0.0, 0.0];
-	if polygon.lightmap_data_offset != 0
-	{
-		let lightmap_size = get_polygon_lightmap_size(polygon);
-		for i in 0 .. (lightmap_size[0] * lightmap_size[1])
-		{
-			let texel = primary_lightmaps_data[(polygon.lightmap_data_offset + i) as usize];
-			for j in 0 .. 3
-			{
-				texels_sum[j] += texel[j];
-			}
-		}
-	}
+	let lightmap_size = get_polygon_lightmap_size(polygon);
+	let lightmap_basis = calculate_lightmap_basis(polygon);
 
 	let plane_normal_normalized = polygon.plane.vec / polygon.plane.vec.magnitude();
 
-	let polygon_center = get_polygon_center(map, polygon) + TEXEL_NORMAL_SHIFT * plane_normal_normalized;
+	// Shift pos slightly towards direction of normal to avoid self-shadowing artifacts.
+	let start_pos = lightmap_basis.pos + plane_normal_normalized * TEXEL_NORMAL_SHIFT;
+
+	let mut samples = Vec::with_capacity((lightmap_size[0] * lightmap_size[1]) as usize);
+	for v in 0 .. lightmap_size[1]
+	{
+		let start_pos_v = start_pos + (v as f32) * lightmap_basis.v_vec;
+		let line_dst_start = polygon.lightmap_data_offset + v * lightmap_size[0];
+		for u in 0 .. lightmap_size[0]
+		{
+			let pos = start_pos_v + (u as f32) * lightmap_basis.u_vec;
+			// TODO - scale color by texel size.
+			let color = primary_lightmaps_data[(line_dst_start + u) as usize];
+			samples.push(SecondaryLightSourceSample { pos, color });
+		}
+	}
 
 	SecondaryLightSource {
-		pos: polygon_center,
+		samples,
 		normal: plane_normal_normalized,
-		color: texels_sum,
 	}
 }
