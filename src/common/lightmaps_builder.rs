@@ -269,37 +269,18 @@ fn build_primary_lightmap(
 
 	let polygon_center = get_polygon_center(map, polygon) + TEXEL_NORMAL_SHIFT * plane_normal_normalized;
 
-	// Calculate inverse matrix for tex_coord equation and plane equation in order to calculate world position for UV.
-	let tc_basis_scale = 1.0 / (LIGHTMAP_SCALE as f32);
-	let tex_coord_basis = Mat4f::from_cols(
-		polygon.tex_coord_equation[0]
-			.vec
-			.extend(polygon.tex_coord_equation[0].dist) *
-			tc_basis_scale,
-		polygon.tex_coord_equation[1]
-			.vec
-			.extend(polygon.tex_coord_equation[1].dist) *
-			tc_basis_scale,
-		polygon.plane.vec.extend(-polygon.plane.dist),
-		Vec4f::new(0.0, 0.0, 0.0, 1.0),
-	);
-	let tex_coord_basis_inverted = tex_coord_basis.transpose().invert().unwrap(); // TODO - avoid "unwrap"?
+	let lightmap_basis = calculate_lightmap_basis(polygon);
 
-	let u_vec = tex_coord_basis_inverted.x.truncate();
-	let v_vec = tex_coord_basis_inverted.y.truncate();
 	// Shift pos slightly towards direction of normal to avoid self-shadowing artifacts.
-	let start_pos = tex_coord_basis_inverted.w.truncate() +
-		u_vec * ((polygon.tex_coord_min[0] >> LIGHTMAP_SCALE_LOG2) as f32) +
-		v_vec * ((polygon.tex_coord_min[1] >> LIGHTMAP_SCALE_LOG2) as f32) +
-		plane_normal_normalized * TEXEL_NORMAL_SHIFT;
+	let start_pos = lightmap_basis.pos + plane_normal_normalized * TEXEL_NORMAL_SHIFT;
 
 	// Prepare sample grid shifts.
 	let mut sample_grid = [Vec3f::zero(); (MAX_SAMPLE_GRID_SIZE * MAX_SAMPLE_GRID_SIZE) as usize];
 	if sample_grid_size > 1
 	{
 		let grid_size_f = sample_grid_size as f32;
-		let u_step = u_vec / grid_size_f;
-		let v_step = v_vec / grid_size_f;
+		let u_step = lightmap_basis.u_vec / grid_size_f;
+		let v_step = lightmap_basis.v_vec / grid_size_f;
 		let grid_start = (-0.5 * (grid_size_f - 1.0)) * (v_step + u_step);
 		for v in 0 .. sample_grid_size
 		{
@@ -316,12 +297,12 @@ fn build_primary_lightmap(
 
 	for v in 0 .. lightmap_size[1]
 	{
-		let start_pos_v = start_pos + (v as f32) * v_vec;
+		let start_pos_v = start_pos + (v as f32) * lightmap_basis.v_vec;
 		let line_dst_start = polygon.lightmap_data_offset + v * lightmap_size[0];
 		for u in 0 .. lightmap_size[0]
 		{
 			let mut total_light = [0.0, 0.0, 0.0];
-			let texel_pos = start_pos_v + (u as f32) * u_vec;
+			let texel_pos = start_pos_v + (u as f32) * lightmap_basis.u_vec;
 			// Calculate light for multiple samples withing current texel, than use average value.
 			// This allow us to get (reltively) soft shadows.
 			for &sample_shift in &sample_grid[.. num_sample_grid_samples]
@@ -340,19 +321,19 @@ fn build_primary_lightmap(
 						// Special cases - shift postion along U/V axis for texels on border.
 						if u == 0
 						{
-							pos += 0.5 * u_vec;
+							pos += 0.5 * lightmap_basis.u_vec;
 						}
 						if u == lightmap_size[0] - 1
 						{
-							pos -= 0.5 * u_vec;
+							pos -= 0.5 * lightmap_basis.u_vec;
 						}
 						if v == 0
 						{
-							pos += 0.5 * v_vec;
+							pos += 0.5 * lightmap_basis.v_vec;
 						}
 						if v == lightmap_size[1] - 1
 						{
-							pos -= 0.5 * v_vec;
+							pos -= 0.5 * lightmap_basis.v_vec;
 						}
 					}
 					else
@@ -361,8 +342,12 @@ fn build_primary_lightmap(
 						let vec_to_center = polygon_center - pos;
 						let vec_to_center_len = vec_to_center.magnitude().max(MIN_POSITIVE_VALUE);
 						let vec_to_center_normalized = vec_to_center / vec_to_center_len;
-						pos +=
-							vec_to_center_normalized * u_vec.magnitude().max(v_vec.magnitude()).min(vec_to_center_len);
+						pos += vec_to_center_normalized *
+							lightmap_basis
+								.u_vec
+								.magnitude()
+								.max(lightmap_basis.v_vec.magnitude())
+								.min(vec_to_center_len);
 					}
 				}
 
@@ -486,38 +471,19 @@ fn build_polygon_secondary_lightmap(
 
 	let plane_normal_normalized = polygon.plane.vec / polygon.plane.vec.magnitude();
 
-	// Calculate inverse matrix for tex_coord equation and plane equation in order to calculate world position for UV.
-	let tc_basis_scale = 1.0 / (LIGHTMAP_SCALE as f32);
-	let tex_coord_basis = Mat4f::from_cols(
-		polygon.tex_coord_equation[0]
-			.vec
-			.extend(polygon.tex_coord_equation[0].dist) *
-			tc_basis_scale,
-		polygon.tex_coord_equation[1]
-			.vec
-			.extend(polygon.tex_coord_equation[1].dist) *
-			tc_basis_scale,
-		polygon.plane.vec.extend(-polygon.plane.dist),
-		Vec4f::new(0.0, 0.0, 0.0, 1.0),
-	);
-	let tex_coord_basis_inverted = tex_coord_basis.transpose().invert().unwrap(); // TODO - avoid "unwrap"?
+	let lightmap_basis = calculate_lightmap_basis(polygon);
 
-	let u_vec = tex_coord_basis_inverted.x.truncate();
-	let v_vec = tex_coord_basis_inverted.y.truncate();
 	// Shift pos slightly towards direction of normal to avoid self-shadowing artifacts.
-	let start_pos = tex_coord_basis_inverted.w.truncate() +
-		u_vec * ((polygon.tex_coord_min[0] >> LIGHTMAP_SCALE_LOG2) as f32) +
-		v_vec * ((polygon.tex_coord_min[1] >> LIGHTMAP_SCALE_LOG2) as f32) +
-		plane_normal_normalized * TEXEL_NORMAL_SHIFT;
+	let start_pos = lightmap_basis.pos + plane_normal_normalized * TEXEL_NORMAL_SHIFT;
 
 	for v in 0 .. lightmap_size[1]
 	{
-		let start_pos_v = start_pos + (v as f32) * v_vec;
+		let start_pos_v = start_pos + (v as f32) * lightmap_basis.v_vec;
 		let line_dst_start = polygon.lightmap_data_offset + v * lightmap_size[0];
 		for u in 0 .. lightmap_size[0]
 		{
 			let mut total_light = [0.0, 0.0, 0.0];
-			let pos = start_pos_v + (u as f32) * u_vec;
+			let pos = start_pos_v + (u as f32) * lightmap_basis.u_vec;
 			// TODO - correct texel position.
 
 			// Calculate light only from polygons in visible leafs.
@@ -708,6 +674,42 @@ fn edge_intersects_with_polygon(v0: &Vec3f, v1: &Vec3f, polygon_index: usize, ma
 	}
 
 	true
+}
+
+struct LightmapBasis
+{
+	pos: Vec3f,
+	u_vec: Vec3f,
+	v_vec: Vec3f,
+}
+
+fn calculate_lightmap_basis(polygon: &bsp_map_compact::Polygon) -> LightmapBasis
+{
+	// Calculate inverse matrix for tex_coord equation and plane equation in order to calculate world position for UV.
+
+	let tc_basis_scale = 1.0 / (LIGHTMAP_SCALE as f32);
+	let tex_coord_basis = Mat4f::from_cols(
+		polygon.tex_coord_equation[0]
+			.vec
+			.extend(polygon.tex_coord_equation[0].dist) *
+			tc_basis_scale,
+		polygon.tex_coord_equation[1]
+			.vec
+			.extend(polygon.tex_coord_equation[1].dist) *
+			tc_basis_scale,
+		polygon.plane.vec.extend(-polygon.plane.dist),
+		Vec4f::new(0.0, 0.0, 0.0, 1.0),
+	);
+	let tex_coord_basis_inverted = tex_coord_basis.transpose().invert().unwrap(); // TODO - avoid "unwrap"?
+
+	let u_vec = tex_coord_basis_inverted.x.truncate();
+	let v_vec = tex_coord_basis_inverted.y.truncate();
+
+	let pos = tex_coord_basis_inverted.w.truncate() +
+		u_vec * ((polygon.tex_coord_min[0] >> LIGHTMAP_SCALE_LOG2) as f32) +
+		v_vec * ((polygon.tex_coord_min[1] >> LIGHTMAP_SCALE_LOG2) as f32);
+
+	LightmapBasis { pos, u_vec, v_vec }
 }
 
 struct SecondaryLightSource
