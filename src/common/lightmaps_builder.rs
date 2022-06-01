@@ -736,72 +736,174 @@ pub fn create_secondary_light_sources(
 ) -> SecondaryLightSources
 {
 	let mut result = Vec::with_capacity(map.polygons.len());
+	let mut sample_raster_data = Vec::new();
 	for polygon in &map.polygons
 	{
-		result.push(create_secondary_light_source(map, primary_lightmaps_data, polygon));
+		result.push(create_secondary_light_source(
+			map,
+			primary_lightmaps_data,
+			polygon,
+			&mut sample_raster_data,
+		));
 	}
 
 	result
 }
 
+type SampleRasterData = Vec<[f32; 3]>;
+
 fn create_secondary_light_source(
 	map: &bsp_map_compact::BSPMap,
 	primary_lightmaps_data: &LightmapsData,
 	polygon: &bsp_map_compact::Polygon,
+	sample_raster_data: &mut SampleRasterData,
 ) -> SecondaryLightSource
 {
-	// TODO - fix this. Count only texels inside polygon bounds and handle partially-covered texels properly.
+	let plane_normal_normalized = polygon.plane.vec / polygon.plane.vec.magnitude();
 
-	// TODO - multiply value by material albedo.
+	if polygon.lightmap_data_offset == 0
+	{
+		return SecondaryLightSource {
+			samples: Vec::new(),
+			normal: plane_normal_normalized,
+		};
+	}
 
 	let lightmap_size = get_polygon_lightmap_size(polygon);
 	let lightmap_basis = calculate_lightmap_basis(polygon);
 
-	let plane_normal_normalized = polygon.plane.vec / polygon.plane.vec.magnitude();
-
-	let texel_area = lightmap_basis.u_vec.cross(lightmap_basis.v_vec).magnitude();
-
 	// Shift pos slightly towards direction of normal to avoid self-shadowing artifacts.
 	let start_pos = lightmap_basis.pos + plane_normal_normalized * TEXEL_NORMAL_SHIFT;
 
-	let polygon_vertices =
-		&map.vertices[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize];
+	const SAMPLE_RASTER_SHIFT: u32 = 3;
+	const SAMPLE_RASTER_SIZE: u32 = 1 << SAMPLE_RASTER_SHIFT;
+	const SAMPLE_RASTER_MASK: u32 = SAMPLE_RASTER_SIZE - 1;
+	const INV_SAMPLE_RASTER_SIZE: f32 = 1.0 / (SAMPLE_RASTER_SIZE as f32);
 
-	let mut samples = Vec::with_capacity((lightmap_size[0] * lightmap_size[1]) as usize);
-	for v in 0 .. lightmap_size[1]
+	let sample_grid_size = [lightmap_size[0] - 1, lightmap_size[1] - 1];
+	let sample_raster_size = [
+		sample_grid_size[0] << SAMPLE_RASTER_SHIFT,
+		sample_grid_size[1] << SAMPLE_RASTER_SHIFT,
+	];
+
+	// Prepare sample raster.
 	{
-		let start_pos_v = start_pos + (v as f32) * lightmap_basis.v_vec;
-		let line_dst_start = polygon.lightmap_data_offset + v * lightmap_size[0];
-		for u in 0 .. lightmap_size[0]
-		{
-			let pos = start_pos_v + (u as f32) * lightmap_basis.u_vec;
+		let polygon_vertices =
+			&map.vertices[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize];
 
-			// Check if sample is inside polygon. Ignore sample outside polygon.
-			let mut inside_polygon = true;
-			for i in 0 .. polygon.num_vertices
+		sample_raster_data.resize(
+			(sample_raster_size[0] * sample_raster_size[1]) as usize,
+			[0.0, 0.0, 0.0],
+		);
+
+		let lightmap_data = &primary_lightmaps_data[polygon.lightmap_data_offset as usize ..
+			(polygon.lightmap_data_offset + lightmap_size[0] * lightmap_size[1]) as usize];
+
+		let raster_u_vec = lightmap_basis.u_vec * INV_SAMPLE_RASTER_SIZE;
+		let raster_v_vec = lightmap_basis.v_vec * INV_SAMPLE_RASTER_SIZE;
+		let raster_start_pos = start_pos + 0.5 * (raster_u_vec + raster_v_vec);
+		for v in 0 .. sample_raster_size[1]
+		{
+			let start_pos_v = raster_start_pos + (v as f32) * raster_v_vec;
+			for u in 0 .. sample_raster_size[0]
 			{
-				let v0 = polygon_vertices[i as usize];
-				let v1 = polygon_vertices[((i + 1) % polygon.num_vertices) as usize];
-				let edge_vec = v0 - v1;
-				let vec = pos - v0;
-				let cross = edge_vec.cross(vec);
-				let normal_dot = plane_normal_normalized.dot(cross);
-				if normal_dot < 0.0
+				let pos = start_pos_v + (u as f32) * raster_u_vec;
+
+				// Check if sample is inside polygon. Ignore samples outside polygons.
+				let mut inside_polygon = true;
+				for i in 0 .. polygon.num_vertices
 				{
-					inside_polygon = false;
-					break;
+					let v0 = polygon_vertices[i as usize];
+					let v1 = polygon_vertices[((i + 1) % polygon.num_vertices) as usize];
+					let edge_vec = v0 - v1;
+					let vec = pos - v0;
+					let cross = edge_vec.cross(vec);
+					let normal_dot = plane_normal_normalized.dot(cross);
+					if normal_dot < 0.0
+					{
+						inside_polygon = false;
+						break;
+					}
+				}
+				let dst = &mut sample_raster_data[(u + v * sample_raster_size[0]) as usize];
+				if inside_polygon
+				{
+					// Perform interpolated lightmap fetch.
+					let lightmap_u = u >> SAMPLE_RASTER_SHIFT;
+					let lightmap_v = v >> SAMPLE_RASTER_SHIFT;
+					let lightmap_u_plus_one = lightmap_u + 1;
+					let lightmap_v_plus_one = lightmap_v + 1;
+					debug_assert!(lightmap_u_plus_one < lightmap_size[0]);
+					debug_assert!(lightmap_v_plus_one < lightmap_size[1]);
+
+					let lightmap00 = lightmap_data[(lightmap_u + lightmap_v * lightmap_size[0]) as usize];
+					let lightmap01 = lightmap_data[(lightmap_u + lightmap_v_plus_one * lightmap_size[0]) as usize];
+					let lightmap10 = lightmap_data[(lightmap_u_plus_one + lightmap_v * lightmap_size[0]) as usize];
+					let lightmap11 =
+						lightmap_data[(lightmap_u_plus_one + lightmap_v_plus_one * lightmap_size[0]) as usize];
+
+					let k_u = (0.5 + ((u & SAMPLE_RASTER_MASK) as f32)) * INV_SAMPLE_RASTER_SIZE;
+					let k_v = (0.5 + ((v & SAMPLE_RASTER_MASK) as f32)) * INV_SAMPLE_RASTER_SIZE;
+					let one_minus_k_u = 1.0 - k_u;
+					let one_minus_k_v = 1.0 - k_v;
+
+					let mut result = [0.0, 0.0, 0.0];
+					for i in 0 .. 3
+					{
+						let light0 = lightmap00[i] * one_minus_k_v + lightmap01[i] * k_v;
+						let light1 = lightmap10[i] * one_minus_k_v + lightmap11[i] * k_v;
+						result[i] = light0 * one_minus_k_u + light1 * k_u;
+					}
+					// TODO - multiply value by material albedo.
+					*dst = result;
+				}
+				else
+				{
+					*dst = [0.0, 0.0, 0.0];
+				}
+			} // for u
+		} // for v
+	}
+
+	let texel_area = lightmap_basis.u_vec.cross(lightmap_basis.v_vec).magnitude();
+
+	// Resample raster.
+	let mut samples = Vec::new();
+	for v in 0 .. sample_grid_size[1]
+	{
+		let start_pos_v = start_pos + ((v as f32) + 0.5) * lightmap_basis.v_vec;
+		for u in 0 .. sample_grid_size[0]
+		{
+			let pos = start_pos_v + ((u as f32) + 0.5) * lightmap_basis.u_vec;
+
+			let mut color = [0.0, 0.0, 0.0];
+			let pixel_start_u = u << SAMPLE_RASTER_SHIFT;
+			let pixel_start_v = v << SAMPLE_RASTER_SHIFT;
+			for dv in 0 .. SAMPLE_RASTER_SIZE
+			{
+				for du in 0 .. SAMPLE_RASTER_SIZE
+				{
+					let pixel = sample_raster_data
+						[(pixel_start_u + du + (pixel_start_v + dv) * sample_raster_size[0]) as usize];
+					for i in 0 .. 3
+					{
+						color[i] += pixel[i];
+					}
 				}
 			}
-			if !inside_polygon
+			for i in 0 .. 3
+			{
+				color[i] *= (INV_SAMPLE_RASTER_SIZE * INV_SAMPLE_RASTER_SIZE) * texel_area;
+			}
+
+			if color[0] <= 0.0 && color[1] <= 0.0 && color[2] <= 0.0
 			{
 				continue;
 			}
 
-			let color = primary_lightmaps_data[(line_dst_start + u) as usize];
-			samples.push(SecondaryLightSourceSample {
-				pos,
-				color: [color[0] * texel_area, color[1] * texel_area, color[2] * texel_area],
-			});
+			// TODO - correct sample position (do not allow samples inside walls).
+
+			samples.push(SecondaryLightSourceSample { pos, color });
 		}
 	}
 

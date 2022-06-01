@@ -834,8 +834,12 @@ fn draw_secondary_light_source(
 {
 	for sample in &light_source.samples
 	{
-		// 	let color= Color32::from_rgb(sample.color[0].min(255.0) as u8, sample.color[1].min(255.0) as u8, sample.color[2].min(255.0) as u8);
-		let color = Color32::from_rgb(255, 255, 255);
+		let color = Color32::from_rgb(
+			sample.color[0].min(255.0) as u8,
+			sample.color[1].min(255.0) as u8,
+			sample.color[2].min(255.0) as u8,
+		);
+		// let color = Color32::from_rgb(255, 255, 255);
 		draw_line(
 			rasterizer,
 			&camera_matrices.view_matrix,

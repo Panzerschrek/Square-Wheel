@@ -100,7 +100,11 @@ pub fn main()
 	{
 		if let Some(map_compact) = &mut map_bsp_compact_opt
 		{
-			let lightmaps_data = lightmaps_builder::allocate_lightmaps(&materials, map_compact);
+			let mut lightmaps_data = lightmaps_builder::allocate_lightmaps(&materials, map_compact);
+			for l in &mut lightmaps_data
+			{
+				*l = [1.0, 1.0, 1.0];
+			}
 			secondary_ligt_sources = Some(lightmaps_builder::create_secondary_light_sources(
 				map_compact,
 				&lightmaps_data,
