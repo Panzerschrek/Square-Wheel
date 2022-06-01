@@ -602,6 +602,10 @@ const TEXEL_NORMAL_SHIFT: f32 = 1.0 / 16.0;
 // It should be less than sin(90/8 deg).
 const MAX_ALLOVED_SAMPLE_SIZE_TO_DISTANCE_RATIO: f32 = 0.125;
 
+// Multiply all secondary light sources by this constant in order to achieve light energy saving.
+// TODO - check if this is valid constant.
+const LIGHT_INTEGRATION_NORMALIZATION_CONSTANT: f32 = 1.0 / std::f32::consts::PI;
+
 fn get_polygon_center(map: &bsp_map_compact::BSPMap, polygon: &bsp_map_compact::Polygon) -> Vec3f
 {
 	// TODO - improve this.
@@ -925,7 +929,8 @@ fn create_secondary_light_source(
 	let texel_area = lightmap_basis.u_vec.cross(lightmap_basis.v_vec).magnitude();
 
 	// Resample raster, make sample grid lods.
-	let color_scale = (INV_SAMPLE_RASTER_SIZE * INV_SAMPLE_RASTER_SIZE) * texel_area;
+	let color_scale =
+		(INV_SAMPLE_RASTER_SIZE * INV_SAMPLE_RASTER_SIZE * LIGHT_INTEGRATION_NORMALIZATION_CONSTANT) * texel_area;
 	let mut cur_sample_grid_size = sample_grid_size;
 	let mut cur_sample_raster_shift = SAMPLE_RASTER_SHIFT;
 	let mut samples_lods = Vec::new();
