@@ -837,7 +837,7 @@ fn draw_secondary_light_source(
 		return;
 	}
 
-	for sample in light_source.samples.first().unwrap()
+	for sample in lightmaps_builder::get_light_source_lod(&camera_matrices.position, light_source)
 	{
 		let color = Color32::from_rgb(
 			sample.color[0].min(255.0) as u8,

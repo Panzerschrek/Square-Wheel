@@ -504,11 +504,15 @@ fn build_polygon_secondary_lightmap(
 					{
 						continue;
 					}
-					for sample in &light.samples[0]
+
+					// Iterate over all samples of this LOD.
+					for sample in get_light_source_lod(&pos, light)
 					{
 						// TODO - check this. Make sure we use correct math here.
 						// TODO - check for normalization rules.
 						// Light intencity in white room with intencity = 1 should be = 1 too.
+
+						// TODO - limit ratio between sample size and distance to sample.
 
 						let vec_to_light = sample.pos - pos;
 						let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
@@ -553,14 +557,55 @@ fn build_polygon_secondary_lightmap(
 	}
 }
 
+pub fn get_light_source_lod<'a>(
+	point: &Vec3f,
+	light_source: &'a SecondaryLightSource,
+) -> &'a [SecondaryLightSourceSample]
+{
+	// Calculate light source lod.
+	// Try to achieve target ratio between sample size and distance to closest point of light source (approaximated as circle).
+	let closest_distance_to_light = calculate_dinstance_between_point_and_circle(
+		&point,
+		&light_source.center,
+		&light_source.normal,
+		light_source.radius,
+	)
+	.max(MIN_POSITIVE_VALUE);
+	let mut sample_lod = 0;
+	loop
+	{
+		let ratio = ((1 << sample_lod) as f32) * light_source.sample_size / closest_distance_to_light;
+		if ratio >= MAX_ALLOVED_SAMPLE_SIZE_TO_DISTANCE_RATIO
+		{
+			break;
+		}
+		if sample_lod + 1 < light_source.samples.len()
+		{
+			sample_lod += 1;
+		}
+		else
+		{
+			break;
+		}
+	}
+
+	&light_source.samples[sample_lod]
+}
+
 const MIN_POSITIVE_VALUE: f32 = 1.0 / ((1 << 30) as f32);
 const MAP_LIGHTS_SCALE: f32 = 32.0; // TODO - tune this.
 const MIN_LIGHT_VALUE: f32 = 1.0 / 256.0; // TODO - tune this.
 const MAX_SAMPLE_GRID_SIZE: u32 = 8;
 const TEXEL_NORMAL_SHIFT: f32 = 1.0 / 16.0;
 
+// This constant affects light source lod selection.
+// It should be less than sin(90/8 deg).
+const MAX_ALLOVED_SAMPLE_SIZE_TO_DISTANCE_RATIO: f32 = 0.125;
+
 fn get_polygon_center(map: &bsp_map_compact::BSPMap, polygon: &bsp_map_compact::Polygon) -> Vec3f
 {
+	// TODO - improve this.
+	// Calculate real center (center of mass?), not just average values of all vertices.
 	let mut polygon_vertices_average = Vec3f::new(0.0, 0.0, 0.0);
 	for &v in &map.vertices[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize]
 	{
@@ -726,6 +771,9 @@ pub struct SecondaryLightSource
 	pub samples: Vec<Vec<SecondaryLightSourceSample>>,
 	pub sample_size: f32, // Linear size of sample.
 	pub normal: Vec3f,    // Normalized.
+	// Approximate polygon as 2d circle.
+	pub center: Vec3f,
+	pub radius: f32,
 }
 
 pub struct SecondaryLightSourceSample
@@ -773,6 +821,8 @@ fn create_secondary_light_source(
 			samples: Vec::new(),
 			normal: plane_normal_normalized,
 			sample_size: 1.0, // This doesn't matter if we have no samples.
+			center: Vec3f::zero(),
+			radius: 0.0,
 		};
 	}
 
@@ -781,6 +831,9 @@ fn create_secondary_light_source(
 
 	// Shift pos slightly towards direction of normal to avoid self-shadowing artifacts.
 	let start_pos = lightmap_basis.pos + plane_normal_normalized * TEXEL_NORMAL_SHIFT;
+
+	let polygon_vertices =
+		&map.vertices[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize];
 
 	const SAMPLE_RASTER_SHIFT: u32 = 3;
 	const SAMPLE_RASTER_SIZE: u32 = 1 << SAMPLE_RASTER_SHIFT;
@@ -795,9 +848,6 @@ fn create_secondary_light_source(
 
 	// Prepare sample raster.
 	{
-		let polygon_vertices =
-			&map.vertices[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize];
-
 		sample_raster_data.resize(
 			(sample_raster_size[0] * sample_raster_size[1]) as usize,
 			[0.0, 0.0, 0.0],
@@ -940,9 +990,49 @@ fn create_secondary_light_source(
 	// Length of lightmap texel diagonal.
 	let sample_size = (lightmap_basis.u_vec + lightmap_basis.v_vec).magnitude();
 
+	// Calculate approximation circle params.
+	let polygon_center = get_polygon_center(map, polygon);
+	let mut square_radius = 0.0;
+	for v in polygon_vertices
+	{
+		let square_dist = (v - polygon_center).magnitude2();
+		if square_dist > square_radius
+		{
+			square_radius = square_dist;
+		}
+	}
+
 	SecondaryLightSource {
 		samples: samples_lods,
 		sample_size,
 		normal: plane_normal_normalized,
+		center: polygon_center,
+		radius: square_radius.sqrt(),
 	}
+}
+
+fn calculate_dinstance_between_point_and_circle(
+	point: &Vec3f,
+	circle_center: &Vec3f,
+	circle_normal: &Vec3f,
+	circle_radius: f32,
+) -> f32
+{
+	// See https://www.geometrictools.com/Documentation/DistanceToCircle3.pdf.
+
+	let vec_from_center_to_point = point - circle_center;
+	let signed_dinstance_to_circle_plane = vec_from_center_to_point.dot(*circle_normal);
+
+	let perpendicular_vec = signed_dinstance_to_circle_plane * circle_normal;
+	let vec_from_center_to_point_projection = vec_from_center_to_point - perpendicular_vec;
+	let vec_from_center_to_point_projection_square_len = vec_from_center_to_point_projection.magnitude2();
+	if vec_from_center_to_point_projection_square_len <= circle_radius * circle_radius
+	{
+		return signed_dinstance_to_circle_plane.abs();
+	}
+
+	let dist_from_projection_point_to_circle = vec_from_center_to_point_projection_square_len.sqrt() - circle_radius;
+	let square_len = dist_from_projection_point_to_circle * dist_from_projection_point_to_circle +
+		signed_dinstance_to_circle_plane * signed_dinstance_to_circle_plane;
+	square_len.sqrt()
 }
