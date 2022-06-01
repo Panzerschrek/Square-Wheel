@@ -832,7 +832,12 @@ fn draw_secondary_light_source(
 	light_source: &lightmaps_builder::SecondaryLightSource,
 )
 {
-	for sample in &light_source.samples
+	if light_source.samples.is_empty()
+	{
+		return;
+	}
+
+	for sample in light_source.samples.first().unwrap()
 	{
 		let color = Color32::from_rgb(
 			sample.color[0].min(255.0) as u8,

@@ -500,7 +500,11 @@ fn build_polygon_secondary_lightmap(
 					}
 
 					let light = &lights[light_source_polygon_index];
-					for sample in &light.samples
+					if light.samples.is_empty()
+					{
+						continue;
+					}
+					for sample in &light.samples[0]
 					{
 						// TODO - check this. Make sure we use correct math here.
 						// TODO - check for normalization rules.
@@ -718,8 +722,10 @@ pub type SecondaryLightSources = Vec<SecondaryLightSource>;
 
 pub struct SecondaryLightSource
 {
-	pub samples: Vec<SecondaryLightSourceSample>,
-	pub normal: Vec3f, // Normalized.
+	// Set of sample grid lods.
+	pub samples: Vec<Vec<SecondaryLightSourceSample>>,
+	pub sample_size: f32, // Linear size of sample.
+	pub normal: Vec3f,    // Normalized.
 }
 
 pub struct SecondaryLightSourceSample
@@ -766,6 +772,7 @@ fn create_secondary_light_source(
 		return SecondaryLightSource {
 			samples: Vec::new(),
 			normal: plane_normal_normalized,
+			sample_size: 1.0, // This doesn't matter if we have no samples.
 		};
 	}
 
@@ -867,48 +874,75 @@ fn create_secondary_light_source(
 
 	let texel_area = lightmap_basis.u_vec.cross(lightmap_basis.v_vec).magnitude();
 
-	// Resample raster.
-	let mut samples = Vec::new();
-	for v in 0 .. sample_grid_size[1]
+	// Resample raster, make sample grid lods.
+	let color_scale = (INV_SAMPLE_RASTER_SIZE * INV_SAMPLE_RASTER_SIZE) * texel_area;
+	let mut cur_sample_grid_size = sample_grid_size;
+	let mut cur_sample_raster_shift = SAMPLE_RASTER_SHIFT;
+	let mut samples_lods = Vec::new();
+	loop
 	{
-		let start_pos_v = start_pos + ((v as f32) + 0.5) * lightmap_basis.v_vec;
-		for u in 0 .. sample_grid_size[0]
+		let cur_sample_raster_size = 1 << cur_sample_raster_shift;
+		let cur_basis_vecs_scale = (1 << (cur_sample_raster_shift - SAMPLE_RASTER_SHIFT)) as f32;
+		let cur_u_vec = lightmap_basis.u_vec * cur_basis_vecs_scale;
+		let cur_v_vec = lightmap_basis.v_vec * cur_basis_vecs_scale;
+
+		let mut samples = Vec::new();
+		for v in 0 .. cur_sample_grid_size[1]
 		{
-			let pos = start_pos_v + ((u as f32) + 0.5) * lightmap_basis.u_vec;
-
-			let mut color = [0.0, 0.0, 0.0];
-			let pixel_start_u = u << SAMPLE_RASTER_SHIFT;
-			let pixel_start_v = v << SAMPLE_RASTER_SHIFT;
-			for dv in 0 .. SAMPLE_RASTER_SIZE
+			let start_pos_v = start_pos + ((v as f32) + 0.5) * cur_v_vec;
+			for u in 0 .. cur_sample_grid_size[0]
 			{
-				for du in 0 .. SAMPLE_RASTER_SIZE
+				let mut color = [0.0, 0.0, 0.0];
+				let pixel_start_u = u << cur_sample_raster_shift;
+				let pixel_start_v = v << cur_sample_raster_shift;
+				for dv in 0 .. cur_sample_raster_size
 				{
-					let pixel = sample_raster_data
-						[(pixel_start_u + du + (pixel_start_v + dv) * sample_raster_size[0]) as usize];
-					for i in 0 .. 3
+					for du in 0 .. cur_sample_raster_size
 					{
-						color[i] += pixel[i];
-					}
+						let src_u = pixel_start_u + du;
+						let src_v = pixel_start_v + dv;
+						if src_u < sample_raster_size[0] && src_v < sample_raster_size[1]
+						{
+							let pixel = sample_raster_data[(src_u + src_v * sample_raster_size[0]) as usize];
+							for i in 0 .. 3
+							{
+								color[i] += pixel[i];
+							}
+						}
+					} // for du
+				} // for dv
+				if color[0] <= 0.0 && color[1] <= 0.0 && color[2] <= 0.0
+				{
+					continue;
 				}
-			}
-			for i in 0 .. 3
-			{
-				color[i] *= (INV_SAMPLE_RASTER_SIZE * INV_SAMPLE_RASTER_SIZE) * texel_area;
-			}
+				for i in 0 .. 3
+				{
+					color[i] *= color_scale;
+				}
 
-			if color[0] <= 0.0 && color[1] <= 0.0 && color[2] <= 0.0
-			{
-				continue;
-			}
+				// TODO - correct sample position (do not allow samples inside walls).
+				let pos = start_pos_v + ((u as f32) + 0.5) * cur_u_vec;
 
-			// TODO - correct sample position (do not allow samples inside walls).
+				samples.push(SecondaryLightSourceSample { pos, color });
+			} // for u
+		} // for v
 
-			samples.push(SecondaryLightSourceSample { pos, color });
+		samples_lods.push(samples);
+		if cur_sample_grid_size[0] == 1 && cur_sample_grid_size[1] == 1
+		{
+			break;
 		}
-	}
+		cur_sample_grid_size[0] = (cur_sample_grid_size[0] + 1) >> 1;
+		cur_sample_grid_size[1] = (cur_sample_grid_size[1] + 1) >> 1;
+		cur_sample_raster_shift += 1;
+	} // For sample grid lods.
+
+	// Length of lightmap texel diagonal.
+	let sample_size = (lightmap_basis.u_vec + lightmap_basis.v_vec).magnitude();
 
 	SecondaryLightSource {
-		samples,
+		samples: samples_lods,
+		sample_size,
 		normal: plane_normal_normalized,
 	}
 }
