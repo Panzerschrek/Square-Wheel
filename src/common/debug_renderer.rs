@@ -844,11 +844,11 @@ fn draw_secondary_light_source(
 			sample.color[1].min(255.0) as u8,
 			sample.color[2].min(255.0) as u8,
 		);
-		// let color = Color32::from_rgb(255, 255, 255);
+		let color = Color32::from_rgb(255, 255, 255);
 		draw_line(
 			rasterizer,
 			&camera_matrices.view_matrix,
-			&(sample.pos, sample.pos + light_source.normal * 8.0, color),
+			&(sample.pos, sample.pos + light_source.normal * 20.0, color),
 		);
 	}
 }

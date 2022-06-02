@@ -955,6 +955,9 @@ fn create_secondary_light_source(
 		} // for v
 	}
 
+	let polygon_center = get_polygon_center(map, polygon);
+	let polygon_center_normal_shifted = polygon_center + plane_normal_normalized * TEXEL_NORMAL_SHIFT;
+
 	let texel_area = lightmap_basis.u_vec.cross(lightmap_basis.v_vec).magnitude();
 
 	// Resample raster, make sample grid lods.
@@ -1004,10 +1007,13 @@ fn create_secondary_light_source(
 					color[i] *= color_scale;
 				}
 
-				// TODO - correct sample position (do not allow samples inside walls).
 				let pos = start_pos_v + ((u as f32) + 0.5) * cur_u_vec;
+				let pos_corrected = correct_sample_position(map, &pos, &lightmap_basis, &polygon_center_normal_shifted);
 
-				samples.push(SecondaryLightSourceSample { pos, color });
+				samples.push(SecondaryLightSourceSample {
+					pos: pos_corrected,
+					color,
+				});
 			} // for u
 		} // for v
 
@@ -1025,7 +1031,6 @@ fn create_secondary_light_source(
 	let sample_size = (lightmap_basis.u_vec + lightmap_basis.v_vec).magnitude();
 
 	// Calculate approximation circle params.
-	let polygon_center = get_polygon_center(map, polygon);
 	let mut square_radius = 0.0;
 	for v in polygon_vertices
 	{
