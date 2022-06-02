@@ -446,7 +446,10 @@ fn build_polygon_secondary_lightmap(
 		{
 			let mut total_light = [0.0, 0.0, 0.0];
 			let pos_initial = start_pos_v + (u as f32) * lightmap_basis.u_vec;
-			let pos = correct_sample_position(map, &pos_initial, &lightmap_basis, &polygon_center);
+
+			// HACK! Shift sample position slightly towards polygon center to avoid completely black outlines in corners.
+			let pos_sihfted_towards_center = pos_initial * (63.0 / 64.0) + polygon_center * (1.0 / 64.0);
+			let pos = correct_sample_position(map, &pos_sihfted_towards_center, &lightmap_basis, &polygon_center);
 
 			// Calculate light only from polygons in visible leafs.
 			for &leaf_index in visible_leafs
