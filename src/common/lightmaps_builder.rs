@@ -525,15 +525,16 @@ fn build_polygon_secondary_lightmap(
 						continue;
 					}
 
+					// Compute LOD.
+					let light_source_lod = get_light_source_lod(&pos, light);
+
+					// Limit inv square distance - do not allow almost infinite light in case if light sample is too close.
+					let current_sample_size = ((1 << light_source_lod) as f32) * light.sample_size;
+					let min_dist2 = 0.25 * current_sample_size * current_sample_size;
+
 					// Iterate over all samples of this LOD.
-					for sample in get_light_source_lod(&pos, light)
+					for sample in &light.samples[light_source_lod]
 					{
-						// TODO - check this. Make sure we use correct math here.
-						// TODO - check for normalization rules.
-						// Light intencity in white room with intencity = 1 should be = 1 too.
-
-						// TODO - limit ratio between sample size and distance to sample.
-
 						let vec_to_light = sample.pos - pos;
 						let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
 						let vec_to_light_normalized = vec_to_light / vec_to_light_len2.sqrt();
@@ -552,7 +553,7 @@ fn build_polygon_secondary_lightmap(
 							continue;
 						}
 
-						let light_scale = angle_cos * angle_cos_src / vec_to_light_len2;
+						let light_scale = angle_cos * angle_cos_src / vec_to_light_len2.max(min_dist2);
 						let color_scaled = [
 							sample.color[0] * light_scale,
 							sample.color[1] * light_scale,
@@ -577,10 +578,7 @@ fn build_polygon_secondary_lightmap(
 	}
 }
 
-pub fn get_light_source_lod<'a>(
-	point: &Vec3f,
-	light_source: &'a SecondaryLightSource,
-) -> &'a [SecondaryLightSourceSample]
+pub fn get_light_source_lod(point: &Vec3f, light_source: &SecondaryLightSource) -> usize
 {
 	// Calculate light source lod.
 	// Try to achieve target ratio between sample size and distance to closest point of light source (approaximated as circle).
@@ -609,7 +607,7 @@ pub fn get_light_source_lod<'a>(
 		}
 	}
 
-	&light_source.samples[sample_lod]
+	sample_lod
 }
 
 const MIN_POSITIVE_VALUE: f32 = 1.0 / ((1 << 30) as f32);
