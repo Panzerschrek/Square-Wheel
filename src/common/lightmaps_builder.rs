@@ -42,12 +42,15 @@ pub fn build_lightmaps(
 
 	let mut secondary_lightmaps_data = vec![[0.0, 0.0, 0.0]; primary_lightmaps_data.len()];
 
-	build_secondary_lightmaps(
-		&secondary_light_sources,
-		map,
-		&visibility_matrix,
-		&mut secondary_lightmaps_data,
-	);
+	if settings.save_secondary_light
+	{
+		build_secondary_lightmaps(
+			&secondary_light_sources,
+			map,
+			&visibility_matrix,
+			&mut secondary_lightmaps_data,
+		);
+	}
 
 	println!("\nCombining lightmaps");
 	map.lightmaps_data =
