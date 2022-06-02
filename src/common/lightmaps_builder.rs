@@ -8,6 +8,7 @@ pub struct LightmappingSettings
 	pub ambient_light: f32,
 	pub save_primary_light: bool,
 	pub save_secondary_light: bool,
+	pub num_passes: u32,
 }
 
 pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
@@ -36,9 +37,9 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	build_primary_lightmaps(sample_grid_size, &lights, map, &mut primary_lightmaps_data);
 	println!("");
 
-	let mut secondary_lightmaps_data = vec![[0.0, 0.0, 0.0]; primary_lightmaps_data.len()];
+	let mut passes_lightmaps = vec![primary_lightmaps_data];
 
-	if settings.save_secondary_light
+	if settings.save_secondary_light && settings.num_passes > 1
 	{
 		let visibility_matrix = pvs::calculate_visibility_matrix(&map);
 
@@ -74,30 +75,49 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 			}
 		}
 
-		println!("Building secondary lightmap");
-		let secondary_light_sources = create_secondary_light_sources(&materials_albedo, map, &primary_lightmaps_data);
+		for pass_num in 1 .. settings.num_passes.min(8)
+		{
+			let prev_pass_lightmap = passes_lightmaps.last().unwrap();
+			println!("\nBuilding secondary lightmap ({})", pass_num);
+			let secondary_light_sources = create_secondary_light_sources(&materials_albedo, map, &prev_pass_lightmap);
 
-		build_secondary_lightmaps(
-			&secondary_light_sources,
-			map,
-			&visibility_matrix,
-			&mut secondary_lightmaps_data,
-		);
+			let mut secondary_lightmaps_data = vec![[0.0, 0.0, 0.0]; prev_pass_lightmap.len()];
+
+			build_secondary_lightmaps(
+				&secondary_light_sources,
+				map,
+				&visibility_matrix,
+				&mut secondary_lightmaps_data,
+			);
+
+			passes_lightmaps.push(secondary_lightmaps_data);
+		}
 	}
 
 	println!("\nCombining lightmaps");
+	let primary_lightmap = passes_lightmaps.first().unwrap();
+	let secondary_lightmaps = &passes_lightmaps[1 ..];
+
 	map.lightmaps_data =
-		vec![[settings.ambient_light, settings.ambient_light, settings.ambient_light]; primary_lightmaps_data.len()];
+		vec![[settings.ambient_light, settings.ambient_light, settings.ambient_light]; primary_lightmap.len()];
 	let primary_light_scale = if settings.save_primary_light { 1.0 } else { 0.0 };
 	let secondary_light_scale = if settings.save_secondary_light { 1.0 } else { 0.0 };
-	for i in 0 .. primary_lightmaps_data.len()
+
+	for i in 0 .. map.lightmaps_data.len()
 	{
 		let dst = &mut map.lightmaps_data[i];
-		let src_primary = &primary_lightmaps_data[i];
-		let src_seconday = &secondary_lightmaps_data[i];
+
 		for j in 0 .. 3
 		{
-			dst[j] += src_primary[j] * primary_light_scale + src_seconday[j] * secondary_light_scale;
+			dst[j] += primary_lightmap[i][j] * primary_light_scale;
+		}
+		for lightmap in secondary_lightmaps
+		{
+			let src = &lightmap[i];
+			for j in 0 .. 3
+			{
+				dst[j] += src[j] * secondary_light_scale;
+			}
 		}
 	}
 

@@ -41,6 +41,10 @@ struct Opt
 	/// Disable export of secondary light.
 	#[structopt(long)]
 	no_secondary_light: bool,
+
+	/// Number of light passes.
+	#[structopt(long)]
+	num_passes: Option<u32>,
 }
 
 fn main()
@@ -66,6 +70,7 @@ fn main()
 			ambient_light: opt.ambient_light.unwrap_or(0.0),
 			save_primary_light: !opt.no_primary_light,
 			save_secondary_light: !opt.no_secondary_light,
+			num_passes: opt.num_passes.unwrap_or(1),
 		},
 		&materials,
 		&mut map,
