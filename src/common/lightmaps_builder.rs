@@ -1,4 +1,4 @@
-use super::{bsp_map_compact, map_file_common, material, math_types::*, pvs};
+use super::{bsp_map_compact, image, map_file_common, material, math_types::*, pvs};
 use std::io::Write;
 
 pub struct LightmappingSettings
@@ -10,10 +10,11 @@ pub struct LightmappingSettings
 	pub save_secondary_light: bool,
 }
 
-pub fn build_lightmaps(
+pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	settings: &LightmappingSettings,
 	materials: &material::MaterialsMap,
 	map: &mut bsp_map_compact::BSPMap,
+	mut albedo_image_getter: AlbedoImageGetter,
 )
 {
 	let sample_grid_size = settings.sample_grid_size.min(MAX_SAMPLE_GRID_SIZE);
@@ -35,15 +36,47 @@ pub fn build_lightmaps(
 	build_primary_lightmaps(sample_grid_size, &lights, map, &mut primary_lightmaps_data);
 	println!("");
 
-	let visibility_matrix = pvs::calculate_visibility_matrix(&map);
-
-	println!("Building secondary lightmap");
-	let secondary_light_sources = create_secondary_light_sources(map, &primary_lightmaps_data);
-
 	let mut secondary_lightmaps_data = vec![[0.0, 0.0, 0.0]; primary_lightmaps_data.len()];
 
 	if settings.save_secondary_light
 	{
+		let visibility_matrix = pvs::calculate_visibility_matrix(&map);
+
+		let mut materials_albedo = vec![DEFAULT_ALBEDO; map.textures.len()];
+		// Load textures in order to know albedo.
+		for (i, texture_name) in map.textures.iter().enumerate()
+		{
+			let null_pos = texture_name
+				.iter()
+				.position(|x| *x == 0_u8)
+				.unwrap_or(texture_name.len());
+			let texture_str = std::str::from_utf8(&texture_name[0 .. null_pos]).unwrap_or("");
+			if let Some(img) = albedo_image_getter(texture_str)
+			{
+				let mut pixels_sum: [u32; 3] = [0, 0, 0];
+				for pixel in &img.pixels
+				{
+					let rgb = pixel.get_rgb();
+					pixels_sum[0] += rgb[0] as u32;
+					pixels_sum[1] += rgb[1] as u32;
+					pixels_sum[2] += rgb[2] as u32;
+				}
+				let scale = 1.0 / (img.pixels.len() as f32 * 255.0);
+				materials_albedo[i] = [
+					pixels_sum[0] as f32 * scale,
+					pixels_sum[1] as f32 * scale,
+					pixels_sum[2] as f32 * scale,
+				];
+			}
+			else
+			{
+				println!("Can't load texture for material {}", texture_str);
+			}
+		}
+
+		println!("Building secondary lightmap");
+		let secondary_light_sources = create_secondary_light_sources(&materials_albedo, map, &primary_lightmaps_data);
+
 		build_secondary_lightmaps(
 			&secondary_light_sources,
 			map,
@@ -216,6 +249,8 @@ fn get_map_texture_string(map_textures: &[bsp_map_compact::Texture], texture_ind
 	let range = &texture_name[0 .. null_pos];
 	std::str::from_utf8(range).unwrap_or("")
 }
+
+type MaterialAlbedo = [f32; 3];
 
 fn build_primary_lightmaps(
 	sample_grid_size: u32,
@@ -571,6 +606,9 @@ const MAX_ALLOVED_SAMPLE_SIZE_TO_DISTANCE_RATIO: f32 = 0.125;
 // TODO - check if this is valid constant.
 const LIGHT_INTEGRATION_NORMALIZATION_CONSTANT: f32 = 1.0 / std::f32::consts::PI;
 
+// Use pretty dark albedo if texture was not found.
+pub const DEFAULT_ALBEDO: MaterialAlbedo = [0.25, 0.25, 0.25];
+
 fn get_polygon_center(map: &bsp_map_compact::BSPMap, polygon: &bsp_map_compact::Polygon) -> Vec3f
 {
 	// TODO - improve this.
@@ -754,6 +792,7 @@ pub struct SecondaryLightSourceSample
 // Secondary light sources are mapped 1 to 1 to source polygons.
 // Light sources for polygons withoult lightmap have zero intensity.
 pub fn create_secondary_light_sources(
+	materials_albedo: &[MaterialAlbedo],
 	map: &bsp_map_compact::BSPMap,
 	primary_lightmaps_data: &LightmapsData,
 ) -> SecondaryLightSources
@@ -763,6 +802,7 @@ pub fn create_secondary_light_sources(
 	for polygon in &map.polygons
 	{
 		result.push(create_secondary_light_source(
+			materials_albedo,
 			map,
 			primary_lightmaps_data,
 			polygon,
@@ -776,6 +816,7 @@ pub fn create_secondary_light_sources(
 type SampleRasterData = Vec<[f32; 3]>;
 
 fn create_secondary_light_source(
+	materials_albedo: &[MaterialAlbedo],
 	map: &bsp_map_compact::BSPMap,
 	primary_lightmaps_data: &LightmapsData,
 	polygon: &bsp_map_compact::Polygon,
@@ -803,6 +844,10 @@ fn create_secondary_light_source(
 
 	let polygon_vertices =
 		&map.vertices[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize];
+
+	// Use constant albedo for whole polygon.
+	// TODO - maybe perform per-pixel albedo fetch?
+	let polygon_albedo = materials_albedo[polygon.texture as usize];
 
 	const SAMPLE_RASTER_SHIFT: u32 = 3;
 	const SAMPLE_RASTER_SIZE: u32 = 1 << SAMPLE_RASTER_SHIFT;
@@ -878,9 +923,8 @@ fn create_secondary_light_source(
 					{
 						let light0 = lightmap00[i] * one_minus_k_v + lightmap01[i] * k_v;
 						let light1 = lightmap10[i] * one_minus_k_v + lightmap11[i] * k_v;
-						result[i] = light0 * one_minus_k_u + light1 * k_u;
+						result[i] = (light0 * one_minus_k_u + light1 * k_u) * polygon_albedo[i];
 					}
-					// TODO - multiply value by material albedo.
 					*dst = result;
 				}
 				else
