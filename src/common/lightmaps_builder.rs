@@ -310,50 +310,7 @@ fn build_primary_lightmap(
 			// This allow us to get (reltively) soft shadows.
 			for &sample_shift in &sample_grid[.. num_sample_grid_samples]
 			{
-				let mut pos = texel_pos + sample_shift;
-				// Correct texel position if can't see from texel to polygon center.
-				// TODO - improve this. Fix cases where texel position is exactly on some polygon plane.
-				for i in 0 .. 16
-				{
-					if can_see(&pos, &polygon_center, map)
-					{
-						break;
-					}
-					if i < 4
-					{
-						// Special cases - shift postion along U/V axis for texels on border.
-						if u == 0
-						{
-							pos += 0.5 * lightmap_basis.u_vec;
-						}
-						if u == lightmap_size[0] - 1
-						{
-							pos -= 0.5 * lightmap_basis.u_vec;
-						}
-						if v == 0
-						{
-							pos += 0.5 * lightmap_basis.v_vec;
-						}
-						if v == lightmap_size[1] - 1
-						{
-							pos -= 0.5 * lightmap_basis.v_vec;
-						}
-					}
-					else
-					{
-						// Hard case - shift towards center.
-						let vec_to_center = polygon_center - pos;
-						let vec_to_center_len = vec_to_center.magnitude().max(MIN_POSITIVE_VALUE);
-						let vec_to_center_normalized = vec_to_center / vec_to_center_len;
-						pos += vec_to_center_normalized *
-							lightmap_basis
-								.u_vec
-								.magnitude()
-								.max(lightmap_basis.v_vec.magnitude())
-								.min(vec_to_center_len);
-					}
-				}
-
+				let pos = correct_sample_position(map, &(texel_pos + sample_shift), &lightmap_basis, &polygon_center);
 				for light in lights
 				{
 					let vec_to_light = light.pos - pos;
@@ -474,6 +431,8 @@ fn build_polygon_secondary_lightmap(
 
 	let plane_normal_normalized = polygon.plane.vec / polygon.plane.vec.magnitude();
 
+	let polygon_center = get_polygon_center(map, polygon) + TEXEL_NORMAL_SHIFT * plane_normal_normalized;
+
 	let lightmap_basis = calculate_lightmap_basis(polygon);
 
 	// Shift pos slightly towards direction of normal to avoid self-shadowing artifacts.
@@ -486,8 +445,8 @@ fn build_polygon_secondary_lightmap(
 		for u in 0 .. lightmap_size[0]
 		{
 			let mut total_light = [0.0, 0.0, 0.0];
-			let pos = start_pos_v + (u as f32) * lightmap_basis.u_vec;
-			// TODO - correct texel position.
+			let pos_initial = start_pos_v + (u as f32) * lightmap_basis.u_vec;
+			let pos = correct_sample_position(map, &pos_initial, &lightmap_basis, &polygon_center);
 
 			// Calculate light only from polygons in visible leafs.
 			for &leaf_index in visible_leafs
@@ -1043,4 +1002,62 @@ fn calculate_dinstance_between_point_and_circle(
 	let square_len = dist_from_projection_point_to_circle * dist_from_projection_point_to_circle +
 		signed_dinstance_to_circle_plane * signed_dinstance_to_circle_plane;
 	square_len.sqrt()
+}
+
+fn correct_sample_position(
+	map: &bsp_map_compact::BSPMap,
+	pos: &Vec3f,
+	lightmap_basis: &LightmapBasis,
+	polygon_center: &Vec3f,
+) -> Vec3f
+{
+	// Can see from sample point to polygon center - return initial sample point.
+	if can_see(pos, polygon_center, map)
+	{
+		return *pos;
+	}
+
+	// Try to perform fixed adjustments.
+	// Use steps along lightmap basis with length 0.5, than with length 1.0, than diagonal steps.
+	const SHIFT_VECS: [[f32; 2]; 12] = [
+		[0.5, 0.0],
+		[-0.5, 0.0],
+		[0.0, 0.5],
+		[0.0, -0.5],
+		[1.0, 0.0],
+		[1.0, 0.0],
+		[0.0, 1.0],
+		[0.0, -1.0],
+		[1.0, 1.0],
+		[1.0, -1.0],
+		[-1.0, 1.0],
+		[-1.0, -1.0],
+	];
+
+	for shift in SHIFT_VECS
+	{
+		let pos_corrected = pos + lightmap_basis.u_vec * shift[0] + lightmap_basis.v_vec * shift[1];
+		if can_see(&pos_corrected, polygon_center, map)
+		{
+			return pos_corrected;
+		}
+	}
+
+	// Hard situation. Try to move sample to polygon center via iterative steps.
+	let max_basis_vec_len = lightmap_basis.u_vec.magnitude().max(lightmap_basis.v_vec.magnitude());
+	let mut pos_corrected = *pos;
+	for _i in 0 .. 16
+	{
+		let vec_to_center = polygon_center - pos_corrected;
+		let vec_to_center_len = vec_to_center.magnitude().max(MIN_POSITIVE_VALUE);
+		let vec_to_center_normalized = vec_to_center / vec_to_center_len;
+		pos_corrected += vec_to_center_normalized * max_basis_vec_len.min(vec_to_center_len);
+		if can_see(&pos_corrected, polygon_center, map)
+		{
+			return pos_corrected;
+		}
+	}
+
+	// In worst case just return polygon center.
+	return *polygon_center;
 }
