@@ -1,4 +1,4 @@
-use super::{bsp_builder, map_polygonizer, math_types::*, plane::*};
+use super::{bbox::*, bsp_builder, map_polygonizer, math_types::*, plane::*};
 use std::collections::HashMap;
 
 // This file contains declaration of compact BSP map representation.
@@ -155,6 +155,28 @@ pub fn convert_bsp_map_to_compact_format(
 pub fn get_map_string(s: StringRef, map: &BSPMap) -> &str
 {
 	std::str::from_utf8(&map.strings_data[(s.offset as usize) .. ((s.offset + s.size) as usize)]).unwrap_or("")
+}
+
+pub fn get_submodel_bbox(map: &BSPMap, submodel: &Submodel) -> BBox
+{
+	// Calculate model bounding box based on all vertices of all polygons.
+	let inf = 1e24;
+	let mut bbox = BBox {
+		min: Vec3f::new(inf, inf, inf),
+		max: Vec3f::new(-inf, -inf, -inf),
+	};
+
+	for &polygon in
+		&map.polygons[(submodel.first_polygon as usize) .. ((submodel.first_polygon + submodel.num_polygons) as usize)]
+	{
+		for vertex in
+			&map.vertices[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)]
+		{
+			bbox.extend_with_point(vertex);
+		}
+	}
+
+	bbox
 }
 
 type PortalPtrToIndexMap = HashMap<*const bsp_builder::LeafsPortal, u32>;

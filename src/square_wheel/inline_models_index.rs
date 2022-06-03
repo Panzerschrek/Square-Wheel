@@ -193,26 +193,9 @@ fn prepare_models_info(map: &bsp_map_compact::BSPMap) -> Vec<ModelInfo>
 
 fn prepare_model_info(map: &bsp_map_compact::BSPMap, submodel: &bsp_map_compact::Submodel) -> ModelInfo
 {
-	// Calculate model bounding box based on all vertices of all polygons.
-	let inf = 1e24;
-	let mut bbox = BBox {
-		min: Vec3f::new(inf, inf, inf),
-		max: Vec3f::new(-inf, -inf, -inf),
-	};
-
-	for &polygon in
-		&map.polygons[(submodel.first_polygon as usize) .. ((submodel.first_polygon + submodel.num_polygons) as usize)]
-	{
-		for vertex in
-			&map.vertices[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)]
-		{
-			bbox.extend_with_point(vertex);
-		}
-	}
-
 	ModelInfo {
 		leafs: Vec::new(),
-		bbox,
+		bbox: bsp_map_compact::get_submodel_bbox(map, submodel),
 		shift: Vec3f::zero(),
 		angle_z: Rad(0.0),
 	}

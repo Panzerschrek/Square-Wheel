@@ -420,8 +420,6 @@ fn build_secondary_lightmaps(
 	let mut polygons_processed = 0;
 	let texels_total = lightmaps_data.len();
 
-	// TODO - process also submodels polygons.
-
 	let mut visible_leafs_list = Vec::new();
 	for leaf_index in 0 .. map.leafs.len()
 	{
@@ -467,6 +465,102 @@ fn build_secondary_lightmaps(
 				);
 				let _ignore_errors = std::io::stdout().flush();
 			}
+		}
+	}
+
+	let root_node = (map.nodes.len() - 1) as u32;
+	let mut submodel_leafs_list = Vec::new();
+	let mut submodel_visible_leafs_bit_set = Vec::new();
+	for submodel in &map.submodels
+	{
+		// Know in which leafs this submodel is located.
+		let bbox = bsp_map_compact::get_submodel_bbox(map, submodel);
+		let bbox_vertices = [
+			Vec3f::new(bbox.min.x, bbox.min.y, bbox.min.z),
+			Vec3f::new(bbox.min.x, bbox.min.y, bbox.max.z),
+			Vec3f::new(bbox.min.x, bbox.max.y, bbox.min.z),
+			Vec3f::new(bbox.min.x, bbox.max.y, bbox.max.z),
+			Vec3f::new(bbox.max.x, bbox.min.y, bbox.min.z),
+			Vec3f::new(bbox.max.x, bbox.min.y, bbox.max.z),
+			Vec3f::new(bbox.max.x, bbox.max.y, bbox.min.z),
+			Vec3f::new(bbox.max.x, bbox.max.y, bbox.max.z),
+		];
+
+		submodel_leafs_list.clear();
+		collect_submodel_leafs_r(map, &bbox_vertices, root_node, &mut submodel_leafs_list);
+
+		// Know which leafs are visible for submodel's leafs.
+		submodel_visible_leafs_bit_set.clear();
+		submodel_visible_leafs_bit_set.resize(map.leafs.len(), false);
+		for &leaf_index in &submodel_leafs_list
+		{
+			let visibility_matrix_row = &visibility_matrix
+				[(leaf_index as usize) * map.leafs.len() .. ((leaf_index as usize) + 1) * map.leafs.len()];
+			for (src, dst) in visibility_matrix_row
+				.iter()
+				.zip(submodel_visible_leafs_bit_set.iter_mut())
+			{
+				*dst |= src;
+			}
+		}
+
+		visible_leafs_list.clear();
+		for other_leaf_index in 0 .. map.leafs.len()
+		{
+			if submodel_visible_leafs_bit_set[other_leaf_index]
+			{
+				visible_leafs_list.push(other_leaf_index as u32);
+			}
+		}
+
+		for polygon_index in
+			submodel.first_polygon as usize .. (submodel.first_polygon + submodel.num_polygons) as usize
+		{
+			polygons_processed += 1;
+			if map.polygons[polygon_index].lightmap_data_offset == 0
+			{
+				// No lightmap for this polygon.
+				continue;
+			}
+			build_polygon_secondary_lightmap(lights, polygon_index, map, &visible_leafs_list, lightmaps_data);
+
+			// TODO - show progress here?
+		} // for submodel polygons.
+	} // for submodels
+}
+
+fn collect_submodel_leafs_r(
+	map: &bsp_map_compact::BSPMap,
+	bbox_vertices: &[Vec3f; 8],
+	node_index: u32,
+	out_leafs: &mut Vec<u32>,
+)
+{
+	if node_index >= bsp_map_compact::FIRST_LEAF_INDEX
+	{
+		let leaf_index = node_index - bsp_map_compact::FIRST_LEAF_INDEX;
+		out_leafs.push(leaf_index);
+	}
+	else
+	{
+		let node = map.nodes[node_index as usize];
+
+		let mut vertices_front = 0;
+		for &vertex in bbox_vertices
+		{
+			if node.plane.vec.dot(vertex) > node.plane.dist
+			{
+				vertices_front += 1;
+			}
+		}
+
+		if vertices_front > 0
+		{
+			collect_submodel_leafs_r(map, bbox_vertices, node.children[0], out_leafs);
+		}
+		if vertices_front < bbox_vertices.len()
+		{
+			collect_submodel_leafs_r(map, bbox_vertices, node.children[1], out_leafs);
 		}
 	}
 }
