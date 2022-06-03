@@ -1,6 +1,6 @@
 use common::{
-	bsp_builder, bsp_map_compact, bsp_map_save_load, debug_renderer, map_file_q1, map_polygonizer, material, matrix::*,
-	system_window,
+	bsp_builder, bsp_map_compact, bsp_map_save_load, debug_renderer, lightmaps_builder, map_file_q1, map_polygonizer,
+	material, matrix::*, system_window,
 };
 use sdl2::{event::Event, keyboard::Keycode};
 use std::{path::PathBuf, time::Duration};
@@ -41,6 +41,9 @@ struct Opt
 
 	#[structopt(long)]
 	draw_polygon_normals: bool,
+
+	#[structopt(long)]
+	draw_secondary_light_sources: bool,
 }
 
 pub fn main()
@@ -50,10 +53,13 @@ pub fn main()
 	let mut window = system_window::SystemWindow::new();
 	let mut camera_controller = common::camera_controller::CameraController::new();
 
+	let materials = material::MaterialsMap::new();
+
 	let mut map_file_parsed_opt = None;
 	let mut map_polygonized_opt = None;
 	let mut map_bsp_tree_opt = None;
 	let mut map_bsp_compact_opt = None;
+	let mut secondary_ligt_sources = None;
 	if let Some(path) = &opt.input
 	{
 		let file_contents_str = std::fs::read_to_string(path).unwrap();
@@ -72,10 +78,7 @@ pub fn main()
 					opt.draw_map_sectors_graph ||
 					opt.draw_map_sectors_graph_compact
 				{
-					map_bsp_tree_opt = Some(bsp_builder::build_leaf_bsp_tree(
-						&map_polygonized,
-						&material::MaterialsMap::new(),
-					));
+					map_bsp_tree_opt = Some(bsp_builder::build_leaf_bsp_tree(&map_polygonized, &materials));
 					if opt.draw_bsp_map_compact || opt.draw_map_sectors_graph_compact
 					{
 						map_bsp_compact_opt = Some(bsp_map_compact::convert_bsp_map_to_compact_format(
@@ -91,6 +94,24 @@ pub fn main()
 	if let Some(path) = &opt.input_compiled
 	{
 		map_bsp_compact_opt = bsp_map_save_load::load_map(path).unwrap();
+	}
+
+	if opt.draw_secondary_light_sources
+	{
+		if let Some(map_compact) = &mut map_bsp_compact_opt
+		{
+			let materials_albedo = vec![lightmaps_builder::DEFAULT_ALBEDO; map_compact.textures.len()];
+			let mut lightmaps_data = lightmaps_builder::allocate_lightmaps(&materials, map_compact);
+			for l in &mut lightmaps_data
+			{
+				*l = [1.0, 1.0, 1.0];
+			}
+			secondary_ligt_sources = Some(lightmaps_builder::create_secondary_light_sources(
+				&materials_albedo,
+				map_compact,
+				&lightmaps_data,
+			));
+		}
 	}
 
 	let mut prev_time = std::time::Instant::now();
@@ -131,6 +152,7 @@ pub fn main()
 					draw_only_first_entity: false,
 					draw_polygon_normals: opt.draw_polygon_normals,
 					draw_all_portals: opt.draw_all_portals,
+					draw_secondary_light_sources: opt.draw_secondary_light_sources,
 				},
 				&build_view_matrix(
 					camera_controller.get_pos(),
@@ -144,6 +166,7 @@ pub fn main()
 				map_polygonized_opt.as_ref(),
 				map_bsp_tree_opt.as_ref(),
 				map_bsp_compact_opt.as_ref(),
+				secondary_ligt_sources.as_ref(),
 			)
 		});
 

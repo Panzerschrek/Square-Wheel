@@ -1,4 +1,4 @@
-use common::{bsp_map_save_load, lightmaps_builder, material};
+use common::{bsp_map_save_load, image, lightmaps_builder, material};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -22,9 +22,29 @@ struct Opt
 	#[structopt(long)]
 	light_scale: Option<f32>,
 
+	/// Force add ambinet light with provided power.
+	#[structopt(long)]
+	ambient_light: Option<f32>,
+
 	/// Path to directory containing materials.
 	#[structopt(parse(from_os_str), long)]
 	materials_dir: Option<PathBuf>,
+
+	/// Path to directory containing textures.
+	#[structopt(parse(from_os_str), long)]
+	textures_dir: Option<PathBuf>,
+
+	/// Disable export of primary light.
+	#[structopt(long)]
+	no_primary_light: bool,
+
+	/// Disable export of secondary light.
+	#[structopt(long)]
+	no_secondary_light: bool,
+
+	/// Number of light passes.
+	#[structopt(long)]
+	num_passes: Option<u32>,
 }
 
 fn main()
@@ -33,9 +53,9 @@ fn main()
 
 	let opt = Opt::from_args();
 
-	let materials = if let Some(dir) = opt.materials_dir
+	let materials = if let Some(dir) = &opt.materials_dir
 	{
-		material::load_materials(&dir)
+		material::load_materials(dir)
 	}
 	else
 	{
@@ -47,9 +67,43 @@ fn main()
 		&lightmaps_builder::LightmappingSettings {
 			sample_grid_size: opt.sample_grid_size.unwrap_or(1),
 			light_scale: opt.light_scale.unwrap_or(1.0),
+			ambient_light: opt.ambient_light.unwrap_or(0.0),
+			save_primary_light: !opt.no_primary_light,
+			save_secondary_light: !opt.no_secondary_light,
+			num_passes: opt.num_passes.unwrap_or(1),
 		},
 		&materials,
 		&mut map,
+		|texture| load_texture_image(&materials, opt.textures_dir.as_ref(), texture),
 	);
 	bsp_map_save_load::save_map(&map, &opt.output).unwrap();
+}
+
+fn load_texture_image(
+	materials: &material::MaterialsMap,
+	textures_dir: Option<&PathBuf>,
+	texture: &str,
+) -> Option<image::Image>
+{
+	let mut file_name = texture.to_string();
+	if let Some(material) = materials.get(texture)
+	{
+		if let Some(diffuse) = &material.diffuse
+		{
+			file_name = diffuse.clone();
+		}
+	}
+
+	let file_path = if let Some(dir) = textures_dir
+	{
+		let mut p = dir.clone();
+		p.push(file_name);
+		p
+	}
+	else
+	{
+		PathBuf::from(file_name)
+	};
+
+	image::load(&file_path)
 }
