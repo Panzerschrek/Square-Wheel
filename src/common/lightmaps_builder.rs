@@ -573,8 +573,6 @@ fn build_polygon_secondary_lightmap(
 	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
 )
 {
-	// TODO - remove copy-paste.
-
 	let polygon = &map.polygons[polygon_index];
 	let lightmap_size = get_polygon_lightmap_size(polygon);
 
@@ -647,18 +645,18 @@ fn build_polygon_secondary_lightmap(
 							continue;
 						}
 
+						if !can_see(&sample.pos, &pos, map)
+						{
+							// In shadow.
+							continue;
+						}
+
 						let light_scale = angle_cos * angle_cos_src / vec_to_light_len2.max(min_dist2);
 						let color_scaled = [
 							sample.color[0] * light_scale,
 							sample.color[1] * light_scale,
 							sample.color[2] * light_scale,
 						];
-
-						if !can_see(&sample.pos, &pos, map)
-						{
-							// In shadow.
-							continue;
-						}
 
 						total_light[0] += color_scaled[0];
 						total_light[1] += color_scaled[1];
@@ -1189,7 +1187,7 @@ fn correct_sample_position(
 		[0.0, 0.5],
 		[0.0, -0.5],
 		[1.0, 0.0],
-		[1.0, 0.0],
+		[-1.0, 0.0],
 		[0.0, 1.0],
 		[0.0, -1.0],
 		[1.0, 1.0],
