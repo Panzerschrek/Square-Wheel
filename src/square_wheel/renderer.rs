@@ -695,46 +695,41 @@ impl Renderer
 				},
 			];
 
-			if polygon.lightmap_data_offset == 0
+			let mut lightmap_tc_shift: [u32; 2] = [0, 0];
+			for i in 0 .. 2
 			{
-				build_surface(
-					surface_size,
-					polygon_data.surface_tc_min,
-					texture,
-					&polygon.plane,
-					&tex_coord_equation_scaled,
-					lights,
-					surface_data,
-				);
+				let round_mask = !((lightmaps_builder::LIGHTMAP_SCALE as i32) - 1);
+				let shift =
+					polygon_data.surface_tc_min[i] - ((polygon.tex_coord_min[i] & round_mask) >> polygon_data.mip);
+				debug_assert!(shift >= 0);
+				lightmap_tc_shift[i] = shift as u32;
+			}
+
+			let lightmap_size = lightmaps_builder::get_polygon_lightmap_size(polygon);
+
+			let polygon_lightmap_data = if polygon.lightmap_data_offset != 0
+			{
+				&lightmaps_data[polygon.lightmap_data_offset as usize ..
+					((polygon.lightmap_data_offset + lightmap_size[0] * lightmap_size[1]) as usize)]
 			}
 			else
 			{
-				let mut lightmap_tc_shift: [u32; 2] = [0, 0];
-				for i in 0 .. 2
-				{
-					let round_mask = !((lightmaps_builder::LIGHTMAP_SCALE as i32) - 1);
-					let shift =
-						polygon_data.surface_tc_min[i] - ((polygon.tex_coord_min[i] & round_mask) >> polygon_data.mip);
-					debug_assert!(shift >= 0);
-					lightmap_tc_shift[i] = shift as u32;
-				}
+				&[]
+			};
 
-				let lightmap_size = lightmaps_builder::get_polygon_lightmap_size(polygon);
-				build_surface_with_lightmap(
-					&polygon.plane,
-					&tex_coord_equation_scaled,
-					surface_size,
-					polygon_data.surface_tc_min,
-					texture,
-					lightmap_size,
-					lightmaps_builder::LIGHTMAP_SCALE_LOG2 - polygon_data.mip,
-					lightmap_tc_shift,
-					&lightmaps_data[polygon.lightmap_data_offset as usize ..
-						((polygon.lightmap_data_offset + lightmap_size[0] * lightmap_size[1]) as usize)],
-					lights,
-					surface_data,
-				);
-			}
+			build_surface(
+				&polygon.plane,
+				&tex_coord_equation_scaled,
+				surface_size,
+				polygon_data.surface_tc_min,
+				texture,
+				lightmap_size,
+				lightmaps_builder::LIGHTMAP_SCALE_LOG2 - polygon_data.mip,
+				lightmap_tc_shift,
+				polygon_lightmap_data,
+				lights,
+				surface_data,
+			);
 		};
 
 		if rayon::current_num_threads() == 1
