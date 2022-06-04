@@ -105,6 +105,8 @@ pub fn build_surface(
 }
 
 pub fn build_surface_with_lightmap(
+	plane: &Plane,
+	tex_coord_equation: &[Plane; 2],
 	surface_size: [u32; 2],
 	surface_tc_min: [i32; 2],
 	texture: &textures::Texture,
@@ -112,54 +114,82 @@ pub fn build_surface_with_lightmap(
 	lightmap_scale_log2: u32,
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[bsp_map_compact::LightmapElement],
+	dynamic_lights: &[LightWithShadowMap],
 	out_surface_data: &mut [Color32],
 )
 {
-	if lightmap_scale_log2 == 1
+	if lightmap_scale_log2 == 0
 	{
-		build_surface_with_lightmap_const_scale::<1>(
+		build_surface_impl::<1>(
+			plane,
+			tex_coord_equation,
 			surface_size,
 			surface_tc_min,
 			texture,
 			lightmap_size,
 			lightmap_tc_shift,
 			lightmap_data,
+			dynamic_lights,
+			out_surface_data,
+		);
+	}
+	else if lightmap_scale_log2 == 1
+	{
+		build_surface_impl::<1>(
+			plane,
+			tex_coord_equation,
+			surface_size,
+			surface_tc_min,
+			texture,
+			lightmap_size,
+			lightmap_tc_shift,
+			lightmap_data,
+			dynamic_lights,
 			out_surface_data,
 		);
 	}
 	else if lightmap_scale_log2 == 2
 	{
-		build_surface_with_lightmap_const_scale::<2>(
+		build_surface_impl::<2>(
+			plane,
+			tex_coord_equation,
 			surface_size,
 			surface_tc_min,
 			texture,
 			lightmap_size,
 			lightmap_tc_shift,
 			lightmap_data,
+			dynamic_lights,
 			out_surface_data,
 		);
 	}
 	else if lightmap_scale_log2 == 3
 	{
-		build_surface_with_lightmap_const_scale::<3>(
+		build_surface_impl::<3>(
+			plane,
+			tex_coord_equation,
 			surface_size,
 			surface_tc_min,
 			texture,
 			lightmap_size,
 			lightmap_tc_shift,
 			lightmap_data,
+			dynamic_lights,
 			out_surface_data,
 		);
 	}
 	else if lightmap_scale_log2 == 4
 	{
-		build_surface_with_lightmap_const_scale::<4>(
+		build_surface_impl::<4>(
+			plane,
+			tex_coord_equation,
 			surface_size,
 			surface_tc_min,
 			texture,
 			lightmap_size,
 			lightmap_tc_shift,
 			lightmap_data,
+			dynamic_lights,
 			out_surface_data,
 		);
 	}
@@ -169,16 +199,47 @@ pub fn build_surface_with_lightmap(
 	}
 }
 
-pub fn build_surface_with_lightmap_const_scale<const LIGHTAP_SCALE_LOG2: u32>(
+pub fn build_surface_impl<const LIGHTAP_SCALE_LOG2: u32>(
+	plane: &Plane,
+	tex_coord_equation: &[Plane; 2],
 	surface_size: [u32; 2],
 	surface_tc_min: [i32; 2],
 	texture: &textures::Texture,
 	lightmap_size: [u32; 2],
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[bsp_map_compact::LightmapElement],
+	dynamic_lights: &[LightWithShadowMap],
 	out_surface_data: &mut [Color32],
 )
 {
+	// Calculate inverse matrix for tex_coord aquation and plane equation in order to calculate world position for UV.
+	// TODO - project tc equation to surface plane?
+	let tex_coord_basis = Mat4f::from_cols(
+		tex_coord_equation[0].vec.extend(tex_coord_equation[0].dist),
+		tex_coord_equation[1].vec.extend(tex_coord_equation[1].dist),
+		plane.vec.extend(-plane.dist),
+		Vec4f::new(0.0, 0.0, 0.0, 1.0),
+	);
+	let tex_coord_basis_inverted_opt = tex_coord_basis.transpose().invert();
+	if tex_coord_basis_inverted_opt.is_none()
+	{
+		return;
+	}
+	let tex_coord_basis_inverted = tex_coord_basis_inverted_opt.unwrap();
+
+	let u_vec = tex_coord_basis_inverted.x.truncate();
+	let v_vec = tex_coord_basis_inverted.y.truncate();
+	let start_pos = tex_coord_basis_inverted.w.truncate() +
+		u_vec * ((surface_tc_min[0]) as f32 + 0.5) +
+		v_vec * ((surface_tc_min[1]) as f32 + 0.5);
+
+	let plane_normal_normalized = plane.vec * inv_sqrt_fast(plane.vec.magnitude2());
+
+	// Use texture basis vectors as basis for normal transformation.
+	// This may be inaccurate if texture is non-uniformly stretched or shifted, but it is still fine for most cases.
+	let u_vec_normalized = u_vec * inv_sqrt_fast(u_vec.magnitude2().max(MIN_POSITIVE_VALUE));
+	let v_vec_normalized = v_vec * inv_sqrt_fast(v_vec.magnitude2().max(MIN_POSITIVE_VALUE));
+
 	// TODO - use uninitialized memory.
 	let mut line_lightmap = [[0.0, 0.0, 0.0]; (lightmaps_builder::MAX_LIGHTMAP_SIZE + 2) as usize];
 	let lightmap_scale_f = (1 << LIGHTAP_SCALE_LOG2) as f32;
@@ -224,40 +285,52 @@ pub fn build_surface_with_lightmap_const_scale<const LIGHTAP_SCALE_LOG2: u32>(
 		let src_line = &texture.pixels[src_line_start .. src_line_start + (texture.size[0] as usize)];
 		let mut src_u = surface_tc_min[0].rem_euclid(texture.size[0] as i32);
 		let mut dst_u = 0;
+		let start_pos_v = start_pos + (dst_v as f32) * v_vec;
 		for dst_texel in dst_line.iter_mut()
 		{
 			let lightmap_base_u = dst_u + lightmap_tc_shift[0];
 			let lightmap_u = lightmap_base_u >> LIGHTAP_SCALE_LOG2;
 			let lightmap_u_plus_one = lightmap_u + 1;
 			debug_assert!(lightmap_u_plus_one < lightmap_size[0]);
-			let l0 = unsafe{ debug_only_checked_fetch(&line_lightmap, lightmap_u as usize) };
-			let l1 = unsafe{ debug_only_checked_fetch(&line_lightmap, lightmap_u_plus_one as usize) };
+			let l0 = unsafe { debug_only_checked_fetch(&line_lightmap, lightmap_u as usize) };
+			let l1 = unsafe { debug_only_checked_fetch(&line_lightmap, lightmap_u_plus_one as usize) };
 			let k = ((lightmap_base_u & lightmap_fetch_mask) as f32) * inv_lightmap_scale_f + k_shift;
 			let k_minus_one = 1.0 - k;
-			let mut lightmap_value = [0.0, 0.0, 0.0];
+			let mut total_light = [0.0, 0.0, 0.0];
 			for i in 0 .. 3
 			{
-				lightmap_value[i] = l0[i] * k_minus_one + l1[i] * k;
-			};
-
-			let texel_value = unsafe{ debug_only_checked_fetch(src_line, src_u as usize) };
-
-			/*
-			if lightmap_scale_log2 < 4
-			{
-				let shift = 1 << (lightmap_scale_log2) >> 1;
-				let lightmap_u = (dst_u + lightmap_tc_shift[0] + shift) >> lightmap_scale_log2;
-				let lightmap_v = (dst_v + lightmap_tc_shift[1] + shift) >> lightmap_scale_log2;
-				lightmap_value = lightmap_data[(lightmap_u + lightmap_v * lightmap_size[0]) as usize];
+				total_light[i] = l0[i] * k_minus_one + l1[i] * k;
 			}
-			let texel_value = Color32::from_rgb(100, 100, 100);
-			*/
+
+			let pos = start_pos_v + (dst_u as f32) * u_vec;
+
+			let texel_value = unsafe { debug_only_checked_fetch(src_line, src_u as usize) };
+
+			// Normal transformed to world space.
+			let normal = texel_value.normal.x * u_vec_normalized +
+				texel_value.normal.y * v_vec_normalized +
+				texel_value.normal.z * plane_normal_normalized;
+
+			for (light, shadow_cube_map) in dynamic_lights
+			{
+				let vec_to_light = light.pos - pos;
+
+				let shadow_factor = cube_shadow_map_fetch(shadow_cube_map, &vec_to_light);
+
+				let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
+				let angle_cos = normal.dot(vec_to_light) * inv_sqrt_fast(vec_to_light_len2);
+				let light_scale = shadow_factor * angle_cos.max(0.0) / vec_to_light_len2;
+
+				total_light[0] += light.color[0] * light_scale;
+				total_light[1] += light.color[1] * light_scale;
+				total_light[2] += light.color[2] * light_scale;
+			}
 
 			let components = texel_value.diffuse.unpack_to_rgb_f32();
 			let components_modulated = [
-				(components[0] * lightmap_value[0]).min(Color32::MAX_RGB_F32_COMPONENTS[0]),
-				(components[1] * lightmap_value[1]).min(Color32::MAX_RGB_F32_COMPONENTS[1]),
-				(components[2] * lightmap_value[2]).min(Color32::MAX_RGB_F32_COMPONENTS[2]),
+				(components[0] * total_light[0]).min(Color32::MAX_RGB_F32_COMPONENTS[0]),
+				(components[1] * total_light[1]).min(Color32::MAX_RGB_F32_COMPONENTS[1]),
+				(components[2] * total_light[2]).min(Color32::MAX_RGB_F32_COMPONENTS[2]),
 			];
 
 			// Here we 100% sure that components overflow is not possible (because of "min").

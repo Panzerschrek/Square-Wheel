@@ -683,20 +683,20 @@ impl Renderer
 					polygon_data.surface_pixels_offset + (surface_size[0] * surface_size[1]) as usize]
 			};
 
-			if polygon.lightmap_data_offset == 0 || !lights.is_empty()
-			{
-				let mip_scale = 1.0 / (1 << polygon_data.mip) as f32;
-				let tex_coord_equation_scaled = [
-					Plane {
-						vec: polygon.tex_coord_equation[0].vec * mip_scale,
-						dist: polygon.tex_coord_equation[0].dist * mip_scale,
-					},
-					Plane {
-						vec: polygon.tex_coord_equation[1].vec * mip_scale,
-						dist: polygon.tex_coord_equation[1].dist * mip_scale,
-					},
-				];
+			let mip_scale = 1.0 / (1 << polygon_data.mip) as f32;
+			let tex_coord_equation_scaled = [
+				Plane {
+					vec: polygon.tex_coord_equation[0].vec * mip_scale,
+					dist: polygon.tex_coord_equation[0].dist * mip_scale,
+				},
+				Plane {
+					vec: polygon.tex_coord_equation[1].vec * mip_scale,
+					dist: polygon.tex_coord_equation[1].dist * mip_scale,
+				},
+			];
 
+			if polygon.lightmap_data_offset == 0
+			{
 				build_surface(
 					surface_size,
 					polygon_data.surface_tc_min,
@@ -721,6 +721,8 @@ impl Renderer
 
 				let lightmap_size = lightmaps_builder::get_polygon_lightmap_size(polygon);
 				build_surface_with_lightmap(
+					&polygon.plane,
+					&tex_coord_equation_scaled,
 					surface_size,
 					polygon_data.surface_tc_min,
 					texture,
@@ -729,6 +731,7 @@ impl Renderer
 					lightmap_tc_shift,
 					&lightmaps_data[polygon.lightmap_data_offset as usize ..
 						((polygon.lightmap_data_offset + lightmap_size[0] * lightmap_size[1]) as usize)],
+					lights,
 					surface_data,
 				);
 			}
