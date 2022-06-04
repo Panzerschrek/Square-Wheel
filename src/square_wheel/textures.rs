@@ -10,6 +10,7 @@ pub struct Texture
 {
 	pub size: [u32; 2],
 	pub pixels: Vec<TextureElement>,
+	pub has_normal_map: bool, // If false, normals data is trivial.
 }
 
 #[derive(Copy, Clone)]
@@ -105,6 +106,7 @@ fn make_texture(diffuse: image::Image, normals: Option<image::Image>) -> Texture
 	let mut result = Texture {
 		size: diffuse.size,
 		pixels: vec![TextureElement::default(); (diffuse.size[0] * diffuse.size[1]) as usize],
+		has_normal_map: normals.is_some(),
 	};
 
 	for (dst, src) in result.pixels.iter_mut().zip(diffuse.pixels.iter())
@@ -170,6 +172,7 @@ fn build_mips(mip0: Texture) -> TextureWithMips
 		let mut mip = Texture {
 			size: [prev_mip.size[0] >> 1, prev_mip.size[1] >> 1],
 			pixels: Vec::new(),
+			has_normal_map: prev_mip.has_normal_map,
 		};
 
 		mip.pixels = vec![TextureElement::default(); (mip.size[0] * mip.size[1]) as usize];

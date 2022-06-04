@@ -188,12 +188,62 @@ fn build_surface_impl_2_static_params<const LIGHTAP_SCALE_LOG2: u32, const USE_L
 	}
 }
 
-// Specify various settings as template params in order to get most efficient code for current combination of params.
-// Use chained dispatch in order to convert dynamic params into static.
 fn build_surface_impl_3_static_params<
 	const LIGHTAP_SCALE_LOG2: u32,
 	const USE_LIGHTMAP: bool,
 	const USE_DYNAMIC_LIGHTS: bool,
+>(
+	plane: &Plane,
+	tex_coord_equation: &[Plane; 2],
+	surface_size: [u32; 2],
+	surface_tc_min: [i32; 2],
+	texture: &textures::Texture,
+	lightmap_size: [u32; 2],
+	lightmap_tc_shift: [u32; 2],
+	lightmap_data: &[bsp_map_compact::LightmapElement],
+	dynamic_lights: &[LightWithShadowMap],
+	out_surface_data: &mut [Color32],
+)
+{
+	if texture.has_normal_map
+	{
+		build_surface_impl_4_static_params::<LIGHTAP_SCALE_LOG2, USE_LIGHTMAP, USE_DYNAMIC_LIGHTS, true>(
+			plane,
+			tex_coord_equation,
+			surface_size,
+			surface_tc_min,
+			texture,
+			lightmap_size,
+			lightmap_tc_shift,
+			lightmap_data,
+			&dynamic_lights,
+			out_surface_data,
+		);
+	}
+	else
+	{
+		build_surface_impl_4_static_params::<LIGHTAP_SCALE_LOG2, USE_LIGHTMAP, USE_DYNAMIC_LIGHTS, false>(
+			plane,
+			tex_coord_equation,
+			surface_size,
+			surface_tc_min,
+			texture,
+			lightmap_size,
+			lightmap_tc_shift,
+			lightmap_data,
+			dynamic_lights,
+			out_surface_data,
+		);
+	}
+}
+
+// Specify various settings as template params in order to get most efficient code for current combination of params.
+// Use chained dispatch in order to convert dynamic params into static.
+fn build_surface_impl_4_static_params<
+	const LIGHTAP_SCALE_LOG2: u32,
+	const USE_LIGHTMAP: bool,
+	const USE_DYNAMIC_LIGHTS: bool,
+	const USE_NORMAL_MAP: bool,
 >(
 	plane: &Plane,
 	tex_coord_equation: &[Plane; 2],
@@ -307,10 +357,17 @@ fn build_surface_impl_3_static_params<
 			{
 				let pos = start_pos_v + (dst_u as f32) * u_vec;
 
-				// Normal transformed to world space.
-				let normal = texel_value.normal.x * u_vec_normalized +
-					texel_value.normal.y * v_vec_normalized +
-					texel_value.normal.z * plane_normal_normalized;
+				let normal = if USE_NORMAL_MAP
+				{
+					// Normal transformed to world space.
+					texel_value.normal.x * u_vec_normalized +
+						texel_value.normal.y * v_vec_normalized +
+						texel_value.normal.z * plane_normal_normalized
+				}
+				else
+				{
+					plane_normal_normalized
+				};
 
 				for (light, shadow_cube_map) in dynamic_lights
 				{
