@@ -17,6 +17,8 @@ pub fn build_surface(
 	out_surface_data: &mut [Color32],
 )
 {
+	// Perform call in each branch instead of assigning function to function pointer and calling it later because LLVM compiler can't inline call via pointer.
+	// Proper inlining is very important here - it can reduce call overhead and merge identical code.
 	if lightmap_scale_log2 == 0
 	{
 		build_surface_impl_1_static_params::<0>(
@@ -167,7 +169,7 @@ fn build_surface_impl_2_static_params<const LIGHTAP_SCALE_LOG2: u32, const USE_L
 			lightmap_size,
 			lightmap_tc_shift,
 			lightmap_data,
-			&[],
+			dynamic_lights,
 			out_surface_data,
 		);
 	}
