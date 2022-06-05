@@ -397,7 +397,8 @@ fn build_surface_impl_4_static_params<
 					let vec_to_light_normal_dot = normal.dot(vec_to_light);
 					let angle_cos = vec_to_light_normal_dot * inv_sqrt_fast(vec_to_light_len2);
 
-					let diffuse_intensity = angle_cos.max(0.0);
+					let angle_cos_zero_clamped = angle_cos.max(0.0);
+					let diffuse_intensity = angle_cos_zero_clamped;
 
 					let specular_intensity = if true
 					{
@@ -414,7 +415,13 @@ fn build_surface_impl_4_static_params<
 						0.0
 					};
 
-					let light_combined = shadow_factor * (diffuse_intensity + specular_intensity) / vec_to_light_len2;
+					// This formula is correct for dielectrics.
+					// For metals almost all light is reflected.
+					let specular_k = angle_cos_zero_clamped * angle_cos_zero_clamped * angle_cos_zero_clamped;
+
+					let light_combined = shadow_factor *
+						(diffuse_intensity * specular_k + specular_intensity * (1.0 - specular_k)) /
+						vec_to_light_len2;
 
 					total_light[0] += light.color[0] * light_combined;
 					total_light[1] += light.color[1] * light_combined;
