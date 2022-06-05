@@ -408,7 +408,11 @@ fn build_surface_impl_4_static_params<
 						let vec_to_camera_light_reflected_angle_cos = vec_to_camera.dot(vec_to_light_reflected) *
 							inv_sqrt_fast(vec_to_camera_len2 * vec_to_light_len2);
 
-						8.0 / (128.0 - 127.0 * vec_to_camera_light_reflected_angle_cos.min(1.0))
+						// This formula is not physycally-correct but it gives good results.
+						let glossiness_shifted = 2.0 * texel_value.glossiness - 1.0;
+						((1.0 + 1.0 / 64.0) - glossiness_shifted * glossiness_shifted) /
+							((2.0 + 1.0 / 256.0) -
+								texel_value.glossiness - vec_to_camera_light_reflected_angle_cos.min(1.0))
 					}
 					else
 					{
@@ -417,10 +421,11 @@ fn build_surface_impl_4_static_params<
 
 					// This formula is correct for dielectrics.
 					// For metals almost all light is reflected.
-					let specular_k = angle_cos_zero_clamped * angle_cos_zero_clamped * angle_cos_zero_clamped;
+					let specular_k = texel_value.glossiness *
+						(1.0 - angle_cos_zero_clamped * angle_cos_zero_clamped * angle_cos_zero_clamped);
 
 					let light_combined = shadow_factor *
-						(diffuse_intensity * specular_k + specular_intensity * (1.0 - specular_k)) /
+						(diffuse_intensity * (1.0 - specular_k) + specular_intensity * specular_k) /
 						vec_to_light_len2;
 
 					total_light[0] += light.color[0] * light_combined;

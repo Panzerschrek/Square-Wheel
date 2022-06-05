@@ -11,6 +11,13 @@ pub struct Material
 	/// Normal map texture path.
 	pub normal_map: Option<String>,
 
+	/// 0 - no specular at all, material looks like diffuse.
+	/// 0.5 - some specular is visible.
+	/// 0.75 - specular is noticeable on most surfaces.
+	/// 1.0 - almost like a mirror.
+	#[serde(default)]
+	pub glossiness: f32,
+
 	/// If false - totally exclude from BSP build. Completely removes all polygons with such materials.
 	#[serde(default = "default_true")]
 	pub bsp: bool,
@@ -36,6 +43,7 @@ impl Default for Material
 		Self {
 			diffuse: None,
 			normal_map: None,
+			glossiness: 0.0,
 			bsp: true,
 			draw: true,
 			blocks_view: true,

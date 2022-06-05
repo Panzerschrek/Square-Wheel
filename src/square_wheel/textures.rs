@@ -19,6 +19,7 @@ pub struct TextureElement
 	pub diffuse: Color32,
 	/// Normal is always normalized.
 	pub normal: Vec3f,
+	pub glossiness: f32,
 }
 
 impl Default for TextureElement
@@ -28,6 +29,7 @@ impl Default for TextureElement
 		Self {
 			diffuse: Color32::black(),
 			normal: Vec3f::unit_z(),
+			glossiness: 0.0,
 		}
 	}
 }
@@ -59,7 +61,7 @@ pub fn load_textures(materials: &[material::Material], textures_path: &std::path
 			None
 		};
 
-		let mip0 = make_texture(diffuse, normals);
+		let mip0 = make_texture(diffuse, normals, material.glossiness);
 
 		result.push(build_mips(mip0));
 	}
@@ -101,7 +103,7 @@ fn make_stub_image() -> image::Image
 	result
 }
 
-fn make_texture(diffuse: image::Image, normals: Option<image::Image>) -> Texture
+fn make_texture(diffuse: image::Image, normals: Option<image::Image>, glossiness: f32) -> Texture
 {
 	let mut result = Texture {
 		size: diffuse.size,
@@ -112,6 +114,7 @@ fn make_texture(diffuse: image::Image, normals: Option<image::Image>) -> Texture
 	for (dst, src) in result.pixels.iter_mut().zip(diffuse.pixels.iter())
 	{
 		dst.diffuse = *src;
+		dst.glossiness = glossiness;
 	}
 
 	if let Some(mut n) = normals
@@ -194,6 +197,7 @@ fn build_mips(mip0: Texture) -> TextureWithMips
 				let p11 = prev_mip.pixels[src_x + 1 + src_offset1];
 				dst.diffuse = Color32::get_average_4([p00.diffuse, p01.diffuse, p10.diffuse, p11.diffuse]);
 				dst.normal = renormalize_normal(p00.normal + p01.normal + p10.normal + p11.normal);
+				dst.glossiness = (p00.glossiness + p01.glossiness + p10.glossiness + p11.glossiness) * 0.25;
 			}
 		}
 		result[i] = mip;
