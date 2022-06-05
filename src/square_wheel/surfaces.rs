@@ -397,7 +397,7 @@ fn build_surface_impl_4_static_params<
 					let vec_to_light_normal_dot = normal.dot(vec_to_light);
 					let angle_cos = vec_to_light_normal_dot * inv_sqrt_fast(vec_to_light_len2);
 
-					let diffuse_intensity = angle_cos.max(0.0) / vec_to_light_len2;
+					let diffuse_intensity = angle_cos.max(0.0);
 
 					let specular_intensity = if true
 					{
@@ -407,14 +407,14 @@ fn build_surface_impl_4_static_params<
 						let vec_to_camera_light_reflected_angle_cos = vec_to_camera.dot(vec_to_light_reflected) *
 							inv_sqrt_fast(vec_to_camera_len2 * vec_to_light_len2);
 
-						(1.0 / 65536.0) / (64.0 - 63.0 * vec_to_camera_light_reflected_angle_cos.min(1.0))
+						8.0 / (128.0 - 127.0 * vec_to_camera_light_reflected_angle_cos.min(1.0))
 					}
 					else
 					{
 						0.0
 					};
 
-					let light_combined = shadow_factor * (diffuse_intensity + specular_intensity);
+					let light_combined = shadow_factor * (diffuse_intensity + specular_intensity) / vec_to_light_len2;
 
 					total_light[0] += light.color[0] * light_combined;
 					total_light[1] += light.color[1] * light_combined;
