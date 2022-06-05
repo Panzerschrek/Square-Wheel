@@ -470,10 +470,21 @@ fn build_surface_impl_5_static_params<
 							((2.0 + 1.0 / 256.0) -
 								texel_value.glossiness - vec_to_camera_light_reflected_angle_cos.min(1.0));
 
+						// Schlick's approximation of Fresnel factor.
+						// See https://en.wikipedia.org/wiki/Schlick%27s_approximation.
+						let fresnel_factor = {
+							let n1 = 1.0;
+							let n2 = 1.3;
+							let r_root = (n1 - n2) / (n1 + n2);
+							let r0 = r_root * r_root;
+							let one_minus_angle_cos = (1.0 - angle_cos_zero_clamped).max(0.0);
+							let one_minus_angle_cos2 = one_minus_angle_cos * one_minus_angle_cos;
+							(1.0 - r0) - (1.0 - r0) * one_minus_angle_cos2 * one_minus_angle_cos2 * one_minus_angle_cos
+						};
+
 						// This formula is correct for dielectrics.
 						// TODO - fix this. For metals almost all light is reflected.
-						specular_k = texel_value.glossiness *
-							(1.0 - angle_cos_zero_clamped * angle_cos_zero_clamped * angle_cos_zero_clamped);
+						specular_k = texel_value.glossiness * fresnel_factor;
 					}
 
 					let light_combined = shadow_factor *
