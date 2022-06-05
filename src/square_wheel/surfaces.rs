@@ -254,13 +254,67 @@ fn build_surface_impl_3_static_params<
 	}
 }
 
-// Specify various settings as template params in order to get most efficient code for current combination of params.
-// Use chained dispatch in order to convert dynamic params into static.
 fn build_surface_impl_4_static_params<
 	const LIGHTAP_SCALE_LOG2: u32,
 	const USE_LIGHTMAP: bool,
 	const USE_DYNAMIC_LIGHTS: bool,
 	const USE_NORMAL_MAP: bool,
+>(
+	plane: &Plane,
+	tex_coord_equation: &[Plane; 2],
+	surface_size: [u32; 2],
+	surface_tc_min: [i32; 2],
+	texture: &textures::Texture,
+	lightmap_size: [u32; 2],
+	lightmap_tc_shift: [u32; 2],
+	lightmap_data: &[bsp_map_compact::LightmapElement],
+	dynamic_lights: &[LightWithShadowMap],
+	cam_pos: &Vec3f,
+	out_surface_data: &mut [Color32],
+)
+{
+	if texture.has_non_zero_glossiness
+	{
+		build_surface_impl_5_static_params::<LIGHTAP_SCALE_LOG2, USE_LIGHTMAP, USE_DYNAMIC_LIGHTS, USE_NORMAL_MAP, true>(
+			plane,
+			tex_coord_equation,
+			surface_size,
+			surface_tc_min,
+			texture,
+			lightmap_size,
+			lightmap_tc_shift,
+			lightmap_data,
+			dynamic_lights,
+			cam_pos,
+			out_surface_data,
+		);
+	}
+	else
+	{
+		build_surface_impl_5_static_params::<LIGHTAP_SCALE_LOG2, USE_LIGHTMAP, USE_DYNAMIC_LIGHTS, USE_NORMAL_MAP, false>(
+			plane,
+			tex_coord_equation,
+			surface_size,
+			surface_tc_min,
+			texture,
+			lightmap_size,
+			lightmap_tc_shift,
+			lightmap_data,
+			dynamic_lights,
+			cam_pos,
+			out_surface_data,
+		);
+	}
+}
+
+// Specify various settings as template params in order to get most efficient code for current combination of params.
+// Use chained dispatch in order to convert dynamic params into static.
+fn build_surface_impl_5_static_params<
+	const LIGHTAP_SCALE_LOG2: u32,
+	const USE_LIGHTMAP: bool,
+	const USE_DYNAMIC_LIGHTS: bool,
+	const USE_NORMAL_MAP: bool,
+	const USE_SPECULAR: bool,
 >(
 	plane: &Plane,
 	tex_coord_equation: &[Plane; 2],
@@ -400,7 +454,9 @@ fn build_surface_impl_4_static_params<
 					let angle_cos_zero_clamped = angle_cos.max(0.0);
 					let diffuse_intensity = angle_cos_zero_clamped;
 
-					let specular_intensity = if true
+					let mut specular_intensity = 0.0;
+					let mut specular_k = 0.0;
+					if USE_SPECULAR
 					{
 						let vec_to_light_reflected = normal * (2.0 * vec_to_light_normal_dot) - vec_to_light;
 						let vec_to_camera = cam_pos - pos;
@@ -408,21 +464,17 @@ fn build_surface_impl_4_static_params<
 						let vec_to_camera_light_reflected_angle_cos = vec_to_camera.dot(vec_to_light_reflected) *
 							inv_sqrt_fast(vec_to_camera_len2 * vec_to_light_len2);
 
-						// This formula is not physycally-correct but it gives good results.
+						// This formula is not physically-correct but it gives good results.
 						let glossiness_shifted = 2.0 * texel_value.glossiness - 1.0;
-						((1.0 + 1.0 / 64.0) - glossiness_shifted * glossiness_shifted) /
+						specular_intensity = ((1.0 + 1.0 / 64.0) - glossiness_shifted * glossiness_shifted) /
 							((2.0 + 1.0 / 256.0) -
-								texel_value.glossiness - vec_to_camera_light_reflected_angle_cos.min(1.0))
-					}
-					else
-					{
-						0.0
-					};
+								texel_value.glossiness - vec_to_camera_light_reflected_angle_cos.min(1.0));
 
-					// This formula is correct for dielectrics.
-					// For metals almost all light is reflected.
-					let specular_k = texel_value.glossiness *
-						(1.0 - angle_cos_zero_clamped * angle_cos_zero_clamped * angle_cos_zero_clamped);
+						// This formula is correct for dielectrics.
+						// TODO - fix this. For metals almost all light is reflected.
+						specular_k = texel_value.glossiness *
+							(1.0 - angle_cos_zero_clamped * angle_cos_zero_clamped * angle_cos_zero_clamped);
+					}
 
 					let light_combined = shadow_factor *
 						(diffuse_intensity * (1.0 - specular_k) + specular_intensity * specular_k) /

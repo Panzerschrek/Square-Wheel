@@ -11,6 +11,7 @@ pub struct Texture
 	pub size: [u32; 2],
 	pub pixels: Vec<TextureElement>,
 	pub has_normal_map: bool, // If false, normals data is trivial.
+	pub has_non_zero_glossiness: bool,
 }
 
 #[derive(Copy, Clone)]
@@ -105,16 +106,19 @@ fn make_stub_image() -> image::Image
 
 fn make_texture(diffuse: image::Image, normals: Option<image::Image>, glossiness: f32) -> Texture
 {
+	let glossiness_corrected = glossiness.max(0.0).min(1.0);
+
 	let mut result = Texture {
 		size: diffuse.size,
 		pixels: vec![TextureElement::default(); (diffuse.size[0] * diffuse.size[1]) as usize],
 		has_normal_map: normals.is_some(),
+		has_non_zero_glossiness: glossiness_corrected > 0.0,
 	};
 
 	for (dst, src) in result.pixels.iter_mut().zip(diffuse.pixels.iter())
 	{
 		dst.diffuse = *src;
-		dst.glossiness = glossiness;
+		dst.glossiness = glossiness_corrected;
 	}
 
 	if let Some(mut n) = normals
@@ -176,6 +180,7 @@ fn build_mips(mip0: Texture) -> TextureWithMips
 			size: [prev_mip.size[0] >> 1, prev_mip.size[1] >> 1],
 			pixels: Vec::new(),
 			has_normal_map: prev_mip.has_normal_map,
+			has_non_zero_glossiness: prev_mip.has_non_zero_glossiness,
 		};
 
 		mip.pixels = vec![TextureElement::default(); (mip.size[0] * mip.size[1]) as usize];
