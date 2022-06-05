@@ -255,7 +255,7 @@ impl Renderer
 			{
 				lights_with_shadow_maps.push((light, shadow_map));
 			}
-			self.build_polygons_surfaces(&lights_with_shadow_maps);
+			self.build_polygons_surfaces(camera_matrices, &lights_with_shadow_maps);
 		}
 
 		let surfaces_preparation_end_time = Clock::now();
@@ -659,7 +659,7 @@ impl Renderer
 		self.current_frame_visible_polygons.push(polygon_index as u32);
 	}
 
-	fn build_polygons_surfaces(&mut self, lights: &[LightWithShadowMap])
+	fn build_polygons_surfaces(&mut self, camera_matrices: &CameraMatrices, lights: &[LightWithShadowMap])
 	{
 		// Perform parallel surfaces building.
 		// Use "unsafe" to write into surfaces data concurrently.
@@ -728,6 +728,7 @@ impl Renderer
 				lightmap_tc_shift,
 				polygon_lightmap_data,
 				lights,
+				&camera_matrices.position,
 				surface_data,
 			);
 		};

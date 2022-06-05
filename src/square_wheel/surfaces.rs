@@ -14,6 +14,7 @@ pub fn build_surface(
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
+	cam_pos: &Vec3f,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -31,6 +32,7 @@ pub fn build_surface(
 			lightmap_tc_shift,
 			lightmap_data,
 			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
@@ -46,6 +48,7 @@ pub fn build_surface(
 			lightmap_tc_shift,
 			lightmap_data,
 			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
@@ -61,6 +64,7 @@ pub fn build_surface(
 			lightmap_tc_shift,
 			lightmap_data,
 			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
@@ -76,6 +80,7 @@ pub fn build_surface(
 			lightmap_tc_shift,
 			lightmap_data,
 			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
@@ -91,6 +96,7 @@ pub fn build_surface(
 			lightmap_tc_shift,
 			lightmap_data,
 			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
@@ -110,6 +116,7 @@ fn build_surface_impl_1_static_params<const LIGHTAP_SCALE_LOG2: u32>(
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
+	cam_pos: &Vec3f,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -125,6 +132,7 @@ fn build_surface_impl_1_static_params<const LIGHTAP_SCALE_LOG2: u32>(
 			lightmap_tc_shift,
 			lightmap_data,
 			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
@@ -140,6 +148,7 @@ fn build_surface_impl_1_static_params<const LIGHTAP_SCALE_LOG2: u32>(
 			lightmap_tc_shift,
 			lightmap_data,
 			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
@@ -155,6 +164,7 @@ fn build_surface_impl_2_static_params<const LIGHTAP_SCALE_LOG2: u32, const USE_L
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
+	cam_pos: &Vec3f,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -170,6 +180,7 @@ fn build_surface_impl_2_static_params<const LIGHTAP_SCALE_LOG2: u32, const USE_L
 			lightmap_tc_shift,
 			lightmap_data,
 			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
@@ -185,6 +196,7 @@ fn build_surface_impl_2_static_params<const LIGHTAP_SCALE_LOG2: u32, const USE_L
 			lightmap_tc_shift,
 			lightmap_data,
 			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
@@ -204,6 +216,7 @@ fn build_surface_impl_3_static_params<
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
+	cam_pos: &Vec3f,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -218,7 +231,8 @@ fn build_surface_impl_3_static_params<
 			lightmap_size,
 			lightmap_tc_shift,
 			lightmap_data,
-			&dynamic_lights,
+			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
@@ -234,6 +248,7 @@ fn build_surface_impl_3_static_params<
 			lightmap_tc_shift,
 			lightmap_data,
 			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
@@ -256,6 +271,7 @@ fn build_surface_impl_4_static_params<
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
+	cam_pos: &Vec3f,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -378,12 +394,31 @@ fn build_surface_impl_4_static_params<
 					let shadow_factor = cube_shadow_map_fetch(shadow_cube_map, &vec_to_light);
 
 					let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
-					let angle_cos = normal.dot(vec_to_light) * inv_sqrt_fast(vec_to_light_len2);
-					let light_scale = shadow_factor * angle_cos.max(0.0) / vec_to_light_len2;
+					let vec_to_light_normal_dot = normal.dot(vec_to_light);
+					let angle_cos = vec_to_light_normal_dot * inv_sqrt_fast(vec_to_light_len2);
 
-					total_light[0] += light.color[0] * light_scale;
-					total_light[1] += light.color[1] * light_scale;
-					total_light[2] += light.color[2] * light_scale;
+					let diffuse_intensity = angle_cos.max(0.0) / vec_to_light_len2;
+
+					let specular_intensity = if true
+					{
+						let vec_to_light_reflected = normal * (2.0 * vec_to_light_normal_dot) - vec_to_light;
+						let vec_to_camera = cam_pos - pos;
+						let vec_to_camera_len2 = vec_to_camera.magnitude2().max(MIN_POSITIVE_VALUE);
+						let vec_to_camera_light_reflected_angle_cos = vec_to_camera.dot(vec_to_light_reflected) *
+							inv_sqrt_fast(vec_to_camera_len2 * vec_to_light_len2);
+
+						vec_to_camera_light_reflected_angle_cos.max(0.0).min(1.0).powf(32.0) / 65536.0
+					}
+					else
+					{
+						0.0
+					};
+
+					let light_combined = shadow_factor * (diffuse_intensity + specular_intensity);
+
+					total_light[0] += light.color[0] * light_combined;
+					total_light[1] += light.color[1] * light_combined;
+					total_light[2] += light.color[2] * light_combined;
 				}
 			}
 
