@@ -407,7 +407,7 @@ fn build_surface_impl_4_static_params<
 						let vec_to_camera_light_reflected_angle_cos = vec_to_camera.dot(vec_to_light_reflected) *
 							inv_sqrt_fast(vec_to_camera_len2 * vec_to_light_len2);
 
-						vec_to_camera_light_reflected_angle_cos.max(0.0).min(1.0).powf(32.0) / 65536.0
+						(1.0 / 65536.0) / (64.0 - 63.0 * vec_to_camera_light_reflected_angle_cos.min(1.0))
 					}
 					else
 					{
