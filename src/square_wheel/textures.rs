@@ -62,7 +62,16 @@ pub fn load_textures(materials: &[material::Material], textures_path: &std::path
 			None
 		};
 
-		let mip0 = make_texture(diffuse, normals, material.glossiness);
+		let glossiness_map = if let Some(glossiness_map_texture) = &material.glossiness_map
+		{
+			load_image(&glossiness_map_texture.clone(), textures_path)
+		}
+		else
+		{
+			None
+		};
+
+		let mip0 = make_texture(diffuse, normals, material.glossiness, glossiness_map);
 
 		result.push(build_mips(mip0));
 	}
@@ -104,7 +113,12 @@ fn make_stub_image() -> image::Image
 	result
 }
 
-fn make_texture(diffuse: image::Image, normals: Option<image::Image>, glossiness: f32) -> Texture
+fn make_texture(
+	diffuse: image::Image,
+	normals: Option<image::Image>,
+	glossiness: f32,
+	glossiness_map: Option<image::Image>,
+) -> Texture
 {
 	let glossiness_corrected = glossiness.max(0.0).min(1.0);
 
@@ -112,7 +126,7 @@ fn make_texture(diffuse: image::Image, normals: Option<image::Image>, glossiness
 		size: diffuse.size,
 		pixels: vec![TextureElement::default(); (diffuse.size[0] * diffuse.size[1]) as usize],
 		has_normal_map: normals.is_some(),
-		has_non_zero_glossiness: glossiness_corrected > 0.0,
+		has_non_zero_glossiness: glossiness_corrected > 0.0 || glossiness_map.is_some(),
 	};
 
 	for (dst, src) in result.pixels.iter_mut().zip(diffuse.pixels.iter())
@@ -140,6 +154,20 @@ fn make_texture(diffuse: image::Image, normals: Option<image::Image>, glossiness
 				((rgb[2] as i32) - zero_level) as f32,
 			);
 			dst.normal = renormalize_normal(normal);
+		}
+	}
+
+	if let Some(mut g) = glossiness_map
+	{
+		if g.size != diffuse.size
+		{
+			let g_resized = resize_image(&g, diffuse.size);
+			g = g_resized;
+		}
+		for (dst, src) in result.pixels.iter_mut().zip(g.pixels.iter())
+		{
+			let rgb = src.get_rgb();
+			dst.glossiness = (rgb[0] as f32) / 255.0;
 		}
 	}
 

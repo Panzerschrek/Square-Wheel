@@ -18,6 +18,9 @@ pub struct Material
 	#[serde(default)]
 	pub glossiness: f32,
 
+	/// If non-empty - glossiness from this texture will be used instead of glossiness param.
+	pub glossiness_map: Option<String>,
+
 	/// If false - totally exclude from BSP build. Completely removes all polygons with such materials.
 	#[serde(default = "default_true")]
 	pub bsp: bool,
@@ -44,6 +47,7 @@ impl Default for Material
 			diffuse: None,
 			normal_map: None,
 			glossiness: 0.0,
+			glossiness_map: None,
 			bsp: true,
 			draw: true,
 			blocks_view: true,
