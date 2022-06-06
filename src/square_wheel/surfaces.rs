@@ -452,7 +452,7 @@ fn build_surface_impl_5_static_params<
 					let angle_cos = vec_to_light_normal_dot * inv_sqrt_fast(vec_to_light_len2);
 
 					let angle_cos_zero_clamped = angle_cos.max(0.0);
-					let diffuse_intensity = 1.0;
+					let diffuse_intensity = angle_cos_zero_clamped;
 
 					let mut specular_intensity = 0.0;
 					let mut specular_k = 0.0;
@@ -488,8 +488,7 @@ fn build_surface_impl_5_static_params<
 					}
 
 					let light_combined = shadow_factor *
-						angle_cos_zero_clamped * (diffuse_intensity * (1.0 - specular_k) +
-						specular_intensity * specular_k) /
+						(diffuse_intensity * (1.0 - specular_k) + specular_intensity * specular_k) /
 						vec_to_light_len2;
 
 					total_light[0] += light.color[0] * light_combined;
