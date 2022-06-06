@@ -15,6 +15,7 @@ pub fn build_surface(
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
+	override_glossiness: f32,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -33,6 +34,7 @@ pub fn build_surface(
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
+			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -49,6 +51,7 @@ pub fn build_surface(
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
+			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -65,6 +68,7 @@ pub fn build_surface(
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
+			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -81,6 +85,7 @@ pub fn build_surface(
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
+			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -97,6 +102,7 @@ pub fn build_surface(
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
+			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -117,6 +123,7 @@ fn build_surface_impl_1_static_params<const LIGHTAP_SCALE_LOG2: u32>(
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
+	override_glossiness: f32,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -133,6 +140,7 @@ fn build_surface_impl_1_static_params<const LIGHTAP_SCALE_LOG2: u32>(
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
+			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -149,6 +157,7 @@ fn build_surface_impl_1_static_params<const LIGHTAP_SCALE_LOG2: u32>(
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
+			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -165,6 +174,7 @@ fn build_surface_impl_2_static_params<const LIGHTAP_SCALE_LOG2: u32, const USE_L
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
+	override_glossiness: f32,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -181,6 +191,7 @@ fn build_surface_impl_2_static_params<const LIGHTAP_SCALE_LOG2: u32, const USE_L
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
+			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -197,6 +208,7 @@ fn build_surface_impl_2_static_params<const LIGHTAP_SCALE_LOG2: u32, const USE_L
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
+			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -217,6 +229,7 @@ fn build_surface_impl_3_static_params<
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
+	override_glossiness: f32,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -233,6 +246,7 @@ fn build_surface_impl_3_static_params<
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
+			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -249,6 +263,7 @@ fn build_surface_impl_3_static_params<
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
+			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -270,6 +285,7 @@ fn build_surface_impl_4_static_params<
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
+	override_glossiness: f32,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -286,6 +302,7 @@ fn build_surface_impl_4_static_params<
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
+			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -302,6 +319,7 @@ fn build_surface_impl_4_static_params<
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
+			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -326,6 +344,7 @@ fn build_surface_impl_5_static_params<
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
+	override_glossiness: f32,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -466,10 +485,10 @@ fn build_surface_impl_5_static_params<
 							inv_sqrt_fast(vec_to_camera_len2 * vec_to_light_len2);
 
 						// This formula is not physically-correct but it gives good results.
-						let glossiness_shifted = 2.0 * texel_value.glossiness - 1.0;
-						specular_intensity = ((1.0 + 1.0 / 64.0) - glossiness_shifted * glossiness_shifted) /
-							((2.0 + 1.0 / 256.0) -
-								texel_value.glossiness - vec_to_camera_light_reflected_angle_cos.min(1.0));
+						// TODO - avoid division here?
+						let inv_glossiness = 1.0 / (1.01 - override_glossiness);
+						let x = ((vec_to_camera_light_reflected_angle_cos - 1.0) * inv_glossiness).max(-1.0);
+						specular_intensity = (x * (x + 2.0) + 1.0) * inv_glossiness;
 
 						// Schlick's approximation of Fresnel factor.
 						// See https://en.wikipedia.org/wiki/Schlick%27s_approximation.
@@ -485,7 +504,7 @@ fn build_surface_impl_5_static_params<
 
 						// This formula is correct for dielectrics.
 						// TODO - fix this. For metals almost all light is reflected.
-						specular_k = texel_value.glossiness * fresnel_factor;
+						specular_k = override_glossiness * fresnel_factor;
 					}
 
 					let shadow_distance_factor = shadow_factor / vec_to_light_len2;
