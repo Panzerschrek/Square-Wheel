@@ -479,7 +479,7 @@ fn build_surface_impl_5_static_params<
 							let r0 = r_root * r_root;
 							let one_minus_angle_cos = (1.0 - angle_cos_zero_clamped).max(0.0);
 							let one_minus_angle_cos2 = one_minus_angle_cos * one_minus_angle_cos;
-							(1.0 - r0) - (1.0 - r0) * one_minus_angle_cos2 * one_minus_angle_cos2 * one_minus_angle_cos
+							r0 + (1.0 - r0) * one_minus_angle_cos2 * one_minus_angle_cos2 * one_minus_angle_cos
 						};
 
 						// This formula is correct for dielectrics.
