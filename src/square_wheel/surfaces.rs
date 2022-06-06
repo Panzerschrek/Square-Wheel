@@ -486,9 +486,9 @@ fn build_surface_impl_5_static_params<
 
 						// This formula is not physically-correct but it gives good results.
 						// TODO - avoid division here?
-						let inv_glossiness = 1.0 / (1.01 - override_glossiness);
-						let x = ((vec_to_camera_light_reflected_angle_cos - 1.0) * inv_glossiness).max(-1.0);
-						specular_intensity = (x * (x + 2.0) + 1.0) * inv_glossiness;
+						let inv_glossiness = 1.0 / (1.005 - override_glossiness);
+						let x = ((vec_to_camera_light_reflected_angle_cos - 1.0) * inv_glossiness).max(-2.0);
+						specular_intensity = (x * (x * 0.125 + 0.5) + 0.5) * inv_glossiness;
 
 						// Schlick's approximation of Fresnel factor.
 						// See https://en.wikipedia.org/wiki/Schlick%27s_approximation.
