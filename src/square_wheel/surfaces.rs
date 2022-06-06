@@ -406,7 +406,8 @@ fn build_surface_impl_5_static_params<
 		let start_pos_v = start_pos + (dst_v as f32) * v_vec;
 		for dst_texel in dst_line.iter_mut()
 		{
-			let mut total_light = [0.0, 0.0, 0.0];
+			let mut total_light_diffuse = [0.0, 0.0, 0.0];
+			let mut total_light_specular = [0.0, 0.0, 0.0];
 			if USE_LIGHTMAP
 			{
 				let lightmap_base_u = dst_u + lightmap_tc_shift[0];
@@ -419,7 +420,7 @@ fn build_surface_impl_5_static_params<
 				let k_minus_one = 1.0 - k;
 				for i in 0 .. 3
 				{
-					total_light[i] = l0[i] * k_minus_one + l1[i] * k;
+					total_light_diffuse[i] = l0[i] * k_minus_one + l1[i] * k;
 				}
 			}
 
@@ -487,26 +488,40 @@ fn build_surface_impl_5_static_params<
 						specular_k = texel_value.glossiness * fresnel_factor;
 					}
 
-					let light_combined = shadow_factor *
-						(diffuse_intensity * (1.0 - specular_k) + specular_intensity * specular_k) /
-						vec_to_light_len2;
+					let shadow_distance_factor = shadow_factor / vec_to_light_len2;
 
-					total_light[0] += light.color[0] * light_combined;
-					total_light[1] += light.color[1] * light_combined;
-					total_light[2] += light.color[2] * light_combined;
+					let light_intensity_diffuse = diffuse_intensity * (1.0 - specular_k) * shadow_distance_factor;
+					total_light_diffuse[0] += light.color[0] * light_intensity_diffuse;
+					total_light_diffuse[1] += light.color[1] * light_intensity_diffuse;
+					total_light_diffuse[2] += light.color[2] * light_intensity_diffuse;
+
+					if USE_SPECULAR
+					{
+						let light_intensity_specular = specular_intensity * specular_k * shadow_distance_factor;
+						total_light_specular[0] += light.color[0] * light_intensity_specular;
+						total_light_specular[1] += light.color[1] * light_intensity_specular;
+						total_light_specular[2] += light.color[2] * light_intensity_specular;
+					}
+				} // For dynamic lights.
+			} // If use dynmic lights.
+
+			let color_components = texel_value.diffuse.unpack_to_rgb_f32();
+
+			let mut result_color_components = [0.0, 0.0, 0.0];
+			for i in 0 .. 3
+			{
+				let mut c = color_components[i] * total_light_diffuse[i];
+				if USE_SPECULAR
+				{
+					// For non-metals specular reflection is white.
+					c += total_light_specular[i] * Color32::MAX_RGB_F32_COMPONENTS[i];
 				}
+				result_color_components[i] = c.min(Color32::MAX_RGB_F32_COMPONENTS[i]);
 			}
-
-			let components = texel_value.diffuse.unpack_to_rgb_f32();
-			let components_modulated = [
-				(components[0] * total_light[0]).min(Color32::MAX_RGB_F32_COMPONENTS[0]),
-				(components[1] * total_light[1]).min(Color32::MAX_RGB_F32_COMPONENTS[1]),
-				(components[2] * total_light[2]).min(Color32::MAX_RGB_F32_COMPONENTS[2]),
-			];
 
 			// Here we 100% sure that components overflow is not possible (because of "min").
 			// NaNs are not possible here too.
-			let color_packed = unsafe { Color32::from_rgb_f32_unchecked(&components_modulated) };
+			let color_packed = unsafe { Color32::from_rgb_f32_unchecked(&result_color_components) };
 
 			*dst_texel = color_packed;
 			src_u += 1;
