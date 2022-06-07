@@ -487,23 +487,24 @@ fn build_surface_impl_5_static_params<
 						// This formula is not physically-correct but it gives good results.
 						let glossiness_scaled = 255.0 * override_glossiness;
 						let x = ((vec_to_camera_light_reflected_angle_cos - 1.0) * glossiness_scaled).max(-2.0);
-						specular_intensity = (x * (x * 0.125 + 0.5) + 0.5) * glossiness_scaled;
+						specular_intensity = (x * (x * 0.0625 + 0.25) + 0.25) * glossiness_scaled;
 
 						// Schlick's approximation of Fresnel factor.
 						// See https://en.wikipedia.org/wiki/Schlick%27s_approximation.
 						let fresnel_factor = {
-							let n1 = 1.0;
-							let n2 = 1.3;
-							let r_root = (n1 - n2) / (n1 + n2);
-							let r0 = r_root * r_root;
 							let one_minus_angle_cos = (1.0 - angle_cos_zero_clamped).max(0.0);
 							let one_minus_angle_cos2 = one_minus_angle_cos * one_minus_angle_cos;
-							r0 + (1.0 - r0) * one_minus_angle_cos2 * one_minus_angle_cos2 * one_minus_angle_cos
+							DIELECTRIC_ZERO_REFLECTIVITY +
+								(1.0 - DIELECTRIC_ZERO_REFLECTIVITY) *
+									one_minus_angle_cos2 * one_minus_angle_cos2 *
+									one_minus_angle_cos
 						};
 
-						// This formula is correct for dielectrics.
-						// TODO - fix this. For metals almost all light is reflected.
-						specular_k = override_glossiness * fresnel_factor;
+						// For glossy surface we can just use Fresnel factor for diffuse/specular mixing.
+						// But for rough srufaces we can't. Normally we should use some sort of integral of Schlick's approximation.
+						// But it's too expensive. So, just make mix of Fresnel factor depending on view angle with constant factor for absolutely rough surface.
+						specular_k = fresnel_factor * override_glossiness +
+							DIELECTRIC_AVERAGE_REFLECTIVITY * (1.0 - override_glossiness);
 					}
 
 					let shadow_distance_factor = shadow_factor / vec_to_light_len2;
@@ -613,6 +614,9 @@ fn cube_shadow_map_side_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f, side
 }
 
 const MIN_POSITIVE_VALUE: f32 = 1.0 / ((1 << 30) as f32);
+
+const DIELECTRIC_ZERO_REFLECTIVITY: f32 = 0.04;
+const DIELECTRIC_AVERAGE_REFLECTIVITY: f32 = DIELECTRIC_ZERO_REFLECTIVITY * 3.0;
 
 // Relative erorr <= 1.5 * 2^(-12)
 #[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
