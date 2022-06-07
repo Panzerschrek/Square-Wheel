@@ -461,53 +461,69 @@ fn build_surface_impl_5_static_params<
 					plane_normal_normalized
 				};
 
+				let vec_to_camera_reflected;
+				let vec_to_camera_len2;
+				let fresnel_factor;
+				if USE_SPECULAR
+				{
+					// Calculate reflected view angle and fresnel factor based on it.
+					// Use these data later for calculation o specular light for all dynamic lights.
+					let vec_to_camera = cam_pos - pos;
+					let vec_to_camera_normal_dot = vec_to_camera.dot(normal);
+					vec_to_camera_reflected = normal * (2.0 * vec_to_camera_normal_dot) - vec_to_camera;
+					vec_to_camera_len2 = vec_to_camera_reflected.magnitude2().max(MIN_POSITIVE_VALUE);
+
+					let vec_to_camera_normal_angle_cos =
+						(vec_to_camera_normal_dot * inv_sqrt_fast(vec_to_camera_len2)).max(0.0);
+
+					// Schlick's approximation of Fresnel factor.
+					// See https://en.wikipedia.org/wiki/Schlick%27s_approximation.
+					fresnel_factor = {
+						let one_minus_angle_cos = (1.0 - vec_to_camera_normal_angle_cos).max(0.0);
+						let one_minus_angle_cos2 = one_minus_angle_cos * one_minus_angle_cos;
+						DIELECTRIC_ZERO_REFLECTIVITY +
+							(1.0 - DIELECTRIC_ZERO_REFLECTIVITY) *
+								one_minus_angle_cos2 * one_minus_angle_cos2 *
+								one_minus_angle_cos
+					};
+				}
+				else
+				{
+					vec_to_camera_reflected = Vec3f::zero();
+					vec_to_camera_len2 = MIN_POSITIVE_VALUE;
+					fresnel_factor = 0.0;
+				}
+
 				for (light, shadow_cube_map) in dynamic_lights
 				{
 					let vec_to_light = light.pos - pos;
 
 					let shadow_factor = cube_shadow_map_fetch(shadow_cube_map, &vec_to_light);
-
 					let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
-					let vec_to_light_normal_dot = normal.dot(vec_to_light);
-					let angle_cos = vec_to_light_normal_dot * inv_sqrt_fast(vec_to_light_len2);
+					let shadow_distance_factor = shadow_factor / vec_to_light_len2;
 
-					let angle_cos_zero_clamped = angle_cos.max(0.0);
-					let diffuse_intensity = angle_cos_zero_clamped;
+					let diffuse_intensity = (normal.dot(vec_to_light) * inv_sqrt_fast(vec_to_light_len2)).max(0.0);
 
 					let mut specular_intensity = 0.0;
 					let mut specular_k = 0.0;
 					if USE_SPECULAR
 					{
-						let vec_to_light_reflected = normal * (2.0 * vec_to_light_normal_dot) - vec_to_light;
-						let vec_to_camera = cam_pos - pos;
-						let vec_to_camera_len2 = vec_to_camera.magnitude2().max(MIN_POSITIVE_VALUE);
-						let vec_to_camera_light_reflected_angle_cos = vec_to_camera.dot(vec_to_light_reflected) *
+						let vec_to_camera_reflected_light_angle_cos = vec_to_camera_reflected.dot(vec_to_light) *
 							inv_sqrt_fast(vec_to_camera_len2 * vec_to_light_len2);
 
 						// This formula is not physically-correct but it gives good results.
+						// TODO - reduce this constant?
 						let glossiness_scaled = 255.0 * override_glossiness;
-						let x = ((vec_to_camera_light_reflected_angle_cos - 1.0) * glossiness_scaled).max(-2.0);
+						let x = ((vec_to_camera_reflected_light_angle_cos - 1.0) * glossiness_scaled).max(-2.0);
 						specular_intensity = (x * (x * 0.0625 + 0.25) + 0.25) * glossiness_scaled;
-
-						// Schlick's approximation of Fresnel factor.
-						// See https://en.wikipedia.org/wiki/Schlick%27s_approximation.
-						let fresnel_factor = {
-							let one_minus_angle_cos = (1.0 - angle_cos_zero_clamped).max(0.0);
-							let one_minus_angle_cos2 = one_minus_angle_cos * one_minus_angle_cos;
-							DIELECTRIC_ZERO_REFLECTIVITY +
-								(1.0 - DIELECTRIC_ZERO_REFLECTIVITY) *
-									one_minus_angle_cos2 * one_minus_angle_cos2 *
-									one_minus_angle_cos
-						};
 
 						// For glossy surface we can just use Fresnel factor for diffuse/specular mixing.
 						// But for rough srufaces we can't. Normally we should use some sort of integral of Schlick's approximation.
 						// But it's too expensive. So, just make mix of Fresnel factor depending on view angle with constant factor for absolutely rough surface.
+						// TODO - us non-linear glissiness here?
 						specular_k = fresnel_factor * override_glossiness +
 							DIELECTRIC_AVERAGE_REFLECTIVITY * (1.0 - override_glossiness);
 					}
-
-					let shadow_distance_factor = shadow_factor / vec_to_light_len2;
 
 					let light_intensity_diffuse = diffuse_intensity * (1.0 - specular_k) * shadow_distance_factor;
 					total_light_diffuse[0] += light.color[0] * light_intensity_diffuse;
