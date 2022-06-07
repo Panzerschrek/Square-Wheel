@@ -512,8 +512,7 @@ fn build_surface_impl_5_static_params<
 							inv_sqrt_fast(vec_to_camera_len2 * vec_to_light_len2);
 
 						// This formula is not physically-correct but it gives good results.
-						// TODO - reduce this constant?
-						let glossiness_scaled = 255.0 * override_glossiness;
+						let glossiness_scaled = 64.0 * override_glossiness;
 						let x = ((vec_to_camera_reflected_light_angle_cos - 1.0) * glossiness_scaled).max(-2.0);
 						specular_intensity = (x * (x * 0.0625 + 0.25) + 0.25) * glossiness_scaled;
 
