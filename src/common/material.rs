@@ -12,8 +12,9 @@ pub struct Material
 	pub normal_map: Option<String>,
 
 	/// 0 - no specular at all, material looks like diffuse.
-	/// 0.5 - some specular is visible.
-	/// 0.75 - specular is noticeable on most surfaces.
+	/// 0.1 - some specular is visible.
+	/// 0.25 - specular is noticeable on most surfaces.
+	/// 0.5 - slightly rough mirror.
 	/// 1.0 - almost like a mirror.
 	#[serde(default)]
 	pub glossiness: f32,
