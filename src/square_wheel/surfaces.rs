@@ -291,49 +291,52 @@ fn build_surface_impl_4_static_params<
 {
 	if texture.has_non_zero_glossiness
 	{
-		build_surface_impl_5_static_params::<
-			LIGHTAP_SCALE_LOG2,
-			USE_LIGHTMAP,
-			USE_DYNAMIC_LIGHTS,
-			USE_NORMAL_MAP,
-			SPECULAR_TYPE_NONE,
-		>(
-			plane,
-			tex_coord_equation,
-			surface_size,
-			surface_tc_min,
-			texture,
-			lightmap_size,
-			lightmap_tc_shift,
-			lightmap_data,
-			dynamic_lights,
-			cam_pos,
-			override_glossiness,
-			out_surface_data,
-		);
-	}
-	else if texture.is_metal
-	{
-		build_surface_impl_5_static_params::<
-			LIGHTAP_SCALE_LOG2,
-			USE_LIGHTMAP,
-			USE_DYNAMIC_LIGHTS,
-			USE_NORMAL_MAP,
-			SPECULAR_TYPE_METAL,
-		>(
-			plane,
-			tex_coord_equation,
-			surface_size,
-			surface_tc_min,
-			texture,
-			lightmap_size,
-			lightmap_tc_shift,
-			lightmap_data,
-			dynamic_lights,
-			cam_pos,
-			override_glossiness,
-			out_surface_data,
-		);
+		if texture.is_metal
+		{
+			build_surface_impl_5_static_params::<
+				LIGHTAP_SCALE_LOG2,
+				USE_LIGHTMAP,
+				USE_DYNAMIC_LIGHTS,
+				USE_NORMAL_MAP,
+				SPECULAR_TYPE_METAL,
+			>(
+				plane,
+				tex_coord_equation,
+				surface_size,
+				surface_tc_min,
+				texture,
+				lightmap_size,
+				lightmap_tc_shift,
+				lightmap_data,
+				dynamic_lights,
+				cam_pos,
+				override_glossiness,
+				out_surface_data,
+			);
+		}
+		else
+		{
+			build_surface_impl_5_static_params::<
+				LIGHTAP_SCALE_LOG2,
+				USE_LIGHTMAP,
+				USE_DYNAMIC_LIGHTS,
+				USE_NORMAL_MAP,
+				SPECULAR_TYPE_DIELECTRIC,
+			>(
+				plane,
+				tex_coord_equation,
+				surface_size,
+				surface_tc_min,
+				texture,
+				lightmap_size,
+				lightmap_tc_shift,
+				lightmap_data,
+				dynamic_lights,
+				cam_pos,
+				override_glossiness,
+				out_surface_data,
+			);
+		}
 	}
 	else
 	{
@@ -342,7 +345,7 @@ fn build_surface_impl_4_static_params<
 			USE_LIGHTMAP,
 			USE_DYNAMIC_LIGHTS,
 			USE_NORMAL_MAP,
-			SPECULAR_TYPE_DIELECTRIC,
+			SPECULAR_TYPE_NONE,
 		>(
 			plane,
 			tex_coord_equation,
@@ -387,8 +390,6 @@ fn build_surface_impl_5_static_params<
 	out_surface_data: &mut [Color32],
 )
 {
-	let use_specular = SPECULAR_TYPE != SPECULAR_TYPE_NONE;
-
 	// Calculate inverse matrix for tex_coord equation and plane equation in order to calculate world position for UV.
 	// TODO - project tc equation to surface plane?
 	let tex_coord_basis = Mat4f::from_cols(
@@ -466,8 +467,8 @@ fn build_surface_impl_5_static_params<
 		let start_pos_v = start_pos + (dst_v as f32) * v_vec;
 		for dst_texel in dst_line.iter_mut()
 		{
-			let mut total_light_diffuse = [0.0, 0.0, 0.0];
-			let mut total_light_specular = [0.0, 0.0, 0.0];
+			let mut total_light_albedo_modulated = [0.0, 0.0, 0.0];
+			let mut total_light_direct = [0.0, 0.0, 0.0];
 			if USE_LIGHTMAP
 			{
 				let lightmap_base_u = dst_u + lightmap_tc_shift[0];
@@ -480,7 +481,7 @@ fn build_surface_impl_5_static_params<
 				let k_minus_one = 1.0 - k;
 				for i in 0 .. 3
 				{
-					total_light_diffuse[i] = l0[i] * k_minus_one + l1[i] * k;
+					total_light_albedo_modulated[i] = l0[i] * k_minus_one + l1[i] * k;
 				}
 			}
 
@@ -504,8 +505,8 @@ fn build_surface_impl_5_static_params<
 
 				let vec_to_camera_reflected;
 				let vec_to_camera_len2;
-				let fresnel_factor;
-				if use_specular
+				let specular_k;
+				if SPECULAR_TYPE != SPECULAR_TYPE_NONE
 				{
 					// Calculate reflected view angle and fresnel factor based on it.
 					// Use these data later for calculation o specular light for all dynamic lights.
@@ -519,20 +520,38 @@ fn build_surface_impl_5_static_params<
 
 					// Schlick's approximation of Fresnel factor.
 					// See https://en.wikipedia.org/wiki/Schlick%27s_approximation.
-					fresnel_factor = {
-						let one_minus_angle_cos = (1.0 - vec_to_camera_normal_angle_cos).max(0.0);
-						let one_minus_angle_cos2 = one_minus_angle_cos * one_minus_angle_cos;
-						DIELECTRIC_ZERO_REFLECTIVITY +
-							(1.0 - DIELECTRIC_ZERO_REFLECTIVITY) *
-								one_minus_angle_cos2 * one_minus_angle_cos2 *
-								one_minus_angle_cos
-					};
+
+					// For glossy surface we can just use Fresnel factor for diffuse/specular mixing.
+					// But for rough srufaces we can't. Normally we should use some sort of integral of Schlick's approximation.
+					// But it's too expensive. So, just make mix of Fresnel factor depending on view angle with constant factor for absolutely rough surface.
+					// TODO - us non-linear glossiness here?
+
+					let one_minus_angle_cos = (1.0 - vec_to_camera_normal_angle_cos).max(0.0);
+					let one_minus_angle_cos2 = one_minus_angle_cos * one_minus_angle_cos;
+					let fresnel_factor_base = one_minus_angle_cos2 * one_minus_angle_cos2 * one_minus_angle_cos;
+					if SPECULAR_TYPE == SPECULAR_TYPE_DIELECTRIC
+					{
+						let fresnel_factor =
+							DIELECTRIC_ZERO_REFLECTIVITY + (1.0 - DIELECTRIC_ZERO_REFLECTIVITY) * fresnel_factor_base;
+
+						specular_k = fresnel_factor * override_glossiness +
+							DIELECTRIC_AVERAGE_REFLECTIVITY * (1.0 - override_glossiness);
+					}
+					else if SPECULAR_TYPE == SPECULAR_TYPE_METAL
+					{
+						specular_k = fresnel_factor_base * override_glossiness +
+							METAL_AVERAGE_SCHLICK_FACTOR * (1.0 - override_glossiness);
+					}
+					else
+					{
+						specular_k = 0.0;
+					}
 				}
 				else
 				{
 					vec_to_camera_reflected = Vec3f::zero();
 					vec_to_camera_len2 = MIN_POSITIVE_VALUE;
-					fresnel_factor = 0.0;
+					specular_k = 0.0;
 				}
 
 				for (light, shadow_cube_map) in dynamic_lights
@@ -543,11 +562,22 @@ fn build_surface_impl_5_static_params<
 					let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
 					let shadow_distance_factor = shadow_factor / vec_to_light_len2;
 
-					let diffuse_intensity = (normal.dot(vec_to_light) * inv_sqrt_fast(vec_to_light_len2)).max(0.0);
+					let diffuse_intensity = if SPECULAR_TYPE == SPECULAR_TYPE_METAL
+					{
+						// No diffuse light for metalls.
+						0.0
+					}
+					else
+					{
+						(normal.dot(vec_to_light) * inv_sqrt_fast(vec_to_light_len2)).max(0.0)
+					};
 
-					let mut specular_intensity = 0.0;
-					let mut specular_k = 0.0;
-					if use_specular
+					let specular_intensity = if SPECULAR_TYPE == SPECULAR_TYPE_NONE
+					{
+						// No specular for surfaces without specular.
+						0.0
+					}
+					else
 					{
 						let vec_to_camera_reflected_light_angle_cos = vec_to_camera_reflected.dot(vec_to_light) *
 							inv_sqrt_fast(vec_to_camera_len2 * vec_to_light_len2);
@@ -555,27 +585,49 @@ fn build_surface_impl_5_static_params<
 						// This formula is not physically-correct but it gives good results.
 						let glossiness_scaled = 64.0 * override_glossiness;
 						let x = ((vec_to_camera_reflected_light_angle_cos - 1.0) * glossiness_scaled).max(-2.0);
-						specular_intensity = (x * (x * 0.0625 + 0.25) + 0.25) * glossiness_scaled;
+						(x * (x * 0.0625 + 0.25) + 0.25) * glossiness_scaled
+					};
 
-						// For glossy surface we can just use Fresnel factor for diffuse/specular mixing.
-						// But for rough srufaces we can't. Normally we should use some sort of integral of Schlick's approximation.
-						// But it's too expensive. So, just make mix of Fresnel factor depending on view angle with constant factor for absolutely rough surface.
-						// TODO - us non-linear glissiness here?
-						specular_k = fresnel_factor * override_glossiness +
-							DIELECTRIC_AVERAGE_REFLECTIVITY * (1.0 - override_glossiness);
-					}
-
-					let light_intensity_diffuse = diffuse_intensity * (1.0 - specular_k) * shadow_distance_factor;
-					total_light_diffuse[0] += light.color[0] * light_intensity_diffuse;
-					total_light_diffuse[1] += light.color[1] * light_intensity_diffuse;
-					total_light_diffuse[2] += light.color[2] * light_intensity_diffuse;
-
-					if use_specular
+					match SPECULAR_TYPE
 					{
-						let light_intensity_specular = specular_intensity * specular_k * shadow_distance_factor;
-						total_light_specular[0] += light.color[0] * light_intensity_specular;
-						total_light_specular[1] += light.color[1] * light_intensity_specular;
-						total_light_specular[2] += light.color[2] * light_intensity_specular;
+						SPECULAR_TYPE_NONE =>
+						{
+							total_light_albedo_modulated[0] += light.color[0] * shadow_distance_factor;
+							total_light_albedo_modulated[1] += light.color[1] * shadow_distance_factor;
+							total_light_albedo_modulated[2] += light.color[2] * shadow_distance_factor;
+						},
+						SPECULAR_TYPE_DIELECTRIC =>
+						{
+							let light_intensity_diffuse =
+								diffuse_intensity * (1.0 - specular_k) * shadow_distance_factor;
+							total_light_albedo_modulated[0] += light.color[0] * light_intensity_diffuse;
+							total_light_albedo_modulated[1] += light.color[1] * light_intensity_diffuse;
+							total_light_albedo_modulated[2] += light.color[2] * light_intensity_diffuse;
+
+							let light_intensity_specular = specular_intensity * specular_k * shadow_distance_factor;
+							total_light_direct[0] += light.color[0] * light_intensity_specular;
+							total_light_direct[1] += light.color[1] * light_intensity_specular;
+							total_light_direct[2] += light.color[2] * light_intensity_specular;
+						},
+						SPECULAR_TYPE_METAL =>
+						{
+							let specular_intensity_shadow_distance_factor = specular_intensity * shadow_distance_factor;
+
+							let light_intensity_modulated =
+								(1.0 - specular_k) * specular_intensity_shadow_distance_factor;
+							total_light_albedo_modulated[0] += light.color[0] * light_intensity_modulated;
+							total_light_albedo_modulated[1] += light.color[1] * light_intensity_modulated;
+							total_light_albedo_modulated[2] += light.color[2] * light_intensity_modulated;
+
+							let light_intensity_direct = specular_k * specular_intensity_shadow_distance_factor;
+							total_light_direct[0] += light.color[0] * light_intensity_direct;
+							total_light_direct[1] += light.color[1] * light_intensity_direct;
+							total_light_direct[2] += light.color[2] * light_intensity_direct;
+						},
+						_ =>
+						{
+							panic!("Wrong specular type!")
+						},
 					}
 				} // For dynamic lights.
 			} // If use dynmic lights.
@@ -585,11 +637,10 @@ fn build_surface_impl_5_static_params<
 			let mut result_color_components = [0.0, 0.0, 0.0];
 			for i in 0 .. 3
 			{
-				let mut c = color_components[i] * total_light_diffuse[i];
-				if use_specular
+				let mut c = color_components[i] * total_light_albedo_modulated[i];
+				if SPECULAR_TYPE != SPECULAR_TYPE_NONE
 				{
-					// For non-metals specular reflection is white.
-					c += total_light_specular[i] * Color32::MAX_RGB_F32_COMPONENTS[i];
+					c += total_light_direct[i] * Color32::MAX_RGB_F32_COMPONENTS[i];
 				}
 				result_color_components[i] = c.min(Color32::MAX_RGB_F32_COMPONENTS[i]);
 			}
@@ -673,6 +724,7 @@ const MIN_POSITIVE_VALUE: f32 = 1.0 / ((1 << 30) as f32);
 
 const DIELECTRIC_ZERO_REFLECTIVITY: f32 = 0.04;
 const DIELECTRIC_AVERAGE_REFLECTIVITY: f32 = DIELECTRIC_ZERO_REFLECTIVITY * 3.0;
+const METAL_AVERAGE_SCHLICK_FACTOR: f32 = 0.5;
 
 // Relative erorr <= 1.5 * 2^(-12)
 #[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
