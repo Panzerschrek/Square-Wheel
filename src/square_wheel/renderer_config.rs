@@ -27,9 +27,6 @@ pub struct RendererConfig
 
 	#[serde(default)]
 	pub textures_path: String,
-
-	#[serde(default)]
-	pub override_glossiness: f32,
 }
 
 impl RendererConfig

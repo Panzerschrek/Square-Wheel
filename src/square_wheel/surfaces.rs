@@ -15,7 +15,6 @@ pub fn build_surface(
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
-	override_glossiness: f32,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -34,7 +33,6 @@ pub fn build_surface(
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
-			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -51,7 +49,6 @@ pub fn build_surface(
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
-			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -68,7 +65,6 @@ pub fn build_surface(
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
-			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -85,7 +81,6 @@ pub fn build_surface(
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
-			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -102,7 +97,6 @@ pub fn build_surface(
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
-			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -123,7 +117,6 @@ fn build_surface_impl_1_static_params<const LIGHTAP_SCALE_LOG2: u32>(
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
-	override_glossiness: f32,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -140,7 +133,6 @@ fn build_surface_impl_1_static_params<const LIGHTAP_SCALE_LOG2: u32>(
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
-			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -157,7 +149,6 @@ fn build_surface_impl_1_static_params<const LIGHTAP_SCALE_LOG2: u32>(
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
-			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -174,7 +165,6 @@ fn build_surface_impl_2_static_params<const LIGHTAP_SCALE_LOG2: u32, const USE_L
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
-	override_glossiness: f32,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -191,7 +181,6 @@ fn build_surface_impl_2_static_params<const LIGHTAP_SCALE_LOG2: u32, const USE_L
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
-			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -208,7 +197,6 @@ fn build_surface_impl_2_static_params<const LIGHTAP_SCALE_LOG2: u32, const USE_L
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
-			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -229,7 +217,6 @@ fn build_surface_impl_3_static_params<
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
-	override_glossiness: f32,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -246,7 +233,6 @@ fn build_surface_impl_3_static_params<
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
-			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -263,7 +249,6 @@ fn build_surface_impl_3_static_params<
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
-			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -285,7 +270,6 @@ fn build_surface_impl_4_static_params<
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
-	override_glossiness: f32,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -310,7 +294,6 @@ fn build_surface_impl_4_static_params<
 				lightmap_data,
 				dynamic_lights,
 				cam_pos,
-				override_glossiness,
 				out_surface_data,
 			);
 		}
@@ -333,7 +316,6 @@ fn build_surface_impl_4_static_params<
 				lightmap_data,
 				dynamic_lights,
 				cam_pos,
-				override_glossiness,
 				out_surface_data,
 			);
 		}
@@ -357,7 +339,6 @@ fn build_surface_impl_4_static_params<
 			lightmap_data,
 			dynamic_lights,
 			cam_pos,
-			override_glossiness,
 			out_surface_data,
 		);
 	}
@@ -386,7 +367,6 @@ fn build_surface_impl_5_static_params<
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
-	override_glossiness: f32,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -534,13 +514,13 @@ fn build_surface_impl_5_static_params<
 						let fresnel_factor =
 							DIELECTRIC_ZERO_REFLECTIVITY + (1.0 - DIELECTRIC_ZERO_REFLECTIVITY) * fresnel_factor_base;
 
-						specular_k = fresnel_factor * override_glossiness +
-							DIELECTRIC_AVERAGE_REFLECTIVITY * (1.0 - override_glossiness);
+						specular_k = fresnel_factor * texel_value.glossiness +
+							DIELECTRIC_AVERAGE_REFLECTIVITY * (1.0 - texel_value.glossiness);
 					}
 					else if SPECULAR_TYPE == SPECULAR_TYPE_METAL
 					{
-						specular_k = fresnel_factor_base * override_glossiness +
-							METAL_AVERAGE_SCHLICK_FACTOR * (1.0 - override_glossiness);
+						specular_k = fresnel_factor_base * texel_value.glossiness +
+							METAL_AVERAGE_SCHLICK_FACTOR * (1.0 - texel_value.glossiness);
 					}
 					else
 					{
@@ -583,7 +563,7 @@ fn build_surface_impl_5_static_params<
 							inv_sqrt_fast(vec_to_camera_len2 * vec_to_light_len2);
 
 						// This formula is not physically-correct but it gives good results.
-						let glossiness_scaled = 64.0 * override_glossiness;
+						let glossiness_scaled = 64.0 * texel_value.glossiness;
 						let x = ((vec_to_camera_reflected_light_angle_cos - 1.0) * glossiness_scaled).max(-2.0);
 						(x * (x * 0.0625 + 0.25) + 0.25) * glossiness_scaled
 					};

@@ -669,7 +669,6 @@ impl Renderer
 		let polygons = &self.map.polygons;
 		let polygons_data = &self.polygons_data;
 		let textures = &self.textures;
-		let override_glossiness = self.config.override_glossiness;
 
 		let surfaces_pixels_shared = SharedMutSlice::new(&mut self.surfaces_pixels);
 
@@ -730,7 +729,6 @@ impl Renderer
 				polygon_lightmap_data,
 				lights,
 				&camera_matrices.position,
-				override_glossiness,
 				surface_data,
 			);
 		};
