@@ -122,20 +122,23 @@ fn make_texture(
 	is_metal: bool,
 ) -> Texture
 {
-	let glossiness_corrected = glossiness.max(0.0).min(1.0);
+	// Do not allow absolte zero glossiness. Limit it to some small value.
+	const MIN_VALID_GLOSSINESS: f32 = 1.0 / 72.0;
+
+	let glossiness_clamped = glossiness.max(0.0).min(1.0);
 
 	let mut result = Texture {
 		size: diffuse.size,
 		pixels: vec![TextureElement::default(); (diffuse.size[0] * diffuse.size[1]) as usize],
 		has_normal_map: normals.is_some(),
-		has_non_zero_glossiness: glossiness_corrected > 0.0 || glossiness_map.is_some(),
+		has_non_zero_glossiness: glossiness_clamped > 0.0 || glossiness_map.is_some(),
 		is_metal,
 	};
 
 	for (dst, src) in result.pixels.iter_mut().zip(diffuse.pixels.iter())
 	{
 		dst.diffuse = *src;
-		dst.glossiness = glossiness_corrected;
+		dst.glossiness = glossiness_clamped.max(MIN_VALID_GLOSSINESS);
 	}
 
 	if let Some(mut n) = normals
@@ -170,7 +173,7 @@ fn make_texture(
 		for (dst, src) in result.pixels.iter_mut().zip(g.pixels.iter())
 		{
 			let rgb = src.get_rgb();
-			dst.glossiness = (rgb[0] as f32) / 255.0;
+			dst.glossiness = ((rgb[0] as f32) / 255.0).max(MIN_VALID_GLOSSINESS);
 		}
 	}
 
