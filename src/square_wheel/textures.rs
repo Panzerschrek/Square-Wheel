@@ -185,7 +185,7 @@ fn resize_image(image: &image::Image, target_size: [u32; 2]) -> image::Image
 {
 	let mut result = image::Image {
 		size: target_size,
-		pixels: vec![Color32::from_rgb(255, 0, 255); 16 * 16],
+		pixels: vec![Color32::black(); (target_size[0] * target_size[1]) as usize],
 	};
 
 	for y in 0 .. result.size[1]
