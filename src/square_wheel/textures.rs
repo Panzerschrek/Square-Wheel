@@ -122,9 +122,6 @@ fn make_texture(
 	is_metal: bool,
 ) -> Texture
 {
-	// Do not allow absolte zero glossiness. Limit it to some small value.
-	const MIN_VALID_GLOSSINESS: f32 = 1.0 / 72.0;
-
 	let glossiness_clamped = glossiness.max(0.0).min(1.0);
 
 	let mut result = Texture {
@@ -235,9 +232,19 @@ fn build_mips(mip0: Texture) -> TextureWithMips
 				let p01 = prev_mip.pixels[src_x + src_offset1];
 				let p10 = prev_mip.pixels[src_x + 1 + src_offset0];
 				let p11 = prev_mip.pixels[src_x + 1 + src_offset1];
+
 				dst.diffuse = Color32::get_average_4([p00.diffuse, p01.diffuse, p10.diffuse, p11.diffuse]);
-				dst.normal = renormalize_normal(p00.normal + p01.normal + p10.normal + p11.normal);
-				dst.glossiness = (p00.glossiness + p01.glossiness + p10.glossiness + p11.glossiness) * 0.25;
+
+				let normals_sum = p00.normal + p01.normal + p10.normal + p11.normal;
+				let normals_sum_len2 = normals_sum.magnitude2();
+				dst.normal = normals_sum / normals_sum_len2.sqrt().max(0.000001);
+
+				// For perfectly flat surface length of normals sum is 4.
+				// For surface with normal variation this value is less than 4.
+				// So, reduce glossiness in order to compensate normal variations.
+				let average_glossiness = (p00.glossiness + p01.glossiness + p10.glossiness + p11.glossiness) * 0.25;
+				let glossines_reduce_factor = normals_sum_len2 * normals_sum_len2 * (1.0 / 256.0);
+				dst.glossiness = (average_glossiness * glossines_reduce_factor).max(MIN_VALID_GLOSSINESS);
 			}
 		}
 		result[i] = mip;
@@ -245,6 +252,9 @@ fn build_mips(mip0: Texture) -> TextureWithMips
 
 	result
 }
+
+// Do not allow absolte zero glossiness. Limit it to some small value.
+const MIN_VALID_GLOSSINESS: f32 = 1.0 / 72.0;
 
 fn renormalize_normal(normal: Vec3f) -> Vec3f
 {
