@@ -22,6 +22,10 @@ pub struct Material
 	/// If non-empty - glossiness from this texture will be used instead of glossiness param.
 	pub glossiness_map: Option<String>,
 
+	/// For glossy materials use metal-style specular, instead of dielectric-style specular.
+	#[serde(default)]
+	pub is_metal: bool,
+
 	/// If false - totally exclude from BSP build. Completely removes all polygons with such materials.
 	#[serde(default = "default_true")]
 	pub bsp: bool,
@@ -49,6 +53,7 @@ impl Default for Material
 			normal_map: None,
 			glossiness: 0.0,
 			glossiness_map: None,
+			is_metal: false,
 			bsp: true,
 			draw: true,
 			blocks_view: true,

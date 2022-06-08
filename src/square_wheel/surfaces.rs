@@ -291,7 +291,36 @@ fn build_surface_impl_4_static_params<
 {
 	if texture.has_non_zero_glossiness
 	{
-		build_surface_impl_5_static_params::<LIGHTAP_SCALE_LOG2, USE_LIGHTMAP, USE_DYNAMIC_LIGHTS, USE_NORMAL_MAP, true>(
+		build_surface_impl_5_static_params::<
+			LIGHTAP_SCALE_LOG2,
+			USE_LIGHTMAP,
+			USE_DYNAMIC_LIGHTS,
+			USE_NORMAL_MAP,
+			SPECULAR_TYPE_NONE,
+		>(
+			plane,
+			tex_coord_equation,
+			surface_size,
+			surface_tc_min,
+			texture,
+			lightmap_size,
+			lightmap_tc_shift,
+			lightmap_data,
+			dynamic_lights,
+			cam_pos,
+			override_glossiness,
+			out_surface_data,
+		);
+	}
+	else if texture.is_metal
+	{
+		build_surface_impl_5_static_params::<
+			LIGHTAP_SCALE_LOG2,
+			USE_LIGHTMAP,
+			USE_DYNAMIC_LIGHTS,
+			USE_NORMAL_MAP,
+			SPECULAR_TYPE_METAL,
+		>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -308,7 +337,13 @@ fn build_surface_impl_4_static_params<
 	}
 	else
 	{
-		build_surface_impl_5_static_params::<LIGHTAP_SCALE_LOG2, USE_LIGHTMAP, USE_DYNAMIC_LIGHTS, USE_NORMAL_MAP, false>(
+		build_surface_impl_5_static_params::<
+			LIGHTAP_SCALE_LOG2,
+			USE_LIGHTMAP,
+			USE_DYNAMIC_LIGHTS,
+			USE_NORMAL_MAP,
+			SPECULAR_TYPE_DIELECTRIC,
+		>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -325,6 +360,10 @@ fn build_surface_impl_4_static_params<
 	}
 }
 
+pub const SPECULAR_TYPE_NONE: u32 = 0;
+pub const SPECULAR_TYPE_DIELECTRIC: u32 = 1;
+pub const SPECULAR_TYPE_METAL: u32 = 2;
+
 // Specify various settings as template params in order to get most efficient code for current combination of params.
 // Use chained dispatch in order to convert dynamic params into static.
 fn build_surface_impl_5_static_params<
@@ -332,7 +371,7 @@ fn build_surface_impl_5_static_params<
 	const USE_LIGHTMAP: bool,
 	const USE_DYNAMIC_LIGHTS: bool,
 	const USE_NORMAL_MAP: bool,
-	const USE_SPECULAR: bool,
+	const SPECULAR_TYPE: u32,
 >(
 	plane: &Plane,
 	tex_coord_equation: &[Plane; 2],
@@ -348,6 +387,8 @@ fn build_surface_impl_5_static_params<
 	out_surface_data: &mut [Color32],
 )
 {
+	let use_specular = SPECULAR_TYPE != SPECULAR_TYPE_NONE;
+
 	// Calculate inverse matrix for tex_coord equation and plane equation in order to calculate world position for UV.
 	// TODO - project tc equation to surface plane?
 	let tex_coord_basis = Mat4f::from_cols(
@@ -464,7 +505,7 @@ fn build_surface_impl_5_static_params<
 				let vec_to_camera_reflected;
 				let vec_to_camera_len2;
 				let fresnel_factor;
-				if USE_SPECULAR
+				if use_specular
 				{
 					// Calculate reflected view angle and fresnel factor based on it.
 					// Use these data later for calculation o specular light for all dynamic lights.
@@ -506,7 +547,7 @@ fn build_surface_impl_5_static_params<
 
 					let mut specular_intensity = 0.0;
 					let mut specular_k = 0.0;
-					if USE_SPECULAR
+					if use_specular
 					{
 						let vec_to_camera_reflected_light_angle_cos = vec_to_camera_reflected.dot(vec_to_light) *
 							inv_sqrt_fast(vec_to_camera_len2 * vec_to_light_len2);
@@ -529,7 +570,7 @@ fn build_surface_impl_5_static_params<
 					total_light_diffuse[1] += light.color[1] * light_intensity_diffuse;
 					total_light_diffuse[2] += light.color[2] * light_intensity_diffuse;
 
-					if USE_SPECULAR
+					if use_specular
 					{
 						let light_intensity_specular = specular_intensity * specular_k * shadow_distance_factor;
 						total_light_specular[0] += light.color[0] * light_intensity_specular;
@@ -545,7 +586,7 @@ fn build_surface_impl_5_static_params<
 			for i in 0 .. 3
 			{
 				let mut c = color_components[i] * total_light_diffuse[i];
-				if USE_SPECULAR
+				if use_specular
 				{
 					// For non-metals specular reflection is white.
 					c += total_light_specular[i] * Color32::MAX_RGB_F32_COMPONENTS[i];

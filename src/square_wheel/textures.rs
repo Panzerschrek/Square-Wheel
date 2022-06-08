@@ -12,6 +12,7 @@ pub struct Texture
 	pub pixels: Vec<TextureElement>,
 	pub has_normal_map: bool, // If false, normals data is trivial.
 	pub has_non_zero_glossiness: bool,
+	pub is_metal: bool,
 }
 
 #[derive(Copy, Clone)]
@@ -71,7 +72,7 @@ pub fn load_textures(materials: &[material::Material], textures_path: &std::path
 			None
 		};
 
-		let mip0 = make_texture(diffuse, normals, material.glossiness, glossiness_map);
+		let mip0 = make_texture(diffuse, normals, material.glossiness, glossiness_map, material.is_metal);
 
 		result.push(build_mips(mip0));
 	}
@@ -118,6 +119,7 @@ fn make_texture(
 	normals: Option<image::Image>,
 	glossiness: f32,
 	glossiness_map: Option<image::Image>,
+	is_metal: bool,
 ) -> Texture
 {
 	let glossiness_corrected = glossiness.max(0.0).min(1.0);
@@ -127,6 +129,7 @@ fn make_texture(
 		pixels: vec![TextureElement::default(); (diffuse.size[0] * diffuse.size[1]) as usize],
 		has_normal_map: normals.is_some(),
 		has_non_zero_glossiness: glossiness_corrected > 0.0 || glossiness_map.is_some(),
+		is_metal,
 	};
 
 	for (dst, src) in result.pixels.iter_mut().zip(diffuse.pixels.iter())
@@ -209,6 +212,7 @@ fn build_mips(mip0: Texture) -> TextureWithMips
 			pixels: Vec::new(),
 			has_normal_map: prev_mip.has_normal_map,
 			has_non_zero_glossiness: prev_mip.has_non_zero_glossiness,
+			is_metal: prev_mip.is_metal,
 		};
 
 		mip.pixels = vec![TextureElement::default(); (mip.size[0] * mip.size[1]) as usize];
