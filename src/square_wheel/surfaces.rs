@@ -565,7 +565,7 @@ fn build_surface_impl_5_static_params<
 						// This formula is not physically-correct but it gives good results.
 						let glossiness_scaled = 64.0 * texel_value.glossiness;
 						let x = ((vec_to_camera_reflected_light_angle_cos - 1.0) * glossiness_scaled).max(-2.0);
-						(x * (x * 0.0625 + 0.25) + 0.25) * glossiness_scaled
+						(x * (x * 0.25 + 1.0) + 1.0) * glossiness_scaled
 					};
 
 					match SPECULAR_TYPE
