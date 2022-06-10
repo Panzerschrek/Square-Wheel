@@ -480,11 +480,9 @@ fn build_secondary_lightmaps(
 	});
 
 	let root_node = (map.nodes.len() - 1) as u32;
-	let mut submodel_leafs_list = Vec::new();
-	let mut submodel_visible_leafs_bit_set = Vec::new();
-	let mut visible_leafs_list = Vec::new();
-	for submodel in &map.submodels
-	{
+	map.submodels.par_iter().for_each(|submodel| {
+		let lightmaps_data_unshared = unsafe { lightmaps_data_shared.get() };
+
 		// Know in which leafs this submodel is located.
 		let bbox = bsp_map_compact::get_submodel_bbox(map, submodel);
 		let bbox_vertices = [
@@ -498,12 +496,11 @@ fn build_secondary_lightmaps(
 			Vec3f::new(bbox.max.x, bbox.max.y, bbox.max.z),
 		];
 
-		submodel_leafs_list.clear();
+		let mut submodel_leafs_list = Vec::new();
 		collect_submodel_leafs_r(map, &bbox_vertices, root_node, &mut submodel_leafs_list);
 
 		// Know which leafs are visible for submodel's leafs.
-		submodel_visible_leafs_bit_set.clear();
-		submodel_visible_leafs_bit_set.resize(map.leafs.len(), false);
+		let mut submodel_visible_leafs_bit_set = vec![false; map.leafs.len()];
 		for &leaf_index in &submodel_leafs_list
 		{
 			let visibility_matrix_row = &visibility_matrix
@@ -516,7 +513,7 @@ fn build_secondary_lightmaps(
 			}
 		}
 
-		visible_leafs_list.clear();
+		let mut visible_leafs_list = Vec::new();
 		for other_leaf_index in 0 .. map.leafs.len()
 		{
 			if submodel_visible_leafs_bit_set[other_leaf_index]
@@ -533,11 +530,11 @@ fn build_secondary_lightmaps(
 				// No lightmap for this polygon.
 				continue;
 			}
-			build_polygon_secondary_lightmap(lights, polygon_index, map, &visible_leafs_list, lightmaps_data);
+			build_polygon_secondary_lightmap(lights, polygon_index, map, &visible_leafs_list, lightmaps_data_unshared);
 
 			// TODO - show progress here?
 		} // for submodel polygons.
-	} // for submodels
+	}); // for submodels
 }
 
 fn collect_submodel_leafs_r(
