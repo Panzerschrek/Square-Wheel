@@ -28,7 +28,7 @@ impl SystemWindow
 			.build()
 			.unwrap();
 
-		window.set_minimum_size(320, 200).unwrap();
+		window.set_minimum_size(MIN_WIDTH, MIN_HEIGHT).unwrap();
 
 		let event_pump = context.event_pump().unwrap();
 		SystemWindow {
@@ -37,11 +37,19 @@ impl SystemWindow
 		}
 	}
 
+	pub fn resize(&mut self, width: u32, height: u32)
+	{
+		let _gnore = self.sdl2_window.set_size(
+			width.max(MIN_WIDTH).min(MAX_WIDTH),
+			height.max(MIN_HEIGHT).min(MAX_HEIGHT),
+		);
+	}
+
 	pub fn set_windowed(&mut self)
 	{
 		let _gnore = self.sdl2_window.set_fullscreen(sdl2::video::FullscreenType::Off);
 	}
-	
+
 	pub fn set_fullscreen_desktop(&mut self)
 	{
 		let _gnore = self.sdl2_window.set_fullscreen(sdl2::video::FullscreenType::Desktop);
@@ -82,3 +90,8 @@ impl SystemWindow
 		let _ = surface.update_window();
 	}
 }
+
+const MIN_WIDTH: u32 = 320;
+const MIN_HEIGHT: u32 = 200;
+const MAX_WIDTH: u32 = 4000;
+const MAX_HEIGHT: u32 = 3000;

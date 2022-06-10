@@ -71,8 +71,11 @@ impl Host
 		let console = console::Console::new(commands_processor.clone());
 		console.borrow_mut().add_text("Innitializing host".to_string());
 
-		let commands_queue =
-			commands_queue::CommandsQueue::new(vec![("map", Host::command_map), ("quit", Host::command_quit)]);
+		let commands_queue = commands_queue::CommandsQueue::new(vec![
+			("map", Host::command_map),
+			("quit", Host::command_quit),
+			("resize_window", Host::command_resize_window),
+		]);
 
 		commands_processor
 			.borrow_mut()
@@ -316,6 +319,24 @@ impl Host
 	fn command_quit(&mut self, _args: commands_queue::CommandArgs)
 	{
 		self.quit_requested = true;
+	}
+
+	fn command_resize_window(&mut self, args: commands_queue::CommandArgs)
+	{
+		if args.len() < 2
+		{
+			self.console.borrow_mut().add_text("Expected two args".to_string());
+			return;
+		}
+
+		if let (Ok(width), Ok(height)) = (args[0].parse::<u32>(), args[1].parse::<u32>())
+		{
+			self.window.borrow_mut().resize(width, height);
+		}
+		else
+		{
+			self.console.borrow_mut().add_text("Failed to parse args".to_string());
+		}
 	}
 }
 
