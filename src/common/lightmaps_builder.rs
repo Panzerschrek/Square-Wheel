@@ -424,18 +424,20 @@ fn build_secondary_lightmaps(
 	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
 )
 {
-	let mut texels_complete = 0;
-	let mut polygons_processed = 0;
-	let texels_total = lightmaps_data.len();
+	let texels_complete = atomic::AtomicU32::new(0);
+	let polygons_complete = atomic::AtomicU32::new(0);
+	let texels_total = lightmaps_data.len() as u32;
 
-	let mut visible_leafs_list = Vec::new();
-	for leaf_index in 0 .. map.leafs.len()
-	{
-		let leaf = &map.leafs[leaf_index];
+	// It is safe to share lightmaps data across threads since each polygons uses its own region.
+	let lightmaps_data_shared = SharedMutSlice::new(lightmaps_data);
+
+	map.leafs.par_iter().enumerate().for_each(|(leaf_index, leaf)| {
+		let lightmaps_data_unshared = unsafe { lightmaps_data_shared.get() };
+
 		let visibility_matrix_row =
 			&visibility_matrix[leaf_index * map.leafs.len() .. (leaf_index + 1) * map.leafs.len()];
 
-		visible_leafs_list.clear();
+		let mut visible_leafs_list = Vec::new();
 		for other_leaf_index in 0 .. map.leafs.len()
 		{
 			if visibility_matrix_row[other_leaf_index]
@@ -446,39 +448,41 @@ fn build_secondary_lightmaps(
 
 		for polygon_index in leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize
 		{
-			polygons_processed += 1;
 			if map.polygons[polygon_index].lightmap_data_offset == 0
 			{
 				// No lightmap for this polygon.
 				continue;
 			}
-			build_polygon_secondary_lightmap(lights, polygon_index, map, &visible_leafs_list, lightmaps_data);
+			build_polygon_secondary_lightmap(lights, polygon_index, map, &visible_leafs_list, lightmaps_data_unshared);
 
 			// Calculate and show progress.
 			let lightmap_size = get_polygon_lightmap_size(&map.polygons[polygon_index]);
-			let lightmap_texels = (lightmap_size[0] * lightmap_size[1]) as usize;
+			let lightmap_texels = lightmap_size[0] * lightmap_size[1];
 
-			let ratio_before = texels_complete * 256 / texels_total;
-			texels_complete += lightmap_texels;
-			let ratio_after = texels_complete * 256 / texels_total;
+			let texels_complete_before = texels_complete.fetch_add(lightmap_texels, atomic::Ordering::SeqCst);
+			let texels_complete_afrer = texels_complete_before + lightmap_texels;
+			let ratio_before = texels_complete_before * 256 / texels_total;
+			let ratio_after = texels_complete_afrer * 256 / texels_total;
+			let polygons_before = polygons_complete.fetch_add(1, atomic::Ordering::SeqCst);
 			if ratio_after > ratio_before
 			{
 				print!(
 					"\r{:03.2}% complete ({} of {} texels),  {} of {} polygons",
-					(texels_complete as f32) * 100.0 / (texels_total as f32),
-					texels_complete,
+					(texels_complete_afrer as f32) * 100.0 / (texels_total as f32),
+					texels_complete_afrer,
 					texels_total,
-					polygons_processed,
+					polygons_before + 1,
 					map.polygons.len()
 				);
 				let _ignore_errors = std::io::stdout().flush();
 			}
-		}
-	}
+		} // for leaf polygons.
+	});
 
 	let root_node = (map.nodes.len() - 1) as u32;
 	let mut submodel_leafs_list = Vec::new();
 	let mut submodel_visible_leafs_bit_set = Vec::new();
+	let mut visible_leafs_list = Vec::new();
 	for submodel in &map.submodels
 	{
 		// Know in which leafs this submodel is located.
@@ -524,7 +528,6 @@ fn build_secondary_lightmaps(
 		for polygon_index in
 			submodel.first_polygon as usize .. (submodel.first_polygon + submodel.num_polygons) as usize
 		{
-			polygons_processed += 1;
 			if map.polygons[polygon_index].lightmap_data_offset == 0
 			{
 				// No lightmap for this polygon.
