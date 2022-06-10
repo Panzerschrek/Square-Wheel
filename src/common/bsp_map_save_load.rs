@@ -1,8 +1,21 @@
 use super::bsp_map_compact::*;
 use std::{
 	io::{Read, Seek, Write},
-	path::Path,
+	path::{Path, PathBuf},
 };
+
+pub const BSP_MAP_FILE_EXTENSION: &str = "sqwm";
+
+pub fn normalize_bsp_map_file_path(mut file_path: PathBuf) -> PathBuf
+{
+	if file_path.extension().is_some()
+	{
+		return file_path;
+	}
+
+	file_path.set_extension(BSP_MAP_FILE_EXTENSION);
+	file_path
+}
 
 // Just write raw bytes of map structs into file.
 // This is fine until we use plain structs and load this file on machined with same bytes order.

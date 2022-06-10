@@ -269,7 +269,8 @@ impl Host
 		}
 		self.active_map = None;
 
-		match bsp_map_save_load::load_map(&std::path::PathBuf::from(args[0].clone()))
+		let map_path = bsp_map_save_load::normalize_bsp_map_file_path(std::path::PathBuf::from(args[0].clone()));
+		match bsp_map_save_load::load_map(&map_path)
 		{
 			Ok(Some(map)) =>
 			{
@@ -282,11 +283,15 @@ impl Host
 			},
 			Ok(None) =>
 			{
-				self.console.borrow_mut().add_text("Failed to load map".to_string());
+				self.console
+					.borrow_mut()
+					.add_text(format!("Failed to load map {:?}", map_path));
 			},
 			Err(e) =>
 			{
-				self.console.borrow_mut().add_text(format!("Failed to load map: {}", e));
+				self.console
+					.borrow_mut()
+					.add_text(format!("Failed to load map {:?}: {}", map_path, e));
 			},
 		}
 	}
