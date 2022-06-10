@@ -1,5 +1,6 @@
-use super::{bsp_map_compact, image, map_file_common, material, math_types::*, pvs};
-use std::io::Write;
+use super::{bsp_map_compact, image, map_file_common, material, math_types::*, pvs, shared_mut_slice::*};
+use rayon::prelude::*;
+use std::{io::Write, sync::atomic};
 
 pub struct LightmappingSettings
 {
@@ -279,48 +280,55 @@ fn build_primary_lightmaps(
 	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
 )
 {
-	let mut texels_complete = 0;
-	let texels_total = lightmaps_data.len();
-	for i in 0 .. map.polygons.len()
-	{
-		if map.polygons[i].lightmap_data_offset == 0
+	let texels_complete = atomic::AtomicU32::new(0);
+	let polygons_complete = atomic::AtomicU32::new(0);
+	let texels_total = lightmaps_data.len() as u32;
+
+	// It is safe to share lightmaps data across threads since each polygons uses its own region.
+	let lightmaps_data_shared = SharedMutSlice::new(lightmaps_data);
+
+	map.polygons.par_iter().for_each(|polygon| {
+		if polygon.lightmap_data_offset == 0
 		{
 			// No lightmap for this polygon.
-			continue;
+			return;
 		}
-		build_primary_lightmap(sample_grid_size, lights, i, map, lightmaps_data);
+
+		let lightmaps_data_unshared = unsafe { lightmaps_data_shared.get() };
+		build_primary_lightmap(sample_grid_size, lights, polygon, map, lightmaps_data_unshared);
 
 		// Calculate and show progress.
-		let lightmap_size = get_polygon_lightmap_size(&map.polygons[i]);
-		let lightmap_texels = (lightmap_size[0] * lightmap_size[1]) as usize;
+		let lightmap_size = get_polygon_lightmap_size(polygon);
+		let lightmap_texels = lightmap_size[0] * lightmap_size[1];
 
-		let ratio_before = texels_complete * 256 / texels_total;
-		texels_complete += lightmap_texels;
-		let ratio_after = texels_complete * 256 / texels_total;
+		let texels_complete_before = texels_complete.fetch_add(lightmap_texels, atomic::Ordering::SeqCst);
+		let texels_complete_afrer = texels_complete_before + lightmap_texels;
+		let ratio_before = texels_complete_before * 256 / texels_total;
+		let ratio_after = texels_complete_afrer * 256 / texels_total;
+		let polygons_before = polygons_complete.fetch_add(1, atomic::Ordering::SeqCst);
 		if ratio_after > ratio_before
 		{
 			print!(
 				"\r{:03.2}% complete ({} of {} texels),  {} of {} polygons",
-				(texels_complete as f32) * 100.0 / (texels_total as f32),
-				texels_complete,
+				(texels_complete_afrer as f32) * 100.0 / (texels_total as f32),
+				texels_complete_afrer,
 				texels_total,
-				i,
+				polygons_before + 1,
 				map.polygons.len()
 			);
 			let _ignore_errors = std::io::stdout().flush();
 		}
-	}
+	});
 }
 
 fn build_primary_lightmap(
 	sample_grid_size: u32,
 	lights: &[PointLight],
-	polygon_index: usize,
+	polygon: &bsp_map_compact::Polygon,
 	map: &bsp_map_compact::BSPMap,
 	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
 )
 {
-	let polygon = &map.polygons[polygon_index];
 	let lightmap_size = get_polygon_lightmap_size(polygon);
 
 	let plane_normal_normalized = polygon.plane.vec / polygon.plane.vec.magnitude();
