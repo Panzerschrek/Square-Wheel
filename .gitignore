@@ -3,5 +3,17 @@ screenshots/
 other/
 textures/
 
+# Various Windows binaries
 *.dll
 *.exe
+
+# IDE stuff
+src/.vs
+
+# Map files
+*.sqwm
+*.map
+
+# Default config file
+config.json
+
