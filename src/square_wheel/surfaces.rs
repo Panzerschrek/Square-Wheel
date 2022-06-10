@@ -14,6 +14,7 @@ pub fn build_surface(
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
+	cam_pos: &Vec3f,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -31,6 +32,7 @@ pub fn build_surface(
 			lightmap_tc_shift,
 			lightmap_data,
 			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
@@ -46,6 +48,7 @@ pub fn build_surface(
 			lightmap_tc_shift,
 			lightmap_data,
 			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
@@ -61,6 +64,7 @@ pub fn build_surface(
 			lightmap_tc_shift,
 			lightmap_data,
 			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
@@ -76,6 +80,7 @@ pub fn build_surface(
 			lightmap_tc_shift,
 			lightmap_data,
 			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
@@ -91,6 +96,7 @@ pub fn build_surface(
 			lightmap_tc_shift,
 			lightmap_data,
 			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
@@ -110,6 +116,7 @@ fn build_surface_impl_1_static_params<const LIGHTAP_SCALE_LOG2: u32>(
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
+	cam_pos: &Vec3f,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -125,6 +132,7 @@ fn build_surface_impl_1_static_params<const LIGHTAP_SCALE_LOG2: u32>(
 			lightmap_tc_shift,
 			lightmap_data,
 			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
@@ -140,6 +148,7 @@ fn build_surface_impl_1_static_params<const LIGHTAP_SCALE_LOG2: u32>(
 			lightmap_tc_shift,
 			lightmap_data,
 			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
@@ -155,6 +164,7 @@ fn build_surface_impl_2_static_params<const LIGHTAP_SCALE_LOG2: u32, const USE_L
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
+	cam_pos: &Vec3f,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -170,6 +180,7 @@ fn build_surface_impl_2_static_params<const LIGHTAP_SCALE_LOG2: u32, const USE_L
 			lightmap_tc_shift,
 			lightmap_data,
 			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
@@ -185,6 +196,7 @@ fn build_surface_impl_2_static_params<const LIGHTAP_SCALE_LOG2: u32, const USE_L
 			lightmap_tc_shift,
 			lightmap_data,
 			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
@@ -204,6 +216,7 @@ fn build_surface_impl_3_static_params<
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
+	cam_pos: &Vec3f,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -218,7 +231,8 @@ fn build_surface_impl_3_static_params<
 			lightmap_size,
 			lightmap_tc_shift,
 			lightmap_data,
-			&dynamic_lights,
+			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
@@ -234,13 +248,12 @@ fn build_surface_impl_3_static_params<
 			lightmap_tc_shift,
 			lightmap_data,
 			dynamic_lights,
+			cam_pos,
 			out_surface_data,
 		);
 	}
 }
 
-// Specify various settings as template params in order to get most efficient code for current combination of params.
-// Use chained dispatch in order to convert dynamic params into static.
 fn build_surface_impl_4_static_params<
 	const LIGHTAP_SCALE_LOG2: u32,
 	const USE_LIGHTMAP: bool,
@@ -256,6 +269,104 @@ fn build_surface_impl_4_static_params<
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
+	cam_pos: &Vec3f,
+	out_surface_data: &mut [Color32],
+)
+{
+	if texture.has_non_zero_glossiness
+	{
+		if texture.is_metal
+		{
+			build_surface_impl_5_static_params::<
+				LIGHTAP_SCALE_LOG2,
+				USE_LIGHTMAP,
+				USE_DYNAMIC_LIGHTS,
+				USE_NORMAL_MAP,
+				SPECULAR_TYPE_METAL,
+			>(
+				plane,
+				tex_coord_equation,
+				surface_size,
+				surface_tc_min,
+				texture,
+				lightmap_size,
+				lightmap_tc_shift,
+				lightmap_data,
+				dynamic_lights,
+				cam_pos,
+				out_surface_data,
+			);
+		}
+		else
+		{
+			build_surface_impl_5_static_params::<
+				LIGHTAP_SCALE_LOG2,
+				USE_LIGHTMAP,
+				USE_DYNAMIC_LIGHTS,
+				USE_NORMAL_MAP,
+				SPECULAR_TYPE_DIELECTRIC,
+			>(
+				plane,
+				tex_coord_equation,
+				surface_size,
+				surface_tc_min,
+				texture,
+				lightmap_size,
+				lightmap_tc_shift,
+				lightmap_data,
+				dynamic_lights,
+				cam_pos,
+				out_surface_data,
+			);
+		}
+	}
+	else
+	{
+		build_surface_impl_5_static_params::<
+			LIGHTAP_SCALE_LOG2,
+			USE_LIGHTMAP,
+			USE_DYNAMIC_LIGHTS,
+			USE_NORMAL_MAP,
+			SPECULAR_TYPE_NONE,
+		>(
+			plane,
+			tex_coord_equation,
+			surface_size,
+			surface_tc_min,
+			texture,
+			lightmap_size,
+			lightmap_tc_shift,
+			lightmap_data,
+			dynamic_lights,
+			cam_pos,
+			out_surface_data,
+		);
+	}
+}
+
+pub const SPECULAR_TYPE_NONE: u32 = 0;
+pub const SPECULAR_TYPE_DIELECTRIC: u32 = 1;
+pub const SPECULAR_TYPE_METAL: u32 = 2;
+
+// Specify various settings as template params in order to get most efficient code for current combination of params.
+// Use chained dispatch in order to convert dynamic params into static.
+fn build_surface_impl_5_static_params<
+	const LIGHTAP_SCALE_LOG2: u32,
+	const USE_LIGHTMAP: bool,
+	const USE_DYNAMIC_LIGHTS: bool,
+	const USE_NORMAL_MAP: bool,
+	const SPECULAR_TYPE: u32,
+>(
+	plane: &Plane,
+	tex_coord_equation: &[Plane; 2],
+	surface_size: [u32; 2],
+	surface_tc_min: [i32; 2],
+	texture: &textures::Texture,
+	lightmap_size: [u32; 2],
+	lightmap_tc_shift: [u32; 2],
+	lightmap_data: &[bsp_map_compact::LightmapElement],
+	dynamic_lights: &[LightWithShadowMap],
+	cam_pos: &Vec3f,
 	out_surface_data: &mut [Color32],
 )
 {
@@ -336,7 +447,8 @@ fn build_surface_impl_4_static_params<
 		let start_pos_v = start_pos + (dst_v as f32) * v_vec;
 		for dst_texel in dst_line.iter_mut()
 		{
-			let mut total_light = [0.0, 0.0, 0.0];
+			let mut total_light_albedo_modulated = [0.0, 0.0, 0.0];
+			let mut total_light_direct = [0.0, 0.0, 0.0];
 			if USE_LIGHTMAP
 			{
 				let lightmap_base_u = dst_u + lightmap_tc_shift[0];
@@ -349,7 +461,7 @@ fn build_surface_impl_4_static_params<
 				let k_minus_one = 1.0 - k;
 				for i in 0 .. 3
 				{
-					total_light[i] = l0[i] * k_minus_one + l1[i] * k;
+					total_light_albedo_modulated[i] = l0[i] * k_minus_one + l1[i] * k;
 				}
 			}
 
@@ -371,32 +483,151 @@ fn build_surface_impl_4_static_params<
 					plane_normal_normalized
 				};
 
+				let vec_to_camera_reflected;
+				let vec_to_camera_len2;
+				let specular_k;
+				if SPECULAR_TYPE != SPECULAR_TYPE_NONE
+				{
+					// Calculate reflected view angle and fresnel factor based on it.
+					// Use these data later for calculation o specular light for all dynamic lights.
+					let vec_to_camera = cam_pos - pos;
+					let vec_to_camera_normal_dot = vec_to_camera.dot(normal);
+					vec_to_camera_reflected = normal * (2.0 * vec_to_camera_normal_dot) - vec_to_camera;
+					vec_to_camera_len2 = vec_to_camera_reflected.magnitude2().max(MIN_POSITIVE_VALUE);
+
+					let vec_to_camera_normal_angle_cos =
+						(vec_to_camera_normal_dot * inv_sqrt_fast(vec_to_camera_len2)).max(0.0);
+
+					// Schlick's approximation of Fresnel factor.
+					// See https://en.wikipedia.org/wiki/Schlick%27s_approximation.
+
+					// For glossy surface we can just use Fresnel factor for diffuse/specular mixing.
+					// But for rough srufaces we can't. Normally we should use some sort of integral of Schlick's approximation.
+					// But it's too expensive. So, just make mix of Fresnel factor depending on view angle with constant factor for absolutely rough surface.
+					// TODO - us non-linear glossiness here?
+
+					let one_minus_angle_cos = (1.0 - vec_to_camera_normal_angle_cos).max(0.0);
+					let one_minus_angle_cos2 = one_minus_angle_cos * one_minus_angle_cos;
+					let fresnel_factor_base = one_minus_angle_cos2 * one_minus_angle_cos2 * one_minus_angle_cos;
+					if SPECULAR_TYPE == SPECULAR_TYPE_DIELECTRIC
+					{
+						let fresnel_factor =
+							DIELECTRIC_ZERO_REFLECTIVITY + (1.0 - DIELECTRIC_ZERO_REFLECTIVITY) * fresnel_factor_base;
+
+						specular_k = fresnel_factor * texel_value.glossiness +
+							DIELECTRIC_AVERAGE_REFLECTIVITY * (1.0 - texel_value.glossiness);
+					}
+					else if SPECULAR_TYPE == SPECULAR_TYPE_METAL
+					{
+						specular_k = fresnel_factor_base * texel_value.glossiness +
+							METAL_AVERAGE_SCHLICK_FACTOR * (1.0 - texel_value.glossiness);
+					}
+					else
+					{
+						specular_k = 0.0;
+					}
+				}
+				else
+				{
+					vec_to_camera_reflected = Vec3f::zero();
+					vec_to_camera_len2 = MIN_POSITIVE_VALUE;
+					specular_k = 0.0;
+				}
+
 				for (light, shadow_cube_map) in dynamic_lights
 				{
 					let vec_to_light = light.pos - pos;
 
 					let shadow_factor = cube_shadow_map_fetch(shadow_cube_map, &vec_to_light);
-
 					let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
-					let angle_cos = normal.dot(vec_to_light) * inv_sqrt_fast(vec_to_light_len2);
-					let light_scale = shadow_factor * angle_cos.max(0.0) / vec_to_light_len2;
+					let shadow_distance_factor = shadow_factor / vec_to_light_len2;
 
-					total_light[0] += light.color[0] * light_scale;
-					total_light[1] += light.color[1] * light_scale;
-					total_light[2] += light.color[2] * light_scale;
+					let diffuse_intensity = if SPECULAR_TYPE == SPECULAR_TYPE_METAL
+					{
+						// No diffuse light for metalls.
+						0.0
+					}
+					else
+					{
+						(normal.dot(vec_to_light) * inv_sqrt_fast(vec_to_light_len2)).max(0.0)
+					};
+
+					let specular_intensity = if SPECULAR_TYPE == SPECULAR_TYPE_NONE
+					{
+						// No specular for surfaces without specular.
+						0.0
+					}
+					else
+					{
+						let vec_to_camera_reflected_light_angle_cos = vec_to_camera_reflected.dot(vec_to_light) *
+							inv_sqrt_fast(vec_to_camera_len2 * vec_to_light_len2);
+
+						// This formula is not physically-correct but it gives good results.
+						let glossiness_scaled = 64.0 * texel_value.glossiness;
+						let x = ((vec_to_camera_reflected_light_angle_cos - 1.0) * glossiness_scaled).max(-2.0);
+						(x * (x * 0.25 + 1.0) + 1.0) * glossiness_scaled
+					};
+
+					match SPECULAR_TYPE
+					{
+						SPECULAR_TYPE_NONE =>
+						{
+							total_light_albedo_modulated[0] += light.color[0] * shadow_distance_factor;
+							total_light_albedo_modulated[1] += light.color[1] * shadow_distance_factor;
+							total_light_albedo_modulated[2] += light.color[2] * shadow_distance_factor;
+						},
+						SPECULAR_TYPE_DIELECTRIC =>
+						{
+							let light_intensity_diffuse =
+								diffuse_intensity * (1.0 - specular_k) * shadow_distance_factor;
+							total_light_albedo_modulated[0] += light.color[0] * light_intensity_diffuse;
+							total_light_albedo_modulated[1] += light.color[1] * light_intensity_diffuse;
+							total_light_albedo_modulated[2] += light.color[2] * light_intensity_diffuse;
+
+							let light_intensity_specular = specular_intensity * specular_k * shadow_distance_factor;
+							total_light_direct[0] += light.color[0] * light_intensity_specular;
+							total_light_direct[1] += light.color[1] * light_intensity_specular;
+							total_light_direct[2] += light.color[2] * light_intensity_specular;
+						},
+						SPECULAR_TYPE_METAL =>
+						{
+							let specular_intensity_shadow_distance_factor = specular_intensity * shadow_distance_factor;
+
+							let light_intensity_modulated =
+								(1.0 - specular_k) * specular_intensity_shadow_distance_factor;
+							total_light_albedo_modulated[0] += light.color[0] * light_intensity_modulated;
+							total_light_albedo_modulated[1] += light.color[1] * light_intensity_modulated;
+							total_light_albedo_modulated[2] += light.color[2] * light_intensity_modulated;
+
+							let light_intensity_direct = specular_k * specular_intensity_shadow_distance_factor;
+							total_light_direct[0] += light.color[0] * light_intensity_direct;
+							total_light_direct[1] += light.color[1] * light_intensity_direct;
+							total_light_direct[2] += light.color[2] * light_intensity_direct;
+						},
+						_ =>
+						{
+							panic!("Wrong specular type!")
+						},
+					}
+				} // For dynamic lights.
+			} // If use dynmic lights.
+
+			let color_components = texel_value.diffuse.unpack_to_rgb_f32();
+
+			let mut result_color_components = [0.0, 0.0, 0.0];
+			for i in 0 .. 3
+			{
+				let mut c = color_components[i] * total_light_albedo_modulated[i];
+				if SPECULAR_TYPE != SPECULAR_TYPE_NONE
+				{
+					c += total_light_direct[i] * Color32::MAX_RGB_F32_COMPONENTS[i];
 				}
+				result_color_components[i] = c.min(Color32::MAX_RGB_F32_COMPONENTS[i]);
 			}
-
-			let components = texel_value.diffuse.unpack_to_rgb_f32();
-			let components_modulated = [
-				(components[0] * total_light[0]).min(Color32::MAX_RGB_F32_COMPONENTS[0]),
-				(components[1] * total_light[1]).min(Color32::MAX_RGB_F32_COMPONENTS[1]),
-				(components[2] * total_light[2]).min(Color32::MAX_RGB_F32_COMPONENTS[2]),
-			];
 
 			// Here we 100% sure that components overflow is not possible (because of "min").
 			// NaNs are not possible here too.
-			let color_packed = unsafe { Color32::from_rgb_f32_unchecked(&components_modulated) };
+			let color_packed = unsafe { Color32::from_rgb_f32_unchecked(&result_color_components) };
 
 			*dst_texel = color_packed;
 			src_u += 1;
@@ -470,6 +701,10 @@ fn cube_shadow_map_side_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f, side
 }
 
 const MIN_POSITIVE_VALUE: f32 = 1.0 / ((1 << 30) as f32);
+
+const DIELECTRIC_ZERO_REFLECTIVITY: f32 = 0.04;
+const DIELECTRIC_AVERAGE_REFLECTIVITY: f32 = DIELECTRIC_ZERO_REFLECTIVITY * 3.0;
+const METAL_AVERAGE_SCHLICK_FACTOR: f32 = 0.5;
 
 // Relative erorr <= 1.5 * 2^(-12)
 #[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
