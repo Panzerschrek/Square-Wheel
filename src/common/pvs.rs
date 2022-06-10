@@ -1,5 +1,6 @@
 use super::{bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, matrix};
-use std::io::Write;
+use rayon::prelude::*;
+use std::{io::Write, sync::atomic};
 
 // leafs.len() * leafs.len() elements.
 // TODO - use more compact form.
@@ -11,24 +12,32 @@ pub fn calculate_visibility_matrix(map: &bsp_map_compact::BSPMap) -> VisibilityM
 
 	let mut mat = vec![false; map.leafs.len() * map.leafs.len()];
 
-	let mut bit_sets = Vec::with_capacity(map.leafs.len());
-	for leaf_index in 0 .. map.leafs.len() as u32
-	{
-		bit_sets.push(calculate_pvs_bit_set_for_leaf(map, leaf_index));
+	let leafs_complete = atomic::AtomicU32::new(0);
+	let leafs_total = map.leafs.len() as u32;
 
-		let ratio_before = leaf_index * 256 / (map.leafs.len() as u32);
-		let ratio_after = (leaf_index + 1) * 256 / (map.leafs.len() as u32);
-		if ratio_after != ratio_before
-		{
-			print!(
-				"\r{:03.2}% complete ({} of {} leafs)",
-				((leaf_index + 1) as f32) * 100.0 / (map.leafs.len() as f32),
-				leaf_index + 1,
-				map.leafs.len()
-			);
-			let _ignore_errors = std::io::stdout().flush();
-		}
-	}
+	let mut bit_sets = vec![Vec::new(); map.leafs.len()];
+	// Speed-up visibility matrix calculation by performing calculation for each row in parallel.
+	bit_sets
+		.par_iter_mut()
+		.enumerate()
+		.for_each(|(leaf_index, leaf_bit_set)| {
+			*leaf_bit_set = calculate_pvs_bit_set_for_leaf(map, leaf_index as u32);
+
+			let leafs_before = leafs_complete.fetch_add(1, atomic::Ordering::SeqCst);
+			let leafs_after = leafs_before + 1;
+			let ratio_before = leafs_before * 256 / leafs_total;
+			let ratio_after = leafs_after * 256 / leafs_total;
+			if ratio_after != ratio_before
+			{
+				print!(
+					"\r{:03.2}% complete ({} of {} leafs)",
+					(leafs_after as f32) * 100.0 / (leafs_total as f32),
+					leafs_after,
+					leafs_total
+				);
+				let _ignore_errors = std::io::stdout().flush();
+			}
+		});
 
 	println!("\nCaclulating final visibility matrix");
 	for x in 0 .. map.leafs.len()
