@@ -108,7 +108,10 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 			let texture_str = std::str::from_utf8(&texture_name[0 .. null_pos]).unwrap_or("");
 			if let Some(material) = materials.get(texture_str)
 			{
-				*dst_light = material.emissive_light;
+				for i in 0 .. 3
+				{
+					dst_light[i] = material.emissive_light[i] * settings.light_scale;
+				}
 			}
 		}
 
