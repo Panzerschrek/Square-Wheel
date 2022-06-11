@@ -45,12 +45,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		let mut emissive_light = vec![[0.0, 0.0, 0.0]; map.textures.len()];
 		for (dst_light, texture_name) in emissive_light.iter_mut().zip(map.textures.iter())
 		{
-			let null_pos = texture_name
-				.iter()
-				.position(|x| *x == 0_u8)
-				.unwrap_or(texture_name.len());
-			let texture_str = std::str::from_utf8(&texture_name[0 .. null_pos]).unwrap_or("");
-			if let Some(material) = materials.get(texture_str)
+			if let Some(material) = materials.get(bsp_map_compact::get_texture_string(texture_name))
 			{
 				for i in 0 .. 3
 				{
@@ -94,11 +89,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		// Load textures in order to know albedo.
 		for (i, texture_name) in map.textures.iter().enumerate()
 		{
-			let null_pos = texture_name
-				.iter()
-				.position(|x| *x == 0_u8)
-				.unwrap_or(texture_name.len());
-			let texture_str = std::str::from_utf8(&texture_name[0 .. null_pos]).unwrap_or("");
+			let texture_str = bsp_map_compact::get_texture_string(texture_name);
 			if let Some(img) = albedo_image_getter(texture_str)
 			{
 				let mut pixels_sum: [u32; 3] = [0, 0, 0];
@@ -282,7 +273,9 @@ pub fn allocate_lightmaps(materials: &material::MaterialsMap, map: &mut bsp_map_
 
 	for polygon in &mut map.polygons
 	{
-		let has_lightmap = if let Some(material) = materials.get(get_map_texture_string(&map.textures, polygon.texture))
+		let has_lightmap = if let Some(material) = materials.get(bsp_map_compact::get_texture_string(
+			&map.textures[polygon.texture as usize],
+		))
 		{
 			material.light
 		}
@@ -304,17 +297,6 @@ pub fn allocate_lightmaps(materials: &material::MaterialsMap, map: &mut bsp_map_
 	}
 
 	vec![[0.0, 0.0, 0.0]; offset]
-}
-
-fn get_map_texture_string(map_textures: &[bsp_map_compact::Texture], texture_index: u32) -> &str
-{
-	let texture_name = &map_textures[texture_index as usize];
-	let null_pos = texture_name
-		.iter()
-		.position(|x| *x == 0_u8)
-		.unwrap_or(texture_name.len());
-	let range = &texture_name[0 .. null_pos];
-	std::str::from_utf8(range).unwrap_or("")
 }
 
 type MaterialAlbedo = [f32; 3];

@@ -157,6 +157,15 @@ pub fn get_map_string(s: StringRef, map: &BSPMap) -> &str
 	std::str::from_utf8(&map.strings_data[(s.offset as usize) .. ((s.offset + s.size) as usize)]).unwrap_or("")
 }
 
+pub fn get_texture_string(texture_name: &Texture) -> &str
+{
+	let null_pos = texture_name
+		.iter()
+		.position(|x| *x == 0_u8)
+		.unwrap_or(texture_name.len());
+	std::str::from_utf8(&texture_name[0 .. null_pos]).unwrap_or("")
+}
+
 pub fn get_submodel_bbox(map: &BSPMap, submodel: &Submodel) -> BBox
 {
 	// Calculate model bounding box based on all vertices of all polygons.
