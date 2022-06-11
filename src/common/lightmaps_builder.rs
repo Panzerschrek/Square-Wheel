@@ -37,11 +37,56 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 
 	println!("Building primary lightmap");
 	build_primary_lightmaps(sample_grid_size, &lights, map, &mut primary_lightmaps_data);
-	println!("");
-
-	let mut passes_lightmaps = vec![primary_lightmaps_data];
 
 	let visibility_matrix = pvs::calculate_visibility_matrix(&map);
+
+	if settings.build_emissive_surfaces_light
+	{
+		let mut emissive_light = vec![[0.0, 0.0, 0.0]; map.textures.len()];
+		for (dst_light, texture_name) in emissive_light.iter_mut().zip(map.textures.iter())
+		{
+			let null_pos = texture_name
+				.iter()
+				.position(|x| *x == 0_u8)
+				.unwrap_or(texture_name.len());
+			let texture_str = std::str::from_utf8(&texture_name[0 .. null_pos]).unwrap_or("");
+			if let Some(material) = materials.get(texture_str)
+			{
+				for i in 0 .. 3
+				{
+					dst_light[i] = material.emissive_light[i] * settings.light_scale;
+				}
+			}
+		}
+
+		println!("\nBuilding emissive surfaces lightmap");
+
+		let emissive_light_sources =
+			create_emissive_surfaces_light_sources(&emissive_light, map, primary_lightmaps_data.len());
+
+		let mut emissive_surfaces_lightmaps_data = vec![[0.0, 0.0, 0.0]; primary_lightmaps_data.len()];
+
+		build_secondary_lightmaps(
+			&emissive_light_sources,
+			map,
+			&visibility_matrix,
+			&mut emissive_surfaces_lightmaps_data,
+		);
+
+		// Add emissive surfaces lightmap to primary lightap in order to generate secondary light for emissive surfaces lights.
+		for (dst, src) in primary_lightmaps_data
+			.iter_mut()
+			.zip(emissive_surfaces_lightmaps_data.iter())
+		{
+			for i in 0 .. 3
+			{
+				dst[i] += src[i];
+			}
+		}
+		println!("\nDone!");
+	}
+
+	let mut passes_lightmaps = vec![primary_lightmaps_data];
 
 	if settings.save_secondary_light && settings.num_passes > 1
 	{
@@ -94,42 +139,6 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 
 			passes_lightmaps.push(secondary_lightmaps_data);
 		}
-	}
-
-	if settings.build_emissive_surfaces_light
-	{
-		let mut emissive_light = vec![[0.0, 0.0, 0.0]; map.textures.len()];
-		for (dst_light, texture_name) in emissive_light.iter_mut().zip(map.textures.iter())
-		{
-			let null_pos = texture_name
-				.iter()
-				.position(|x| *x == 0_u8)
-				.unwrap_or(texture_name.len());
-			let texture_str = std::str::from_utf8(&texture_name[0 .. null_pos]).unwrap_or("");
-			if let Some(material) = materials.get(texture_str)
-			{
-				for i in 0 .. 3
-				{
-					dst_light[i] = material.emissive_light[i] * settings.light_scale;
-				}
-			}
-		}
-
-		println!("\nBuilding emissive surfaces lightmap");
-
-		let lightmap_size = passes_lightmaps.last().unwrap().len();
-		let emissive_light_sources = create_emissive_surfaces_light_sources(&emissive_light, map, lightmap_size);
-
-		let mut emissive_surfaces_lightmaps_data = vec![[0.0, 0.0, 0.0]; lightmap_size];
-
-		build_secondary_lightmaps(
-			&emissive_light_sources,
-			map,
-			&visibility_matrix,
-			&mut emissive_surfaces_lightmaps_data,
-		);
-
-		passes_lightmaps.push(emissive_surfaces_lightmaps_data);
 	}
 
 	println!("\nCombining lightmaps");
