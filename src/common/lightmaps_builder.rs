@@ -9,6 +9,7 @@ pub struct LightmappingSettings
 	pub ambient_light: f32,
 	pub save_primary_light: bool,
 	pub save_secondary_light: bool,
+	pub build_emissive_surfaces_light: bool,
 	pub num_passes: u32,
 }
 
@@ -16,7 +17,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	settings: &LightmappingSettings,
 	materials: &material::MaterialsMap,
 	map: &mut bsp_map_compact::BSPMap,
-	mut albedo_image_getter: AlbedoImageGetter,
+	albedo_image_getter: AlbedoImageGetter,
 )
 {
 	let sample_grid_size = settings.sample_grid_size.min(MAX_SAMPLE_GRID_SIZE);
@@ -36,45 +37,45 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 
 	println!("Building primary lightmap");
 	build_primary_lightmaps(sample_grid_size, &lights, map, &mut primary_lightmaps_data);
-	println!("");
+
+	let visibility_matrix = pvs::calculate_visibility_matrix(&map);
+
+	if settings.build_emissive_surfaces_light
+	{
+		let emissive_light = get_map_textures_emissive_light(map, materials, settings);
+
+		println!("\nBuilding emissive surfaces lightmap");
+
+		let emissive_light_sources =
+			create_emissive_surfaces_light_sources(&emissive_light, map, primary_lightmaps_data.len());
+
+		let mut emissive_surfaces_lightmaps_data = vec![[0.0, 0.0, 0.0]; primary_lightmaps_data.len()];
+
+		build_secondary_lightmaps(
+			&emissive_light_sources,
+			map,
+			&visibility_matrix,
+			&mut emissive_surfaces_lightmaps_data,
+		);
+
+		// Add emissive surfaces lightmap to primary lightap in order to generate secondary light for emissive surfaces lights.
+		for (dst, src) in primary_lightmaps_data
+			.iter_mut()
+			.zip(emissive_surfaces_lightmaps_data.iter())
+		{
+			for i in 0 .. 3
+			{
+				dst[i] += src[i];
+			}
+		}
+		println!("\nDone!");
+	}
 
 	let mut passes_lightmaps = vec![primary_lightmaps_data];
 
 	if settings.save_secondary_light && settings.num_passes > 1
 	{
-		let visibility_matrix = pvs::calculate_visibility_matrix(&map);
-
-		let mut materials_albedo = vec![DEFAULT_ALBEDO; map.textures.len()];
-		// Load textures in order to know albedo.
-		for (i, texture_name) in map.textures.iter().enumerate()
-		{
-			let null_pos = texture_name
-				.iter()
-				.position(|x| *x == 0_u8)
-				.unwrap_or(texture_name.len());
-			let texture_str = std::str::from_utf8(&texture_name[0 .. null_pos]).unwrap_or("");
-			if let Some(img) = albedo_image_getter(texture_str)
-			{
-				let mut pixels_sum: [u32; 3] = [0, 0, 0];
-				for pixel in &img.pixels
-				{
-					let rgb = pixel.get_rgb();
-					pixels_sum[0] += rgb[0] as u32;
-					pixels_sum[1] += rgb[1] as u32;
-					pixels_sum[2] += rgb[2] as u32;
-				}
-				let scale = 1.0 / (img.pixels.len() as f32 * 255.0);
-				materials_albedo[i] = [
-					pixels_sum[0] as f32 * scale,
-					pixels_sum[1] as f32 * scale,
-					pixels_sum[2] as f32 * scale,
-				];
-			}
-			else
-			{
-				println!("Can't load texture for material {}", texture_str);
-			}
-		}
+		let materials_albedo = get_map_textures_albedo(map, albedo_image_getter);
 
 		for pass_num in 1 .. settings.num_passes.min(8)
 		{
@@ -123,6 +124,61 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	}
 
 	println!("Done!");
+}
+
+fn get_map_textures_emissive_light(
+	map: &bsp_map_compact::BSPMap,
+	materials: &material::MaterialsMap,
+	settings: &LightmappingSettings,
+) -> Vec<[f32; 3]>
+{
+	let mut emissive_light = vec![[0.0, 0.0, 0.0]; map.textures.len()];
+	for (dst_light, texture_name) in emissive_light.iter_mut().zip(map.textures.iter())
+	{
+		if let Some(material) = materials.get(bsp_map_compact::get_texture_string(texture_name))
+		{
+			for i in 0 .. 3
+			{
+				dst_light[i] = material.emissive_light[i] * settings.light_scale;
+			}
+		}
+	}
+	emissive_light
+}
+
+fn get_map_textures_albedo<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
+	map: &bsp_map_compact::BSPMap,
+	mut albedo_image_getter: AlbedoImageGetter,
+) -> Vec<MaterialAlbedo>
+{
+	let mut materials_albedo = vec![DEFAULT_ALBEDO; map.textures.len()];
+	// Load textures in order to know albedo.
+	for (dst_albedo, texture_name) in materials_albedo.iter_mut().zip(map.textures.iter())
+	{
+		let texture_str = bsp_map_compact::get_texture_string(texture_name);
+		if let Some(img) = albedo_image_getter(texture_str)
+		{
+			let mut pixels_sum: [u32; 3] = [0, 0, 0];
+			for pixel in &img.pixels
+			{
+				let rgb = pixel.get_rgb();
+				pixels_sum[0] += rgb[0] as u32;
+				pixels_sum[1] += rgb[1] as u32;
+				pixels_sum[2] += rgb[2] as u32;
+			}
+			let scale = 1.0 / (img.pixels.len() as f32 * 255.0);
+			*dst_albedo = [
+				pixels_sum[0] as f32 * scale,
+				pixels_sum[1] as f32 * scale,
+				pixels_sum[2] as f32 * scale,
+			];
+		}
+		else
+		{
+			println!("Can't load texture for material {}", texture_str);
+		}
+	}
+	materials_albedo
 }
 
 // If this chaged, map file version must be changed too!
@@ -236,7 +292,9 @@ pub fn allocate_lightmaps(materials: &material::MaterialsMap, map: &mut bsp_map_
 
 	for polygon in &mut map.polygons
 	{
-		let has_lightmap = if let Some(material) = materials.get(get_map_texture_string(&map.textures, polygon.texture))
+		let has_lightmap = if let Some(material) = materials.get(bsp_map_compact::get_texture_string(
+			&map.textures[polygon.texture as usize],
+		))
 		{
 			material.light
 		}
@@ -258,17 +316,6 @@ pub fn allocate_lightmaps(materials: &material::MaterialsMap, map: &mut bsp_map_
 	}
 
 	vec![[0.0, 0.0, 0.0]; offset]
-}
-
-fn get_map_texture_string(map_textures: &[bsp_map_compact::Texture], texture_index: u32) -> &str
-{
-	let texture_name = &map_textures[texture_index as usize];
-	let null_pos = texture_name
-		.iter()
-		.position(|x| *x == 0_u8)
-		.unwrap_or(texture_name.len());
-	let range = &texture_name[0 .. null_pos];
-	std::str::from_utf8(range).unwrap_or("")
 }
 
 type MaterialAlbedo = [f32; 3];
@@ -919,13 +966,70 @@ pub fn create_secondary_light_sources(
 	let mut sample_raster_data = Vec::new();
 	for polygon in &map.polygons
 	{
-		result.push(create_secondary_light_source(
-			materials_albedo,
-			map,
-			primary_lightmaps_data,
-			polygon,
-			&mut sample_raster_data,
-		));
+		let source = if polygon.lightmap_data_offset == 0
+		{
+			SecondaryLightSource {
+				samples: Vec::new(),
+				normal: Vec3f::unit_z(),
+				sample_size: 1.0,
+				center: Vec3f::zero(),
+				radius: 0.0,
+			}
+		}
+		else
+		{
+			create_secondary_light_source(
+				materials_albedo,
+				map,
+				primary_lightmaps_data,
+				polygon,
+				&mut sample_raster_data,
+			)
+		};
+
+		result.push(source);
+	}
+
+	result
+}
+
+fn create_emissive_surfaces_light_sources(
+	materials_emissive_light: &[[f32; 3]],
+	map: &bsp_map_compact::BSPMap,
+	lightmap_data_size: usize,
+) -> SecondaryLightSources
+{
+	// Use same function for emissive surfaces lights creation as for secondary lights.
+	// In order to do this create pseudo-lightmap with all one values and modulate it by emissive light power.
+	let all_ones_lightmap = vec![[1.0, 1.0, 1.0]; lightmap_data_size];
+
+	let mut result = Vec::with_capacity(map.polygons.len());
+	let mut sample_raster_data = Vec::new();
+	for polygon in &map.polygons
+	{
+		let light = materials_emissive_light[polygon.texture as usize];
+		let source = if light[0] <= 0.0 && light[1] <= 0.0 && light[2] <= 0.0
+		{
+			SecondaryLightSource {
+				samples: Vec::new(),
+				normal: Vec3f::unit_z(),
+				sample_size: 1.0,
+				center: Vec3f::zero(),
+				radius: 0.0,
+			}
+		}
+		else
+		{
+			create_secondary_light_source(
+				materials_emissive_light,
+				map,
+				&all_ones_lightmap,
+				polygon,
+				&mut sample_raster_data,
+			)
+		};
+
+		result.push(source);
 	}
 
 	result
@@ -942,17 +1046,6 @@ fn create_secondary_light_source(
 ) -> SecondaryLightSource
 {
 	let plane_normal_normalized = polygon.plane.vec / polygon.plane.vec.magnitude();
-
-	if polygon.lightmap_data_offset == 0
-	{
-		return SecondaryLightSource {
-			samples: Vec::new(),
-			normal: plane_normal_normalized,
-			sample_size: 1.0, // This doesn't matter if we have no samples.
-			center: Vec3f::zero(),
-			radius: 0.0,
-		};
-	}
 
 	let lightmap_size = get_polygon_lightmap_size(polygon);
 	let lightmap_basis = calculate_lightmap_basis(polygon);

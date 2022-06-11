@@ -82,14 +82,8 @@ impl Renderer
 		let mut map_materials = Vec::with_capacity(map.textures.len());
 		for texture_name in &map.textures
 		{
-			let null_pos = texture_name
-				.iter()
-				.position(|x| *x == 0_u8)
-				.unwrap_or(texture_name.len());
-			let range = &texture_name[0 .. null_pos];
-
-			let material_name_string = std::str::from_utf8(range).unwrap_or("").to_string();
-			let material = if let Some(material) = materials.get(&material_name_string)
+			let material_name_string = bsp_map_compact::get_texture_string(texture_name);
+			let material = if let Some(material) = materials.get(material_name_string)
 			{
 				material.clone()
 			}
