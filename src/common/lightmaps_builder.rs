@@ -9,6 +9,7 @@ pub struct LightmappingSettings
 	pub ambient_light: f32,
 	pub save_primary_light: bool,
 	pub save_secondary_light: bool,
+	pub build_emissive_surfaces_light: bool,
 	pub num_passes: u32,
 }
 
@@ -40,10 +41,10 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 
 	let mut passes_lightmaps = vec![primary_lightmaps_data];
 
+	let visibility_matrix = pvs::calculate_visibility_matrix(&map);
+
 	if settings.save_secondary_light && settings.num_passes > 1
 	{
-		let visibility_matrix = pvs::calculate_visibility_matrix(&map);
-
 		let mut materials_albedo = vec![DEFAULT_ALBEDO; map.textures.len()];
 		// Load textures in order to know albedo.
 		for (i, texture_name) in map.textures.iter().enumerate()
@@ -93,6 +94,42 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 
 			passes_lightmaps.push(secondary_lightmaps_data);
 		}
+	}
+
+	if settings.build_emissive_surfaces_light
+	{
+		let mut emissive_light = vec![[0.0, 0.0, 0.0]; map.textures.len()];
+		for (dst_light, texture_name) in emissive_light.iter_mut().zip(map.textures.iter())
+		{
+			let null_pos = texture_name
+				.iter()
+				.position(|x| *x == 0_u8)
+				.unwrap_or(texture_name.len());
+			let texture_str = std::str::from_utf8(&texture_name[0 .. null_pos]).unwrap_or("");
+			if let Some(material) = materials.get(texture_str)
+			{
+				*dst_light = material.emissive_light;
+			}
+		}
+
+		println!("\nBuilding emissive surfaces lightmap");
+
+		// Use same function for emissive surfaces lights creation as for secondary lights.
+		// In order to do this create pseudo-lightmap with all one values and modulate it by emissive light power.
+		// TODO - what if emissive surface have no lightmap?
+		let all_ones_lightmap = vec![[1.0, 1.0, 1.0]; passes_lightmaps.last().unwrap().len()];
+		let emissive_light_sources = create_secondary_light_sources(&emissive_light, map, &all_ones_lightmap);
+
+		let mut emissive_surfaces_lightmaps_data = vec![[0.0, 0.0, 0.0]; all_ones_lightmap.len()];
+
+		build_secondary_lightmaps(
+			&emissive_light_sources,
+			map,
+			&visibility_matrix,
+			&mut emissive_surfaces_lightmaps_data,
+		);
+
+		passes_lightmaps.push(emissive_surfaces_lightmaps_data);
 	}
 
 	println!("\nCombining lightmaps");

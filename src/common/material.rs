@@ -42,6 +42,11 @@ pub struct Material
 	/// If true - polygon is affected by light and has lightmap.
 	#[serde(default = "default_true")]
 	pub light: bool,
+
+	/// RGB power of light for emissive materials.
+	/// Used during lightmaps preparation.
+	#[serde(default)]
+	pub emissive_light: [f32; 3],
 }
 
 impl Default for Material
@@ -58,6 +63,7 @@ impl Default for Material
 			draw: true,
 			blocks_view: true,
 			light: true,
+			emissive_light: [0.0, 0.0, 0.0],
 		}
 	}
 }
