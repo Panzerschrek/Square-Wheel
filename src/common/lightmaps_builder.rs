@@ -17,7 +17,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	settings: &LightmappingSettings,
 	materials: &material::MaterialsMap,
 	map: &mut bsp_map_compact::BSPMap,
-	mut albedo_image_getter: AlbedoImageGetter,
+	albedo_image_getter: AlbedoImageGetter,
 )
 {
 	let sample_grid_size = settings.sample_grid_size.min(MAX_SAMPLE_GRID_SIZE);
@@ -42,17 +42,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 
 	if settings.build_emissive_surfaces_light
 	{
-		let mut emissive_light = vec![[0.0, 0.0, 0.0]; map.textures.len()];
-		for (dst_light, texture_name) in emissive_light.iter_mut().zip(map.textures.iter())
-		{
-			if let Some(material) = materials.get(bsp_map_compact::get_texture_string(texture_name))
-			{
-				for i in 0 .. 3
-				{
-					dst_light[i] = material.emissive_light[i] * settings.light_scale;
-				}
-			}
-		}
+		let emissive_light = get_map_textures_emissive_light(map, materials, settings);
 
 		println!("\nBuilding emissive surfaces lightmap");
 
@@ -85,33 +75,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 
 	if settings.save_secondary_light && settings.num_passes > 1
 	{
-		let mut materials_albedo = vec![DEFAULT_ALBEDO; map.textures.len()];
-		// Load textures in order to know albedo.
-		for (i, texture_name) in map.textures.iter().enumerate()
-		{
-			let texture_str = bsp_map_compact::get_texture_string(texture_name);
-			if let Some(img) = albedo_image_getter(texture_str)
-			{
-				let mut pixels_sum: [u32; 3] = [0, 0, 0];
-				for pixel in &img.pixels
-				{
-					let rgb = pixel.get_rgb();
-					pixels_sum[0] += rgb[0] as u32;
-					pixels_sum[1] += rgb[1] as u32;
-					pixels_sum[2] += rgb[2] as u32;
-				}
-				let scale = 1.0 / (img.pixels.len() as f32 * 255.0);
-				materials_albedo[i] = [
-					pixels_sum[0] as f32 * scale,
-					pixels_sum[1] as f32 * scale,
-					pixels_sum[2] as f32 * scale,
-				];
-			}
-			else
-			{
-				println!("Can't load texture for material {}", texture_str);
-			}
-		}
+		let materials_albedo = get_map_textures_albedo(map, albedo_image_getter);
 
 		for pass_num in 1 .. settings.num_passes.min(8)
 		{
@@ -160,6 +124,61 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	}
 
 	println!("Done!");
+}
+
+fn get_map_textures_emissive_light(
+	map: &bsp_map_compact::BSPMap,
+	materials: &material::MaterialsMap,
+	settings: &LightmappingSettings,
+) -> Vec<[f32; 3]>
+{
+	let mut emissive_light = vec![[0.0, 0.0, 0.0]; map.textures.len()];
+	for (dst_light, texture_name) in emissive_light.iter_mut().zip(map.textures.iter())
+	{
+		if let Some(material) = materials.get(bsp_map_compact::get_texture_string(texture_name))
+		{
+			for i in 0 .. 3
+			{
+				dst_light[i] = material.emissive_light[i] * settings.light_scale;
+			}
+		}
+	}
+	emissive_light
+}
+
+fn get_map_textures_albedo<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
+	map: &bsp_map_compact::BSPMap,
+	mut albedo_image_getter: AlbedoImageGetter,
+) -> Vec<MaterialAlbedo>
+{
+	let mut materials_albedo = vec![DEFAULT_ALBEDO; map.textures.len()];
+	// Load textures in order to know albedo.
+	for (dst_albedo, texture_name) in materials_albedo.iter_mut().zip(map.textures.iter())
+	{
+		let texture_str = bsp_map_compact::get_texture_string(texture_name);
+		if let Some(img) = albedo_image_getter(texture_str)
+		{
+			let mut pixels_sum: [u32; 3] = [0, 0, 0];
+			for pixel in &img.pixels
+			{
+				let rgb = pixel.get_rgb();
+				pixels_sum[0] += rgb[0] as u32;
+				pixels_sum[1] += rgb[1] as u32;
+				pixels_sum[2] += rgb[2] as u32;
+			}
+			let scale = 1.0 / (img.pixels.len() as f32 * 255.0);
+			*dst_albedo = [
+				pixels_sum[0] as f32 * scale,
+				pixels_sum[1] as f32 * scale,
+				pixels_sum[2] as f32 * scale,
+			];
+		}
+		else
+		{
+			println!("Can't load texture for material {}", texture_str);
+		}
+	}
+	materials_albedo
 }
 
 // If this chaged, map file version must be changed too!
