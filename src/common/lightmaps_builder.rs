@@ -114,13 +114,10 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 
 		println!("\nBuilding emissive surfaces lightmap");
 
-		// Use same function for emissive surfaces lights creation as for secondary lights.
-		// In order to do this create pseudo-lightmap with all one values and modulate it by emissive light power.
-		// TODO - what if emissive surface have no lightmap?
-		let all_ones_lightmap = vec![[1.0, 1.0, 1.0]; passes_lightmaps.last().unwrap().len()];
-		let emissive_light_sources = create_secondary_light_sources(&emissive_light, map, &all_ones_lightmap);
+		let lightmap_size = passes_lightmaps.last().unwrap().len();
+		let emissive_light_sources = create_emissive_surfaces_light_sources(&emissive_light, map, lightmap_size);
 
-		let mut emissive_surfaces_lightmaps_data = vec![[0.0, 0.0, 0.0]; all_ones_lightmap.len()];
+		let mut emissive_surfaces_lightmaps_data = vec![[0.0, 0.0, 0.0]; lightmap_size];
 
 		build_secondary_lightmaps(
 			&emissive_light_sources,
@@ -956,13 +953,70 @@ pub fn create_secondary_light_sources(
 	let mut sample_raster_data = Vec::new();
 	for polygon in &map.polygons
 	{
-		result.push(create_secondary_light_source(
-			materials_albedo,
-			map,
-			primary_lightmaps_data,
-			polygon,
-			&mut sample_raster_data,
-		));
+		let source = if polygon.lightmap_data_offset == 0
+		{
+			SecondaryLightSource {
+				samples: Vec::new(),
+				normal: Vec3f::unit_z(),
+				sample_size: 1.0,
+				center: Vec3f::zero(),
+				radius: 0.0,
+			}
+		}
+		else
+		{
+			create_secondary_light_source(
+				materials_albedo,
+				map,
+				primary_lightmaps_data,
+				polygon,
+				&mut sample_raster_data,
+			)
+		};
+
+		result.push(source);
+	}
+
+	result
+}
+
+fn create_emissive_surfaces_light_sources(
+	materials_emissive_light: &[[f32; 3]],
+	map: &bsp_map_compact::BSPMap,
+	lightmap_data_size: usize,
+) -> SecondaryLightSources
+{
+	// Use same function for emissive surfaces lights creation as for secondary lights.
+	// In order to do this create pseudo-lightmap with all one values and modulate it by emissive light power.
+	let all_ones_lightmap = vec![[1.0, 1.0, 1.0]; lightmap_data_size];
+
+	let mut result = Vec::with_capacity(map.polygons.len());
+	let mut sample_raster_data = Vec::new();
+	for polygon in &map.polygons
+	{
+		let light = materials_emissive_light[polygon.texture as usize];
+		let source = if light[0] <= 0.0 && light[1] <= 0.0 && light[2] <= 0.0
+		{
+			SecondaryLightSource {
+				samples: Vec::new(),
+				normal: Vec3f::unit_z(),
+				sample_size: 1.0,
+				center: Vec3f::zero(),
+				radius: 0.0,
+			}
+		}
+		else
+		{
+			create_secondary_light_source(
+				materials_emissive_light,
+				map,
+				&all_ones_lightmap,
+				polygon,
+				&mut sample_raster_data,
+			)
+		};
+
+		result.push(source);
 	}
 
 	result
@@ -979,17 +1033,6 @@ fn create_secondary_light_source(
 ) -> SecondaryLightSource
 {
 	let plane_normal_normalized = polygon.plane.vec / polygon.plane.vec.magnitude();
-
-	if polygon.lightmap_data_offset == 0
-	{
-		return SecondaryLightSource {
-			samples: Vec::new(),
-			normal: plane_normal_normalized,
-			sample_size: 1.0, // This doesn't matter if we have no samples.
-			center: Vec3f::zero(),
-			radius: 0.0,
-		};
-	}
 
 	let lightmap_size = get_polygon_lightmap_size(polygon);
 	let lightmap_basis = calculate_lightmap_basis(polygon);
