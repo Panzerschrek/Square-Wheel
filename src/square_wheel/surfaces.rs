@@ -20,7 +20,23 @@ pub fn build_surface(
 {
 	// Perform call in each branch instead of assigning function to function pointer and calling it later because LLVM compiler can't inline call via pointer.
 	// Proper inlining is very important here - it can reduce call overhead and merge identical code.
-	if lightmap_scale_log2 == 0
+	if lightmap_data.is_empty()
+	{
+		build_surface_impl_1_static_params::<NO_LIGHTMAP_SCALE>(
+			plane,
+			tex_coord_equation,
+			surface_size,
+			surface_tc_min,
+			texture,
+			lightmap_size,
+			lightmap_tc_shift,
+			lightmap_data,
+			dynamic_lights,
+			cam_pos,
+			out_surface_data,
+		);
+	}
+	else if lightmap_scale_log2 == 0
 	{
 		build_surface_impl_1_static_params::<0>(
 			plane,
@@ -120,7 +136,7 @@ fn build_surface_impl_1_static_params<const LIGHTAP_SCALE_LOG2: u32>(
 	out_surface_data: &mut [Color32],
 )
 {
-	if lightmap_data.is_empty()
+	if dynamic_lights.is_empty()
 	{
 		build_surface_impl_2_static_params::<LIGHTAP_SCALE_LOG2, false>(
 			plane,
@@ -154,7 +170,7 @@ fn build_surface_impl_1_static_params<const LIGHTAP_SCALE_LOG2: u32>(
 	}
 }
 
-fn build_surface_impl_2_static_params<const LIGHTAP_SCALE_LOG2: u32, const USE_LIGHTMAP: bool>(
+fn build_surface_impl_2_static_params<const LIGHTAP_SCALE_LOG2: u32, const USE_DYNAMIC_LIGHTS: bool>(
 	plane: &Plane,
 	tex_coord_equation: &[Plane; 2],
 	surface_size: [u32; 2],
@@ -168,9 +184,9 @@ fn build_surface_impl_2_static_params<const LIGHTAP_SCALE_LOG2: u32, const USE_L
 	out_surface_data: &mut [Color32],
 )
 {
-	if dynamic_lights.is_empty()
+	if texture.has_normal_map
 	{
-		build_surface_impl_3_static_params::<LIGHTAP_SCALE_LOG2, USE_LIGHTMAP, false>(
+		build_surface_impl_3_static_params::<LIGHTAP_SCALE_LOG2, USE_DYNAMIC_LIGHTS, true>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -186,7 +202,7 @@ fn build_surface_impl_2_static_params<const LIGHTAP_SCALE_LOG2: u32, const USE_L
 	}
 	else
 	{
-		build_surface_impl_3_static_params::<LIGHTAP_SCALE_LOG2, USE_LIGHTMAP, true>(
+		build_surface_impl_3_static_params::<LIGHTAP_SCALE_LOG2, USE_DYNAMIC_LIGHTS, false>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -204,59 +220,6 @@ fn build_surface_impl_2_static_params<const LIGHTAP_SCALE_LOG2: u32, const USE_L
 
 fn build_surface_impl_3_static_params<
 	const LIGHTAP_SCALE_LOG2: u32,
-	const USE_LIGHTMAP: bool,
-	const USE_DYNAMIC_LIGHTS: bool,
->(
-	plane: &Plane,
-	tex_coord_equation: &[Plane; 2],
-	surface_size: [u32; 2],
-	surface_tc_min: [i32; 2],
-	texture: &textures::Texture,
-	lightmap_size: [u32; 2],
-	lightmap_tc_shift: [u32; 2],
-	lightmap_data: &[bsp_map_compact::LightmapElement],
-	dynamic_lights: &[LightWithShadowMap],
-	cam_pos: &Vec3f,
-	out_surface_data: &mut [Color32],
-)
-{
-	if texture.has_normal_map
-	{
-		build_surface_impl_4_static_params::<LIGHTAP_SCALE_LOG2, USE_LIGHTMAP, USE_DYNAMIC_LIGHTS, true>(
-			plane,
-			tex_coord_equation,
-			surface_size,
-			surface_tc_min,
-			texture,
-			lightmap_size,
-			lightmap_tc_shift,
-			lightmap_data,
-			dynamic_lights,
-			cam_pos,
-			out_surface_data,
-		);
-	}
-	else
-	{
-		build_surface_impl_4_static_params::<LIGHTAP_SCALE_LOG2, USE_LIGHTMAP, USE_DYNAMIC_LIGHTS, false>(
-			plane,
-			tex_coord_equation,
-			surface_size,
-			surface_tc_min,
-			texture,
-			lightmap_size,
-			lightmap_tc_shift,
-			lightmap_data,
-			dynamic_lights,
-			cam_pos,
-			out_surface_data,
-		);
-	}
-}
-
-fn build_surface_impl_4_static_params<
-	const LIGHTAP_SCALE_LOG2: u32,
-	const USE_LIGHTMAP: bool,
 	const USE_DYNAMIC_LIGHTS: bool,
 	const USE_NORMAL_MAP: bool,
 >(
@@ -277,9 +240,8 @@ fn build_surface_impl_4_static_params<
 	{
 		if texture.is_metal
 		{
-			build_surface_impl_5_static_params::<
+			build_surface_impl_4_static_params::<
 				LIGHTAP_SCALE_LOG2,
-				USE_LIGHTMAP,
 				USE_DYNAMIC_LIGHTS,
 				USE_NORMAL_MAP,
 				SPECULAR_TYPE_METAL,
@@ -299,9 +261,8 @@ fn build_surface_impl_4_static_params<
 		}
 		else
 		{
-			build_surface_impl_5_static_params::<
+			build_surface_impl_4_static_params::<
 				LIGHTAP_SCALE_LOG2,
-				USE_LIGHTMAP,
 				USE_DYNAMIC_LIGHTS,
 				USE_NORMAL_MAP,
 				SPECULAR_TYPE_DIELECTRIC,
@@ -322,13 +283,7 @@ fn build_surface_impl_4_static_params<
 	}
 	else
 	{
-		build_surface_impl_5_static_params::<
-			LIGHTAP_SCALE_LOG2,
-			USE_LIGHTMAP,
-			USE_DYNAMIC_LIGHTS,
-			USE_NORMAL_MAP,
-			SPECULAR_TYPE_NONE,
-		>(
+		build_surface_impl_4_static_params::<LIGHTAP_SCALE_LOG2, USE_DYNAMIC_LIGHTS, USE_NORMAL_MAP, SPECULAR_TYPE_NONE>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -348,11 +303,12 @@ pub const SPECULAR_TYPE_NONE: u32 = 0;
 pub const SPECULAR_TYPE_DIELECTRIC: u32 = 1;
 pub const SPECULAR_TYPE_METAL: u32 = 2;
 
+pub const NO_LIGHTMAP_SCALE: u32 = 31;
+
 // Specify various settings as template params in order to get most efficient code for current combination of params.
 // Use chained dispatch in order to convert dynamic params into static.
-fn build_surface_impl_5_static_params<
+fn build_surface_impl_4_static_params<
 	const LIGHTAP_SCALE_LOG2: u32,
-	const USE_LIGHTMAP: bool,
 	const USE_DYNAMIC_LIGHTS: bool,
 	const USE_NORMAL_MAP: bool,
 	const SPECULAR_TYPE: u32,
@@ -409,7 +365,7 @@ fn build_surface_impl_5_static_params<
 	{
 		// Prepare interpolated lightmap values for current line.
 		// TODO - skip samples outside current surface borders.
-		if USE_LIGHTMAP
+		if LIGHTAP_SCALE_LOG2 != NO_LIGHTMAP_SCALE
 		{
 			let lightmap_base_v = dst_v + lightmap_tc_shift[1];
 			let lightmap_v = lightmap_base_v >> LIGHTAP_SCALE_LOG2;
@@ -449,7 +405,7 @@ fn build_surface_impl_5_static_params<
 		{
 			let mut total_light_albedo_modulated = [0.0, 0.0, 0.0];
 			let mut total_light_direct = [0.0, 0.0, 0.0];
-			if USE_LIGHTMAP
+			if LIGHTAP_SCALE_LOG2 != NO_LIGHTMAP_SCALE
 			{
 				let lightmap_base_u = dst_u + lightmap_tc_shift[0];
 				let lightmap_u = lightmap_base_u >> LIGHTAP_SCALE_LOG2;
