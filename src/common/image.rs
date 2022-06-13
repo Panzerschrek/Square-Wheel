@@ -1,5 +1,5 @@
 use super::color::*;
-use sdl2::image::LoadSurface;
+use sdl2::image::{LoadSurface, SaveSurface};
 
 #[derive(Default, Clone)]
 pub struct Image
@@ -49,4 +49,38 @@ pub fn load(file_path: &std::path::Path) -> Option<Image>
 	}
 
 	None
+}
+
+pub fn save(image: &Image, file_path: &std::path::Path) -> bool
+{
+	let element_size = std::mem::size_of::<Color32>();
+	let bytes = unsafe {
+		std::slice::from_raw_parts_mut(
+			(&image.pixels[0]) as *const Color32 as *mut Color32 as *mut u8,
+			element_size * image.pixels.len(),
+		)
+	};
+
+	if let Ok(surface) = sdl2::surface::Surface::from_data(
+		bytes,
+		image.size[0],
+		image.size[1],
+		image.size[0] * (element_size as u32),
+		sdl2::pixels::PixelFormatEnum::ARGB8888,
+	)
+	{
+		match surface.save(file_path)
+		{
+			Ok(()) => true,
+			Err(e) =>
+			{
+				println!("Failed to save image: {}", e);
+				false
+			},
+		}
+	}
+	else
+	{
+		false
+	}
 }

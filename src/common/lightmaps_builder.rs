@@ -919,6 +919,7 @@ fn build_polygon_diretional_lightmap(
 						continue;
 					}
 
+					// TODO - save single direction for all grid samples?
 					let vec_to_light_transformed = Vec3f::new(
 						vec_to_light.dot(u_vec_normalized),
 						vec_to_light.dot(v_vec_normalized),
@@ -1006,6 +1007,13 @@ fn build_polygon_diretional_lightmap(
 					} // for light samples.
 				} // for leaf polygons.
 			} // for leafs.
+
+			let dst_index = (u + line_dst_start) as usize;
+
+			if (dst_index & 1023) == 0
+			{
+				light_hemisphere.debug_save(&std::path::PathBuf::from(format!("light_hemispheres/{}.png", dst_index)));
+			}
 
 			// TODO - calculate directional lightmap.
 			lightmaps_data[(u + line_dst_start) as usize];

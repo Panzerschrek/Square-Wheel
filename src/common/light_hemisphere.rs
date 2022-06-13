@@ -1,11 +1,11 @@
-use super::math_types::*;
+use super::{color::*, image, math_types::*};
 
 pub struct LightHemisphere
 {
 	pixels: [[f32; 3]; TEXTURE_AREA],
 }
 
-const TEXTURE_SIZE: u32 = 32;
+const TEXTURE_SIZE: u32 = 128;
 const TEXTURE_AREA: usize = (TEXTURE_SIZE * TEXTURE_SIZE) as usize;
 const TEXTURE_SIZE_F: f32 = TEXTURE_SIZE as f32;
 const HALF_TEXTURE_SIZE_F: f32 = TEXTURE_SIZE_F * 0.5;
@@ -35,6 +35,23 @@ impl LightHemisphere
 		// TODO - perform some sort of blur for sized lights.
 		self.add_point_light(direction, color);
 	}
+
+	pub fn debug_save(&self, file_path: &std::path::Path)
+	{
+		let mut img = image::Image {
+			size: [TEXTURE_SIZE, TEXTURE_SIZE],
+			pixels: vec![Color32::black(); TEXTURE_AREA],
+		};
+		for (dst, src) in img.pixels.iter_mut().zip(self.pixels.iter())
+		{
+			let scale = 255.0 * 128.0;
+			let r = (src[0] * scale).max(0.0).min(255.0) as u8;
+			let g = (src[1] * scale).max(0.0).min(255.0) as u8;
+			let b = (src[2] * scale).max(0.0).min(255.0) as u8;
+			*dst = Color32::from_rgba(r, g, b, 255);
+		}
+		image::save(&img, file_path);
+	}
 }
 
 fn project_vec_to_texture(v: &Vec3f) -> [u32; 2]
@@ -43,7 +60,7 @@ fn project_vec_to_texture(v: &Vec3f) -> [u32; 2]
 
 	let coord_projected = project_normalized_vector(&v_normalized);
 	let coord_in_texture =
-		coord_projected * (HALF_TEXTURE_SIZE_F * 2.0_f32.sqrt()) - Vec2f::new(HALF_TEXTURE_SIZE_F, HALF_TEXTURE_SIZE_F);
+		coord_projected * (HALF_TEXTURE_SIZE_F / 2.0_f32.sqrt()) + Vec2f::new(HALF_TEXTURE_SIZE_F, HALF_TEXTURE_SIZE_F);
 	[
 		clamp_to_texture_border(coord_in_texture.x),
 		clamp_to_texture_border(coord_in_texture.y),
