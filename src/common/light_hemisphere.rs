@@ -78,7 +78,7 @@ impl LightHemisphere
 			gaussian_scale * ((angle_cos - 1.0) / deviation).exp()
 		};
 
-		if box_half_size >= 8
+		if box_half_size >= 6
 		{
 			// Large scale - no supersampling.
 			for y in y_start ..= y_end
@@ -94,7 +94,7 @@ impl LightHemisphere
 				}
 			}
 		}
-		else if box_half_size >= 4
+		else if box_half_size >= 3
 		{
 			// Middle scale - perform 2x2 supersampling.
 			for y in y_start ..= y_end
