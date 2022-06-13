@@ -46,10 +46,10 @@ impl LightHemisphere
 			clamp_to_texture_border(coord_in_texture.y),
 		];
 
-		let deviation = size * 1.5;
+		let deviation = size / 20.0;
 
-		let box_size_f = deviation * 12.0 * TEXTURE_SIZE_F;
-		if box_size_f < 0.25
+		let box_half_size_f = deviation * 12.0 * TEXTURE_SIZE_F;
+		if box_half_size_f < 0.25
 		{
 			// Sharp gaussian. Avoid useless integration, just assign light power to center pixel.
 			let dst = &mut self.pixels[(coord[0] + coord[1] * TEXTURE_SIZE) as usize];
@@ -60,7 +60,7 @@ impl LightHemisphere
 			return;
 		}
 
-		let box_half_size = (box_size_f + 1.0) as i32;
+		let box_half_size = (box_half_size_f + 1.0) as i32;
 
 		let x_start = (coord[0] as i32 - box_half_size).max(0);
 		let x_end = (coord[0] as i32 + box_half_size).min(TEXTURE_SIZE as i32 - 1);
@@ -152,7 +152,7 @@ impl LightHemisphere
 		};
 		for (dst, src) in img.pixels.iter_mut().zip(self.pixels.iter())
 		{
-			let scale = 255.0 * 256.0;
+			let scale = 255.0 * 64.0;
 			let r = (src[0] * scale).max(0.0).min(255.0) as u8;
 			let g = (src[1] * scale).max(0.0).min(255.0) as u8;
 			let b = (src[2] * scale).max(0.0).min(255.0) as u8;

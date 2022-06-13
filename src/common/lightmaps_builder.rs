@@ -955,6 +955,7 @@ fn build_polygon_diretional_lightmap(
 					let light_source_lod = get_light_source_lod(&pos, light);
 					let min_dist2 =
 						get_secondary_light_source_sample_min_square_distance(light.sample_size, light_source_lod);
+					let current_sample_size = ((1 << light_source_lod) as f32) * light.sample_size;
 
 					// Iterate over all samples of this LOD.
 					for sample in &light.samples[light_source_lod]
@@ -1002,7 +1003,7 @@ fn build_polygon_diretional_lightmap(
 						light_hemisphere.add_sized_light(
 							&vec_to_light_transformed,
 							&color_scaled,
-							1.0 / vec_to_light_len2_clamped.sqrt(),
+							current_sample_size / vec_to_light_len2_clamped.sqrt(),
 						);
 					} // for light samples.
 				} // for leaf polygons.
