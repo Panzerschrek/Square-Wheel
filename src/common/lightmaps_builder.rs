@@ -675,8 +675,7 @@ fn build_polygon_secondary_lightmap(
 			let mut total_light = [0.0, 0.0, 0.0];
 			let pos_initial = start_pos_v + (u as f32) * lightmap_basis.u_vec;
 
-			// HACK! Shift sample position slightly towards polygon center to avoid completely black outlines in corners.
-			let pos_sihfted_towards_center = pos_initial * (63.0 / 64.0) + polygon_center * (1.0 / 64.0);
+			let pos_sihfted_towards_center = pre_correct_secondary_light_sample_position(&pos_initial, &polygon_center);
 			let pos = correct_sample_position(map, &pos_sihfted_towards_center, &lightmap_basis, &polygon_center);
 
 			// Calculate light only from polygons in visible leafs.
@@ -700,10 +699,8 @@ fn build_polygon_secondary_lightmap(
 
 					// Compute LOD.
 					let light_source_lod = get_light_source_lod(&pos, light);
-
-					// Limit inv square distance - do not allow almost infinite light in case if light sample is too close.
-					let current_sample_size = ((1 << light_source_lod) as f32) * light.sample_size;
-					let min_dist2 = 0.25 * current_sample_size * current_sample_size;
+					let min_dist2 =
+						get_secondary_light_source_sample_min_square_distance(light.sample_size, light_source_lod);
 
 					// Iterate over all samples of this LOD.
 					for sample in &light.samples[light_source_lod]
@@ -929,12 +926,9 @@ fn build_polygon_diretional_lightmap(
 					);
 					light_hemisphere.add_point_light(&vec_to_light_transformed, &color_scaled);
 				}
-			}
+			} // For primary light sample shifts.
 
-			// TODO - remove copy-paste.
-
-			// HACK! Shift sample position slightly towards polygon center to avoid completely black outlines in corners.
-			let pos_sihfted_towards_center = texel_pos * (63.0 / 64.0) + polygon_center * (1.0 / 64.0);
+			let pos_sihfted_towards_center = pre_correct_secondary_light_sample_position(&texel_pos, &polygon_center);
 			let pos = correct_sample_position(map, &pos_sihfted_towards_center, &lightmap_basis, &polygon_center);
 
 			// Calculate light only from polygons in visible leafs.
@@ -958,10 +952,8 @@ fn build_polygon_diretional_lightmap(
 
 					// Compute LOD.
 					let light_source_lod = get_light_source_lod(&pos, light);
-
-					// Limit inv square distance - do not allow almost infinite light in case if light sample is too close.
-					let current_sample_size = ((1 << light_source_lod) as f32) * light.sample_size;
-					let min_dist2 = 0.25 * current_sample_size * current_sample_size;
+					let min_dist2 =
+						get_secondary_light_source_sample_min_square_distance(light.sample_size, light_source_lod);
 
 					// Iterate over all samples of this LOD.
 					for sample in &light.samples[light_source_lod]
@@ -1009,7 +1001,7 @@ fn build_polygon_diretional_lightmap(
 						light_hemisphere.add_sized_light(
 							&vec_to_light_transformed,
 							&color_scaled,
-							vec_to_light_len2_clamped.sqrt(),
+							1.0 / vec_to_light_len2_clamped.sqrt(),
 						);
 					} // for light samples.
 				} // for leaf polygons.
@@ -1561,6 +1553,19 @@ fn calculate_dinstance_between_point_and_circle(
 	let square_len = dist_from_projection_point_to_circle * dist_from_projection_point_to_circle +
 		signed_dinstance_to_circle_plane * signed_dinstance_to_circle_plane;
 	square_len.sqrt()
+}
+
+fn get_secondary_light_source_sample_min_square_distance(sample_size: f32, light_source_lod: usize) -> f32
+{
+	// Limit inv square distance - do not allow almost infinite light in case if light sample is too close.
+	let current_sample_size = ((1 << light_source_lod) as f32) * sample_size;
+	0.25 * current_sample_size * current_sample_size
+}
+
+fn pre_correct_secondary_light_sample_position(pos_initial: &Vec3f, polygon_center: &Vec3f) -> Vec3f
+{
+	// HACK! Shift sample position slightly towards polygon center to avoid completely black outlines in corners.
+	pos_initial * (63.0 / 64.0) + polygon_center * (1.0 / 64.0)
 }
 
 fn correct_sample_position(
