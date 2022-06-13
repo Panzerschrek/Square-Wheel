@@ -5,7 +5,7 @@ pub struct LightHemisphere
 	pixels: [[f32; 3]; TEXTURE_AREA],
 }
 
-const TEXTURE_SIZE: u32 = 128;
+const TEXTURE_SIZE: u32 = 64;
 const TEXTURE_AREA: usize = (TEXTURE_SIZE * TEXTURE_SIZE) as usize;
 const TEXTURE_SIZE_F: f32 = TEXTURE_SIZE as f32;
 const HALF_TEXTURE_SIZE_F: f32 = TEXTURE_SIZE_F * 0.5;
@@ -30,10 +30,118 @@ impl LightHemisphere
 		}
 	}
 
-	pub fn add_sized_light(&mut self, direction: &Vec3f, color: &[f32; 3], _size: f32)
+	pub fn add_sized_light(&mut self, direction: &Vec3f, color: &[f32; 3], size: f32)
 	{
-		// TODO - perform some sort of blur for sized lights.
-		self.add_point_light(direction, color);
+		// Add sized light using Gaussian-blur.
+		// Use spherial gaussian function for this.
+		// Deviation is based on provided size.
+
+		let direction_normalized = direction / direction.magnitude();
+
+		let coord_projected = project_normalized_vector(&direction_normalized);
+		let coord_in_texture = coord_projected * (HALF_TEXTURE_SIZE_F / 2.0_f32.sqrt()) +
+			Vec2f::new(HALF_TEXTURE_SIZE_F, HALF_TEXTURE_SIZE_F);
+		let coord = [
+			clamp_to_texture_border(coord_in_texture.x),
+			clamp_to_texture_border(coord_in_texture.y),
+		];
+
+		let deviation = size * 1.5;
+
+		let box_size_f = deviation * 12.0 * TEXTURE_SIZE_F;
+		if box_size_f < 0.25
+		{
+			// Sharp gaussian. Avoid useless integration, just assign light power to center pixel.
+			let dst = &mut self.pixels[(coord[0] + coord[1] * TEXTURE_SIZE) as usize];
+			for i in 0 .. 3
+			{
+				dst[i] += color[i];
+			}
+			return;
+		}
+
+		let box_half_size = (box_size_f + 1.0) as i32;
+
+		let x_start = (coord[0] as i32 - box_half_size).max(0);
+		let x_end = (coord[0] as i32 + box_half_size).min(TEXTURE_SIZE as i32 - 1);
+
+		let y_start = (coord[1] as i32 - box_half_size).max(0);
+		let y_end = (coord[1] as i32 + box_half_size).min(TEXTURE_SIZE as i32 - 1);
+
+		let gaussian_scale = 1.0 / (deviation * deviation * (TEXTURE_SIZE_F * TEXTURE_SIZE_F));
+
+		let power_func = |pos| {
+			let projection_point =
+				(pos - Vec2f::new(HALF_TEXTURE_SIZE_F, HALF_TEXTURE_SIZE_F)) * (2.0_f32.sqrt() / HALF_TEXTURE_SIZE_F);
+			let vec = unproject_normalized_coord(&projection_point);
+			let angle_cos = vec.dot(direction_normalized);
+			gaussian_scale * ((angle_cos - 1.0) / deviation).exp()
+		};
+
+		if box_half_size >= 8
+		{
+			// Large scale - no supersampling.
+			for y in y_start ..= y_end
+			{
+				for x in x_start ..= x_end
+				{
+					let power = power_func(Vec2f::new(x as f32 + 0.5, y as f32 + 0.5));
+					let dst = &mut self.pixels[(x + y * (TEXTURE_SIZE as i32)) as usize];
+					for i in 0 .. 3
+					{
+						dst[i] += power * color[i];
+					}
+				}
+			}
+		}
+		else if box_half_size >= 4
+		{
+			// Middle scale - perform 2x2 supersampling.
+			for y in y_start ..= y_end
+			{
+				for x in x_start ..= x_end
+				{
+					let base_pos = Vec2f::new(x as f32, y as f32);
+					let mut power = power_func(base_pos + Vec2f::new(0.25, 0.25)) +
+						power_func(base_pos + Vec2f::new(0.25, 0.75)) +
+						power_func(base_pos + Vec2f::new(0.75, 0.25)) +
+						power_func(base_pos + Vec2f::new(0.75, 0.75));
+					power *= 0.25;
+					let dst = &mut self.pixels[(x + y * (TEXTURE_SIZE as i32)) as usize];
+					for i in 0 .. 3
+					{
+						dst[i] += power * color[i];
+					}
+				}
+			}
+		}
+		else
+		{
+			// Small scale - perform 4x4 supersampling.
+			for y in y_start ..= y_end
+			{
+				for x in x_start ..= x_end
+				{
+					let base_pos = Vec2f::new(x as f32, y as f32);
+					let mut power = 0.0;
+					for dx in 0 .. 4
+					{
+						for dy in 0 .. 4
+						{
+							power += power_func(
+								base_pos + Vec2f::new(0.125 + (dx as f32) * 0.25, 0.125 + (dy as f32) * 0.25),
+							);
+						}
+					}
+					power *= 1.0 / 16.0;
+					let dst = &mut self.pixels[(x + y * (TEXTURE_SIZE as i32)) as usize];
+					for i in 0 .. 3
+					{
+						dst[i] += power * color[i];
+					}
+				}
+			}
+		}
 	}
 
 	pub fn debug_save(&self, file_path: &std::path::Path)
@@ -44,7 +152,7 @@ impl LightHemisphere
 		};
 		for (dst, src) in img.pixels.iter_mut().zip(self.pixels.iter())
 		{
-			let scale = 255.0 * 128.0;
+			let scale = 255.0 * 256.0;
 			let r = (src[0] * scale).max(0.0).min(255.0) as u8;
 			let g = (src[1] * scale).max(0.0).min(255.0) as u8;
 			let b = (src[2] * scale).max(0.0).min(255.0) as u8;

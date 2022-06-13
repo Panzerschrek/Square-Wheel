@@ -1012,7 +1012,10 @@ fn build_polygon_diretional_lightmap(
 
 			if (dst_index & 1023) == 0
 			{
-				light_hemisphere.debug_save(&std::path::PathBuf::from(format!("light_hemispheres/{}.png", dst_index)));
+				light_hemisphere.debug_save(&std::path::PathBuf::from(format!(
+					"light_hemispheres/{}.png",
+					dst_index
+				)));
 			}
 
 			// TODO - calculate directional lightmap.
