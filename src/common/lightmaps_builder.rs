@@ -123,6 +123,16 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		}
 	}
 
+	map.directional_lightmaps_data = vec![
+		bsp_map_compact::DirectionalLightmapElement {
+			ambient_light: [0.0, 0.0, 0.0],
+			light_direction_vector_scaled: Vec3f::zero(),
+			directional_light_deviation: 0.0,
+			directional_light_color: [0.0, 0.0, 0.0]
+		};
+		primary_lightmap.len()
+	];
+
 	println!("Done!");
 }
 

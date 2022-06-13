@@ -24,6 +24,7 @@ pub struct BSPMap
 	// UTF-8 bytes of all strings.
 	pub strings_data: Vec<u8>,
 	pub lightmaps_data: Vec<LightmapElement>,
+	pub directional_lightmaps_data: Vec<DirectionalLightmapElement>,
 }
 
 #[repr(C)]
@@ -117,6 +118,19 @@ pub type Texture = [u8; MAX_TEXTURE_NAME_LEN];
 
 // Currently it is just a simple diffuse colored light.
 pub type LightmapElement = [f32; 3];
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct DirectionalLightmapElement
+{
+	// Component of light that is constant in any direction.
+	pub ambient_light: [f32; 3],
+	// Vector towards predominant light direction, scaled by light intensity.
+	pub light_direction_vector_scaled: Vec3f,
+	pub directional_light_deviation: f32,
+	// Color for directional light is normalized.
+	pub directional_light_color: [f32; 3],
+}
 
 // Conversion functions.
 //

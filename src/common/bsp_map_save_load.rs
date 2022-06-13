@@ -108,6 +108,12 @@ pub fn save_map(bsp_map: &BSPMap, file_path: &Path) -> Result<(), std::io::Error
 		&mut header.lumps[LUMP_LIGHTMAPS_DATA],
 		&mut offset,
 	)?;
+	write_lump(
+		&bsp_map.directional_lightmaps_data,
+		&mut file,
+		&mut header.lumps[LUMP_DIRECTIONAL_LIGHTMAPS_DATA],
+		&mut offset,
+	)?;
 
 	// Write header again to update lumps headers.
 	file.seek(std::io::SeekFrom::Start(0))?;
@@ -163,6 +169,7 @@ pub fn load_map(file_path: &Path) -> Result<Option<BSPMap>, std::io::Error>
 		key_value_pairs: read_lump(&mut file, &header.lumps[LUMP_KEY_VALUE_PAIRS])?,
 		strings_data: read_lump(&mut file, &header.lumps[LUMP_STRINGS_DATA])?,
 		lightmaps_data: read_lump(&mut file, &header.lumps[LUMP_LIGHTMAPS_DATA])?,
+		directional_lightmaps_data: read_lump(&mut file, &header.lumps[LUMP_DIRECTIONAL_LIGHTMAPS_DATA])?,
 	};
 
 	Ok(Some(map))
@@ -201,6 +208,7 @@ const LUMP_ENTITIES: usize = 8;
 const LUMP_KEY_VALUE_PAIRS: usize = 9;
 const LUMP_STRINGS_DATA: usize = 10;
 const LUMP_LIGHTMAPS_DATA: usize = 11;
+const LUMP_DIRECTIONAL_LIGHTMAPS_DATA: usize = 12;
 
 fn write_lump<T>(
 	data: &[T],
