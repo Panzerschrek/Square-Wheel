@@ -36,6 +36,8 @@ impl LightHemisphere
 		// Use spherial gaussian function for this.
 		// Deviation is based on provided size.
 
+		// TODO - check correctness of integration.
+
 		let direction_normalized = direction / direction.magnitude();
 
 		let coord_projected = project_normalized_vector(&direction_normalized);
@@ -68,7 +70,8 @@ impl LightHemisphere
 		let y_start = (coord[1] as i32 - box_half_size).max(0);
 		let y_end = (coord[1] as i32 + box_half_size).min(TEXTURE_SIZE as i32 - 1);
 
-		let gaussian_scale = 1.0 / (deviation * deviation * (TEXTURE_SIZE_F * TEXTURE_SIZE_F));
+		let gaussian_scale =
+			1.0 / (deviation * deviation * (TEXTURE_SIZE_F * TEXTURE_SIZE_F * 2.0 * std::f32::consts::PI));
 
 		let power_func = |pos| {
 			let projection_point =
