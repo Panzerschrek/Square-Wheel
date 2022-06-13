@@ -43,7 +43,7 @@ fn project_vec_to_texture(v: &Vec3f) -> [u32; 2]
 
 	let coord_projected = project_normalized_vector(&v_normalized);
 	let coord_in_texture =
-		coord_projected * (HALF_TEXTURE_SIZE_F * 2.0_f32.sqrt()) + Vec2f::new(HALF_TEXTURE_SIZE_F, HALF_TEXTURE_SIZE_F);
+		coord_projected * (HALF_TEXTURE_SIZE_F * 2.0_f32.sqrt()) - Vec2f::new(HALF_TEXTURE_SIZE_F, HALF_TEXTURE_SIZE_F);
 	[
 		clamp_to_texture_border(coord_in_texture.x),
 		clamp_to_texture_border(coord_in_texture.y),
@@ -52,7 +52,7 @@ fn project_vec_to_texture(v: &Vec3f) -> [u32; 2]
 
 fn clamp_to_texture_border(coord: f32) -> u32
 {
-	coord.max(0.0).min(TEXTURE_SIZE_F) as u32
+	coord.max(0.0).min(TEXTURE_SIZE_F - 1.0) as u32
 }
 
 // Use Lambert azimuthal equal-area projection.
