@@ -48,9 +48,10 @@ impl LightHemisphere
 			clamp_to_texture_border(coord_in_texture.y),
 		];
 
-		let deviation = size / 20.0;
+		let deviation = size * 0.5;
+		let deviation2 = deviation * deviation;
 
-		let box_half_size_f = deviation * 12.0 * TEXTURE_SIZE_F;
+		let box_half_size_f = deviation * 3.0 * TEXTURE_SIZE_F;
 		if box_half_size_f < 0.25
 		{
 			// Sharp gaussian. Avoid useless integration, just assign light power to center pixel.
@@ -71,14 +72,14 @@ impl LightHemisphere
 		let y_end = (coord[1] as i32 + box_half_size).min(TEXTURE_SIZE as i32 - 1);
 
 		let gaussian_scale =
-			1.0 / (deviation * deviation * (TEXTURE_SIZE_F * TEXTURE_SIZE_F * 2.0 * std::f32::consts::PI));
+			1.0 / (deviation2 * (TEXTURE_SIZE_F * TEXTURE_SIZE_F * 2.0 * std::f32::consts::PI));
 
 		let power_func = |pos| {
 			let projection_point =
 				(pos - Vec2f::new(HALF_TEXTURE_SIZE_F, HALF_TEXTURE_SIZE_F)) * (2.0_f32.sqrt() / HALF_TEXTURE_SIZE_F);
 			let vec = unproject_normalized_coord(&projection_point);
 			let angle_cos = vec.dot(direction_normalized);
-			gaussian_scale * ((angle_cos - 1.0) / deviation).exp()
+			gaussian_scale * ((angle_cos - 1.0) / deviation2).exp()
 		};
 
 		if box_half_size >= 6
@@ -205,7 +206,7 @@ impl LightHemisphere
 		};
 		for (dst, src) in img.pixels.iter_mut().zip(self.pixels.iter())
 		{
-			let scale = 255.0 * 64.0;
+			let scale = 255.0 * 65536.0;
 			let r = (src[0] * scale).max(0.0).min(255.0) as u8;
 			let g = (src[1] * scale).max(0.0).min(255.0) as u8;
 			let b = (src[2] * scale).max(0.0).min(255.0) as u8;
