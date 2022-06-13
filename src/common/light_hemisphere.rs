@@ -72,7 +72,7 @@ impl LightHemisphere
 		let y_end = (coord[1] as i32 + box_half_size).min(TEXTURE_SIZE as i32 - 1);
 
 		let gaussian_scale =
-			1.0 / (deviation2 * (TEXTURE_SIZE_F * TEXTURE_SIZE_F * 2.0 * std::f32::consts::PI));
+			4.0 / (deviation2 * (TEXTURE_SIZE_F * TEXTURE_SIZE_F * std::f32::consts::PI));
 
 		let power_func = |pos| {
 			let projection_point =
