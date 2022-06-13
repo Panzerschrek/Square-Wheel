@@ -43,17 +43,16 @@ impl LightHemisphere
 		let coord_projected = project_normalized_vector(&direction_normalized);
 		let coord_in_texture = coord_projected * (HALF_TEXTURE_SIZE_F / 2.0_f32.sqrt()) +
 			Vec2f::new(HALF_TEXTURE_SIZE_F, HALF_TEXTURE_SIZE_F);
-		let coord = [
-			clamp_to_texture_border(coord_in_texture.x),
-			clamp_to_texture_border(coord_in_texture.y),
-		];
 
 		let deviation = size * 0.5;
-		let deviation2 = deviation * deviation;
 
-		let box_half_size_f = deviation * 3.0 * TEXTURE_SIZE_F;
-		if box_half_size_f < 0.25
+		let box_half_size = deviation * 2.75 * TEXTURE_SIZE_F;
+		if box_half_size < 0.25
 		{
+			let coord = [
+				clamp_to_texture_border(coord_in_texture.x),
+				clamp_to_texture_border(coord_in_texture.y),
+			];
 			// Sharp gaussian. Avoid useless integration, just assign light power to center pixel.
 			let dst = &mut self.pixels[(coord[0] + coord[1] * TEXTURE_SIZE) as usize];
 			for i in 0 .. 3
@@ -63,16 +62,15 @@ impl LightHemisphere
 			return;
 		}
 
-		let box_half_size = (box_half_size_f + 1.0) as i32;
+		let deviation2 = deviation * deviation;
 
-		let x_start = (coord[0] as i32 - box_half_size).max(0);
-		let x_end = (coord[0] as i32 + box_half_size).min(TEXTURE_SIZE as i32 - 1);
+		let x_start = clamp_to_texture_border(coord_in_texture[0] - box_half_size);
+		let x_end = clamp_to_texture_border(coord_in_texture[0] + box_half_size);
 
-		let y_start = (coord[1] as i32 - box_half_size).max(0);
-		let y_end = (coord[1] as i32 + box_half_size).min(TEXTURE_SIZE as i32 - 1);
+		let y_start = clamp_to_texture_border(coord_in_texture[1] - box_half_size);
+		let y_end = clamp_to_texture_border(coord_in_texture[1] + box_half_size);
 
-		let gaussian_scale =
-			4.0 / (deviation2 * (TEXTURE_SIZE_F * TEXTURE_SIZE_F * std::f32::consts::PI));
+		let gaussian_scale = 4.0 / (deviation2 * (TEXTURE_SIZE_F * TEXTURE_SIZE_F * std::f32::consts::PI));
 
 		let power_func = |pos| {
 			let projection_point =
@@ -82,7 +80,7 @@ impl LightHemisphere
 			gaussian_scale * ((angle_cos - 1.0) / deviation2).exp()
 		};
 
-		if box_half_size >= 6
+		if box_half_size >= 5.0
 		{
 			// Large scale - no supersampling.
 			for y in y_start ..= y_end
@@ -90,7 +88,7 @@ impl LightHemisphere
 				for x in x_start ..= x_end
 				{
 					let power = power_func(Vec2f::new(x as f32 + 0.5, y as f32 + 0.5));
-					let dst = &mut self.pixels[(x + y * (TEXTURE_SIZE as i32)) as usize];
+					let dst = &mut self.pixels[(x + y * TEXTURE_SIZE) as usize];
 					for i in 0 .. 3
 					{
 						dst[i] += power * color[i];
@@ -98,7 +96,7 @@ impl LightHemisphere
 				}
 			}
 		}
-		else if box_half_size >= 3
+		else if box_half_size >= 2.5
 		{
 			// Middle scale - perform 2x2 supersampling.
 			for y in y_start ..= y_end
@@ -111,7 +109,7 @@ impl LightHemisphere
 						power_func(base_pos + Vec2f::new(0.75, 0.25)) +
 						power_func(base_pos + Vec2f::new(0.75, 0.75));
 					power *= 0.25;
-					let dst = &mut self.pixels[(x + y * (TEXTURE_SIZE as i32)) as usize];
+					let dst = &mut self.pixels[(x + y * TEXTURE_SIZE) as usize];
 					for i in 0 .. 3
 					{
 						dst[i] += power * color[i];
@@ -138,7 +136,7 @@ impl LightHemisphere
 						}
 					}
 					power *= 1.0 / 16.0;
-					let dst = &mut self.pixels[(x + y * (TEXTURE_SIZE as i32)) as usize];
+					let dst = &mut self.pixels[(x + y * TEXTURE_SIZE) as usize];
 					for i in 0 .. 3
 					{
 						dst[i] += power * color[i];
@@ -206,7 +204,7 @@ impl LightHemisphere
 		};
 		for (dst, src) in img.pixels.iter_mut().zip(self.pixels.iter())
 		{
-			let scale = 255.0 * 65536.0;
+			let scale = 255.0 * 8.0 * (TEXTURE_AREA as f32);
 			let r = (src[0] * scale).max(0.0).min(255.0) as u8;
 			let g = (src[1] * scale).max(0.0).min(255.0) as u8;
 			let b = (src[2] * scale).max(0.0).min(255.0) as u8;
