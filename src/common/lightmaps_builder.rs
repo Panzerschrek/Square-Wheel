@@ -137,6 +137,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	];
 
 	// Build directional lightmaps using initial lights and secondary light sources based on combined lightmap.
+	// TODO - use also emissive surfaces lights.
 	let secondary_light_sources = create_secondary_light_sources(&materials_albedo, map, &map.lightmaps_data);
 	build_directional_lightmaps(
 		sample_grid_size,
@@ -1011,6 +1012,8 @@ fn build_polygon_diretional_lightmap(
 
 			let dst_index = (u + line_dst_start) as usize;
 
+			let ambient_light = light_hemisphere.extract_ambient_light();
+
 			if (dst_index & 1023) == 0
 			{
 				light_hemisphere.debug_save(&std::path::PathBuf::from(format!(
@@ -1019,8 +1022,9 @@ fn build_polygon_diretional_lightmap(
 				)));
 			}
 
-			// TODO - calculate directional lightmap.
-			lightmaps_data[(u + line_dst_start) as usize];
+			let dst_lightmap_element = &mut lightmaps_data[(u + line_dst_start) as usize];
+			dst_lightmap_element.ambient_light = ambient_light;
+			// TODO - calulate other components.
 		}
 	}
 }

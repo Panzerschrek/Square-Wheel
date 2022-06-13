@@ -144,6 +144,56 @@ impl LightHemisphere
 		}
 	}
 
+	pub fn extract_ambient_light(&mut self) -> [f32; 3]
+	{
+		// Collect pixels inside projection circle.
+		let mut arr = [[0.0, 0.0, 0.0]; TEXTURE_AREA]; // TODO - use uninitialized memory.
+		let mut arr_elements = 0;
+		for y in 0 .. TEXTURE_SIZE
+		{
+			let two_dy = (2 * y + 1) as i32 - (TEXTURE_SIZE as i32);
+			let two_dy2 = two_dy * two_dy;
+			for x in 0 .. TEXTURE_SIZE
+			{
+				let two_dx = (2 * x + 1) as i32 - (TEXTURE_SIZE as i32);
+				let two_dx2 = two_dx * two_dx;
+
+				let two_len2 = two_dx2 + two_dy2;
+				// TODO - include also texels touching projection circle.
+				if two_len2 <= (TEXTURE_SIZE * TEXTURE_SIZE) as i32
+				{
+					arr[arr_elements] = self.pixels[(x + y * TEXTURE_SIZE) as usize];
+					arr_elements += 1;
+				}
+			}
+		}
+
+		// Use as thresholds maximum value of smallest 1 / INV_THRESHOLD pixels.
+		const INV_THRESHOLD: usize = 10;
+		let mut threshold_value = [0.0, 0.0, 0.0];
+		let projection_pixels = &mut arr[.. arr_elements];
+		for i in 0 .. 3
+		{
+			// Sort pixels using current component.
+			// Crap! Rust-faggots, do not allow me to sort floats normally!
+			// projection_pixels.sort_unstable_by_key(|x| x[i]);
+			projection_pixels.sort_by(|a, b| a[i].partial_cmp(&b[i]).unwrap());
+
+			threshold_value[i] = projection_pixels[arr_elements / INV_THRESHOLD][i];
+		}
+
+		// Subtract ambient light.
+		for pixels in &mut self.pixels
+		{
+			for i in 0 .. 3
+			{
+				pixels[i] = (pixels[i] - threshold_value[i]).max(0.0);
+			}
+		}
+
+		threshold_value
+	}
+
 	pub fn debug_save(&self, file_path: &std::path::Path)
 	{
 		let mut img = image::Image {
