@@ -547,10 +547,17 @@ fn draw_map_polygon_lightmaps_directions(
 		{
 			let pos = start_pos_v + (u as f32) * lightmap_basis.u_vec;
 
-			let vec = row_lightmap_data[u as usize].light_direction_vector_scaled;
+			let lightmap_texel = row_lightmap_data[u as usize];
+			let vec = lightmap_texel.light_direction_vector_scaled;
 			let vec_world_space = u_vec_normalized * vec.x + v_vec_normalized * vec.y + plane_normal_normalized * vec.z;
 
-			let color = Color32::from_rgb(255, 255, 255);
+			let scale = 255.0 / 3.0;
+			let color = Color32::from_rgb(
+				(lightmap_texel.directional_light_color[0] * scale).min(255.0) as u8,
+				(lightmap_texel.directional_light_color[1] * scale).min(255.0) as u8,
+				(lightmap_texel.directional_light_color[2] * scale).min(255.0) as u8,
+			);
+
 			draw_line(
 				rasterizer,
 				&camera_matrices.view_matrix,
