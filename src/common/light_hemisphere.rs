@@ -46,7 +46,7 @@ impl LightHemisphere
 
 		let deviation = size * 0.5;
 
-		let box_half_size = deviation * 2.75 * TEXTURE_SIZE_F;
+		let box_half_size = deviation * (3.0 * HALF_TEXTURE_SIZE_F);
 		if box_half_size < 0.25
 		{
 			let coord = [
@@ -71,13 +71,14 @@ impl LightHemisphere
 		let y_end = clamp_to_texture_border(coord_in_texture[1] + box_half_size);
 
 		let gaussian_scale = 4.0 / (deviation2 * (TEXTURE_SIZE_F * TEXTURE_SIZE_F * std::f32::consts::PI));
+		let inv_deviation2 = 1.0 / deviation2;
 
 		let power_func = |pos| {
 			let projection_point =
 				(pos - Vec2f::new(HALF_TEXTURE_SIZE_F, HALF_TEXTURE_SIZE_F)) * (2.0_f32.sqrt() / HALF_TEXTURE_SIZE_F);
 			let vec = unproject_normalized_coord(&projection_point);
 			let angle_cos = vec.dot(direction_normalized);
-			gaussian_scale * ((angle_cos - 1.0) / deviation2).exp()
+			gaussian_scale * ((angle_cos - 1.0) * inv_deviation2).exp()
 		};
 
 		if box_half_size >= 5.0
