@@ -220,7 +220,7 @@ impl LightHemisphere
 					light_sum[i] += light[i];
 				}
 				let brightness = get_light_brightness(light);
-				let projection_point = (Vec2f::new(x as f32, y as f32) -
+				let projection_point = (Vec2f::new(x as f32 + 0.5, y as f32 + 0.5) -
 					Vec2f::new(HALF_TEXTURE_SIZE_F, HALF_TEXTURE_SIZE_F)) *
 					(2.0_f32.sqrt() / HALF_TEXTURE_SIZE_F);
 				let vec = unproject_normalized_coord(&projection_point);
