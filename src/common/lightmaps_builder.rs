@@ -1013,6 +1013,7 @@ fn build_polygon_diretional_lightmap(
 			let dst_index = (u + line_dst_start) as usize;
 
 			let ambient_light = light_hemisphere.extract_ambient_light();
+			let directional_light_params = light_hemisphere.calculate_light_direction();
 
 			if (dst_index & 1023) == 0
 			{
@@ -1024,7 +1025,9 @@ fn build_polygon_diretional_lightmap(
 
 			let dst_lightmap_element = &mut lightmaps_data[(u + line_dst_start) as usize];
 			dst_lightmap_element.ambient_light = ambient_light;
-			// TODO - calulate other components.
+			dst_lightmap_element.directional_light_color = directional_light_params.color;
+			dst_lightmap_element.light_direction_vector_scaled = directional_light_params.direction_vector_scaled;
+			dst_lightmap_element.directional_light_deviation = directional_light_params.deviation;
 		}
 	}
 }

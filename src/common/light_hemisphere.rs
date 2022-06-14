@@ -197,6 +197,65 @@ impl LightHemisphere
 		threshold_value
 	}
 
+	pub fn calculate_light_direction(&self) -> DirectionalLightParams
+	{
+		// Caclulate brightness for each pixel,
+		// scale direction vector (normalized) by this brightness,
+		// caclulate sum of scaled vectors.
+		// Sum vector is a direction of light scaled by brightness.
+		// Ratio between this vector length and sum of brightness values is half cosine of deviation vecror.
+
+		// Also calculate light sum and calculate color based on this sum.
+
+		let mut light_sum = [0.0, 0.0, 0.0];
+		let mut scaled_vecs_sum = Vec3f::new(0., 0.0, 0.0);
+		let mut brightness_sum = 0.0;
+		for y in 0 .. TEXTURE_SIZE
+		{
+			for x in 0 .. TEXTURE_SIZE
+			{
+				let light = &self.pixels[(x + y * TEXTURE_SIZE) as usize];
+				for i in 0 .. 3
+				{
+					light_sum[i] += light[i];
+				}
+				let brightness = get_light_brightness(light);
+				let projection_point = (Vec2f::new(x as f32, y as f32) -
+					Vec2f::new(HALF_TEXTURE_SIZE_F, HALF_TEXTURE_SIZE_F)) *
+					(2.0_f32.sqrt() / HALF_TEXTURE_SIZE_F);
+				let vec = unproject_normalized_coord(&projection_point);
+				scaled_vecs_sum += vec * brightness;
+				brightness_sum += brightness;
+			}
+		}
+
+		const MIN_LEN: f32 = 1.0 / (1024.0 * 1024.0);
+
+		brightness_sum = brightness_sum.max(MIN_LEN);
+
+		let mut vec_len = scaled_vecs_sum.magnitude();
+		if vec_len <= 0.0
+		{
+			scaled_vecs_sum = Vec3f::new(0.0, 0.0, MIN_LEN);
+			vec_len = MIN_LEN;
+		}
+		let half_deviation_cos = vec_len / brightness_sum;
+		let deviation = (1.0 - half_deviation_cos).max(0.0).min(1.0); // TODO - select proper formula.
+
+		let light_sum_brightness = get_light_brightness(&light_sum).max(MIN_LEN);
+		let color = [
+			light_sum[0] / light_sum_brightness,
+			light_sum[1] / light_sum_brightness,
+			light_sum[2] / light_sum_brightness,
+		];
+
+		DirectionalLightParams {
+			direction_vector_scaled: scaled_vecs_sum,
+			deviation,
+			color,
+		}
+	}
+
 	pub fn debug_save(&self, file_path: &std::path::Path)
 	{
 		let mut img = image::Image {
@@ -213,6 +272,13 @@ impl LightHemisphere
 		}
 		image::save(&img, file_path);
 	}
+}
+
+pub struct DirectionalLightParams
+{
+	pub direction_vector_scaled: Vec3f,
+	pub deviation: f32,
+	pub color: [f32; 3],
 }
 
 fn project_vec_to_texture(v: &Vec3f) -> [u32; 2]
@@ -249,4 +315,10 @@ fn unproject_normalized_coord(coord: &Vec2f) -> Vec3f
 	let coord_square_len = coord.magnitude2();
 	let xy_scale = ((1.0 - coord_square_len * 0.25).max(0.0)).sqrt();
 	Vec3f::new(xy_scale * coord.x, xy_scale * coord.y, 1.0 - coord_square_len * 0.5)
+}
+
+fn get_light_brightness(light: &[f32; 3]) -> f32
+{
+	// TODO - use more complex formula?
+	(light[0] + light[1] + light[2]) * (1.0 / 3.0)
 }
