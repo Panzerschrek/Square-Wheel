@@ -869,7 +869,7 @@ fn build_polygon_diretional_lightmap(
 
 	// Use normalized u/v vecs in order to transform direction to light into texel space.
 	let u_vec_normalized = lightmap_basis.u_vec / (lightmap_basis.u_vec.magnitude().max(MIN_POSITIVE_VALUE));
-	let v_vec_normalized = lightmap_basis.v_vec / (lightmap_basis.u_vec.magnitude().max(MIN_POSITIVE_VALUE));
+	let v_vec_normalized = lightmap_basis.v_vec / (lightmap_basis.v_vec.magnitude().max(MIN_POSITIVE_VALUE));
 
 	for v in 0 .. lightmap_size[1]
 	{
@@ -1023,7 +1023,7 @@ fn build_polygon_diretional_lightmap(
 				)));
 			}
 
-			let dst_lightmap_element = &mut lightmaps_data[(u + line_dst_start) as usize];
+			let dst_lightmap_element = &mut lightmaps_data[dst_index];
 			dst_lightmap_element.ambient_light = ambient_light;
 			dst_lightmap_element.directional_light_color = directional_light_params.color;
 			dst_lightmap_element.light_direction_vector_scaled = directional_light_params.direction_vector_scaled;
@@ -1206,14 +1206,14 @@ fn edge_intersects_with_polygon(v0: &Vec3f, v1: &Vec3f, polygon_index: usize, ma
 	true
 }
 
-struct LightmapBasis
+pub struct LightmapBasis
 {
-	pos: Vec3f,
-	u_vec: Vec3f,
-	v_vec: Vec3f,
+	pub pos: Vec3f,
+	pub u_vec: Vec3f,
+	pub v_vec: Vec3f,
 }
 
-fn calculate_lightmap_basis(polygon: &bsp_map_compact::Polygon) -> LightmapBasis
+pub fn calculate_lightmap_basis(polygon: &bsp_map_compact::Polygon) -> LightmapBasis
 {
 	// Calculate inverse matrix for tex_coord equation and plane equation in order to calculate world position for UV.
 

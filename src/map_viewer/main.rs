@@ -44,6 +44,9 @@ struct Opt
 
 	#[structopt(long)]
 	draw_secondary_light_sources: bool,
+
+	#[structopt(long)]
+	draw_lightmaps_directions: bool,
 }
 
 pub fn main()
@@ -153,6 +156,7 @@ pub fn main()
 					draw_polygon_normals: opt.draw_polygon_normals,
 					draw_all_portals: opt.draw_all_portals,
 					draw_secondary_light_sources: opt.draw_secondary_light_sources,
+					draw_lightmaps_directions: opt.draw_lightmaps_directions,
 				},
 				&build_view_matrix(
 					camera_controller.get_pos(),

@@ -16,6 +16,7 @@ pub struct DrawOptions
 	pub draw_only_first_entity: bool,
 	pub draw_polygon_normals: bool,
 	pub draw_secondary_light_sources: bool,
+	pub draw_lightmaps_directions: bool,
 }
 
 pub fn draw_frame(
@@ -153,6 +154,10 @@ fn draw_map(
 				draw_options.draw_polygon_normals,
 				bsp_map_compact_non_opt,
 			);
+		}
+		if draw_options.draw_lightmaps_directions
+		{
+			draw_map_lightmaps_directions(&mut rasterizer, camera_matrices, bsp_map_compact_non_opt);
 		}
 	}
 
@@ -492,6 +497,66 @@ fn draw_map_bsp_compact_leaf(
 			color,
 			draw_polygon_normals,
 		);
+	}
+}
+
+fn draw_map_lightmaps_directions(
+	rasterizer: &mut DebugRasterizer,
+	camera_matrices: &CameraMatrices,
+	bsp_map: &bsp_map_compact::BSPMap,
+)
+{
+	if bsp_map.directional_lightmaps_data.is_empty()
+	{
+		return;
+	}
+
+	for polygon in &bsp_map.polygons
+	{
+		draw_map_polygon_lightmaps_directions(rasterizer, camera_matrices, bsp_map, polygon);
+	}
+}
+
+fn draw_map_polygon_lightmaps_directions(
+	rasterizer: &mut DebugRasterizer,
+	camera_matrices: &CameraMatrices,
+	bsp_map: &bsp_map_compact::BSPMap,
+	polygon: &bsp_map_compact::Polygon,
+)
+{
+	if polygon.lightmap_data_offset == 0
+	{
+		return;
+	}
+
+	let lightmap_size = lightmaps_builder::get_polygon_lightmap_size(polygon);
+	let plane_normal_normalized = polygon.plane.vec / polygon.plane.vec.magnitude();
+	let lightmap_basis = lightmaps_builder::calculate_lightmap_basis(polygon);
+
+	let u_vec_normalized = lightmap_basis.u_vec / lightmap_basis.u_vec.magnitude();
+	let v_vec_normalized = lightmap_basis.v_vec / lightmap_basis.v_vec.magnitude();
+
+	let polygon_lightmap_data = &bsp_map.directional_lightmaps_data[polygon.lightmap_data_offset as usize ..
+		(polygon.lightmap_data_offset + lightmap_size[0] * lightmap_size[1]) as usize];
+	for v in 0 .. lightmap_size[1]
+	{
+		let start_pos_v = lightmap_basis.pos + (v as f32) * lightmap_basis.v_vec;
+		let row_lightmap_data = &polygon_lightmap_data
+			[(v * lightmap_size[0]) as usize .. (v * lightmap_size[0] + lightmap_size[0]) as usize];
+		for u in 0 .. lightmap_size[0]
+		{
+			let pos = start_pos_v + (u as f32) * lightmap_basis.u_vec;
+
+			let vec = row_lightmap_data[u as usize].light_direction_vector_scaled;
+			let vec_world_space = u_vec_normalized * vec.x + v_vec_normalized * vec.y + plane_normal_normalized * vec.z;
+
+			let color = Color32::from_rgb(255, 255, 255);
+			draw_line(
+				rasterizer,
+				&camera_matrices.view_matrix,
+				&(pos, pos + vec_world_space * 4.0, color),
+			);
+		}
 	}
 }
 
