@@ -498,7 +498,7 @@ fn build_surface_impl_5_static_params<
 				{
 					let dot = if USE_NORMAL_MAP
 					{
-						directional_component.vector_scaled.dot(texel_value.normal)
+						directional_component.vector_scaled.dot(texel_value.normal).max(0.0)
 					}
 					else
 					{
