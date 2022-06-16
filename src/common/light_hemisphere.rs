@@ -194,7 +194,13 @@ impl LightHemisphere
 			}
 		}
 
-		threshold_value
+		// TODO - check if it si correct scale.
+		let scale = TEXTURE_SIZE_F * TEXTURE_SIZE_F;
+		[
+			threshold_value[0] * scale,
+			threshold_value[1] * scale,
+			threshold_value[2] * scale,
+		]
 	}
 
 	pub fn calculate_light_direction(&self) -> DirectionalLightParams
