@@ -478,6 +478,8 @@ fn build_surface_impl_5_static_params<
 		let start_pos_v = start_pos + (dst_v as f32) * v_vec;
 		for dst_texel in dst_line.iter_mut()
 		{
+			let texel_value = unsafe { debug_only_checked_fetch(src_line, src_u as usize) };
+
 			let mut total_light_albedo_modulated = [0.0, 0.0, 0.0];
 			let mut total_light_direct = [0.0, 0.0, 0.0];
 			if LIGHTAP_SCALE_LOG2 != NO_LIGHTMAP_SCALE
@@ -490,11 +492,25 @@ fn build_surface_impl_5_static_params<
 				let l1 = unsafe { debug_only_checked_fetch(&line_lightmap, lightmap_u_plus_one as usize) };
 				let k = ((lightmap_base_u & lightmap_fetch_mask) as f32) * inv_lightmap_scale_f + k_shift;
 				let l_mixed = LightmapElementOpsT::mix(&l1, &l0, k);
-				total_light_albedo_modulated = LightmapElementOpsT::get_constant_component(&l_mixed);
-				// TODO - use directional component here.
-			}
 
-			let texel_value = unsafe { debug_only_checked_fetch(src_line, src_u as usize) };
+				total_light_albedo_modulated = LightmapElementOpsT::get_constant_component(&l_mixed);
+				if let Some(directional_component) = LightmapElementOpsT::get_directional_component(&l_mixed)
+				{
+					let dot = if USE_NORMAL_MAP
+					{
+						directional_component.vector_scaled.dot(texel_value.normal)
+					}
+					else
+					{
+						directional_component.vector_scaled.z
+					};
+					// TODO - use deviation.
+					for i in 0 .. 3
+					{
+						total_light_albedo_modulated[i] += directional_component.color[i] * dot;
+					}
+				}
+			}
 
 			if USE_DYNAMIC_LIGHTS
 			{
