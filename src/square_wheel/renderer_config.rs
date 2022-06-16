@@ -23,6 +23,9 @@ pub struct RendererConfig
 	pub dynamic_mip_bias: bool,
 
 	#[serde(default)]
+	pub use_directional_lightmaps: bool,
+
+	#[serde(default)]
 	pub materials_path: String,
 
 	#[serde(default)]

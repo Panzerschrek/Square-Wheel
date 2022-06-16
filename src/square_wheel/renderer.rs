@@ -660,9 +660,12 @@ impl Renderer
 		// It is fine since each surface uses its own region.
 
 		let lightmaps_data = &self.map.lightmaps_data;
+		let directional_lightmaps_data = &self.map.directional_lightmaps_data;
 		let polygons = &self.map.polygons;
 		let polygons_data = &self.polygons_data;
 		let textures = &self.textures;
+
+		let use_directional_lightmap = self.config.use_directional_lightmaps && !directional_lightmaps_data.is_empty();
 
 		let surfaces_pixels_shared = SharedMutSlice::new(&mut self.surfaces_pixels);
 
@@ -701,30 +704,59 @@ impl Renderer
 
 			let lightmap_size = lightmaps_builder::get_polygon_lightmap_size(polygon);
 
-			let polygon_lightmap_data = if polygon.lightmap_data_offset != 0
+			let lightmap_scale_log2 = lightmaps_builder::LIGHTMAP_SCALE_LOG2 - polygon_data.mip;
+			if use_directional_lightmap
 			{
-				&lightmaps_data[polygon.lightmap_data_offset as usize ..
-					((polygon.lightmap_data_offset + lightmap_size[0] * lightmap_size[1]) as usize)]
+				let polygon_lightmap_data = if polygon.lightmap_data_offset != 0
+				{
+					&directional_lightmaps_data[polygon.lightmap_data_offset as usize ..
+						((polygon.lightmap_data_offset + lightmap_size[0] * lightmap_size[1]) as usize)]
+				}
+				else
+				{
+					&[]
+				};
+				build_surface_directional_lightmap(
+					&polygon.plane,
+					&tex_coord_equation_scaled,
+					surface_size,
+					polygon_data.surface_tc_min,
+					texture,
+					lightmap_size,
+					lightmap_scale_log2,
+					lightmap_tc_shift,
+					polygon_lightmap_data,
+					lights,
+					&camera_matrices.position,
+					surface_data,
+				);
 			}
 			else
 			{
-				&[]
-			};
-
-			build_surface(
-				&polygon.plane,
-				&tex_coord_equation_scaled,
-				surface_size,
-				polygon_data.surface_tc_min,
-				texture,
-				lightmap_size,
-				lightmaps_builder::LIGHTMAP_SCALE_LOG2 - polygon_data.mip,
-				lightmap_tc_shift,
-				polygon_lightmap_data,
-				lights,
-				&camera_matrices.position,
-				surface_data,
-			);
+				let polygon_lightmap_data = if polygon.lightmap_data_offset != 0
+				{
+					&lightmaps_data[polygon.lightmap_data_offset as usize ..
+						((polygon.lightmap_data_offset + lightmap_size[0] * lightmap_size[1]) as usize)]
+				}
+				else
+				{
+					&[]
+				};
+				build_surface_simple_lightmap(
+					&polygon.plane,
+					&tex_coord_equation_scaled,
+					surface_size,
+					polygon_data.surface_tc_min,
+					texture,
+					lightmap_size,
+					lightmap_scale_log2,
+					lightmap_tc_shift,
+					polygon_lightmap_data,
+					lights,
+					&camera_matrices.position,
+					surface_data,
+				);
+			}
 		};
 
 		if rayon::current_num_threads() == 1
