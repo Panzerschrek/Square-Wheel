@@ -194,8 +194,8 @@ impl LightHemisphere
 			}
 		}
 
-		// TODO - check if it si correct scale.
-		let scale = TEXTURE_SIZE_F * TEXTURE_SIZE_F;
+		// TODO - check if this is correct scale.
+		let scale = TEXTURE_SIZE_F * TEXTURE_SIZE_F / (0.5 * std::f32::consts::PI);
 		[
 			threshold_value[0] * scale,
 			threshold_value[1] * scale,
