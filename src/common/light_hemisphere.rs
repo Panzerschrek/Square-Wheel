@@ -325,6 +325,6 @@ fn unproject_normalized_coord(coord: &Vec2f) -> Vec3f
 
 fn get_light_brightness(light: &[f32; 3]) -> f32
 {
-	// TODO - use more complex formula?
-	(light[0] + light[1] + light[2]) * (1.0 / 3.0)
+	// YCbCr-like RGB to grayscale conversion.
+	light[0] * 0.299 + light[1] * 0.587 + light[2] * 0.114
 }
