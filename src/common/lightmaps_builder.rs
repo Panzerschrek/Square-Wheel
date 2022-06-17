@@ -972,7 +972,9 @@ fn build_polygon_diretional_lightmap(
 						primay_light.color[2] * light_scale,
 					];
 
-					if color_scaled[0].max(color_scaled[1]).max(color_scaled[2]) <= MIN_LIGHT_VALUE
+					// TODO - remove this check, use visibility-matrix lights rejection instead.
+					if color_scaled[0].max(color_scaled[1]).max(color_scaled[2]) <=
+						MIN_LIGHT_VALUE * multi_sampling_scale
 					{
 						// Light value is too small. Do not perform shadow check.
 						// This check allows us to significantly reduce light computation time by skipping shadow check for distant lights.
