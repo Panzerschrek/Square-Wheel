@@ -46,6 +46,10 @@ struct Opt
 	#[structopt(long)]
 	no_emissive_surfaces_light: bool,
 
+	/// Disable calculation of directional lightmaps.
+	#[structopt(long)]
+	no_directional_lightmap: bool,
+
 	/// Number of light passes.
 	#[structopt(long)]
 	num_passes: Option<u32>,
@@ -103,6 +107,7 @@ fn main()
 			save_primary_light: !opt.no_primary_light,
 			save_secondary_light: !opt.no_secondary_light,
 			build_emissive_surfaces_light: !opt.no_emissive_surfaces_light,
+			build_directional_lightmap: !opt.no_directional_lightmap,
 			num_passes: opt.num_passes.unwrap_or(1),
 		},
 		&materials,

@@ -12,6 +12,7 @@ pub struct LightmappingSettings
 	pub save_primary_light: bool,
 	pub save_secondary_light: bool,
 	pub build_emissive_surfaces_light: bool,
+	pub build_directional_lightmap: bool,
 	pub num_passes: u32,
 }
 
@@ -45,11 +46,12 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	let materials_albedo = get_map_textures_albedo(map, albedo_image_getter);
 	let emissive_light = get_map_textures_emissive_light(map, materials, settings);
 
+	let mut emissive_light_sources = Vec::new();
 	if settings.build_emissive_surfaces_light
 	{
 		println!("\nBuilding emissive surfaces lightmap");
 
-		let emissive_light_sources =
+		emissive_light_sources =
 			create_emissive_surfaces_light_sources(&emissive_light, map, primary_lightmaps_data.len());
 
 		let mut emissive_surfaces_lightmaps_data = vec![[0.0, 0.0, 0.0]; primary_lightmaps_data.len()];
@@ -124,32 +126,46 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		}
 	}
 
-	println!("Building directional lightmaps");
+	if settings.build_directional_lightmap
+	{
+		println!("Building directional lightmaps");
 
-	let mut directional_lightmaps_data = vec![
-		bsp_map_compact::DirectionalLightmapElement {
-			ambient_light: [0.0, 0.0, 0.0],
-			light_direction_vector_scaled: Vec3f::zero(),
-			directional_light_deviation: 0.0,
-			directional_light_color: [0.0, 0.0, 0.0]
+		let mut directional_lightmaps_data = vec![
+			bsp_map_compact::DirectionalLightmapElement {
+				ambient_light: [0.0, 0.0, 0.0],
+				light_direction_vector_scaled: Vec3f::zero(),
+				directional_light_deviation: 0.0,
+				directional_light_color: [0.0, 0.0, 0.0]
+			};
+			primary_lightmap.len()
+		];
+
+		// Build directional lightmaps using initial lights and secondary light sources based on combined lightmap.
+		let secondary_light_sources = if settings.save_secondary_light
+		{
+			create_secondary_light_sources(&materials_albedo, map, &map.lightmaps_data)
+		}
+		else
+		{
+			Vec::new()
 		};
-		primary_lightmap.len()
-	];
 
-	// Build directional lightmaps using initial lights and secondary light sources based on combined lightmap.
-	let secondary_light_sources = create_secondary_light_sources(&materials_albedo, map, &map.lightmaps_data);
-	let emissive_light_sources = create_emissive_surfaces_light_sources(&emissive_light, map, map.lightmaps_data.len());
-	build_directional_lightmaps(
-		sample_grid_size,
-		&lights,
-		&secondary_light_sources,
-		&emissive_light_sources,
-		map,
-		&visibility_matrix,
-		&mut directional_lightmaps_data,
-	);
+		build_directional_lightmaps(
+			sample_grid_size,
+			&lights,
+			&secondary_light_sources,
+			&emissive_light_sources,
+			map,
+			&visibility_matrix,
+			&mut directional_lightmaps_data,
+		);
 
-	map.directional_lightmaps_data = directional_lightmaps_data;
+		map.directional_lightmaps_data = directional_lightmaps_data;
+	}
+	else
+	{
+		map.directional_lightmaps_data = Vec::new();
+	}
 
 	println!("Done!");
 }
