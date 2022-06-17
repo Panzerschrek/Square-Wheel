@@ -821,7 +821,72 @@ fn build_directional_lightmaps(
 		} // for leaf polygons.
 	});
 
-	// TODO - build directional lightmaps for submodels polygons.
+	let root_node = (map.nodes.len() - 1) as u32;
+	map.submodels.par_iter().for_each(|submodel| {
+		let lightmaps_data_unshared = unsafe { lightmaps_data_shared.get() };
+
+		// TODO - remove copy-paster
+
+		// Know in which leafs this submodel is located.
+		let bbox = bsp_map_compact::get_submodel_bbox(map, submodel);
+		let bbox_vertices = [
+			Vec3f::new(bbox.min.x, bbox.min.y, bbox.min.z),
+			Vec3f::new(bbox.min.x, bbox.min.y, bbox.max.z),
+			Vec3f::new(bbox.min.x, bbox.max.y, bbox.min.z),
+			Vec3f::new(bbox.min.x, bbox.max.y, bbox.max.z),
+			Vec3f::new(bbox.max.x, bbox.min.y, bbox.min.z),
+			Vec3f::new(bbox.max.x, bbox.min.y, bbox.max.z),
+			Vec3f::new(bbox.max.x, bbox.max.y, bbox.min.z),
+			Vec3f::new(bbox.max.x, bbox.max.y, bbox.max.z),
+		];
+
+		let mut submodel_leafs_list = Vec::new();
+		collect_submodel_leafs_r(map, &bbox_vertices, root_node, &mut submodel_leafs_list);
+
+		// Know which leafs are visible for submodel's leafs.
+		let mut submodel_visible_leafs_bit_set = vec![false; map.leafs.len()];
+		for &leaf_index in &submodel_leafs_list
+		{
+			let visibility_matrix_row = &visibility_matrix
+				[(leaf_index as usize) * map.leafs.len() .. ((leaf_index as usize) + 1) * map.leafs.len()];
+			for (src, dst) in visibility_matrix_row
+				.iter()
+				.zip(submodel_visible_leafs_bit_set.iter_mut())
+			{
+				*dst |= src;
+			}
+		}
+
+		let mut visible_leafs_list = Vec::new();
+		for other_leaf_index in 0 .. map.leafs.len()
+		{
+			if submodel_visible_leafs_bit_set[other_leaf_index]
+			{
+				visible_leafs_list.push(other_leaf_index as u32);
+			}
+		}
+
+		for polygon_index in
+			submodel.first_polygon as usize .. (submodel.first_polygon + submodel.num_polygons) as usize
+		{
+			if map.polygons[polygon_index].lightmap_data_offset == 0
+			{
+				// No lightmap for this polygon.
+				continue;
+			}
+			build_polygon_diretional_lightmap(
+				sample_grid_size,
+				primary_lights,
+				secondary_lights,
+				polygon_index,
+				map,
+				&visible_leafs_list,
+				lightmaps_data_unshared,
+			);
+
+			// TODO - show progress here?
+		} // for submodel polygons.
+	}); // for submodels
 }
 
 fn build_polygon_diretional_lightmap(
