@@ -42,10 +42,11 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 
 	let visibility_matrix = pvs::calculate_visibility_matrix(&map);
 
+	let materials_albedo = get_map_textures_albedo(map, albedo_image_getter);
+	let emissive_light = get_map_textures_emissive_light(map, materials, settings);
+
 	if settings.build_emissive_surfaces_light
 	{
-		let emissive_light = get_map_textures_emissive_light(map, materials, settings);
-
 		println!("\nBuilding emissive surfaces lightmap");
 
 		let emissive_light_sources =
@@ -75,7 +76,6 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 
 	let mut passes_lightmaps = vec![primary_lightmaps_data];
 
-	let materials_albedo = get_map_textures_albedo(map, albedo_image_getter);
 	if settings.save_secondary_light && settings.num_passes > 1
 	{
 		for pass_num in 1 .. settings.num_passes.min(8)
@@ -137,12 +137,13 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	];
 
 	// Build directional lightmaps using initial lights and secondary light sources based on combined lightmap.
-	// TODO - use also emissive surfaces lights.
 	let secondary_light_sources = create_secondary_light_sources(&materials_albedo, map, &map.lightmaps_data);
+	let emissive_light_sources = create_emissive_surfaces_light_sources(&emissive_light, map, map.lightmaps_data.len());
 	build_directional_lightmaps(
 		sample_grid_size,
 		&lights,
 		&secondary_light_sources,
+		&emissive_light_sources,
 		map,
 		&visibility_matrix,
 		&mut directional_lightmaps_data,
@@ -753,6 +754,7 @@ fn build_directional_lightmaps(
 	sample_grid_size: u32,
 	primary_lights: &[PointLight],
 	secondary_lights: &[SecondaryLightSource],
+	emissive_lights: &[SecondaryLightSource],
 	map: &bsp_map_compact::BSPMap,
 	visibility_matrix: &pvs::VisibilityMatrix,
 	lightmaps_data: &mut [bsp_map_compact::DirectionalLightmapElement],
@@ -791,6 +793,7 @@ fn build_directional_lightmaps(
 				sample_grid_size,
 				primary_lights,
 				secondary_lights,
+				emissive_lights,
 				polygon_index,
 				map,
 				&visible_leafs_list,
@@ -878,6 +881,7 @@ fn build_directional_lightmaps(
 				sample_grid_size,
 				primary_lights,
 				secondary_lights,
+				emissive_lights,
 				polygon_index,
 				map,
 				&visible_leafs_list,
@@ -893,6 +897,7 @@ fn build_polygon_diretional_lightmap(
 	sample_grid_size: u32,
 	primary_lights: &[PointLight],
 	secondary_lights: &[SecondaryLightSource],
+	emissive_lights: &[SecondaryLightSource],
 	polygon_index: usize,
 	map: &bsp_map_compact::BSPMap,
 	visible_leafs: &[u32], // Leafs visible for this polygon.
@@ -1001,81 +1006,89 @@ fn build_polygon_diretional_lightmap(
 			let pos = correct_sample_position(map, &pos_sihfted_towards_center, &lightmap_basis, &polygon_center);
 
 			// Calculate light only from polygons in visible leafs.
-			for &leaf_index in visible_leafs
+			for light_set in [secondary_lights, emissive_lights]
 			{
-				let leaf = &map.leafs[leaf_index as usize];
-				for light_source_polygon_index in
-					leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize
+				if light_set.is_empty()
 				{
-					if light_source_polygon_index == polygon_index
+					continue;
+				}
+
+				for &leaf_index in visible_leafs
+				{
+					let leaf = &map.leafs[leaf_index as usize];
+					for light_source_polygon_index in
+						leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize
 					{
-						// Ignore lights from this polygon.
-						continue;
-					}
-
-					let light = &secondary_lights[light_source_polygon_index];
-					if light.samples.is_empty()
-					{
-						continue;
-					}
-
-					// Compute LOD.
-					let light_source_lod = get_light_source_lod(&pos, light);
-					let min_dist2 =
-						get_secondary_light_source_sample_min_square_distance(light.sample_size, light_source_lod);
-					let current_sample_size = ((1 << light_source_lod) as f32) * light.sample_size;
-
-					// Iterate over all samples of this LOD.
-					for sample in &light.samples[light_source_lod]
-					{
-						let vec_to_light = sample.pos - pos;
-						let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
-						let vec_to_light_normalized = vec_to_light / vec_to_light_len2.sqrt();
-						let normal_dot = plane_normal_normalized.dot(vec_to_light);
-
-						if normal_dot <= 0.0
+						if light_source_polygon_index == polygon_index
 						{
-							// Do not determine visibility for light behind polygon plane.
+							// Ignore lights from this polygon.
 							continue;
 						}
 
-						let angle_cos_src = -(light.normal.dot(vec_to_light_normalized));
-						if angle_cos_src <= 0.0
+						let light = &light_set[light_source_polygon_index];
+						if light.samples.is_empty()
 						{
-							// Do not determine visibility for texels behind light source plane.
 							continue;
 						}
 
-						if !can_see(&sample.pos, &pos, map)
+						// Compute LOD.
+						let light_source_lod = get_light_source_lod(&pos, light);
+						let min_dist2 =
+							get_secondary_light_source_sample_min_square_distance(light.sample_size, light_source_lod);
+						let current_sample_size = ((1 << light_source_lod) as f32) * light.sample_size;
+
+						// Iterate over all samples of this LOD.
+						for sample in &light.samples[light_source_lod]
 						{
-							// In shadow.
-							continue;
-						}
+							let vec_to_light = sample.pos - pos;
+							let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
+							let vec_to_light_normalized = vec_to_light / vec_to_light_len2.sqrt();
+							let normal_dot = plane_normal_normalized.dot(vec_to_light);
 
-						// Do not use agle cos because we add light into light hemisphere.
+							if normal_dot <= 0.0
+							{
+								// Do not determine visibility for light behind polygon plane.
+								continue;
+							}
 
-						let vec_to_light_len2_clamped = vec_to_light_len2.max(min_dist2);
+							let angle_cos_src = -(light.normal.dot(vec_to_light_normalized));
+							if angle_cos_src <= 0.0
+							{
+								// Do not determine visibility for texels behind light source plane.
+								continue;
+							}
 
-						let light_scale = angle_cos_src / vec_to_light_len2_clamped;
-						let color_scaled = [
-							sample.color[0] * light_scale,
-							sample.color[1] * light_scale,
-							sample.color[2] * light_scale,
-						];
+							if !can_see(&sample.pos, &pos, map)
+							{
+								// In shadow.
+								continue;
+							}
 
-						let vec_to_light_transformed = Vec3f::new(
-							vec_to_light.dot(u_vec_normalized),
-							vec_to_light.dot(v_vec_normalized),
-							normal_dot,
-						);
-						light_hemisphere.add_sized_light(
-							&vec_to_light_transformed,
-							&color_scaled,
-							current_sample_size / vec_to_light_len2_clamped.sqrt(),
-						);
-					} // for light samples.
-				} // for leaf polygons.
-			} // for leafs.
+							// Do not use agle cos because we add light into light hemisphere.
+
+							let vec_to_light_len2_clamped = vec_to_light_len2.max(min_dist2);
+
+							let light_scale = angle_cos_src / vec_to_light_len2_clamped;
+							let color_scaled = [
+								sample.color[0] * light_scale,
+								sample.color[1] * light_scale,
+								sample.color[2] * light_scale,
+							];
+
+							let vec_to_light_transformed = Vec3f::new(
+								vec_to_light.dot(u_vec_normalized),
+								vec_to_light.dot(v_vec_normalized),
+								normal_dot,
+							);
+							light_hemisphere.add_sized_light(
+								&vec_to_light_transformed,
+								&color_scaled,
+								current_sample_size / vec_to_light_len2_clamped.sqrt(),
+							);
+						} // for light samples.
+					} // for leaf polygons.
+				} // for leafs.
+			} // For light sets.
 
 			let dst_index = (u + line_dst_start) as usize;
 
