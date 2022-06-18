@@ -977,8 +977,7 @@ fn build_polygon_diretional_lightmap(
 					let vec_to_light = primay_light.pos - pos;
 					let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
 
-					let normal_dot = plane_normal_normalized.dot(vec_to_light);
-					if normal_dot <= 0.0
+					if plane_normal_normalized.dot(vec_to_light) <= 0.0
 					{
 						// Do not determine visibility for light behind polygon plane.
 						continue;
@@ -1008,11 +1007,12 @@ fn build_polygon_diretional_lightmap(
 						continue;
 					}
 
-					// TODO - save single direction for all grid samples?
+					// Use same direction to light for all grid samples to avoid bluring point lights (make specular sharp).
+					let vec_to_light_from_texel_center = primay_light.pos - texel_pos;
 					let vec_to_light_transformed = Vec3f::new(
-						vec_to_light.dot(u_vec_normalized),
-						vec_to_light.dot(v_vec_normalized),
-						normal_dot,
+						vec_to_light_from_texel_center.dot(u_vec_normalized),
+						vec_to_light_from_texel_center.dot(v_vec_normalized),
+						vec_to_light_from_texel_center.dot(plane_normal_normalized),
 					);
 					light_hemisphere.add_point_light(&vec_to_light_transformed, &color_scaled);
 				}
