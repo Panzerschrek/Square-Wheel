@@ -171,9 +171,8 @@ impl LightHemisphere
 			}
 		}
 
-		// Use as thresholds maximum value of smallest 1 / INV_THRESHOLD pixels.
-		const INV_THRESHOLD: usize = 10;
-		let mut threshold_value = [0.0, 0.0, 0.0];
+		// Find median light value.
+		let mut median_value = [0.0, 0.0, 0.0];
 		let projection_pixels = &mut arr[.. arr_elements];
 		for i in 0 .. 3
 		{
@@ -182,25 +181,31 @@ impl LightHemisphere
 			// projection_pixels.sort_unstable_by_key(|x| x[i]);
 			projection_pixels.sort_by(|a, b| a[i].partial_cmp(&b[i]).unwrap());
 
-			threshold_value[i] = projection_pixels[arr_elements / INV_THRESHOLD][i];
+			median_value[i] = projection_pixels[arr_elements / 2][i];
 		}
 
-		// Subtract ambient light.
-		for pixels in &mut self.pixels
+		// Subtract median light value. Accumulate sutracted value, using cosine law.
+		let mut ambient_light = [0.0, 0.0, 0.0];
+		for y in 0 .. TEXTURE_SIZE
 		{
-			for i in 0 .. 3
+			for x in 0 .. TEXTURE_SIZE
 			{
-				pixels[i] = (pixels[i] - threshold_value[i]).max(0.0);
+				let light = &mut self.pixels[(x + y * TEXTURE_SIZE) as usize];
+
+				let projection_point = (Vec2f::new(x as f32 + 0.5, y as f32 + 0.5) -
+					Vec2f::new(HALF_TEXTURE_SIZE_F, HALF_TEXTURE_SIZE_F)) *
+					(2.0_f32.sqrt() / HALF_TEXTURE_SIZE_F);
+				let normal_cos = unproject_normalized_coord(&projection_point).z.max(0.0);
+
+				for i in 0 .. 3
+				{
+					ambient_light[i] += median_value[i].min(light[i]) * normal_cos;
+					light[i] = (light[i] - median_value[i]).max(0.0)
+				}
 			}
 		}
 
-		// TODO - check if this is correct scale.
-		let scale = TEXTURE_SIZE_F * TEXTURE_SIZE_F / (0.5 * std::f32::consts::PI);
-		[
-			threshold_value[0] * scale,
-			threshold_value[1] * scale,
-			threshold_value[2] * scale,
-		]
+		ambient_light
 	}
 
 	pub fn calculate_light_direction(&self) -> DirectionalLightParams
