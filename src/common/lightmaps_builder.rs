@@ -36,12 +36,20 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		l.color[2] *= settings.light_scale;
 	}
 
+	let lights_by_leaf = group_lights_by_leafs(map, &lights);
+
 	let mut primary_lightmaps_data = allocate_lightmaps(materials, map);
 	println!("Lightmap texels: {}", primary_lightmaps_data.len());
 
-	build_primary_lightmaps(sample_grid_size, &lights, map, &mut primary_lightmaps_data);
-
 	let visibility_matrix = pvs::calculate_visibility_matrix(&map);
+
+	build_primary_lightmaps(
+		sample_grid_size,
+		&lights_by_leaf,
+		map,
+		&visibility_matrix,
+		&mut primary_lightmaps_data,
+	);
 
 	let materials_albedo = get_map_textures_albedo(map, albedo_image_getter);
 	let emissive_light = get_map_textures_emissive_light(map, materials, settings);
@@ -146,7 +154,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 
 		build_directional_lightmaps(
 			sample_grid_size,
-			&lights,
+			&lights_by_leaf,
 			&secondary_light_sources,
 			&emissive_light_sources,
 			map,
@@ -162,6 +170,41 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	}
 
 	println!("Done!");
+}
+
+type LightsByLeaf = Vec<Vec<PointLight>>;
+
+fn group_lights_by_leafs(map: &bsp_map_compact::BSPMap, light_sources: &[PointLight]) -> LightsByLeaf
+{
+	let mut lights_by_leaf = vec![Vec::new(); map.leafs.len()];
+
+	let root_node = (map.nodes.len() - 1) as u32;
+	for light_source in light_sources
+	{
+		let mut index = root_node;
+		loop
+		{
+			if index >= bsp_map_compact::FIRST_LEAF_INDEX
+			{
+				index = index - bsp_map_compact::FIRST_LEAF_INDEX;
+				break;
+			}
+
+			let node = &map.nodes[index as usize];
+			index = if node.plane.vec.dot(light_source.pos) > node.plane.dist
+			{
+				node.children[0]
+			}
+			else
+			{
+				node.children[1]
+			};
+		}
+
+		lights_by_leaf[index as usize].push(*light_source);
+	} // for light sources
+
+	lights_by_leaf
 }
 
 fn get_map_textures_emissive_light(
@@ -219,6 +262,7 @@ fn get_map_textures_albedo<AlbedoImageGetter: FnMut(&str) -> Option<image::Image
 	materials_albedo
 }
 
+#[derive(Copy, Clone)]
 struct PointLight
 {
 	pos: Vec3f,
@@ -391,8 +435,9 @@ type MaterialAlbedo = [f32; 3];
 
 fn build_primary_lightmaps(
 	sample_grid_size: u32,
-	lights: &[PointLight],
+	lights: &LightsByLeaf,
 	map: &bsp_map_compact::BSPMap,
+	visibility_matrix: &pvs::VisibilityMatrix,
 	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
 )
 {
@@ -401,18 +446,58 @@ fn build_primary_lightmaps(
 	// It is safe to share lightmaps data across threads since each polygons uses its own region.
 	let lightmaps_data_shared = SharedMutSlice::new(lightmaps_data);
 
-	map.polygons.par_iter().for_each(|polygon| {
-		if polygon.lightmap_data_offset == 0
-		{
-			// No lightmap for this polygon.
-			return;
-		}
-
+	map.leafs.par_iter().enumerate().for_each(|(leaf_index, leaf)| {
 		let lightmaps_data_unshared = unsafe { lightmaps_data_shared.get() };
-		build_primary_lightmap(sample_grid_size, lights, polygon, map, lightmaps_data_unshared);
 
-		progress_tracker.process_polygon(polygon);
+		let visible_leafs_list = get_visible_leafs(map, leaf_index, visibility_matrix);
+		let visible_lights_list = get_visible_lights(lights, &visible_leafs_list);
+
+		for polygon_index in leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize
+		{
+			let polygon = &map.polygons[polygon_index];
+			if polygon.lightmap_data_offset == 0
+			{
+				// No lightmap for this polygon.
+				continue;
+			}
+			build_primary_lightmap(
+				sample_grid_size,
+				&visible_lights_list,
+				polygon,
+				map,
+				lightmaps_data_unshared,
+			);
+
+			progress_tracker.process_polygon(polygon);
+		} // for leaf polygons.
 	});
+
+	map.submodels.par_iter().for_each(|submodel| {
+		let lightmaps_data_unshared = unsafe { lightmaps_data_shared.get() };
+
+		let visible_leafs_list = get_visible_leafs_for_submodel(map, submodel, visibility_matrix);
+		let visible_lights_list = get_visible_lights(lights, &visible_leafs_list);
+
+		for polygon_index in
+			submodel.first_polygon as usize .. (submodel.first_polygon + submodel.num_polygons) as usize
+		{
+			let polygon = &map.polygons[polygon_index];
+			if polygon.lightmap_data_offset == 0
+			{
+				// No lightmap for this polygon.
+				continue;
+			}
+			build_primary_lightmap(
+				sample_grid_size,
+				&visible_lights_list,
+				polygon,
+				map,
+				lightmaps_data_unshared,
+			);
+
+			progress_tracker.process_polygon(&map.polygons[polygon_index]);
+		} // for submodel polygons.
+	}); // for submodels
 }
 
 fn build_primary_lightmap(
@@ -552,6 +637,19 @@ fn build_secondary_lightmaps(
 			progress_tracker.process_polygon(&map.polygons[polygon_index]);
 		} // for submodel polygons.
 	}); // for submodels
+}
+
+fn get_visible_lights(lights: &LightsByLeaf, visible_leafs: &[u32]) -> Vec<PointLight>
+{
+	let mut visible_lights_list = Vec::new();
+	for &leaf_index in visible_leafs
+	{
+		for light in &lights[leaf_index as usize]
+		{
+			visible_lights_list.push(*light);
+		}
+	}
+	visible_lights_list
 }
 
 fn get_visible_leafs(
@@ -761,7 +859,7 @@ fn build_polygon_secondary_lightmap(
 
 fn build_directional_lightmaps(
 	sample_grid_size: u32,
-	primary_lights: &[PointLight],
+	primary_lights: &LightsByLeaf,
 	secondary_lights: &[SecondaryLightSource],
 	emissive_lights: &[SecondaryLightSource],
 	map: &bsp_map_compact::BSPMap,
@@ -778,6 +876,7 @@ fn build_directional_lightmaps(
 		let lightmaps_data_unshared = unsafe { lightmaps_data_shared.get() };
 
 		let visible_leafs_list = get_visible_leafs(map, leaf_index, visibility_matrix);
+		let visible_lights_list = get_visible_lights(primary_lights, &visible_leafs_list);
 
 		for polygon_index in leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize
 		{
@@ -788,7 +887,7 @@ fn build_directional_lightmaps(
 			}
 			build_polygon_diretional_lightmap(
 				sample_grid_size,
-				primary_lights,
+				&visible_lights_list,
 				secondary_lights,
 				emissive_lights,
 				polygon_index,
@@ -805,6 +904,7 @@ fn build_directional_lightmaps(
 		let lightmaps_data_unshared = unsafe { lightmaps_data_shared.get() };
 
 		let visible_leafs_list = get_visible_leafs_for_submodel(map, submodel, visibility_matrix);
+		let visible_lights_list = get_visible_lights(primary_lights, &visible_leafs_list);
 
 		for polygon_index in
 			submodel.first_polygon as usize .. (submodel.first_polygon + submodel.num_polygons) as usize
@@ -816,7 +916,7 @@ fn build_directional_lightmaps(
 			}
 			build_polygon_diretional_lightmap(
 				sample_grid_size,
-				primary_lights,
+				&visible_lights_list,
 				secondary_lights,
 				emissive_lights,
 				polygon_index,
