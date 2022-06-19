@@ -480,25 +480,18 @@ fn build_primary_lightmap(
 						continue;
 					}
 
+					if !can_see(&light.pos, &pos, map)
+					{
+						// In shadow.
+						continue;
+					}
+
 					let light_scale = angle_cos / vec_to_light_len2;
 					let color_scaled = [
 						light.color[0] * light_scale,
 						light.color[1] * light_scale,
 						light.color[2] * light_scale,
 					];
-
-					if color_scaled[0].max(color_scaled[1]).max(color_scaled[2]) <= MIN_LIGHT_VALUE
-					{
-						// Light value is too small. Do not perform shadow check.
-						// This check allows us to significantly reduce light computation time by skipping shadow check for distant lights.
-						continue;
-					}
-
-					if !can_see(&light.pos, &pos, map)
-					{
-						// In shadow.
-						continue;
-					}
 
 					total_light[0] += multi_sampling_scale * color_scaled[0];
 					total_light[1] += multi_sampling_scale * color_scaled[1];
@@ -911,29 +904,19 @@ fn build_polygon_diretional_lightmap(
 						continue;
 					}
 
-					// Do not use agle cos because we add light into light hemisphere.
+					if !can_see(&primay_light.pos, &pos, map)
+					{
+						// In shadow.
+						continue;
+					}
 
+					// Do not use agle cos because we add light into light hemisphere.
 					let light_scale = multi_sampling_scale / vec_to_light_len2;
 					let color_scaled = [
 						primay_light.color[0] * light_scale,
 						primay_light.color[1] * light_scale,
 						primay_light.color[2] * light_scale,
 					];
-
-					// TODO - remove this check, use visibility-matrix lights rejection instead.
-					if color_scaled[0].max(color_scaled[1]).max(color_scaled[2]) <=
-						MIN_LIGHT_VALUE * multi_sampling_scale
-					{
-						// Light value is too small. Do not perform shadow check.
-						// This check allows us to significantly reduce light computation time by skipping shadow check for distant lights.
-						continue;
-					}
-
-					if !can_see(&primay_light.pos, &pos, map)
-					{
-						// In shadow.
-						continue;
-					}
 
 					// Use same direction to light for all grid samples to avoid bluring point lights (make specular sharp).
 					let vec_to_light_from_texel_center = primay_light.pos - texel_pos;
@@ -1080,7 +1063,6 @@ pub fn get_light_source_lod(point: &Vec3f, light_source: &SecondaryLightSource) 
 
 const MIN_POSITIVE_VALUE: f32 = 1.0 / ((1 << 30) as f32);
 const MAP_LIGHTS_SCALE: f32 = 32.0; // TODO - tune this.
-const MIN_LIGHT_VALUE: f32 = 1.0 / 256.0; // TODO - tune this.
 const MAX_SAMPLE_GRID_SIZE: u32 = 8;
 const TEXEL_NORMAL_SHIFT: f32 = 1.0 / 16.0;
 
