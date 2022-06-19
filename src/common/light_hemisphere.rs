@@ -23,7 +23,7 @@ impl LightHemisphere
 	{
 		let coord = project_vec_to_texture(direction);
 
-		let pixel = &mut self.pixels[(coord[0] + coord[1] * TEXTURE_SIZE) as usize];
+		let pixel = &mut self.pixels[get_pixel_address(coord[0], coord[1])];
 		for i in 0 .. 3
 		{
 			pixel[i] += color[i];
@@ -54,7 +54,7 @@ impl LightHemisphere
 				clamp_to_texture_border(coord_in_texture.y),
 			];
 			// Sharp gaussian. Avoid useless integration, just assign light power to center pixel.
-			let dst = &mut self.pixels[(coord[0] + coord[1] * TEXTURE_SIZE) as usize];
+			let dst = &mut self.pixels[get_pixel_address(coord[0], coord[1])];
 			for i in 0 .. 3
 			{
 				dst[i] += color[i];
@@ -89,7 +89,7 @@ impl LightHemisphere
 				for x in x_start ..= x_end
 				{
 					let power = power_func(Vec2f::new(x as f32 + 0.5, y as f32 + 0.5));
-					let dst = &mut self.pixels[(x + y * TEXTURE_SIZE) as usize];
+					let dst = &mut self.pixels[get_pixel_address(x, y)];
 					for i in 0 .. 3
 					{
 						dst[i] += power * color[i];
@@ -110,7 +110,7 @@ impl LightHemisphere
 						power_func(base_pos + Vec2f::new(0.75, 0.25)) +
 						power_func(base_pos + Vec2f::new(0.75, 0.75));
 					power *= 0.25;
-					let dst = &mut self.pixels[(x + y * TEXTURE_SIZE) as usize];
+					let dst = &mut self.pixels[get_pixel_address(x, y)];
 					for i in 0 .. 3
 					{
 						dst[i] += power * color[i];
@@ -137,7 +137,7 @@ impl LightHemisphere
 						}
 					}
 					power *= 1.0 / 16.0;
-					let dst = &mut self.pixels[(x + y * TEXTURE_SIZE) as usize];
+					let dst = &mut self.pixels[get_pixel_address(x, y)];
 					for i in 0 .. 3
 					{
 						dst[i] += power * color[i];
@@ -165,7 +165,7 @@ impl LightHemisphere
 				// TODO - include also texels touching projection circle.
 				if two_len2 <= (TEXTURE_SIZE * TEXTURE_SIZE) as i32
 				{
-					arr[arr_elements] = self.pixels[(x + y * TEXTURE_SIZE) as usize];
+					arr[arr_elements] = self.pixels[get_pixel_address(x, y)];
 					arr_elements += 1;
 				}
 			}
@@ -190,12 +190,8 @@ impl LightHemisphere
 		{
 			for x in 0 .. TEXTURE_SIZE
 			{
-				let light = &mut self.pixels[(x + y * TEXTURE_SIZE) as usize];
-
-				let projection_point = (Vec2f::new(x as f32 + 0.5, y as f32 + 0.5) -
-					Vec2f::new(HALF_TEXTURE_SIZE_F, HALF_TEXTURE_SIZE_F)) *
-					(2.0_f32.sqrt() / HALF_TEXTURE_SIZE_F);
-				let normal_cos = unproject_normalized_coord(&projection_point).z.max(0.0);
+				let light = &mut self.pixels[get_pixel_address(x, y)];
+				let normal_cos = unproject_texture_coord(x, y).z.max(0.0);
 
 				for i in 0 .. 3
 				{
@@ -225,16 +221,13 @@ impl LightHemisphere
 		{
 			for x in 0 .. TEXTURE_SIZE
 			{
-				let light = &self.pixels[(x + y * TEXTURE_SIZE) as usize];
+				let light = &self.pixels[get_pixel_address(x, y)];
 				for i in 0 .. 3
 				{
 					light_sum[i] += light[i];
 				}
 				let brightness = get_light_brightness(light);
-				let projection_point = (Vec2f::new(x as f32 + 0.5, y as f32 + 0.5) -
-					Vec2f::new(HALF_TEXTURE_SIZE_F, HALF_TEXTURE_SIZE_F)) *
-					(2.0_f32.sqrt() / HALF_TEXTURE_SIZE_F);
-				let vec = unproject_normalized_coord(&projection_point);
+				let vec = unproject_texture_coord(x, y);
 				scaled_vecs_sum += vec * brightness;
 				brightness_sum += brightness;
 			}
@@ -319,6 +312,14 @@ fn project_normalized_vector(v: &Vec3f) -> Vec2f
 	v.truncate() * (2.0 / (v.z + 1.0).max(0.0)).sqrt()
 }
 
+fn unproject_texture_coord(x: u32, y: u32) -> Vec3f
+{
+	let projection_point = (Vec2f::new(x as f32 + 0.5, y as f32 + 0.5) -
+		Vec2f::new(HALF_TEXTURE_SIZE_F, HALF_TEXTURE_SIZE_F)) *
+		(2.0_f32.sqrt() / HALF_TEXTURE_SIZE_F);
+	unproject_normalized_coord(&projection_point)
+}
+
 // Unproject projection with size +-sqrt(2) for hemisphere and +-2 for sphere.
 // Produces normalized vector.
 fn unproject_normalized_coord(coord: &Vec2f) -> Vec3f
@@ -326,6 +327,11 @@ fn unproject_normalized_coord(coord: &Vec2f) -> Vec3f
 	let coord_square_len = coord.magnitude2();
 	let xy_scale = ((1.0 - coord_square_len * 0.25).max(0.0)).sqrt();
 	Vec3f::new(xy_scale * coord.x, xy_scale * coord.y, 1.0 - coord_square_len * 0.5)
+}
+
+fn get_pixel_address(x: u32, y: u32) -> usize
+{
+	(x + y * TEXTURE_SIZE) as usize
 }
 
 fn get_light_brightness(light: &[f32; 3]) -> f32
