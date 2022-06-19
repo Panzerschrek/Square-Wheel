@@ -3,7 +3,7 @@ use common::{bsp_map_compact, color::*, lightmaps_builder, math_types::*, plane:
 
 pub type LightWithShadowMap<'a, 'b> = (&'a PointLight, &'b CubeShadowMap);
 
-pub fn build_surface(
+pub fn build_surface_simple_lightmap(
 	plane: &Plane,
 	tex_coord_equation: &[Plane; 2],
 	surface_size: [u32; 2],
@@ -18,11 +18,73 @@ pub fn build_surface(
 	out_surface_data: &mut [Color32],
 )
 {
+	build_surface_impl_1_static_params::<LightmapElementOpsSimple>(
+		plane,
+		tex_coord_equation,
+		surface_size,
+		surface_tc_min,
+		texture,
+		lightmap_size,
+		lightmap_scale_log2,
+		lightmap_tc_shift,
+		lightmap_data,
+		dynamic_lights,
+		cam_pos,
+		out_surface_data,
+	);
+}
+
+pub fn build_surface_directional_lightmap(
+	plane: &Plane,
+	tex_coord_equation: &[Plane; 2],
+	surface_size: [u32; 2],
+	surface_tc_min: [i32; 2],
+	texture: &textures::Texture,
+	lightmap_size: [u32; 2],
+	lightmap_scale_log2: u32,
+	lightmap_tc_shift: [u32; 2],
+	lightmap_data: &[bsp_map_compact::DirectionalLightmapElement],
+	dynamic_lights: &[LightWithShadowMap],
+	cam_pos: &Vec3f,
+	out_surface_data: &mut [Color32],
+)
+{
+	build_surface_impl_1_static_params::<LightmapElementOpsDirectional>(
+		plane,
+		tex_coord_equation,
+		surface_size,
+		surface_tc_min,
+		texture,
+		lightmap_size,
+		lightmap_scale_log2,
+		lightmap_tc_shift,
+		lightmap_data,
+		dynamic_lights,
+		cam_pos,
+		out_surface_data,
+	);
+}
+
+fn build_surface_impl_1_static_params<LightmapElementOpsT: LightmapElementOps>(
+	plane: &Plane,
+	tex_coord_equation: &[Plane; 2],
+	surface_size: [u32; 2],
+	surface_tc_min: [i32; 2],
+	texture: &textures::Texture,
+	lightmap_size: [u32; 2],
+	lightmap_scale_log2: u32,
+	lightmap_tc_shift: [u32; 2],
+	lightmap_data: &[LightmapElementOpsT::LightmapElement],
+	dynamic_lights: &[LightWithShadowMap],
+	cam_pos: &Vec3f,
+	out_surface_data: &mut [Color32],
+)
+{
 	// Perform call in each branch instead of assigning function to function pointer and calling it later because LLVM compiler can't inline call via pointer.
 	// Proper inlining is very important here - it can reduce call overhead and merge identical code.
 	if lightmap_data.is_empty()
 	{
-		build_surface_impl_1_static_params::<NO_LIGHTMAP_SCALE>(
+		build_surface_impl_2_static_params::<LightmapElementOpsT, NO_LIGHTMAP_SCALE>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -38,7 +100,7 @@ pub fn build_surface(
 	}
 	else if lightmap_scale_log2 == 0
 	{
-		build_surface_impl_1_static_params::<0>(
+		build_surface_impl_2_static_params::<LightmapElementOpsT, 0>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -54,7 +116,7 @@ pub fn build_surface(
 	}
 	else if lightmap_scale_log2 == 1
 	{
-		build_surface_impl_1_static_params::<1>(
+		build_surface_impl_2_static_params::<LightmapElementOpsT, 1>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -70,7 +132,7 @@ pub fn build_surface(
 	}
 	else if lightmap_scale_log2 == 2
 	{
-		build_surface_impl_1_static_params::<2>(
+		build_surface_impl_2_static_params::<LightmapElementOpsT, 2>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -86,7 +148,7 @@ pub fn build_surface(
 	}
 	else if lightmap_scale_log2 == 3
 	{
-		build_surface_impl_1_static_params::<3>(
+		build_surface_impl_2_static_params::<LightmapElementOpsT, 3>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -102,7 +164,7 @@ pub fn build_surface(
 	}
 	else if lightmap_scale_log2 == 4
 	{
-		build_surface_impl_1_static_params::<4>(
+		build_surface_impl_2_static_params::<LightmapElementOpsT, 4>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -122,7 +184,7 @@ pub fn build_surface(
 	}
 }
 
-fn build_surface_impl_1_static_params<const LIGHTAP_SCALE_LOG2: u32>(
+fn build_surface_impl_2_static_params<LightmapElementOpsT: LightmapElementOps, const LIGHTAP_SCALE_LOG2: u32>(
 	plane: &Plane,
 	tex_coord_equation: &[Plane; 2],
 	surface_size: [u32; 2],
@@ -130,7 +192,7 @@ fn build_surface_impl_1_static_params<const LIGHTAP_SCALE_LOG2: u32>(
 	texture: &textures::Texture,
 	lightmap_size: [u32; 2],
 	lightmap_tc_shift: [u32; 2],
-	lightmap_data: &[bsp_map_compact::LightmapElement],
+	lightmap_data: &[LightmapElementOpsT::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [Color32],
@@ -138,7 +200,7 @@ fn build_surface_impl_1_static_params<const LIGHTAP_SCALE_LOG2: u32>(
 {
 	if dynamic_lights.is_empty()
 	{
-		build_surface_impl_2_static_params::<LIGHTAP_SCALE_LOG2, false>(
+		build_surface_impl_3_static_params::<LightmapElementOpsT, LIGHTAP_SCALE_LOG2, false>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -154,55 +216,7 @@ fn build_surface_impl_1_static_params<const LIGHTAP_SCALE_LOG2: u32>(
 	}
 	else
 	{
-		build_surface_impl_2_static_params::<LIGHTAP_SCALE_LOG2, true>(
-			plane,
-			tex_coord_equation,
-			surface_size,
-			surface_tc_min,
-			texture,
-			lightmap_size,
-			lightmap_tc_shift,
-			lightmap_data,
-			dynamic_lights,
-			cam_pos,
-			out_surface_data,
-		);
-	}
-}
-
-fn build_surface_impl_2_static_params<const LIGHTAP_SCALE_LOG2: u32, const USE_DYNAMIC_LIGHTS: bool>(
-	plane: &Plane,
-	tex_coord_equation: &[Plane; 2],
-	surface_size: [u32; 2],
-	surface_tc_min: [i32; 2],
-	texture: &textures::Texture,
-	lightmap_size: [u32; 2],
-	lightmap_tc_shift: [u32; 2],
-	lightmap_data: &[bsp_map_compact::LightmapElement],
-	dynamic_lights: &[LightWithShadowMap],
-	cam_pos: &Vec3f,
-	out_surface_data: &mut [Color32],
-)
-{
-	if texture.has_normal_map
-	{
-		build_surface_impl_3_static_params::<LIGHTAP_SCALE_LOG2, USE_DYNAMIC_LIGHTS, true>(
-			plane,
-			tex_coord_equation,
-			surface_size,
-			surface_tc_min,
-			texture,
-			lightmap_size,
-			lightmap_tc_shift,
-			lightmap_data,
-			dynamic_lights,
-			cam_pos,
-			out_surface_data,
-		);
-	}
-	else
-	{
-		build_surface_impl_3_static_params::<LIGHTAP_SCALE_LOG2, USE_DYNAMIC_LIGHTS, false>(
+		build_surface_impl_3_static_params::<LightmapElementOpsT, LIGHTAP_SCALE_LOG2, true>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -219,6 +233,59 @@ fn build_surface_impl_2_static_params<const LIGHTAP_SCALE_LOG2: u32, const USE_D
 }
 
 fn build_surface_impl_3_static_params<
+	LightmapElementOpsT: LightmapElementOps,
+	const LIGHTAP_SCALE_LOG2: u32,
+	const USE_DYNAMIC_LIGHTS: bool,
+>(
+	plane: &Plane,
+	tex_coord_equation: &[Plane; 2],
+	surface_size: [u32; 2],
+	surface_tc_min: [i32; 2],
+	texture: &textures::Texture,
+	lightmap_size: [u32; 2],
+	lightmap_tc_shift: [u32; 2],
+	lightmap_data: &[LightmapElementOpsT::LightmapElement],
+	dynamic_lights: &[LightWithShadowMap],
+	cam_pos: &Vec3f,
+	out_surface_data: &mut [Color32],
+)
+{
+	if texture.has_normal_map
+	{
+		build_surface_impl_4_static_params::<LightmapElementOpsT, LIGHTAP_SCALE_LOG2, USE_DYNAMIC_LIGHTS, true>(
+			plane,
+			tex_coord_equation,
+			surface_size,
+			surface_tc_min,
+			texture,
+			lightmap_size,
+			lightmap_tc_shift,
+			lightmap_data,
+			dynamic_lights,
+			cam_pos,
+			out_surface_data,
+		);
+	}
+	else
+	{
+		build_surface_impl_4_static_params::<LightmapElementOpsT, LIGHTAP_SCALE_LOG2, USE_DYNAMIC_LIGHTS, false>(
+			plane,
+			tex_coord_equation,
+			surface_size,
+			surface_tc_min,
+			texture,
+			lightmap_size,
+			lightmap_tc_shift,
+			lightmap_data,
+			dynamic_lights,
+			cam_pos,
+			out_surface_data,
+		);
+	}
+}
+
+fn build_surface_impl_4_static_params<
+	LightmapElementOpsT: LightmapElementOps,
 	const LIGHTAP_SCALE_LOG2: u32,
 	const USE_DYNAMIC_LIGHTS: bool,
 	const USE_NORMAL_MAP: bool,
@@ -230,7 +297,7 @@ fn build_surface_impl_3_static_params<
 	texture: &textures::Texture,
 	lightmap_size: [u32; 2],
 	lightmap_tc_shift: [u32; 2],
-	lightmap_data: &[bsp_map_compact::LightmapElement],
+	lightmap_data: &[LightmapElementOpsT::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [Color32],
@@ -240,7 +307,8 @@ fn build_surface_impl_3_static_params<
 	{
 		if texture.is_metal
 		{
-			build_surface_impl_4_static_params::<
+			build_surface_impl_5_static_params::<
+				LightmapElementOpsT,
 				LIGHTAP_SCALE_LOG2,
 				USE_DYNAMIC_LIGHTS,
 				USE_NORMAL_MAP,
@@ -261,7 +329,8 @@ fn build_surface_impl_3_static_params<
 		}
 		else
 		{
-			build_surface_impl_4_static_params::<
+			build_surface_impl_5_static_params::<
+				LightmapElementOpsT,
 				LIGHTAP_SCALE_LOG2,
 				USE_DYNAMIC_LIGHTS,
 				USE_NORMAL_MAP,
@@ -283,7 +352,13 @@ fn build_surface_impl_3_static_params<
 	}
 	else
 	{
-		build_surface_impl_4_static_params::<LIGHTAP_SCALE_LOG2, USE_DYNAMIC_LIGHTS, USE_NORMAL_MAP, SPECULAR_TYPE_NONE>(
+		build_surface_impl_5_static_params::<
+			LightmapElementOpsT,
+			LIGHTAP_SCALE_LOG2,
+			USE_DYNAMIC_LIGHTS,
+			USE_NORMAL_MAP,
+			SPECULAR_TYPE_NONE,
+		>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -307,7 +382,8 @@ pub const NO_LIGHTMAP_SCALE: u32 = 31;
 
 // Specify various settings as template params in order to get most efficient code for current combination of params.
 // Use chained dispatch in order to convert dynamic params into static.
-fn build_surface_impl_4_static_params<
+fn build_surface_impl_5_static_params<
+	LightmapElementOpsT: LightmapElementOps,
 	const LIGHTAP_SCALE_LOG2: u32,
 	const USE_DYNAMIC_LIGHTS: bool,
 	const USE_NORMAL_MAP: bool,
@@ -320,7 +396,7 @@ fn build_surface_impl_4_static_params<
 	texture: &textures::Texture,
 	lightmap_size: [u32; 2],
 	lightmap_tc_shift: [u32; 2],
-	lightmap_data: &[bsp_map_compact::LightmapElement],
+	lightmap_data: &[LightmapElementOpsT::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [Color32],
@@ -354,8 +430,11 @@ fn build_surface_impl_4_static_params<
 	let u_vec_normalized = u_vec * inv_sqrt_fast(u_vec.magnitude2().max(MIN_POSITIVE_VALUE));
 	let v_vec_normalized = v_vec * inv_sqrt_fast(v_vec.magnitude2().max(MIN_POSITIVE_VALUE));
 
-	// TODO - use uninitialized memory.
-	let mut line_lightmap = [[0.0, 0.0, 0.0]; (lightmaps_builder::MAX_LIGHTMAP_SIZE + 2) as usize];
+	// TODO - use uninitialized memory instead.
+	let mut line_lightmap = unsafe {
+		std::mem::zeroed::<[LightmapElementOpsT::LightmapElement; (lightmaps_builder::MAX_LIGHTMAP_SIZE + 2) as usize]>(
+		)
+	};
 	let lightmap_scale_f = (1 << LIGHTAP_SCALE_LOG2) as f32;
 	let inv_lightmap_scale_f = 1.0 / lightmap_scale_f;
 	let k_shift = 0.5 * inv_lightmap_scale_f;
@@ -372,7 +451,6 @@ fn build_surface_impl_4_static_params<
 			let lightmap_v_plus_one = lightmap_v + 1;
 			debug_assert!(lightmap_v_plus_one < lightmap_size[1]);
 			let k = ((lightmap_base_v & lightmap_fetch_mask) as f32) * inv_lightmap_scale_f + k_shift;
-			let k_minus_one = 1.0 - k;
 			let base_lightmap_address = lightmap_v * lightmap_size[0];
 			for ((dst, l0), l1) in line_lightmap
 				.iter_mut()
@@ -385,10 +463,7 @@ fn build_surface_impl_4_static_params<
 						(base_lightmap_address + 2 * lightmap_size[0]) as usize],
 				)
 			{
-				for i in 0 .. 3
-				{
-					dst[i] = l0[i] * k_minus_one + l1[i] * k;
-				}
+				*dst = LightmapElementOpsT::mix(&l1, &l0, k);
 			}
 		}
 
@@ -403,6 +478,8 @@ fn build_surface_impl_4_static_params<
 		let start_pos_v = start_pos + (dst_v as f32) * v_vec;
 		for dst_texel in dst_line.iter_mut()
 		{
+			let texel_value = unsafe { debug_only_checked_fetch(src_line, src_u as usize) };
+
 			let mut total_light_albedo_modulated = [0.0, 0.0, 0.0];
 			let mut total_light_direct = [0.0, 0.0, 0.0];
 			if LIGHTAP_SCALE_LOG2 != NO_LIGHTMAP_SCALE
@@ -414,14 +491,26 @@ fn build_surface_impl_4_static_params<
 				let l0 = unsafe { debug_only_checked_fetch(&line_lightmap, lightmap_u as usize) };
 				let l1 = unsafe { debug_only_checked_fetch(&line_lightmap, lightmap_u_plus_one as usize) };
 				let k = ((lightmap_base_u & lightmap_fetch_mask) as f32) * inv_lightmap_scale_f + k_shift;
-				let k_minus_one = 1.0 - k;
-				for i in 0 .. 3
+				let l_mixed = LightmapElementOpsT::mix(&l1, &l0, k);
+
+				total_light_albedo_modulated = LightmapElementOpsT::get_constant_component(&l_mixed);
+				if let Some(directional_component) = LightmapElementOpsT::get_directional_component(&l_mixed)
 				{
-					total_light_albedo_modulated[i] = l0[i] * k_minus_one + l1[i] * k;
+					let dot = if USE_NORMAL_MAP
+					{
+						directional_component.vector_scaled.dot(texel_value.normal).max(0.0)
+					}
+					else
+					{
+						directional_component.vector_scaled.z
+					};
+					// TODO - use deviation.
+					for i in 0 .. 3
+					{
+						total_light_albedo_modulated[i] += directional_component.color[i] * dot;
+					}
 				}
 			}
-
-			let texel_value = unsafe { debug_only_checked_fetch(src_line, src_u as usize) };
 
 			if USE_DYNAMIC_LIGHTS
 			{
@@ -594,6 +683,91 @@ fn build_surface_impl_4_static_params<
 
 			dst_u += 1;
 		}
+	}
+}
+
+trait LightmapElementOps
+{
+	type LightmapElement: Copy;
+
+	fn mix(a: &Self::LightmapElement, b: &Self::LightmapElement, ratio: f32) -> Self::LightmapElement;
+
+	fn get_constant_component(el: &Self::LightmapElement) -> [f32; 3];
+
+	fn get_directional_component(el: &Self::LightmapElement) -> Option<LightmapDirectionalComponent>;
+}
+
+struct LightmapDirectionalComponent
+{
+	vector_scaled: Vec3f,
+	deviation: f32,
+	color: [f32; 3],
+}
+
+struct LightmapElementOpsSimple;
+impl LightmapElementOps for LightmapElementOpsSimple
+{
+	type LightmapElement = [f32; 3];
+
+	fn mix(a: &Self::LightmapElement, b: &Self::LightmapElement, ratio: f32) -> Self::LightmapElement
+	{
+		let one_minus_ratio = 1.0 - ratio;
+		[
+			a[0] * ratio + b[0] * one_minus_ratio,
+			a[1] * ratio + b[1] * one_minus_ratio,
+			a[2] * ratio + b[2] * one_minus_ratio,
+		]
+	}
+
+	fn get_constant_component(el: &Self::LightmapElement) -> [f32; 3]
+	{
+		*el
+	}
+
+	fn get_directional_component(_el: &Self::LightmapElement) -> Option<LightmapDirectionalComponent>
+	{
+		None
+	}
+}
+
+struct LightmapElementOpsDirectional;
+impl LightmapElementOps for LightmapElementOpsDirectional
+{
+	type LightmapElement = bsp_map_compact::DirectionalLightmapElement;
+
+	fn mix(a: &Self::LightmapElement, b: &Self::LightmapElement, ratio: f32) -> Self::LightmapElement
+	{
+		let one_minus_ratio = 1.0 - ratio;
+		Self::LightmapElement {
+			ambient_light: [
+				a.ambient_light[0] * ratio + b.ambient_light[0] * one_minus_ratio,
+				a.ambient_light[1] * ratio + b.ambient_light[1] * one_minus_ratio,
+				a.ambient_light[2] * ratio + b.ambient_light[2] * one_minus_ratio,
+			],
+			light_direction_vector_scaled: a.light_direction_vector_scaled * ratio +
+				b.light_direction_vector_scaled * one_minus_ratio,
+			directional_light_deviation: a.directional_light_deviation * ratio +
+				b.directional_light_deviation * one_minus_ratio,
+			directional_light_color: [
+				a.directional_light_color[0] * ratio + b.directional_light_color[0] * one_minus_ratio,
+				a.directional_light_color[1] * ratio + b.directional_light_color[1] * one_minus_ratio,
+				a.directional_light_color[2] * ratio + b.directional_light_color[2] * one_minus_ratio,
+			],
+		}
+	}
+
+	fn get_constant_component(el: &Self::LightmapElement) -> [f32; 3]
+	{
+		el.ambient_light
+	}
+
+	fn get_directional_component(el: &Self::LightmapElement) -> Option<LightmapDirectionalComponent>
+	{
+		Some(LightmapDirectionalComponent {
+			vector_scaled: el.light_direction_vector_scaled,
+			deviation: el.directional_light_deviation,
+			color: el.directional_light_color,
+		})
 	}
 }
 

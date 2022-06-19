@@ -46,9 +46,17 @@ struct Opt
 	#[structopt(long)]
 	no_emissive_surfaces_light: bool,
 
+	/// Disable calculation of directional lightmaps.
+	#[structopt(long)]
+	no_directional_lightmap: bool,
+
 	/// Number of light passes.
 	#[structopt(long)]
 	num_passes: Option<u32>,
+
+	/// Number of threads. If empty - all available CPU cores will be used.
+	#[structopt(long)]
+	num_threads: Option<u32>,
 }
 
 fn main()
@@ -56,6 +64,30 @@ fn main()
 	// use "unwrap" in this function. It's fine to abort application if something is wrong.
 
 	let opt = Opt::from_args();
+
+	// Setup global thread pool.
+	{
+		let num_threads = if let Some(n) = opt.num_threads
+		{
+			if n == 0
+			{
+				num_cpus::get()
+			}
+			else
+			{
+				n.min(64) as usize
+			}
+		}
+		else
+		{
+			num_cpus::get()
+		};
+		rayon::ThreadPoolBuilder::new()
+			.num_threads(num_threads)
+			.stack_size(1024 * 1024 * 2)
+			.build_global()
+			.unwrap();
+	}
 
 	let materials = if let Some(dir) = &opt.materials_dir
 	{
@@ -75,6 +107,7 @@ fn main()
 			save_primary_light: !opt.no_primary_light,
 			save_secondary_light: !opt.no_secondary_light,
 			build_emissive_surfaces_light: !opt.no_emissive_surfaces_light,
+			build_directional_lightmap: !opt.no_directional_lightmap,
 			num_passes: opt.num_passes.unwrap_or(1),
 		},
 		&materials,

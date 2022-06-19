@@ -22,6 +22,9 @@ pub struct RendererConfig
 	#[serde(default)]
 	pub dynamic_mip_bias: bool,
 
+	#[serde(default = "default_true")]
+	pub use_directional_lightmaps: bool,
+
 	#[serde(default)]
 	pub materials_path: String,
 
@@ -43,4 +46,9 @@ impl RendererConfig
 			app_config.lock().unwrap()["renderer"] = json;
 		}
 	}
+}
+
+fn default_true() -> bool
+{
+	true
 }

@@ -18,6 +18,11 @@ impl Color32
 		Color32(((r as u32) << 16) | ((g as u32) << 8) | (b as u32))
 	}
 
+	pub fn from_rgba(r: u8, g: u8, b: u8, a: u8) -> Self
+	{
+		Color32(((a as u32) << 24) | ((r as u32) << 16) | ((g as u32) << 8) | (b as u32))
+	}
+
 	pub fn get_inverted(self) -> Self
 	{
 		Color32(!self.0)
