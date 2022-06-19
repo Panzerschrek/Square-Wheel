@@ -127,6 +127,7 @@ pub struct DirectionalLightmapElement
 	pub ambient_light: [f32; 3],
 	// Vector towards predominant light direction, scaled by light intensity.
 	pub light_direction_vector_scaled: Vec3f,
+	// Normalized deviation. 0 - for totally sharp light, 1 - for totally smooth light.
 	pub directional_light_deviation: f32,
 	// Color for directional light is normalized.
 	pub directional_light_color: [f32; 3],

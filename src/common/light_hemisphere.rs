@@ -244,7 +244,10 @@ impl LightHemisphere
 			vec_len = MIN_LEN;
 		}
 		let half_deviation_cos = vec_len / brightness_sum;
-		let deviation = (1.0 - half_deviation_cos).max(0.0).min(1.0); // TODO - select proper formula.
+		const MIN_HALF_DEVIATION_COS: f32 = 0.5;
+		let deviation = ((1.0 - half_deviation_cos) / (1.0 - MIN_HALF_DEVIATION_COS))
+			.max(0.0)
+			.min(1.0);
 
 		let light_sum_brightness = get_light_brightness(&light_sum).max(MIN_LEN);
 		let color = [
