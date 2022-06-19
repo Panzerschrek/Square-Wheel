@@ -39,7 +39,6 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	let mut primary_lightmaps_data = allocate_lightmaps(materials, map);
 	println!("Lightmap texels: {}", primary_lightmaps_data.len());
 
-	println!("Building primary lightmap");
 	build_primary_lightmaps(sample_grid_size, &lights, map, &mut primary_lightmaps_data);
 
 	let visibility_matrix = pvs::calculate_visibility_matrix(&map);
@@ -50,8 +49,6 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	let mut emissive_light_sources = Vec::new();
 	if settings.build_emissive_surfaces_light
 	{
-		println!("\nBuilding emissive surfaces lightmap");
-
 		emissive_light_sources =
 			create_emissive_surfaces_light_sources(&emissive_light, map, primary_lightmaps_data.len());
 
@@ -74,17 +71,15 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 				dst[i] += src[i];
 			}
 		}
-		println!("\nDone!");
 	}
 
 	let mut passes_lightmaps = vec![primary_lightmaps_data];
 
 	if settings.save_secondary_light && settings.num_passes > 1
 	{
-		for pass_num in 1 .. settings.num_passes.min(8)
+		for _pass_num in 1 .. settings.num_passes.min(8)
 		{
 			let prev_pass_lightmap = passes_lightmaps.last().unwrap();
-			println!("\nBuilding secondary lightmap ({})", pass_num);
 			let secondary_light_sources = create_secondary_light_sources(&materials_albedo, map, &prev_pass_lightmap);
 
 			let mut secondary_lightmaps_data = vec![[0.0, 0.0, 0.0]; prev_pass_lightmap.len()];
@@ -100,7 +95,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		}
 	}
 
-	println!("\nCombining lightmaps");
+	println!("Combining lightmaps");
 	let primary_lightmap = passes_lightmaps.first().unwrap();
 	let secondary_lightmaps = &passes_lightmaps[1 ..];
 
@@ -129,8 +124,6 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 
 	if settings.build_directional_lightmap
 	{
-		println!("Building directional lightmaps");
-
 		let mut directional_lightmaps_data = vec![
 			bsp_map_compact::DirectionalLightmapElement {
 				ambient_light: [0.0, 0.0, 0.0],
@@ -337,6 +330,63 @@ pub fn allocate_lightmaps(materials: &material::MaterialsMap, map: &mut bsp_map_
 	vec![[0.0, 0.0, 0.0]; offset]
 }
 
+struct ProgressTracker
+{
+	texels_total: u32,
+	polygons_total: u32,
+	texels_complete: atomic::AtomicU32,
+	polygons_complete: atomic::AtomicU32,
+}
+
+impl ProgressTracker
+{
+	fn new(map: &bsp_map_compact::BSPMap, texels_total: usize, message: &str) -> Self
+	{
+		println!("{}", message);
+
+		Self {
+			texels_total: texels_total as u32,
+			polygons_total: map.polygons.len() as u32,
+			texels_complete: atomic::AtomicU32::new(0),
+			polygons_complete: atomic::AtomicU32::new(0),
+		}
+	}
+
+	fn process_polygon(&self, polygon: &bsp_map_compact::Polygon)
+	{
+		let lightmap_size = get_polygon_lightmap_size(polygon);
+		let lightmap_texels = lightmap_size[0] * lightmap_size[1];
+
+		let texels_complete_before = self
+			.texels_complete
+			.fetch_add(lightmap_texels, atomic::Ordering::SeqCst);
+		let texels_complete_afrer = texels_complete_before + lightmap_texels;
+		let ratio_before = texels_complete_before * 256 / self.texels_total;
+		let ratio_after = texels_complete_afrer * 256 / self.texels_total;
+		let polygons_before = self.polygons_complete.fetch_add(1, atomic::Ordering::SeqCst);
+		if ratio_after > ratio_before
+		{
+			print!(
+				"\r{:03.2}% complete ({} of {} texels),  {} of {} polygons",
+				(texels_complete_afrer as f32) * 100.0 / (self.texels_total as f32),
+				texels_complete_afrer,
+				self.texels_total,
+				polygons_before + 1,
+				self.polygons_total
+			);
+			let _ignore_errors = std::io::stdout().flush();
+		}
+	}
+}
+
+impl Drop for ProgressTracker
+{
+	fn drop(&mut self)
+	{
+		println!("\nDone!");
+	}
+}
+
 type MaterialAlbedo = [f32; 3];
 
 fn build_primary_lightmaps(
@@ -346,9 +396,7 @@ fn build_primary_lightmaps(
 	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
 )
 {
-	let texels_complete = atomic::AtomicU32::new(0);
-	let polygons_complete = atomic::AtomicU32::new(0);
-	let texels_total = lightmaps_data.len() as u32;
+	let progress_tracker = ProgressTracker::new(map, lightmaps_data.len(), "Building primary lightmaps");
 
 	// It is safe to share lightmaps data across threads since each polygons uses its own region.
 	let lightmaps_data_shared = SharedMutSlice::new(lightmaps_data);
@@ -363,27 +411,7 @@ fn build_primary_lightmaps(
 		let lightmaps_data_unshared = unsafe { lightmaps_data_shared.get() };
 		build_primary_lightmap(sample_grid_size, lights, polygon, map, lightmaps_data_unshared);
 
-		// Calculate and show progress.
-		let lightmap_size = get_polygon_lightmap_size(polygon);
-		let lightmap_texels = lightmap_size[0] * lightmap_size[1];
-
-		let texels_complete_before = texels_complete.fetch_add(lightmap_texels, atomic::Ordering::SeqCst);
-		let texels_complete_afrer = texels_complete_before + lightmap_texels;
-		let ratio_before = texels_complete_before * 256 / texels_total;
-		let ratio_after = texels_complete_afrer * 256 / texels_total;
-		let polygons_before = polygons_complete.fetch_add(1, atomic::Ordering::SeqCst);
-		if ratio_after > ratio_before
-		{
-			print!(
-				"\r{:03.2}% complete ({} of {} texels),  {} of {} polygons",
-				(texels_complete_afrer as f32) * 100.0 / (texels_total as f32),
-				texels_complete_afrer,
-				texels_total,
-				polygons_before + 1,
-				map.polygons.len()
-			);
-			let _ignore_errors = std::io::stdout().flush();
-		}
+		progress_tracker.process_polygon(polygon);
 	});
 }
 
@@ -490,9 +518,7 @@ fn build_secondary_lightmaps(
 	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
 )
 {
-	let texels_complete = atomic::AtomicU32::new(0);
-	let polygons_complete = atomic::AtomicU32::new(0);
-	let texels_total = lightmaps_data.len() as u32;
+	let progress_tracker = ProgressTracker::new(map, lightmaps_data.len(), "Building secondary lightmaps");
 
 	// It is safe to share lightmaps data across threads since each polygons uses its own region.
 	let lightmaps_data_shared = SharedMutSlice::new(lightmaps_data);
@@ -521,27 +547,7 @@ fn build_secondary_lightmaps(
 			}
 			build_polygon_secondary_lightmap(lights, polygon_index, map, &visible_leafs_list, lightmaps_data_unshared);
 
-			// Calculate and show progress.
-			let lightmap_size = get_polygon_lightmap_size(&map.polygons[polygon_index]);
-			let lightmap_texels = lightmap_size[0] * lightmap_size[1];
-
-			let texels_complete_before = texels_complete.fetch_add(lightmap_texels, atomic::Ordering::SeqCst);
-			let texels_complete_afrer = texels_complete_before + lightmap_texels;
-			let ratio_before = texels_complete_before * 256 / texels_total;
-			let ratio_after = texels_complete_afrer * 256 / texels_total;
-			let polygons_before = polygons_complete.fetch_add(1, atomic::Ordering::SeqCst);
-			if ratio_after > ratio_before
-			{
-				print!(
-					"\r{:03.2}% complete ({} of {} texels),  {} of {} polygons",
-					(texels_complete_afrer as f32) * 100.0 / (texels_total as f32),
-					texels_complete_afrer,
-					texels_total,
-					polygons_before + 1,
-					map.polygons.len()
-				);
-				let _ignore_errors = std::io::stdout().flush();
-			}
+			progress_tracker.process_polygon(&map.polygons[polygon_index]);
 		} // for leaf polygons.
 	});
 
@@ -598,7 +604,7 @@ fn build_secondary_lightmaps(
 			}
 			build_polygon_secondary_lightmap(lights, polygon_index, map, &visible_leafs_list, lightmaps_data_unshared);
 
-			// TODO - show progress here?
+			progress_tracker.process_polygon(&map.polygons[polygon_index]);
 		} // for submodel polygons.
 	}); // for submodels
 }
@@ -751,9 +757,7 @@ fn build_directional_lightmaps(
 	lightmaps_data: &mut [bsp_map_compact::DirectionalLightmapElement],
 )
 {
-	let texels_complete = atomic::AtomicU32::new(0);
-	let polygons_complete = atomic::AtomicU32::new(0);
-	let texels_total = lightmaps_data.len() as u32;
+	let progress_tracker = ProgressTracker::new(map, lightmaps_data.len(), "Building directional lightmaps");
 
 	// It is safe to share lightmaps data across threads since each polygons uses its own region.
 	let lightmaps_data_shared = SharedMutSlice::new(lightmaps_data);
@@ -791,27 +795,7 @@ fn build_directional_lightmaps(
 				lightmaps_data_unshared,
 			);
 
-			// Calculate and show progress.
-			let lightmap_size = get_polygon_lightmap_size(&map.polygons[polygon_index]);
-			let lightmap_texels = lightmap_size[0] * lightmap_size[1];
-
-			let texels_complete_before = texels_complete.fetch_add(lightmap_texels, atomic::Ordering::SeqCst);
-			let texels_complete_afrer = texels_complete_before + lightmap_texels;
-			let ratio_before = texels_complete_before * 256 / texels_total;
-			let ratio_after = texels_complete_afrer * 256 / texels_total;
-			let polygons_before = polygons_complete.fetch_add(1, atomic::Ordering::SeqCst);
-			if ratio_after > ratio_before
-			{
-				print!(
-					"\r{:03.2}% complete ({} of {} texels),  {} of {} polygons",
-					(texels_complete_afrer as f32) * 100.0 / (texels_total as f32),
-					texels_complete_afrer,
-					texels_total,
-					polygons_before + 1,
-					map.polygons.len()
-				);
-				let _ignore_errors = std::io::stdout().flush();
-			}
+			progress_tracker.process_polygon(&map.polygons[polygon_index]);
 		} // for leaf polygons.
 	});
 
@@ -879,7 +863,7 @@ fn build_directional_lightmaps(
 				lightmaps_data_unshared,
 			);
 
-			// TODO - show progress here?
+			progress_tracker.process_polygon(&map.polygons[polygon_index]);
 		} // for submodel polygons.
 	}); // for submodels
 }
