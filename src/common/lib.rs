@@ -11,6 +11,7 @@ pub mod debug_renderer;
 pub mod fixed_math;
 pub mod image;
 pub mod light_hemisphere;
+pub mod lightmap;
 pub mod lightmaps_builder;
 pub mod map_file_common;
 pub mod map_file_q1;

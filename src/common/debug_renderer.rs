@@ -1,6 +1,6 @@
 use super::{
-	bsp_builder, bsp_map_compact, clipping::*, color::*, debug_rasterizer::*, fixed_math::*, lightmaps_builder,
-	map_file_q1, map_polygonizer, math_types::*, matrix::*, plane::*, system_window,
+	bsp_builder, bsp_map_compact, clipping::*, color::*, debug_rasterizer::*, fixed_math::*, lightmap,
+	lightmaps_builder, map_file_q1, map_polygonizer, math_types::*, matrix::*, plane::*, system_window,
 };
 
 #[derive(Default)]
@@ -529,9 +529,9 @@ fn draw_map_polygon_lightmaps_directions(
 		return;
 	}
 
-	let lightmap_size = lightmaps_builder::get_polygon_lightmap_size(polygon);
+	let lightmap_size = lightmap::get_polygon_lightmap_size(polygon);
 	let plane_normal_normalized = polygon.plane.vec / polygon.plane.vec.magnitude();
-	let lightmap_basis = lightmaps_builder::calculate_lightmap_basis(polygon);
+	let lightmap_basis = lightmap::calculate_lightmap_basis(polygon);
 
 	let u_vec_normalized = lightmap_basis.u_vec / lightmap_basis.u_vec.magnitude();
 	let v_vec_normalized = lightmap_basis.v_vec / lightmap_basis.v_vec.magnitude();

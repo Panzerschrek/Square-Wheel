@@ -4,7 +4,7 @@ use super::{
 	textures::*,
 };
 use common::{
-	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, color::*, fixed_math::*, lightmaps_builder, material,
+	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, color::*, fixed_math::*, lightmap, material,
 	math_types::*, matrix::*, performance_counter::*, plane::*, shared_mut_slice::*, system_window,
 };
 use rayon::prelude::*;
@@ -609,10 +609,10 @@ impl Renderer
 
 			// Clamp coordinates to min/max polygon coordinates (they may be out of range because of computational errors).
 			// It's important to clamp texture coordinates to avoid reading lightmap outside borders.
-			let round_mask = !((lightmaps_builder::LIGHTMAP_SCALE as i32) - 1);
+			let round_mask = !((lightmap::LIGHTMAP_SCALE as i32) - 1);
 			let tc_min_round_down = (polygon.tex_coord_min[i] & round_mask) >> mip;
 			let tc_max_round_up =
-				((polygon.tex_coord_max[i] + (lightmaps_builder::LIGHTMAP_SCALE as i32) - 1) & round_mask) >> mip;
+				((polygon.tex_coord_max[i] + (lightmap::LIGHTMAP_SCALE as i32) - 1) & round_mask) >> mip;
 
 			let mut tc_min_int = (tc_min[i].max(-inf).floor() as i32).max(tc_min_round_down);
 			let mut tc_max_int = (tc_max[i].min(inf).ceil() as i32).min(tc_max_round_up);
@@ -695,16 +695,16 @@ impl Renderer
 			let mut lightmap_tc_shift: [u32; 2] = [0, 0];
 			for i in 0 .. 2
 			{
-				let round_mask = !((lightmaps_builder::LIGHTMAP_SCALE as i32) - 1);
+				let round_mask = !((lightmap::LIGHTMAP_SCALE as i32) - 1);
 				let shift =
 					polygon_data.surface_tc_min[i] - ((polygon.tex_coord_min[i] & round_mask) >> polygon_data.mip);
 				debug_assert!(shift >= 0);
 				lightmap_tc_shift[i] = shift as u32;
 			}
 
-			let lightmap_size = lightmaps_builder::get_polygon_lightmap_size(polygon);
+			let lightmap_size = lightmap::get_polygon_lightmap_size(polygon);
 
-			let lightmap_scale_log2 = lightmaps_builder::LIGHTMAP_SCALE_LOG2 - polygon_data.mip;
+			let lightmap_scale_log2 = lightmap::LIGHTMAP_SCALE_LOG2 - polygon_data.mip;
 			if use_directional_lightmap
 			{
 				let polygon_lightmap_data = if polygon.lightmap_data_offset != 0
