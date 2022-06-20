@@ -58,6 +58,7 @@ pub fn print(
 	}
 }
 
+#[allow(dead_code)]
 pub fn print_scaled(
 	pixels: &mut [Color32],
 	surface_info: &system_window::SurfaceInfo,
