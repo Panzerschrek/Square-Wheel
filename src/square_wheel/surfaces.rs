@@ -516,8 +516,6 @@ fn build_surface_impl_5_static_params<
 				}
 				else
 				{
-					// TODO - support metallic specular.
-
 					let normal = if USE_NORMAL_MAP
 					{
 						texel_value.normal
@@ -545,11 +543,24 @@ fn build_surface_impl_5_static_params<
 					let one_minus_angle_cos2 = one_minus_angle_cos * one_minus_angle_cos;
 					let fresnel_factor_base = one_minus_angle_cos2 * one_minus_angle_cos2 * one_minus_angle_cos;
 
-					let fresnel_factor =
-						DIELECTRIC_ZERO_REFLECTIVITY + (1.0 - DIELECTRIC_ZERO_REFLECTIVITY) * fresnel_factor_base;
+					let specular_k;
+					if SPECULAR_TYPE == SPECULAR_TYPE_DIELECTRIC
+					{
+						let fresnel_factor =
+							DIELECTRIC_ZERO_REFLECTIVITY + (1.0 - DIELECTRIC_ZERO_REFLECTIVITY) * fresnel_factor_base;
 
-					let specular_k = fresnel_factor * texel_value.glossiness +
-						DIELECTRIC_AVERAGE_REFLECTIVITY * (1.0 - texel_value.glossiness);
+						specular_k = fresnel_factor * texel_value.glossiness +
+							DIELECTRIC_AVERAGE_REFLECTIVITY * (1.0 - texel_value.glossiness);
+					}
+					else if SPECULAR_TYPE == SPECULAR_TYPE_METAL
+					{
+						specular_k = fresnel_factor_base * texel_value.glossiness +
+							METAL_AVERAGE_SCHLICK_FACTOR * (1.0 - texel_value.glossiness);
+					}
+					else
+					{
+						specular_k = 0.0;
+					}
 					let one_minus_specular_k = 1.0 - specular_k;
 
 					if let Some(directional_component) = LightmapElementOpsT::get_directional_component(&l_mixed)
@@ -574,17 +585,34 @@ fn build_surface_impl_5_static_params<
 						let x = ((vec_to_camera_reflected_light_angle_cos - 1.0) * glossiness_scaled).max(-2.0);
 						let specular_intensity = (x * (x * 0.25 + 1.0) + 1.0) * glossiness_scaled;
 
-						let diffuse_intensity = directional_component.vector_scaled.dot(texel_value.normal).max(0.0);
+						if SPECULAR_TYPE == SPECULAR_TYPE_DIELECTRIC
+						{
+							let diffuse_intensity = directional_component.vector_scaled.dot(texel_value.normal).max(0.0);
 
-						let light_intensity_diffuse = diffuse_intensity * one_minus_specular_k;
-						total_light_albedo_modulated[0] += directional_component.color[0] * light_intensity_diffuse;
-						total_light_albedo_modulated[1] += directional_component.color[1] * light_intensity_diffuse;
-						total_light_albedo_modulated[2] += directional_component.color[2] * light_intensity_diffuse;
+							let light_intensity_diffuse = diffuse_intensity * one_minus_specular_k;
+							total_light_albedo_modulated[0] += directional_component.color[0] * light_intensity_diffuse;
+							total_light_albedo_modulated[1] += directional_component.color[1] * light_intensity_diffuse;
+							total_light_albedo_modulated[2] += directional_component.color[2] * light_intensity_diffuse;
 
-						let light_intensity_specular = specular_intensity * specular_k * direction_vec_len;
-						total_light_direct[0] += directional_component.color[0] * light_intensity_specular;
-						total_light_direct[1] += directional_component.color[1] * light_intensity_specular;
-						total_light_direct[2] += directional_component.color[2] * light_intensity_specular;
+							let light_intensity_specular = specular_intensity * specular_k * direction_vec_len;
+							total_light_direct[0] += directional_component.color[0] * light_intensity_specular;
+							total_light_direct[1] += directional_component.color[1] * light_intensity_specular;
+							total_light_direct[2] += directional_component.color[2] * light_intensity_specular;
+						}
+						else if SPECULAR_TYPE == SPECULAR_TYPE_METAL
+						{
+							let specular_intensity_scale_factor = specular_intensity * direction_vec_len;
+							
+							let light_intensity_modulated = one_minus_specular_k * specular_intensity_scale_factor;
+							total_light_albedo_modulated[0] += directional_component.color[0] * light_intensity_modulated;
+							total_light_albedo_modulated[1] += directional_component.color[1] * light_intensity_modulated;
+							total_light_albedo_modulated[2] += directional_component.color[2] * light_intensity_modulated;
+
+							let light_intensity_direct = specular_k * specular_intensity_scale_factor;
+							total_light_direct[0] += directional_component.color[0] * light_intensity_direct;
+							total_light_direct[1] += directional_component.color[1] * light_intensity_direct;
+							total_light_direct[2] += directional_component.color[2] * light_intensity_direct;
+						}
 					}
 
 					let constant_component = LightmapElementOpsT::get_constant_component(&l_mixed);
