@@ -532,22 +532,22 @@ fn build_surface_impl_5_static_params<
 						Vec3f::new(0.0, 0.0, 1.0)
 					};
 
+					let constant_component = LightmapElementOpsT::get_constant_component(&l_mixed);
 					if let Some(directional_component) = LightmapElementOpsT::get_directional_component(&l_mixed)
 					{
 						// TODO - support metallic specular.
+
+						let direction_vec_len2 = directional_component.vector_scaled.magnitude2();
+						let direction_vec_len = direction_vec_len2 * inv_sqrt_fast(direction_vec_len2);
 
 						let vec_to_camera_normal_dot = vec_to_camera_texture_space.dot(normal);
 						let vec_to_camera_reflected =
 							normal * (2.0 * vec_to_camera_normal_dot) - vec_to_camera_texture_space;
 						let vec_to_camera_len2 = vec_to_camera_reflected.magnitude2().max(MIN_POSITIVE_VALUE);
 
-						let vec_to_light_len2 = directional_component.vector_scaled.magnitude2();
-						let vec_to_light_inv_len = inv_sqrt_fast(vec_to_light_len2);
-						let vec_to_light_len = vec_to_light_len2 * vec_to_light_inv_len;
-
 						let vec_to_camera_reflected_light_angle_cos = vec_to_camera_reflected
 							.dot(directional_component.vector_scaled) *
-							inv_sqrt_fast(vec_to_camera_len2 * vec_to_light_len2);
+							inv_sqrt_fast(vec_to_camera_len2 * direction_vec_len2);
 
 						let vec_to_camera_normal_angle_cos =
 							(vec_to_camera_normal_dot * inv_sqrt_fast(vec_to_camera_len2)).max(0.0);
@@ -567,6 +567,7 @@ fn build_surface_impl_5_static_params<
 
 						let specular_k = fresnel_factor * glossiness_corrected +
 							DIELECTRIC_AVERAGE_REFLECTIVITY * (1.0 - glossiness_corrected);
+						let one_minus_specular_k = 1.0 - specular_k;
 
 						// This formula is not physically-correct but it gives good results.
 						// TODO - move this formula into separate function.
@@ -576,17 +577,35 @@ fn build_surface_impl_5_static_params<
 
 						let diffuse_intensity = directional_component.vector_scaled.dot(texel_value.normal).max(0.0);
 
-						// TODO - use also ambient light.
-
 						let light_intensity_diffuse = diffuse_intensity * (1.0 - specular_k);
 						total_light_albedo_modulated[0] += directional_component.color[0] * light_intensity_diffuse;
 						total_light_albedo_modulated[1] += directional_component.color[1] * light_intensity_diffuse;
 						total_light_albedo_modulated[2] += directional_component.color[2] * light_intensity_diffuse;
+						total_light_albedo_modulated[0] += constant_component[0] * one_minus_specular_k;
+						total_light_albedo_modulated[1] += constant_component[1] * one_minus_specular_k;
+						total_light_albedo_modulated[2] += constant_component[2] * one_minus_specular_k;
 
-						let light_intensity_specular = specular_intensity * specular_k * vec_to_light_len;
+						let light_intensity_specular = specular_intensity * specular_k * direction_vec_len;
 						total_light_direct[0] += directional_component.color[0] * light_intensity_specular;
 						total_light_direct[1] += directional_component.color[1] * light_intensity_specular;
 						total_light_direct[2] += directional_component.color[2] * light_intensity_specular;
+						total_light_direct[0] += constant_component[0] * specular_k;
+						total_light_direct[1] += constant_component[1] * specular_k;
+						total_light_direct[2] += constant_component[2] * specular_k;
+					}
+					else
+					{
+						// Fallback for non-directional lightmaps. It is incorrect but it is better than nothing.
+						let specular_k = DIELECTRIC_AVERAGE_REFLECTIVITY;
+						let one_minus_specular_k = 1.0 - specular_k;
+
+						total_light_albedo_modulated[0] += constant_component[0] * one_minus_specular_k;
+						total_light_albedo_modulated[1] += constant_component[1] * one_minus_specular_k;
+						total_light_albedo_modulated[2] += constant_component[2] * one_minus_specular_k;
+
+						total_light_direct[0] += constant_component[0] * specular_k;
+						total_light_direct[1] += constant_component[1] * specular_k;
+						total_light_direct[2] += constant_component[2] * specular_k;
 					}
 				}
 			} // If has lightmap.
