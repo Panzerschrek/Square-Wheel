@@ -1,6 +1,4 @@
-use super::{
-	bbox::*, clipping, lightmaps_builder, map_file_common, map_polygonizer, material, math_types::*, plane::*,
-};
+use super::{bbox::*, clipping, lightmap, map_file_common, map_polygonizer, material, math_types::*, plane::*};
 use std::{cell, rc};
 
 pub use map_polygonizer::Polygon;
@@ -1112,8 +1110,8 @@ fn split_long_polygon_r(polygon: &Polygon, out_polygons: &mut Vec<Polygon>, recu
 
 		let tc_min_int = tc_min.floor() as i32;
 		let tc_max_int = tc_max.ceil() as i32;
-		let lightmap_size = lightmaps_builder::get_lightmap_size(tc_min_int, tc_max_int);
-		if lightmap_size <= lightmaps_builder::MAX_LIGHTMAP_SIZE
+		let lightmap_size = lightmap::get_lightmap_size(tc_min_int, tc_max_int);
+		if lightmap_size <= lightmap::MAX_LIGHTMAP_SIZE
 		{
 			continue;
 		}
@@ -1122,7 +1120,7 @@ fn split_long_polygon_r(polygon: &Polygon, out_polygons: &mut Vec<Polygon>, recu
 
 		// Round split plane position to lightmap grid.
 		let middle_tc = (tc_max_int + tc_min_int) >> 1;
-		let split_plane_shift = (middle_tc & !((lightmaps_builder::LIGHTMAP_SCALE - 1) as i32)) as f32;
+		let split_plane_shift = (middle_tc & !((lightmap::LIGHTMAP_SCALE - 1) as i32)) as f32;
 
 		let split_plane = Plane {
 			vec: polygon.texture_info.tex_coord_equation[i].vec,

@@ -1,5 +1,5 @@
 use super::{light::*, shadow_map::*, textures};
-use common::{bsp_map_compact, color::*, lightmaps_builder, math_types::*, plane::*};
+use common::{bsp_map_compact, color::*, lightmap, math_types::*, plane::*};
 
 pub type LightWithShadowMap<'a, 'b> = (&'a PointLight, &'b CubeShadowMap);
 
@@ -432,8 +432,7 @@ fn build_surface_impl_5_static_params<
 
 	// TODO - use uninitialized memory instead.
 	let mut line_lightmap = unsafe {
-		std::mem::zeroed::<[LightmapElementOpsT::LightmapElement; (lightmaps_builder::MAX_LIGHTMAP_SIZE + 2) as usize]>(
-		)
+		std::mem::zeroed::<[LightmapElementOpsT::LightmapElement; (lightmap::MAX_LIGHTMAP_SIZE + 2) as usize]>()
 	};
 	let lightmap_scale_f = (1 << LIGHTAP_SCALE_LOG2) as f32;
 	let inv_lightmap_scale_f = 1.0 / lightmap_scale_f;

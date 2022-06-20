@@ -1,5 +1,6 @@
 use super::{
-	bsp_map_compact, image, light_hemisphere::*, map_file_common, material, math_types::*, pvs, shared_mut_slice::*,
+	bsp_map_compact, image, light_hemisphere::*, lightmap::*, map_file_common, material, math_types::*, pvs,
+	shared_mut_slice::*,
 };
 use rayon::prelude::*;
 use std::{io::Write, sync::atomic};
@@ -35,13 +36,20 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		l.color[2] *= settings.light_scale;
 	}
 
+	let lights_by_leaf = group_lights_by_leafs(map, &lights);
+
 	let mut primary_lightmaps_data = allocate_lightmaps(materials, map);
 	println!("Lightmap texels: {}", primary_lightmaps_data.len());
 
-	println!("Building primary lightmap");
-	build_primary_lightmaps(sample_grid_size, &lights, map, &mut primary_lightmaps_data);
-
 	let visibility_matrix = pvs::calculate_visibility_matrix(&map);
+
+	build_primary_lightmaps(
+		sample_grid_size,
+		&lights_by_leaf,
+		map,
+		&visibility_matrix,
+		&mut primary_lightmaps_data,
+	);
 
 	let materials_albedo = get_map_textures_albedo(map, albedo_image_getter);
 	let emissive_light = get_map_textures_emissive_light(map, materials, settings);
@@ -49,8 +57,6 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	let mut emissive_light_sources = Vec::new();
 	if settings.build_emissive_surfaces_light
 	{
-		println!("\nBuilding emissive surfaces lightmap");
-
 		emissive_light_sources =
 			create_emissive_surfaces_light_sources(&emissive_light, map, primary_lightmaps_data.len());
 
@@ -73,17 +79,15 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 				dst[i] += src[i];
 			}
 		}
-		println!("\nDone!");
 	}
 
 	let mut passes_lightmaps = vec![primary_lightmaps_data];
 
 	if settings.save_secondary_light && settings.num_passes > 1
 	{
-		for pass_num in 1 .. settings.num_passes.min(8)
+		for _pass_num in 1 .. settings.num_passes.min(8)
 		{
 			let prev_pass_lightmap = passes_lightmaps.last().unwrap();
-			println!("\nBuilding secondary lightmap ({})", pass_num);
 			let secondary_light_sources = create_secondary_light_sources(&materials_albedo, map, &prev_pass_lightmap);
 
 			let mut secondary_lightmaps_data = vec![[0.0, 0.0, 0.0]; prev_pass_lightmap.len()];
@@ -99,7 +103,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		}
 	}
 
-	println!("\nCombining lightmaps");
+	println!("Combining lightmaps");
 	let primary_lightmap = passes_lightmaps.first().unwrap();
 	let secondary_lightmaps = &passes_lightmaps[1 ..];
 
@@ -128,8 +132,6 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 
 	if settings.build_directional_lightmap
 	{
-		println!("Building directional lightmaps");
-
 		let mut directional_lightmaps_data = vec![
 			bsp_map_compact::DirectionalLightmapElement {
 				ambient_light: [0.0, 0.0, 0.0],
@@ -152,7 +154,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 
 		build_directional_lightmaps(
 			sample_grid_size,
-			&lights,
+			&lights_by_leaf,
 			&secondary_light_sources,
 			&emissive_light_sources,
 			map,
@@ -168,6 +170,41 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	}
 
 	println!("Done!");
+}
+
+type LightsByLeaf = Vec<Vec<PointLight>>;
+
+fn group_lights_by_leafs(map: &bsp_map_compact::BSPMap, light_sources: &[PointLight]) -> LightsByLeaf
+{
+	let mut lights_by_leaf = vec![Vec::new(); map.leafs.len()];
+
+	let root_node = (map.nodes.len() - 1) as u32;
+	for light_source in light_sources
+	{
+		let mut index = root_node;
+		loop
+		{
+			if index >= bsp_map_compact::FIRST_LEAF_INDEX
+			{
+				index = index - bsp_map_compact::FIRST_LEAF_INDEX;
+				break;
+			}
+
+			let node = &map.nodes[index as usize];
+			index = if node.plane.vec.dot(light_source.pos) > node.plane.dist
+			{
+				node.children[0]
+			}
+			else
+			{
+				node.children[1]
+			};
+		}
+
+		lights_by_leaf[index as usize].push(*light_source);
+	} // for light sources
+
+	lights_by_leaf
 }
 
 fn get_map_textures_emissive_light(
@@ -225,32 +262,7 @@ fn get_map_textures_albedo<AlbedoImageGetter: FnMut(&str) -> Option<image::Image
 	materials_albedo
 }
 
-// If this chaged, map file version must be changed too!
-pub const LIGHTMAP_SCALE_LOG2: u32 = 4;
-pub const LIGHTMAP_SCALE: u32 = 1 << LIGHTMAP_SCALE_LOG2;
-
-// Limit used for polygons splitting.
-// Actual size may be a little big greater.
-pub const MAX_LIGHTMAP_SIZE: u32 = 17;
-
-pub fn get_polygon_lightmap_size(polygon: &bsp_map_compact::Polygon) -> [u32; 2]
-{
-	[
-		get_lightmap_size(polygon.tex_coord_min[0], polygon.tex_coord_max[0]),
-		get_lightmap_size(polygon.tex_coord_min[1], polygon.tex_coord_max[1]),
-	]
-}
-
-pub fn get_lightmap_size(tc_min: i32, tc_max: i32) -> u32
-{
-	// If this chaged, map file version must be changed too!
-	debug_assert!(tc_min < tc_max);
-	let result =
-		((tc_max + ((LIGHTMAP_SCALE - 1) as i32) >> LIGHTMAP_SCALE_LOG2) - (tc_min >> LIGHTMAP_SCALE_LOG2) + 1) as u32;
-	debug_assert!(result >= 2);
-	result
-}
-
+#[derive(Copy, Clone)]
 struct PointLight
 {
 	pos: Vec3f,
@@ -362,54 +374,130 @@ pub fn allocate_lightmaps(materials: &material::MaterialsMap, map: &mut bsp_map_
 	vec![[0.0, 0.0, 0.0]; offset]
 }
 
-type MaterialAlbedo = [f32; 3];
-
-fn build_primary_lightmaps(
-	sample_grid_size: u32,
-	lights: &[PointLight],
-	map: &bsp_map_compact::BSPMap,
-	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
-)
+struct ProgressTracker
 {
-	let texels_complete = atomic::AtomicU32::new(0);
-	let polygons_complete = atomic::AtomicU32::new(0);
-	let texels_total = lightmaps_data.len() as u32;
+	texels_total: u32,
+	polygons_total: u32,
+	texels_complete: atomic::AtomicU32,
+	polygons_complete: atomic::AtomicU32,
+}
 
-	// It is safe to share lightmaps data across threads since each polygons uses its own region.
-	let lightmaps_data_shared = SharedMutSlice::new(lightmaps_data);
+impl ProgressTracker
+{
+	fn new(map: &bsp_map_compact::BSPMap, texels_total: usize, message: &str) -> Self
+	{
+		println!("{}", message);
 
-	map.polygons.par_iter().for_each(|polygon| {
-		if polygon.lightmap_data_offset == 0
-		{
-			// No lightmap for this polygon.
-			return;
+		Self {
+			texels_total: texels_total as u32,
+			polygons_total: map.polygons.len() as u32,
+			texels_complete: atomic::AtomicU32::new(0),
+			polygons_complete: atomic::AtomicU32::new(0),
 		}
+	}
 
-		let lightmaps_data_unshared = unsafe { lightmaps_data_shared.get() };
-		build_primary_lightmap(sample_grid_size, lights, polygon, map, lightmaps_data_unshared);
-
-		// Calculate and show progress.
+	fn process_polygon(&self, polygon: &bsp_map_compact::Polygon)
+	{
 		let lightmap_size = get_polygon_lightmap_size(polygon);
 		let lightmap_texels = lightmap_size[0] * lightmap_size[1];
 
-		let texels_complete_before = texels_complete.fetch_add(lightmap_texels, atomic::Ordering::SeqCst);
+		let texels_complete_before = self
+			.texels_complete
+			.fetch_add(lightmap_texels, atomic::Ordering::SeqCst);
 		let texels_complete_afrer = texels_complete_before + lightmap_texels;
-		let ratio_before = texels_complete_before * 256 / texels_total;
-		let ratio_after = texels_complete_afrer * 256 / texels_total;
-		let polygons_before = polygons_complete.fetch_add(1, atomic::Ordering::SeqCst);
+		let ratio_before = texels_complete_before * 256 / self.texels_total;
+		let ratio_after = texels_complete_afrer * 256 / self.texels_total;
+		let polygons_before = self.polygons_complete.fetch_add(1, atomic::Ordering::SeqCst);
 		if ratio_after > ratio_before
 		{
 			print!(
 				"\r{:03.2}% complete ({} of {} texels),  {} of {} polygons",
-				(texels_complete_afrer as f32) * 100.0 / (texels_total as f32),
+				(texels_complete_afrer as f32) * 100.0 / (self.texels_total as f32),
 				texels_complete_afrer,
-				texels_total,
+				self.texels_total,
 				polygons_before + 1,
-				map.polygons.len()
+				self.polygons_total
 			);
 			let _ignore_errors = std::io::stdout().flush();
 		}
+	}
+}
+
+impl Drop for ProgressTracker
+{
+	fn drop(&mut self)
+	{
+		println!("\nDone!");
+	}
+}
+
+type MaterialAlbedo = [f32; 3];
+
+fn build_primary_lightmaps(
+	sample_grid_size: u32,
+	lights: &LightsByLeaf,
+	map: &bsp_map_compact::BSPMap,
+	visibility_matrix: &pvs::VisibilityMatrix,
+	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
+)
+{
+	let progress_tracker = ProgressTracker::new(map, lightmaps_data.len(), "Building primary lightmaps");
+
+	// It is safe to share lightmaps data across threads since each polygons uses its own region.
+	let lightmaps_data_shared = SharedMutSlice::new(lightmaps_data);
+
+	map.leafs.par_iter().enumerate().for_each(|(leaf_index, leaf)| {
+		let lightmaps_data_unshared = unsafe { lightmaps_data_shared.get() };
+
+		let visible_leafs_list = get_visible_leafs(map, leaf_index, visibility_matrix);
+		let visible_lights_list = get_visible_lights(lights, &visible_leafs_list);
+
+		for polygon_index in leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize
+		{
+			let polygon = &map.polygons[polygon_index];
+			if polygon.lightmap_data_offset == 0
+			{
+				// No lightmap for this polygon.
+				continue;
+			}
+			build_primary_lightmap(
+				sample_grid_size,
+				&visible_lights_list,
+				polygon,
+				map,
+				lightmaps_data_unshared,
+			);
+
+			progress_tracker.process_polygon(polygon);
+		} // for leaf polygons.
 	});
+
+	map.submodels.par_iter().for_each(|submodel| {
+		let lightmaps_data_unshared = unsafe { lightmaps_data_shared.get() };
+
+		let visible_leafs_list = get_visible_leafs_for_submodel(map, submodel, visibility_matrix);
+		let visible_lights_list = get_visible_lights(lights, &visible_leafs_list);
+
+		for polygon_index in
+			submodel.first_polygon as usize .. (submodel.first_polygon + submodel.num_polygons) as usize
+		{
+			let polygon = &map.polygons[polygon_index];
+			if polygon.lightmap_data_offset == 0
+			{
+				// No lightmap for this polygon.
+				continue;
+			}
+			build_primary_lightmap(
+				sample_grid_size,
+				&visible_lights_list,
+				polygon,
+				map,
+				lightmaps_data_unshared,
+			);
+
+			progress_tracker.process_polygon(&map.polygons[polygon_index]);
+		} // for submodel polygons.
+	}); // for submodels
 }
 
 fn build_primary_lightmap(
@@ -477,25 +565,18 @@ fn build_primary_lightmap(
 						continue;
 					}
 
+					if !can_see(&light.pos, &pos, map)
+					{
+						// In shadow.
+						continue;
+					}
+
 					let light_scale = angle_cos / vec_to_light_len2;
 					let color_scaled = [
 						light.color[0] * light_scale,
 						light.color[1] * light_scale,
 						light.color[2] * light_scale,
 					];
-
-					if color_scaled[0].max(color_scaled[1]).max(color_scaled[2]) <= MIN_LIGHT_VALUE
-					{
-						// Light value is too small. Do not perform shadow check.
-						// This check allows us to significantly reduce light computation time by skipping shadow check for distant lights.
-						continue;
-					}
-
-					if !can_see(&light.pos, &pos, map)
-					{
-						// In shadow.
-						continue;
-					}
 
 					total_light[0] += multi_sampling_scale * color_scaled[0];
 					total_light[1] += multi_sampling_scale * color_scaled[1];
@@ -515,9 +596,7 @@ fn build_secondary_lightmaps(
 	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
 )
 {
-	let texels_complete = atomic::AtomicU32::new(0);
-	let polygons_complete = atomic::AtomicU32::new(0);
-	let texels_total = lightmaps_data.len() as u32;
+	let progress_tracker = ProgressTracker::new(map, lightmaps_data.len(), "Building secondary lightmaps");
 
 	// It is safe to share lightmaps data across threads since each polygons uses its own region.
 	let lightmaps_data_shared = SharedMutSlice::new(lightmaps_data);
@@ -525,17 +604,7 @@ fn build_secondary_lightmaps(
 	map.leafs.par_iter().enumerate().for_each(|(leaf_index, leaf)| {
 		let lightmaps_data_unshared = unsafe { lightmaps_data_shared.get() };
 
-		let visibility_matrix_row =
-			&visibility_matrix[leaf_index * map.leafs.len() .. (leaf_index + 1) * map.leafs.len()];
-
-		let mut visible_leafs_list = Vec::new();
-		for other_leaf_index in 0 .. map.leafs.len()
-		{
-			if visibility_matrix_row[other_leaf_index]
-			{
-				visible_leafs_list.push(other_leaf_index as u32);
-			}
-		}
+		let visible_leafs_list = get_visible_leafs(map, leaf_index, visibility_matrix);
 
 		for polygon_index in leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize
 		{
@@ -546,72 +615,14 @@ fn build_secondary_lightmaps(
 			}
 			build_polygon_secondary_lightmap(lights, polygon_index, map, &visible_leafs_list, lightmaps_data_unshared);
 
-			// Calculate and show progress.
-			let lightmap_size = get_polygon_lightmap_size(&map.polygons[polygon_index]);
-			let lightmap_texels = lightmap_size[0] * lightmap_size[1];
-
-			let texels_complete_before = texels_complete.fetch_add(lightmap_texels, atomic::Ordering::SeqCst);
-			let texels_complete_afrer = texels_complete_before + lightmap_texels;
-			let ratio_before = texels_complete_before * 256 / texels_total;
-			let ratio_after = texels_complete_afrer * 256 / texels_total;
-			let polygons_before = polygons_complete.fetch_add(1, atomic::Ordering::SeqCst);
-			if ratio_after > ratio_before
-			{
-				print!(
-					"\r{:03.2}% complete ({} of {} texels),  {} of {} polygons",
-					(texels_complete_afrer as f32) * 100.0 / (texels_total as f32),
-					texels_complete_afrer,
-					texels_total,
-					polygons_before + 1,
-					map.polygons.len()
-				);
-				let _ignore_errors = std::io::stdout().flush();
-			}
+			progress_tracker.process_polygon(&map.polygons[polygon_index]);
 		} // for leaf polygons.
 	});
 
-	let root_node = (map.nodes.len() - 1) as u32;
 	map.submodels.par_iter().for_each(|submodel| {
 		let lightmaps_data_unshared = unsafe { lightmaps_data_shared.get() };
 
-		// Know in which leafs this submodel is located.
-		let bbox = bsp_map_compact::get_submodel_bbox(map, submodel);
-		let bbox_vertices = [
-			Vec3f::new(bbox.min.x, bbox.min.y, bbox.min.z),
-			Vec3f::new(bbox.min.x, bbox.min.y, bbox.max.z),
-			Vec3f::new(bbox.min.x, bbox.max.y, bbox.min.z),
-			Vec3f::new(bbox.min.x, bbox.max.y, bbox.max.z),
-			Vec3f::new(bbox.max.x, bbox.min.y, bbox.min.z),
-			Vec3f::new(bbox.max.x, bbox.min.y, bbox.max.z),
-			Vec3f::new(bbox.max.x, bbox.max.y, bbox.min.z),
-			Vec3f::new(bbox.max.x, bbox.max.y, bbox.max.z),
-		];
-
-		let mut submodel_leafs_list = Vec::new();
-		collect_submodel_leafs_r(map, &bbox_vertices, root_node, &mut submodel_leafs_list);
-
-		// Know which leafs are visible for submodel's leafs.
-		let mut submodel_visible_leafs_bit_set = vec![false; map.leafs.len()];
-		for &leaf_index in &submodel_leafs_list
-		{
-			let visibility_matrix_row = &visibility_matrix
-				[(leaf_index as usize) * map.leafs.len() .. ((leaf_index as usize) + 1) * map.leafs.len()];
-			for (src, dst) in visibility_matrix_row
-				.iter()
-				.zip(submodel_visible_leafs_bit_set.iter_mut())
-			{
-				*dst |= src;
-			}
-		}
-
-		let mut visible_leafs_list = Vec::new();
-		for other_leaf_index in 0 .. map.leafs.len()
-		{
-			if submodel_visible_leafs_bit_set[other_leaf_index]
-			{
-				visible_leafs_list.push(other_leaf_index as u32);
-			}
-		}
+		let visible_leafs_list = get_visible_leafs_for_submodel(map, submodel, visibility_matrix);
 
 		for polygon_index in
 			submodel.first_polygon as usize .. (submodel.first_polygon + submodel.num_polygons) as usize
@@ -623,9 +634,89 @@ fn build_secondary_lightmaps(
 			}
 			build_polygon_secondary_lightmap(lights, polygon_index, map, &visible_leafs_list, lightmaps_data_unshared);
 
-			// TODO - show progress here?
+			progress_tracker.process_polygon(&map.polygons[polygon_index]);
 		} // for submodel polygons.
 	}); // for submodels
+}
+
+fn get_visible_lights(lights: &LightsByLeaf, visible_leafs: &[u32]) -> Vec<PointLight>
+{
+	let mut visible_lights_list = Vec::new();
+	for &leaf_index in visible_leafs
+	{
+		for light in &lights[leaf_index as usize]
+		{
+			visible_lights_list.push(*light);
+		}
+	}
+	visible_lights_list
+}
+
+fn get_visible_leafs(
+	map: &bsp_map_compact::BSPMap,
+	leaf_index: usize,
+	visibility_matrix: &pvs::VisibilityMatrix,
+) -> Vec<u32>
+{
+	let visibility_matrix_row = &visibility_matrix[leaf_index * map.leafs.len() .. (leaf_index + 1) * map.leafs.len()];
+
+	let mut visible_leafs_list = Vec::new();
+	for other_leaf_index in 0 .. map.leafs.len()
+	{
+		if visibility_matrix_row[other_leaf_index]
+		{
+			visible_leafs_list.push(other_leaf_index as u32);
+		}
+	}
+	visible_leafs_list
+}
+
+fn get_visible_leafs_for_submodel(
+	map: &bsp_map_compact::BSPMap,
+	submodel: &bsp_map_compact::Submodel,
+	visibility_matrix: &pvs::VisibilityMatrix,
+) -> Vec<u32>
+{
+	// Know in which leafs this submodel is located.
+	let bbox = bsp_map_compact::get_submodel_bbox(map, submodel);
+	let bbox_vertices = [
+		Vec3f::new(bbox.min.x, bbox.min.y, bbox.min.z),
+		Vec3f::new(bbox.min.x, bbox.min.y, bbox.max.z),
+		Vec3f::new(bbox.min.x, bbox.max.y, bbox.min.z),
+		Vec3f::new(bbox.min.x, bbox.max.y, bbox.max.z),
+		Vec3f::new(bbox.max.x, bbox.min.y, bbox.min.z),
+		Vec3f::new(bbox.max.x, bbox.min.y, bbox.max.z),
+		Vec3f::new(bbox.max.x, bbox.max.y, bbox.min.z),
+		Vec3f::new(bbox.max.x, bbox.max.y, bbox.max.z),
+	];
+
+	let mut submodel_leafs_list = Vec::new();
+	let root_node = (map.nodes.len() - 1) as u32;
+	collect_submodel_leafs_r(map, &bbox_vertices, root_node, &mut submodel_leafs_list);
+
+	// Know which leafs are visible for submodel's leafs.
+	let mut submodel_visible_leafs_bit_set = vec![false; map.leafs.len()];
+	for &leaf_index in &submodel_leafs_list
+	{
+		let visibility_matrix_row = &visibility_matrix
+			[(leaf_index as usize) * map.leafs.len() .. ((leaf_index as usize) + 1) * map.leafs.len()];
+		for (src, dst) in visibility_matrix_row
+			.iter()
+			.zip(submodel_visible_leafs_bit_set.iter_mut())
+		{
+			*dst |= src;
+		}
+	}
+
+	let mut visible_leafs_list = Vec::new();
+	for other_leaf_index in 0 .. map.leafs.len()
+	{
+		if submodel_visible_leafs_bit_set[other_leaf_index]
+		{
+			visible_leafs_list.push(other_leaf_index as u32);
+		}
+	}
+	visible_leafs_list
 }
 
 fn collect_submodel_leafs_r(
@@ -768,7 +859,7 @@ fn build_polygon_secondary_lightmap(
 
 fn build_directional_lightmaps(
 	sample_grid_size: u32,
-	primary_lights: &[PointLight],
+	primary_lights: &LightsByLeaf,
 	secondary_lights: &[SecondaryLightSource],
 	emissive_lights: &[SecondaryLightSource],
 	map: &bsp_map_compact::BSPMap,
@@ -776,9 +867,7 @@ fn build_directional_lightmaps(
 	lightmaps_data: &mut [bsp_map_compact::DirectionalLightmapElement],
 )
 {
-	let texels_complete = atomic::AtomicU32::new(0);
-	let polygons_complete = atomic::AtomicU32::new(0);
-	let texels_total = lightmaps_data.len() as u32;
+	let progress_tracker = ProgressTracker::new(map, lightmaps_data.len(), "Building directional lightmaps");
 
 	// It is safe to share lightmaps data across threads since each polygons uses its own region.
 	let lightmaps_data_shared = SharedMutSlice::new(lightmaps_data);
@@ -786,17 +875,8 @@ fn build_directional_lightmaps(
 	map.leafs.par_iter().enumerate().for_each(|(leaf_index, leaf)| {
 		let lightmaps_data_unshared = unsafe { lightmaps_data_shared.get() };
 
-		let visibility_matrix_row =
-			&visibility_matrix[leaf_index * map.leafs.len() .. (leaf_index + 1) * map.leafs.len()];
-
-		let mut visible_leafs_list = Vec::new();
-		for other_leaf_index in 0 .. map.leafs.len()
-		{
-			if visibility_matrix_row[other_leaf_index]
-			{
-				visible_leafs_list.push(other_leaf_index as u32);
-			}
-		}
+		let visible_leafs_list = get_visible_leafs(map, leaf_index, visibility_matrix);
+		let visible_lights_list = get_visible_lights(primary_lights, &visible_leafs_list);
 
 		for polygon_index in leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize
 		{
@@ -807,7 +887,7 @@ fn build_directional_lightmaps(
 			}
 			build_polygon_diretional_lightmap(
 				sample_grid_size,
-				primary_lights,
+				&visible_lights_list,
 				secondary_lights,
 				emissive_lights,
 				polygon_index,
@@ -816,74 +896,15 @@ fn build_directional_lightmaps(
 				lightmaps_data_unshared,
 			);
 
-			// Calculate and show progress.
-			let lightmap_size = get_polygon_lightmap_size(&map.polygons[polygon_index]);
-			let lightmap_texels = lightmap_size[0] * lightmap_size[1];
-
-			let texels_complete_before = texels_complete.fetch_add(lightmap_texels, atomic::Ordering::SeqCst);
-			let texels_complete_afrer = texels_complete_before + lightmap_texels;
-			let ratio_before = texels_complete_before * 256 / texels_total;
-			let ratio_after = texels_complete_afrer * 256 / texels_total;
-			let polygons_before = polygons_complete.fetch_add(1, atomic::Ordering::SeqCst);
-			if ratio_after > ratio_before
-			{
-				print!(
-					"\r{:03.2}% complete ({} of {} texels),  {} of {} polygons",
-					(texels_complete_afrer as f32) * 100.0 / (texels_total as f32),
-					texels_complete_afrer,
-					texels_total,
-					polygons_before + 1,
-					map.polygons.len()
-				);
-				let _ignore_errors = std::io::stdout().flush();
-			}
+			progress_tracker.process_polygon(&map.polygons[polygon_index]);
 		} // for leaf polygons.
 	});
 
-	let root_node = (map.nodes.len() - 1) as u32;
 	map.submodels.par_iter().for_each(|submodel| {
 		let lightmaps_data_unshared = unsafe { lightmaps_data_shared.get() };
 
-		// TODO - remove copy-paster
-
-		// Know in which leafs this submodel is located.
-		let bbox = bsp_map_compact::get_submodel_bbox(map, submodel);
-		let bbox_vertices = [
-			Vec3f::new(bbox.min.x, bbox.min.y, bbox.min.z),
-			Vec3f::new(bbox.min.x, bbox.min.y, bbox.max.z),
-			Vec3f::new(bbox.min.x, bbox.max.y, bbox.min.z),
-			Vec3f::new(bbox.min.x, bbox.max.y, bbox.max.z),
-			Vec3f::new(bbox.max.x, bbox.min.y, bbox.min.z),
-			Vec3f::new(bbox.max.x, bbox.min.y, bbox.max.z),
-			Vec3f::new(bbox.max.x, bbox.max.y, bbox.min.z),
-			Vec3f::new(bbox.max.x, bbox.max.y, bbox.max.z),
-		];
-
-		let mut submodel_leafs_list = Vec::new();
-		collect_submodel_leafs_r(map, &bbox_vertices, root_node, &mut submodel_leafs_list);
-
-		// Know which leafs are visible for submodel's leafs.
-		let mut submodel_visible_leafs_bit_set = vec![false; map.leafs.len()];
-		for &leaf_index in &submodel_leafs_list
-		{
-			let visibility_matrix_row = &visibility_matrix
-				[(leaf_index as usize) * map.leafs.len() .. ((leaf_index as usize) + 1) * map.leafs.len()];
-			for (src, dst) in visibility_matrix_row
-				.iter()
-				.zip(submodel_visible_leafs_bit_set.iter_mut())
-			{
-				*dst |= src;
-			}
-		}
-
-		let mut visible_leafs_list = Vec::new();
-		for other_leaf_index in 0 .. map.leafs.len()
-		{
-			if submodel_visible_leafs_bit_set[other_leaf_index]
-			{
-				visible_leafs_list.push(other_leaf_index as u32);
-			}
-		}
+		let visible_leafs_list = get_visible_leafs_for_submodel(map, submodel, visibility_matrix);
+		let visible_lights_list = get_visible_lights(primary_lights, &visible_leafs_list);
 
 		for polygon_index in
 			submodel.first_polygon as usize .. (submodel.first_polygon + submodel.num_polygons) as usize
@@ -895,7 +916,7 @@ fn build_directional_lightmaps(
 			}
 			build_polygon_diretional_lightmap(
 				sample_grid_size,
-				primary_lights,
+				&visible_lights_list,
 				secondary_lights,
 				emissive_lights,
 				polygon_index,
@@ -904,7 +925,7 @@ fn build_directional_lightmaps(
 				lightmaps_data_unshared,
 			);
 
-			// TODO - show progress here?
+			progress_tracker.process_polygon(&map.polygons[polygon_index]);
 		} // for submodel polygons.
 	}); // for submodels
 }
@@ -983,29 +1004,19 @@ fn build_polygon_diretional_lightmap(
 						continue;
 					}
 
-					// Do not use agle cos because we add light into light hemisphere.
+					if !can_see(&primay_light.pos, &pos, map)
+					{
+						// In shadow.
+						continue;
+					}
 
+					// Do not use agle cos because we add light into light hemisphere.
 					let light_scale = multi_sampling_scale / vec_to_light_len2;
 					let color_scaled = [
 						primay_light.color[0] * light_scale,
 						primay_light.color[1] * light_scale,
 						primay_light.color[2] * light_scale,
 					];
-
-					// TODO - remove this check, use visibility-matrix lights rejection instead.
-					if color_scaled[0].max(color_scaled[1]).max(color_scaled[2]) <=
-						MIN_LIGHT_VALUE * multi_sampling_scale
-					{
-						// Light value is too small. Do not perform shadow check.
-						// This check allows us to significantly reduce light computation time by skipping shadow check for distant lights.
-						continue;
-					}
-
-					if !can_see(&primay_light.pos, &pos, map)
-					{
-						// In shadow.
-						continue;
-					}
 
 					// Use same direction to light for all grid samples to avoid bluring point lights (make specular sharp).
 					let vec_to_light_from_texel_center = primay_light.pos - texel_pos;
@@ -1106,20 +1117,10 @@ fn build_polygon_diretional_lightmap(
 				} // for leafs.
 			} // For light sets.
 
-			let dst_index = (u + line_dst_start) as usize;
-
 			let ambient_light = light_hemisphere.extract_ambient_light();
 			let directional_light_params = light_hemisphere.calculate_light_direction();
 
-			if (dst_index & 1023) == 0
-			{
-				light_hemisphere.debug_save(&std::path::PathBuf::from(format!(
-					"light_hemispheres/{}.png",
-					dst_index
-				)));
-			}
-
-			let dst_lightmap_element = &mut lightmaps_data[dst_index];
+			let dst_lightmap_element = &mut lightmaps_data[(u + line_dst_start) as usize];
 			dst_lightmap_element.ambient_light = ambient_light;
 			dst_lightmap_element.directional_light_color = directional_light_params.color;
 			dst_lightmap_element.light_direction_vector_scaled = directional_light_params.direction_vector_scaled;
@@ -1162,7 +1163,6 @@ pub fn get_light_source_lod(point: &Vec3f, light_source: &SecondaryLightSource) 
 
 const MIN_POSITIVE_VALUE: f32 = 1.0 / ((1 << 30) as f32);
 const MAP_LIGHTS_SCALE: f32 = 32.0; // TODO - tune this.
-const MIN_LIGHT_VALUE: f32 = 1.0 / 256.0; // TODO - tune this.
 const MAX_SAMPLE_GRID_SIZE: u32 = 8;
 const TEXEL_NORMAL_SHIFT: f32 = 1.0 / 16.0;
 
@@ -1300,42 +1300,6 @@ fn edge_intersects_with_polygon(v0: &Vec3f, v1: &Vec3f, polygon_index: usize, ma
 	}
 
 	true
-}
-
-pub struct LightmapBasis
-{
-	pub pos: Vec3f,
-	pub u_vec: Vec3f,
-	pub v_vec: Vec3f,
-}
-
-pub fn calculate_lightmap_basis(polygon: &bsp_map_compact::Polygon) -> LightmapBasis
-{
-	// Calculate inverse matrix for tex_coord equation and plane equation in order to calculate world position for UV.
-
-	let tc_basis_scale = 1.0 / (LIGHTMAP_SCALE as f32);
-	let tex_coord_basis = Mat4f::from_cols(
-		polygon.tex_coord_equation[0]
-			.vec
-			.extend(polygon.tex_coord_equation[0].dist) *
-			tc_basis_scale,
-		polygon.tex_coord_equation[1]
-			.vec
-			.extend(polygon.tex_coord_equation[1].dist) *
-			tc_basis_scale,
-		polygon.plane.vec.extend(-polygon.plane.dist),
-		Vec4f::new(0.0, 0.0, 0.0, 1.0),
-	);
-	let tex_coord_basis_inverted = tex_coord_basis.transpose().invert().unwrap(); // TODO - avoid "unwrap"?
-
-	let u_vec = tex_coord_basis_inverted.x.truncate();
-	let v_vec = tex_coord_basis_inverted.y.truncate();
-
-	let pos = tex_coord_basis_inverted.w.truncate() +
-		u_vec * ((polygon.tex_coord_min[0] >> LIGHTMAP_SCALE_LOG2) as f32) +
-		v_vec * ((polygon.tex_coord_min[1] >> LIGHTMAP_SCALE_LOG2) as f32);
-
-	LightmapBasis { pos, u_vec, v_vec }
 }
 
 pub type SecondaryLightSources = Vec<SecondaryLightSource>;
