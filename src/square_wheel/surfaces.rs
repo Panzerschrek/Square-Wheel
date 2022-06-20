@@ -516,13 +516,6 @@ fn build_surface_impl_5_static_params<
 				}
 				else
 				{
-					let vec_to_camera = cam_pos - pos;
-					let vec_to_camera_texture_space = Vec3f::new(
-						vec_to_camera.dot(u_vec_normalized),
-						vec_to_camera.dot(v_vec_normalized),
-						vec_to_camera.dot(plane_normal_normalized),
-					);
-
 					let normal = if USE_NORMAL_MAP
 					{
 						texel_value.normal
@@ -539,6 +532,13 @@ fn build_surface_impl_5_static_params<
 
 						let direction_vec_len2 = directional_component.vector_scaled.magnitude2();
 						let direction_vec_len = direction_vec_len2 * inv_sqrt_fast(direction_vec_len2);
+
+						let vec_to_camera = cam_pos - pos;
+						let vec_to_camera_texture_space = Vec3f::new(
+							vec_to_camera.dot(u_vec_normalized),
+							vec_to_camera.dot(v_vec_normalized),
+							vec_to_camera.dot(plane_normal_normalized),
+						);
 
 						let vec_to_camera_normal_dot = vec_to_camera_texture_space.dot(normal);
 						let vec_to_camera_reflected =
@@ -558,16 +558,16 @@ fn build_surface_impl_5_static_params<
 						let fresnel_factor =
 							DIELECTRIC_ZERO_REFLECTIVITY + (1.0 - DIELECTRIC_ZERO_REFLECTIVITY) * fresnel_factor_base;
 
+						let specular_k = fresnel_factor * texel_value.glossiness +
+							DIELECTRIC_AVERAGE_REFLECTIVITY * (1.0 - texel_value.glossiness);
+						let one_minus_specular_k = 1.0 - specular_k;
+
 						// Make glossiness smaller for light with large deviation.
 						// TODO - extract min glossiness constant and deviation scale constant.
 						// TODO - maybe prescale deviation during lightmaps generation?
 						let glossiness_corrected = (1.0 /
 							((1.0 / texel_value.glossiness) + directional_component.deviation * 20.0))
 							.max(0.75 / 64.0);
-
-						let specular_k = fresnel_factor * glossiness_corrected +
-							DIELECTRIC_AVERAGE_REFLECTIVITY * (1.0 - glossiness_corrected);
-						let one_minus_specular_k = 1.0 - specular_k;
 
 						// This formula is not physically-correct but it gives good results.
 						// TODO - move this formula into separate function.
@@ -577,7 +577,7 @@ fn build_surface_impl_5_static_params<
 
 						let diffuse_intensity = directional_component.vector_scaled.dot(texel_value.normal).max(0.0);
 
-						let light_intensity_diffuse = diffuse_intensity * (1.0 - specular_k);
+						let light_intensity_diffuse = diffuse_intensity * one_minus_specular_k;
 						total_light_albedo_modulated[0] += directional_component.color[0] * light_intensity_diffuse;
 						total_light_albedo_modulated[1] += directional_component.color[1] * light_intensity_diffuse;
 						total_light_albedo_modulated[2] += directional_component.color[2] * light_intensity_diffuse;
