@@ -558,18 +558,25 @@ fn build_surface_impl_5_static_params<
 						let fresnel_factor =
 							DIELECTRIC_ZERO_REFLECTIVITY + (1.0 - DIELECTRIC_ZERO_REFLECTIVITY) * fresnel_factor_base;
 
-						// TODO - use deviation to change glossiness.
+						// Make glossiness smaller for light with large deviation.
+						// TODO - extract min glossiness constant and deviation scale constant.
+						// TODO - maybe prescale deviation during lightmaps generation?
+						let glossiness_corrected = (1.0 /
+							((1.0 / texel_value.glossiness) + directional_component.deviation * 20.0))
+							.max(0.75 / 64.0);
 
-						let specular_k = fresnel_factor * texel_value.glossiness +
-							DIELECTRIC_AVERAGE_REFLECTIVITY * (1.0 - texel_value.glossiness);
+						let specular_k = fresnel_factor * glossiness_corrected +
+							DIELECTRIC_AVERAGE_REFLECTIVITY * (1.0 - glossiness_corrected);
 
 						// This formula is not physically-correct but it gives good results.
 						// TODO - move this formula into separate function.
-						let glossiness_scaled = 64.0 * texel_value.glossiness;
+						let glossiness_scaled = 64.0 * glossiness_corrected;
 						let x = ((vec_to_camera_reflected_light_angle_cos - 1.0) * glossiness_scaled).max(-2.0);
 						let specular_intensity = (x * (x * 0.25 + 1.0) + 1.0) * glossiness_scaled;
 
 						let diffuse_intensity = directional_component.vector_scaled.dot(texel_value.normal).max(0.0);
+
+						// TODO - use also ambient light.
 
 						let light_intensity_diffuse = diffuse_intensity * (1.0 - specular_k);
 						total_light_albedo_modulated[0] += directional_component.color[0] * light_intensity_diffuse;
