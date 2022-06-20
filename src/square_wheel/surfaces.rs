@@ -583,17 +583,16 @@ fn build_surface_impl_5_static_params<
 							inv_sqrt_fast(vec_to_camera_len2 * direction_vec_len2);
 
 						// Make glossiness smaller for light with large deviation.
-						// TODO - extract min glossiness constant and deviation scale constant.
-						// TODO - maybe prescale deviation during lightmaps generation?
-						let glossiness_corrected = (1.0 /
-							((1.0 / texel_value.glossiness) + directional_component.deviation * 20.0))
-							.max(0.75 / 64.0);
+						// TODO - extract min glossiness constant and scale constant.
+						let glossiness_corrected_scaled = (1.0 /
+							((1.0 / (64.0 * texel_value.glossiness)) + directional_component.deviation))
+							.max(0.75);
 
 						// This formula is not physically-correct but it gives good results.
 						// TODO - move this formula into separate function.
-						let glossiness_scaled = 64.0 * glossiness_corrected;
-						let x = ((vec_to_camera_reflected_light_angle_cos - 1.0) * glossiness_scaled).max(-2.0);
-						let specular_intensity = (x * (x * 0.25 + 1.0) + 1.0) * glossiness_scaled;
+						let x =
+							((vec_to_camera_reflected_light_angle_cos - 1.0) * glossiness_corrected_scaled).max(-2.0);
+						let specular_intensity = (x * (x * 0.25 + 1.0) + 1.0) * glossiness_corrected_scaled;
 
 						if SPECULAR_TYPE == SPECULAR_TYPE_DIELECTRIC
 						{
