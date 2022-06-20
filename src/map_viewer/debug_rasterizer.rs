@@ -1,4 +1,4 @@
-use super::{color::*, fixed_math::*, system_window};
+use common::{color::*, fixed_math::*, system_window};
 
 pub struct DebugRasterizer<'a>
 {

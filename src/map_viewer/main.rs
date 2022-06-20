@@ -1,6 +1,9 @@
+mod debug_rasterizer;
+mod debug_renderer;
+
 use common::{
-	bsp_builder, bsp_map_compact, bsp_map_save_load, debug_renderer, lightmaps_builder, map_file_q1, map_polygonizer,
-	material, matrix::*, system_window,
+	bsp_builder, bsp_map_compact, bsp_map_save_load, lightmaps_builder, map_file_q1, map_polygonizer, material,
+	matrix::*, system_window,
 };
 use sdl2::{event::Event, keyboard::Keycode};
 use std::{path::PathBuf, time::Duration};

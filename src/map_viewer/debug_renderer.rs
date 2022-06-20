@@ -1,6 +1,7 @@
-use super::{
-	bsp_builder, bsp_map_compact, clipping::*, color::*, debug_rasterizer::*, fixed_math::*, lightmap,
-	lightmaps_builder, map_file_q1, map_polygonizer, math_types::*, matrix::*, plane::*, system_window,
+use super::debug_rasterizer::*;
+use common::{
+	bsp_builder, bsp_map_compact, clipping::*, color::*, fixed_math::*, lightmap, lightmaps_builder, map_file_q1,
+	map_polygonizer, math_types::*, matrix::*, plane::*, system_window,
 };
 
 #[derive(Default)]

@@ -1,7 +1,8 @@
 use super::{
 	commands_processor, commands_queue, config, console, host_config::*, inline_models_index, renderer, test_game,
+	text_printer, ticks_counter::*,
 };
-use common::{bsp_map_save_load, color::*, system_window, ticks_counter::*};
+use common::{bsp_map_save_load, color::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
@@ -270,7 +271,7 @@ impl Host
 		}
 		self.console.borrow().draw(pixels, surface_info);
 
-		common::text_printer::print(
+		text_printer::print(
 			pixels,
 			surface_info,
 			&format!("fps {:04.2}", self.fps_counter.get_frequency()),

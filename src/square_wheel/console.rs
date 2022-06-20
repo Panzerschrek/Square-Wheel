@@ -1,5 +1,5 @@
-use super::commands_processor;
-use common::{color::*, system_window, text_printer};
+use super::{commands_processor, text_printer};
+use common::{color::*, system_window};
 use sdl2::keyboard::Keycode;
 use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 

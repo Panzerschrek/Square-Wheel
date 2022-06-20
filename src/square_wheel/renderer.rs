@@ -1,11 +1,11 @@
 use super::{
 	config, depth_renderer::*, draw_ordering, frame_number::*, inline_models_index::*, light::*,
-	map_visibility_calculator::*, rasterizer::*, rect_splitting, renderer_config::*, shadow_map::*, surfaces::*,
-	textures::*,
+	map_visibility_calculator::*, performance_counter::*, rasterizer::*, rect_splitting, renderer_config::*,
+	shadow_map::*, surfaces::*, text_printer, textures::*,
 };
 use common::{
 	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, color::*, fixed_math::*, lightmap, material,
-	math_types::*, matrix::*, performance_counter::*, plane::*, shared_mut_slice::*, system_window,
+	math_types::*, matrix::*, plane::*, shared_mut_slice::*, system_window,
 };
 use rayon::prelude::*;
 use std::sync::Arc;
@@ -160,7 +160,7 @@ impl Renderer
 				}
 			}
 
-			common::text_printer::print(
+			text_printer::print(
 				pixels,
 				surface_info,
 				&format!(

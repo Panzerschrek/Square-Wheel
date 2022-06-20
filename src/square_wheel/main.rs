@@ -12,6 +12,7 @@ mod host_config;
 mod inline_models_index;
 mod light;
 mod map_visibility_calculator;
+mod performance_counter;
 mod rasterizer;
 mod rect_splitting;
 mod renderer;
@@ -19,7 +20,9 @@ mod renderer_config;
 mod shadow_map;
 mod surfaces;
 mod test_game;
+mod text_printer;
 mod textures;
+mod ticks_counter;
 
 use std::path::PathBuf;
 use structopt::StructOpt;
