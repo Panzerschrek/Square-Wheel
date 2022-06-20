@@ -516,6 +516,8 @@ fn build_surface_impl_5_static_params<
 				}
 				else
 				{
+					// TODO - support metallic specular.
+
 					let normal = if USE_NORMAL_MAP
 					{
 						texel_value.normal
@@ -525,42 +527,39 @@ fn build_surface_impl_5_static_params<
 						Vec3f::new(0.0, 0.0, 1.0)
 					};
 
-					let constant_component = LightmapElementOpsT::get_constant_component(&l_mixed);
+					let vec_to_camera = cam_pos - pos;
+					let vec_to_camera_texture_space = Vec3f::new(
+						vec_to_camera.dot(u_vec_normalized),
+						vec_to_camera.dot(v_vec_normalized),
+						vec_to_camera.dot(plane_normal_normalized),
+					);
+
+					let vec_to_camera_normal_dot = vec_to_camera_texture_space.dot(normal);
+					let vec_to_camera_reflected =
+						normal * (2.0 * vec_to_camera_normal_dot) - vec_to_camera_texture_space;
+					let vec_to_camera_len2 = vec_to_camera_reflected.magnitude2().max(MIN_POSITIVE_VALUE);
+
+					let vec_to_camera_normal_angle_cos =
+						(vec_to_camera_normal_dot * inv_sqrt_fast(vec_to_camera_len2)).max(0.0);
+					let one_minus_angle_cos = (1.0 - vec_to_camera_normal_angle_cos).max(0.0);
+					let one_minus_angle_cos2 = one_minus_angle_cos * one_minus_angle_cos;
+					let fresnel_factor_base = one_minus_angle_cos2 * one_minus_angle_cos2 * one_minus_angle_cos;
+
+					let fresnel_factor =
+						DIELECTRIC_ZERO_REFLECTIVITY + (1.0 - DIELECTRIC_ZERO_REFLECTIVITY) * fresnel_factor_base;
+
+					let specular_k = fresnel_factor * texel_value.glossiness +
+						DIELECTRIC_AVERAGE_REFLECTIVITY * (1.0 - texel_value.glossiness);
+					let one_minus_specular_k = 1.0 - specular_k;
+
 					if let Some(directional_component) = LightmapElementOpsT::get_directional_component(&l_mixed)
 					{
-						// TODO - support metallic specular.
-
 						let direction_vec_len2 = directional_component.vector_scaled.magnitude2();
 						let direction_vec_len = direction_vec_len2 * inv_sqrt_fast(direction_vec_len2);
-
-						let vec_to_camera = cam_pos - pos;
-						let vec_to_camera_texture_space = Vec3f::new(
-							vec_to_camera.dot(u_vec_normalized),
-							vec_to_camera.dot(v_vec_normalized),
-							vec_to_camera.dot(plane_normal_normalized),
-						);
-
-						let vec_to_camera_normal_dot = vec_to_camera_texture_space.dot(normal);
-						let vec_to_camera_reflected =
-							normal * (2.0 * vec_to_camera_normal_dot) - vec_to_camera_texture_space;
-						let vec_to_camera_len2 = vec_to_camera_reflected.magnitude2().max(MIN_POSITIVE_VALUE);
 
 						let vec_to_camera_reflected_light_angle_cos = vec_to_camera_reflected
 							.dot(directional_component.vector_scaled) *
 							inv_sqrt_fast(vec_to_camera_len2 * direction_vec_len2);
-
-						let vec_to_camera_normal_angle_cos =
-							(vec_to_camera_normal_dot * inv_sqrt_fast(vec_to_camera_len2)).max(0.0);
-						let one_minus_angle_cos = (1.0 - vec_to_camera_normal_angle_cos).max(0.0);
-						let one_minus_angle_cos2 = one_minus_angle_cos * one_minus_angle_cos;
-						let fresnel_factor_base = one_minus_angle_cos2 * one_minus_angle_cos2 * one_minus_angle_cos;
-
-						let fresnel_factor =
-							DIELECTRIC_ZERO_REFLECTIVITY + (1.0 - DIELECTRIC_ZERO_REFLECTIVITY) * fresnel_factor_base;
-
-						let specular_k = fresnel_factor * texel_value.glossiness +
-							DIELECTRIC_AVERAGE_REFLECTIVITY * (1.0 - texel_value.glossiness);
-						let one_minus_specular_k = 1.0 - specular_k;
 
 						// Make glossiness smaller for light with large deviation.
 						// TODO - extract min glossiness constant and deviation scale constant.
@@ -581,33 +580,23 @@ fn build_surface_impl_5_static_params<
 						total_light_albedo_modulated[0] += directional_component.color[0] * light_intensity_diffuse;
 						total_light_albedo_modulated[1] += directional_component.color[1] * light_intensity_diffuse;
 						total_light_albedo_modulated[2] += directional_component.color[2] * light_intensity_diffuse;
-						total_light_albedo_modulated[0] += constant_component[0] * one_minus_specular_k;
-						total_light_albedo_modulated[1] += constant_component[1] * one_minus_specular_k;
-						total_light_albedo_modulated[2] += constant_component[2] * one_minus_specular_k;
 
 						let light_intensity_specular = specular_intensity * specular_k * direction_vec_len;
 						total_light_direct[0] += directional_component.color[0] * light_intensity_specular;
 						total_light_direct[1] += directional_component.color[1] * light_intensity_specular;
 						total_light_direct[2] += directional_component.color[2] * light_intensity_specular;
-						total_light_direct[0] += constant_component[0] * specular_k;
-						total_light_direct[1] += constant_component[1] * specular_k;
-						total_light_direct[2] += constant_component[2] * specular_k;
 					}
-					else
-					{
-						// Fallback for non-directional lightmaps. It is incorrect but it is better than nothing.
-						let specular_k = DIELECTRIC_AVERAGE_REFLECTIVITY;
-						let one_minus_specular_k = 1.0 - specular_k;
 
-						total_light_albedo_modulated[0] += constant_component[0] * one_minus_specular_k;
-						total_light_albedo_modulated[1] += constant_component[1] * one_minus_specular_k;
-						total_light_albedo_modulated[2] += constant_component[2] * one_minus_specular_k;
+					let constant_component = LightmapElementOpsT::get_constant_component(&l_mixed);
 
-						total_light_direct[0] += constant_component[0] * specular_k;
-						total_light_direct[1] += constant_component[1] * specular_k;
-						total_light_direct[2] += constant_component[2] * specular_k;
-					}
-				}
+					total_light_albedo_modulated[0] += constant_component[0] * one_minus_specular_k;
+					total_light_albedo_modulated[1] += constant_component[1] * one_minus_specular_k;
+					total_light_albedo_modulated[2] += constant_component[2] * one_minus_specular_k;
+
+					total_light_direct[0] += constant_component[0] * specular_k;
+					total_light_direct[1] += constant_component[1] * specular_k;
+					total_light_direct[2] += constant_component[2] * specular_k;
+				} // If specular material.
 			} // If has lightmap.
 
 			if USE_DYNAMIC_LIGHTS
