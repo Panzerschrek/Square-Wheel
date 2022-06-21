@@ -574,9 +574,10 @@ fn build_surface_impl_5_static_params<
 							inv_sqrt_fast(vec_to_camera_len2 * direction_vec_len2);
 
 						// Make glossiness smaller for light with large deviation.
-						let glossiness_corrected_scaled = (1.0 /
-							((1.0 / (GLOSSINESS_SCALE * texel_value.glossiness)) + directional_component.deviation))
-							.max(0.75);
+						let glossiness_corrected_scaled = inv_fast(
+							inv_fast(GLOSSINESS_SCALE * texel_value.glossiness) + directional_component.deviation,
+						)
+						.max(0.75);
 
 						let specular_intensity = get_specular_intensity(
 							vec_to_camera_reflected_light_angle_cos,
@@ -675,7 +676,7 @@ fn build_surface_impl_5_static_params<
 
 					let shadow_factor = cube_shadow_map_fetch(shadow_cube_map, &vec_to_light);
 					let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
-					let shadow_distance_factor = shadow_factor / vec_to_light_len2;
+					let shadow_distance_factor = shadow_factor * inv_fast(vec_to_light_len2);
 
 					let diffuse_intensity = if SPECULAR_TYPE == SPECULAR_TYPE_METAL
 					{
@@ -904,7 +905,7 @@ fn cube_shadow_map_side_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f, side
 	const ONE_MINUS_EPS: f32 = 1.0 - 1.0 / 65536.0;
 	let cubemap_size_f = cube_shadow_map.size as f32;
 
-	let depth = 1.0 / vec.z.max(MIN_POSITIVE_VALUE);
+	let depth = inv_fast(vec.z.max(MIN_POSITIVE_VALUE));
 	let half_depth = 0.5 * depth;
 	let u_f = (vec.x * half_depth + 0.5).max(0.0).min(ONE_MINUS_EPS) * cubemap_size_f;
 	let v_f = (vec.y * half_depth + 0.5).max(0.0).min(ONE_MINUS_EPS) * cubemap_size_f;
@@ -976,6 +977,25 @@ fn inv_sqrt_fast(x: f32) -> f32
 fn inv_sqrt_fast(x: f32) -> f32
 {
 	1.0 / sqrt(x)
+}
+
+// Relative erorr <= 1.5 * 2^(-12)
+#[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
+fn inv_fast(x: f32) -> f32
+{
+	unsafe { core::arch::x86_64::_mm_cvtss_f32(core::arch::x86_64::_mm_rcp_ss(core::arch::x86_64::_mm_set1_ps(x))) }
+}
+
+#[cfg(all(target_arch = "x86", target_feature = "sse"))]
+fn inv_fast(x: f32) -> f32
+{
+	unsafe { core::arch::x86::_mm_cvtss_f32(core::arch::x86::_mm_rcp_ss(core::arch::x86::_mm_set1_ps(x))) }
+}
+
+#[cfg(not(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse")))]
+fn inv_fast(x: f32) -> f32
+{
+	1.0 / x
 }
 
 unsafe fn debug_only_checked_fetch<T: Copy>(data: &[T], address: usize) -> T
