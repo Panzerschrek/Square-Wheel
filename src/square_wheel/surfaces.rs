@@ -996,7 +996,8 @@ fn cube_shadow_map_side_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f, side
 	debug_assert!(v < cube_shadow_map.size);
 	let texel_address = (u + v * cube_shadow_map.size) as usize;
 	let value = unsafe { debug_only_checked_fetch(&cube_shadow_map.sides[side as usize], texel_address) };
-	return if depth >= value { 1.0 } else { 0.0 };
+	// HACK! Correct depth to compensate inaccurate calculation and avoid false self-shadowing.
+	if depth * (1.0 + 1.0 / 1024.0) >= value { 1.0 } else { 0.0 }
 }
 
 fn get_specular_intensity(vec_to_camera_reflected_light_angle_cos: f32, glossiness_scaled: f32) -> f32
