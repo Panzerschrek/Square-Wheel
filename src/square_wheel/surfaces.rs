@@ -481,8 +481,9 @@ fn build_surface_impl_5_static_params<
 
 			let texel_value = unsafe { debug_only_checked_fetch(src_line, src_u as usize) };
 
-			let mut total_light_albedo_modulated = [0.0, 0.0, 0.0];
-			let mut total_light_direct = [0.0, 0.0, 0.0];
+			// Use 4-component vectors for colors in order to help compiler in vectorization.
+			let mut total_light_albedo_modulated = [0.0, 0.0, 0.0, 0.0];
+			let mut total_light_direct = [0.0, 0.0, 0.0, 0.0];
 			if LIGHTAP_SCALE_LOG2 != NO_LIGHTMAP_SCALE
 			{
 				let lightmap_base_u = dst_u + lightmap_tc_shift[0];
@@ -496,7 +497,9 @@ fn build_surface_impl_5_static_params<
 
 				if SPECULAR_TYPE == SPECULAR_TYPE_NONE
 				{
-					total_light_albedo_modulated = LightmapElementOpsT::get_constant_component(&l_mixed);
+					let constant_component = LightmapElementOpsT::get_constant_component(&l_mixed);
+					total_light_albedo_modulated =
+						[constant_component[0], constant_component[1], constant_component[2], 0.0];
 					if let Some(directional_component) = LightmapElementOpsT::get_directional_component(&l_mixed)
 					{
 						let dot = if USE_NORMAL_MAP
@@ -507,11 +510,17 @@ fn build_surface_impl_5_static_params<
 						{
 							directional_component.vector_scaled.z
 						};
-						for i in 0 .. 3
-						{
-							total_light_albedo_modulated[i] =
-								f32::mul_add(directional_component.color[i], dot, total_light_albedo_modulated[i]);
-						}
+
+						total_light_albedo_modulated = vec4_scalar_mul_add(
+							[
+								directional_component.color[0],
+								directional_component.color[1],
+								directional_component.color[2],
+								0.0,
+							],
+							dot,
+							total_light_albedo_modulated,
+						);
 					}
 				}
 				else
@@ -556,14 +565,11 @@ fn build_surface_impl_5_static_params<
 					let one_minus_specular_k = 1.0 - specular_k;
 
 					let constant_component = LightmapElementOpsT::get_constant_component(&l_mixed);
+					let constant_component4 =
+						[constant_component[0], constant_component[1], constant_component[2], 0.0];
 
-					total_light_albedo_modulated[0] = constant_component[0] * one_minus_specular_k;
-					total_light_albedo_modulated[1] = constant_component[1] * one_minus_specular_k;
-					total_light_albedo_modulated[2] = constant_component[2] * one_minus_specular_k;
-
-					total_light_direct[0] = constant_component[0] * specular_k;
-					total_light_direct[1] = constant_component[1] * specular_k;
-					total_light_direct[2] = constant_component[2] * specular_k;
+					total_light_albedo_modulated = vec4_scalar_mul(constant_component4, one_minus_specular_k);
+					total_light_direct = vec4_scalar_mul(constant_component4, specular_k);
 
 					if let Some(directional_component) = LightmapElementOpsT::get_directional_component(&l_mixed)
 					{
@@ -585,82 +591,36 @@ fn build_surface_impl_5_static_params<
 							glossiness_corrected_scaled,
 						);
 
+						let color4 = [
+							directional_component.color[0],
+							directional_component.color[1],
+							directional_component.color[2],
+							0.0,
+						];
 						if SPECULAR_TYPE == SPECULAR_TYPE_DIELECTRIC
 						{
 							let diffuse_intensity =
 								directional_component.vector_scaled.dot(texel_value.normal).max(0.0);
 
 							let light_intensity_diffuse = diffuse_intensity * one_minus_specular_k;
-							total_light_albedo_modulated[0] = f32::mul_add(
-								directional_component.color[0],
-								light_intensity_diffuse,
-								total_light_albedo_modulated[0],
-							);
-							total_light_albedo_modulated[1] = f32::mul_add(
-								directional_component.color[1],
-								light_intensity_diffuse,
-								total_light_albedo_modulated[1],
-							);
-							total_light_albedo_modulated[2] = f32::mul_add(
-								directional_component.color[2],
-								light_intensity_diffuse,
-								total_light_albedo_modulated[2],
-							);
+							total_light_albedo_modulated =
+								vec4_scalar_mul_add(color4, light_intensity_diffuse, total_light_albedo_modulated);
 
 							let light_intensity_specular = specular_intensity * specular_k * direction_vec_len;
-							total_light_direct[0] = f32::mul_add(
-								directional_component.color[0],
-								light_intensity_specular,
-								total_light_direct[0],
-							);
-							total_light_direct[1] = f32::mul_add(
-								directional_component.color[1],
-								light_intensity_specular,
-								total_light_direct[1],
-							);
-							total_light_direct[2] = f32::mul_add(
-								directional_component.color[2],
-								light_intensity_specular,
-								total_light_direct[2],
-							);
+							total_light_direct =
+								vec4_scalar_mul_add(color4, light_intensity_specular, total_light_direct);
 						}
 						else if SPECULAR_TYPE == SPECULAR_TYPE_METAL
 						{
 							let specular_intensity_scale_factor = specular_intensity * direction_vec_len;
 
 							let light_intensity_modulated = one_minus_specular_k * specular_intensity_scale_factor;
-							total_light_albedo_modulated[0] = f32::mul_add(
-								directional_component.color[0],
-								light_intensity_modulated,
-								total_light_albedo_modulated[0],
-							);
-							total_light_albedo_modulated[1] = f32::mul_add(
-								directional_component.color[1],
-								light_intensity_modulated,
-								total_light_albedo_modulated[1],
-							);
-							total_light_albedo_modulated[2] = f32::mul_add(
-								directional_component.color[2],
-								light_intensity_modulated,
-								total_light_albedo_modulated[2],
-							);
+							total_light_albedo_modulated =
+								vec4_scalar_mul_add(color4, light_intensity_modulated, total_light_albedo_modulated);
 
 							let light_intensity_direct = specular_k * specular_intensity_scale_factor;
-							total_light_direct[0] = f32::mul_add(
-								directional_component.color[0],
-								light_intensity_direct,
-								total_light_direct[0],
-							);
-							total_light_direct[1] = f32::mul_add(
-								directional_component.color[1],
-								light_intensity_direct,
-								total_light_direct[1],
-							);
-							total_light_direct[2] = f32::mul_add(
-								directional_component.color[2],
-								light_intensity_direct,
-								total_light_direct[2],
-							);
+							total_light_direct =
+								vec4_scalar_mul_add(color4, light_intensity_direct, total_light_direct);
 						}
 					} // If has directional component.
 				} // If specular material.
@@ -748,35 +708,24 @@ fn build_surface_impl_5_static_params<
 						get_specular_intensity(vec_to_camera_reflected_light_angle_cos, glossiness_scaled)
 					};
 
+					let color4 = [light.color[0], light.color[1], light.color[2], 0.0];
 					match SPECULAR_TYPE
 					{
 						SPECULAR_TYPE_NONE =>
 						{
-							total_light_albedo_modulated[0] =
-								f32::mul_add(light.color[0], shadow_distance_factor, total_light_albedo_modulated[0]);
-							total_light_albedo_modulated[1] =
-								f32::mul_add(light.color[1], shadow_distance_factor, total_light_albedo_modulated[1]);
-							total_light_albedo_modulated[2] =
-								f32::mul_add(light.color[2], shadow_distance_factor, total_light_albedo_modulated[2]);
+							total_light_albedo_modulated =
+								vec4_scalar_mul_add(color4, shadow_distance_factor, total_light_albedo_modulated);
 						},
 						SPECULAR_TYPE_DIELECTRIC =>
 						{
 							let light_intensity_diffuse =
 								diffuse_intensity * (1.0 - specular_k) * shadow_distance_factor;
-							total_light_albedo_modulated[0] =
-								f32::mul_add(light.color[0], light_intensity_diffuse, total_light_albedo_modulated[0]);
-							total_light_albedo_modulated[1] =
-								f32::mul_add(light.color[1], light_intensity_diffuse, total_light_albedo_modulated[1]);
-							total_light_albedo_modulated[2] =
-								f32::mul_add(light.color[2], light_intensity_diffuse, total_light_albedo_modulated[2]);
+							total_light_albedo_modulated =
+								vec4_scalar_mul_add(color4, light_intensity_diffuse, total_light_albedo_modulated);
 
 							let light_intensity_specular = specular_intensity * specular_k * shadow_distance_factor;
-							total_light_direct[0] =
-								f32::mul_add(light.color[0], light_intensity_specular, total_light_direct[0]);
-							total_light_direct[1] =
-								f32::mul_add(light.color[1], light_intensity_specular, total_light_direct[1]);
-							total_light_direct[2] =
-								f32::mul_add(light.color[2], light_intensity_specular, total_light_direct[2]);
+							total_light_direct =
+								vec4_scalar_mul_add(color4, light_intensity_specular, total_light_direct);
 						},
 						SPECULAR_TYPE_METAL =>
 						{
@@ -784,29 +733,12 @@ fn build_surface_impl_5_static_params<
 
 							let light_intensity_modulated =
 								(1.0 - specular_k) * specular_intensity_shadow_distance_factor;
-							total_light_albedo_modulated[0] = f32::mul_add(
-								light.color[0],
-								light_intensity_modulated,
-								total_light_albedo_modulated[0],
-							);
-							total_light_albedo_modulated[1] = f32::mul_add(
-								light.color[1],
-								light_intensity_modulated,
-								total_light_albedo_modulated[1],
-							);
-							total_light_albedo_modulated[2] = f32::mul_add(
-								light.color[2],
-								light_intensity_modulated,
-								total_light_albedo_modulated[2],
-							);
+							total_light_albedo_modulated =
+								vec4_scalar_mul_add(color4, light_intensity_modulated, total_light_albedo_modulated);
 
 							let light_intensity_direct = specular_k * specular_intensity_shadow_distance_factor;
-							total_light_direct[0] =
-								f32::mul_add(light.color[0], light_intensity_direct, total_light_direct[0]);
-							total_light_direct[1] =
-								f32::mul_add(light.color[1], light_intensity_direct, total_light_direct[1]);
-							total_light_direct[2] =
-								f32::mul_add(light.color[2], light_intensity_direct, total_light_direct[2]);
+							total_light_direct =
+								vec4_scalar_mul_add(color4, light_intensity_direct, total_light_direct);
 						},
 						_ =>
 						{
@@ -816,22 +748,33 @@ fn build_surface_impl_5_static_params<
 				} // For dynamic lights.
 			} // If use dynmic lights.
 
-			let color_components = texel_value.diffuse.unpack_to_rgb_f32();
-
-			let mut result_color_components = [0.0, 0.0, 0.0];
-			for i in 0 .. 3
+			let max_rgb_f32_components = [
+				Color32::MAX_RGB_F32_COMPONENTS[0],
+				Color32::MAX_RGB_F32_COMPONENTS[1],
+				Color32::MAX_RGB_F32_COMPONENTS[2],
+				0.0,
+			];
+			let color_components_3 = texel_value.diffuse.unpack_to_rgb_f32();
+			let mut result_color_components = vec4_mul(
+				[color_components_3[0], color_components_3[1], color_components_3[2], 0.0],
+				total_light_albedo_modulated,
+			);
+			if SPECULAR_TYPE != SPECULAR_TYPE_NONE
 			{
-				let mut c = color_components[i] * total_light_albedo_modulated[i];
-				if SPECULAR_TYPE != SPECULAR_TYPE_NONE
-				{
-					c = f32::mul_add(total_light_direct[i], Color32::MAX_RGB_F32_COMPONENTS[i], c);
-				}
-				result_color_components[i] = c.min(Color32::MAX_RGB_F32_COMPONENTS[i]);
+				result_color_components =
+					vec4_mul_add(total_light_direct, max_rgb_f32_components, result_color_components);
 			}
+			result_color_components = vec4_min(result_color_components, max_rgb_f32_components);
 
 			// Here we 100% sure that components overflow is not possible (because of "min").
 			// NaNs are not possible here too.
-			let color_packed = unsafe { Color32::from_rgb_f32_unchecked(&result_color_components) };
+			let color_packed = unsafe {
+				Color32::from_rgb_f32_unchecked(&[
+					result_color_components[0],
+					result_color_components[1],
+					result_color_components[2],
+				])
+			};
 
 			*dst_texel = color_packed;
 			src_u += 1;
@@ -1108,6 +1051,36 @@ fn inv_fast(x: f32) -> f32
 fn inv_fast(x: f32) -> f32
 {
 	1.0 / x
+}
+
+fn vec4_mul(x: [f32; 4], y: [f32; 4]) -> [f32; 4]
+{
+	[x[0] * y[0], x[1] * y[1], x[2] * y[2], x[3] * y[3]]
+}
+
+fn vec4_scalar_mul(x: [f32; 4], y: f32) -> [f32; 4]
+{
+	[x[0] * y, x[1] * y, x[2] * y, x[3] * y]
+}
+
+fn vec4_mul_add(x: [f32; 4], y: [f32; 4], z: [f32; 4]) -> [f32; 4]
+{
+	[
+		f32::mul_add(x[0], y[0], z[0]),
+		f32::mul_add(x[1], y[1], z[1]),
+		f32::mul_add(x[2], y[2], z[2]),
+		f32::mul_add(x[3], y[3], z[3]),
+	]
+}
+
+fn vec4_scalar_mul_add(x: [f32; 4], y: f32, z: [f32; 4]) -> [f32; 4]
+{
+	vec4_mul_add(x, [y, y, y, y], z)
+}
+
+fn vec4_min(x: [f32; 4], y: [f32; 4]) -> [f32; 4]
+{
+	[x[0].min(y[0]), x[1].min(y[1]), x[2].min(y[2]), x[3].min(y[3])]
 }
 
 unsafe fn debug_only_checked_fetch<T: Copy>(data: &[T], address: usize) -> T
