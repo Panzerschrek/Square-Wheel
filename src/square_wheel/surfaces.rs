@@ -423,12 +423,12 @@ fn build_surface_impl_5_static_params<
 		u_vec * ((surface_tc_min[0]) as f32 + 0.5) +
 		v_vec * ((surface_tc_min[1]) as f32 + 0.5);
 
-	let plane_normal_normalized = plane.vec * inv_sqrt_fast(plane.vec.magnitude2());
+	let plane_normal_normalized = plane.vec * inv_sqrt_fast(vec3_len2(&plane.vec));
 
 	// Use texture basis vectors as basis for normal transformation.
 	// This may be inaccurate if texture is non-uniformly stretched or shifted, but it is still fine for most cases.
-	let u_vec_normalized = u_vec * inv_sqrt_fast(u_vec.magnitude2().max(MIN_POSITIVE_VALUE));
-	let v_vec_normalized = v_vec * inv_sqrt_fast(v_vec.magnitude2().max(MIN_POSITIVE_VALUE));
+	let u_vec_normalized = u_vec * inv_sqrt_fast(vec3_len2(&u_vec).max(MIN_POSITIVE_VALUE));
+	let v_vec_normalized = v_vec * inv_sqrt_fast(vec3_len2(&v_vec).max(MIN_POSITIVE_VALUE));
 
 	// TODO - use uninitialized memory instead.
 	let mut line_lightmap = unsafe {
@@ -478,10 +478,10 @@ fn build_surface_impl_5_static_params<
 		let src_line = &texture.pixels[src_line_start .. src_line_start + (texture.size[0] as usize)];
 		let mut src_u = surface_tc_min[0].rem_euclid(texture.size[0] as i32);
 		let mut dst_u = 0;
-		let start_pos_v = start_pos + (dst_v as f32) * v_vec;
+		let start_pos_v = vec3_scalar_mul_add(&v_vec, dst_v as f32, &start_pos);
 		for dst_texel in dst_line.iter_mut()
 		{
-			let pos = start_pos_v + (dst_u as f32) * u_vec;
+			let pos = vec3_scalar_mul_add(&u_vec, dst_u as f32, &start_pos_v);
 
 			let texel_value = unsafe { debug_only_checked_fetch(src_line, src_u as usize) };
 
@@ -512,7 +512,7 @@ fn build_surface_impl_5_static_params<
 					{
 						let dot = if USE_NORMAL_MAP
 						{
-							directional_component.vector_scaled.dot(texel_value.normal).max(0.0)
+							vec3_dot(&directional_component.vector_scaled, &texel_value.normal).max(0.0)
 						}
 						else
 						{
@@ -544,15 +544,15 @@ fn build_surface_impl_5_static_params<
 
 					let vec_to_camera = cam_pos - pos;
 					let vec_to_camera_texture_space = Vec3f::new(
-						vec_to_camera.dot(u_vec_normalized),
-						vec_to_camera.dot(v_vec_normalized),
-						vec_to_camera.dot(plane_normal_normalized),
+						vec3_dot(&vec_to_camera, &u_vec_normalized),
+						vec3_dot(&vec_to_camera, &v_vec_normalized),
+						vec3_dot(&vec_to_camera, &plane_normal_normalized),
 					);
 
-					let vec_to_camera_normal_dot = vec_to_camera_texture_space.dot(normal);
+					let vec_to_camera_normal_dot = vec3_dot(&vec_to_camera_texture_space, &normal);
 					let vec_to_camera_reflected =
 						normal * (2.0 * vec_to_camera_normal_dot) - vec_to_camera_texture_space;
-					let vec_to_camera_len2 = vec_to_camera_reflected.magnitude2().max(MIN_POSITIVE_VALUE);
+					let vec_to_camera_len2 = vec3_len2(&vec_to_camera_reflected).max(MIN_POSITIVE_VALUE);
 
 					let vec_to_camera_normal_angle_cos =
 						(vec_to_camera_normal_dot * inv_sqrt_fast(vec_to_camera_len2)).max(0.0);
@@ -581,12 +581,12 @@ fn build_surface_impl_5_static_params<
 
 					if let Some(directional_component) = LightmapElementOpsT::get_directional_component(&l_mixed)
 					{
-						let direction_vec_len2 = directional_component.vector_scaled.magnitude2();
+						let direction_vec_len2 = vec3_len2(&directional_component.vector_scaled);
 						let direction_vec_len = direction_vec_len2 * inv_sqrt_fast(direction_vec_len2);
 
-						let vec_to_camera_reflected_light_angle_cos = vec_to_camera_reflected
-							.dot(directional_component.vector_scaled) *
-							inv_sqrt_fast(vec_to_camera_len2 * direction_vec_len2);
+						let vec_to_camera_reflected_light_angle_cos =
+							vec3_dot(&vec_to_camera_reflected, &directional_component.vector_scaled) *
+								inv_sqrt_fast(vec_to_camera_len2 * direction_vec_len2);
 
 						// Make glossiness smaller for light with large deviation.
 						let glossiness_corrected_scaled = inv_fast(
@@ -608,7 +608,7 @@ fn build_surface_impl_5_static_params<
 						if SPECULAR_TYPE == SPECULAR_TYPE_DIELECTRIC
 						{
 							let diffuse_intensity =
-								directional_component.vector_scaled.dot(texel_value.normal).max(0.0);
+								vec3_dot(&directional_component.vector_scaled, &texel_value.normal).max(0.0);
 
 							let light_intensity_diffuse = diffuse_intensity * one_minus_specular_k;
 							total_light_albedo_modulated =
@@ -639,9 +639,35 @@ fn build_surface_impl_5_static_params<
 				let normal = if USE_NORMAL_MAP
 				{
 					// Normal transformed to world space.
-					texel_value.normal.x * u_vec_normalized +
-						texel_value.normal.y * v_vec_normalized +
-						texel_value.normal.z * plane_normal_normalized
+					Vec3f::new(
+						f32::mul_add(
+							texel_value.normal.x,
+							u_vec_normalized.x,
+							f32::mul_add(
+								texel_value.normal.y,
+								v_vec_normalized.x,
+								texel_value.normal.z * plane_normal_normalized.x,
+							),
+						),
+						f32::mul_add(
+							texel_value.normal.x,
+							u_vec_normalized.y,
+							f32::mul_add(
+								texel_value.normal.y,
+								v_vec_normalized.y,
+								texel_value.normal.z * plane_normal_normalized.y,
+							),
+						),
+						f32::mul_add(
+							texel_value.normal.x,
+							u_vec_normalized.z,
+							f32::mul_add(
+								texel_value.normal.y,
+								v_vec_normalized.z,
+								texel_value.normal.z * plane_normal_normalized.z,
+							),
+						),
+					)
 				}
 				else
 				{
@@ -656,9 +682,9 @@ fn build_surface_impl_5_static_params<
 					// Calculate reflected view angle and fresnel factor based on it.
 					// Use these data later for calculation o specular light for all dynamic lights.
 					let vec_to_camera = cam_pos - pos;
-					let vec_to_camera_normal_dot = vec_to_camera.dot(normal);
+					let vec_to_camera_normal_dot = vec3_dot(&vec_to_camera, &normal);
 					vec_to_camera_reflected = normal * (2.0 * vec_to_camera_normal_dot) - vec_to_camera;
-					vec_to_camera_len2 = vec_to_camera_reflected.magnitude2().max(MIN_POSITIVE_VALUE);
+					vec_to_camera_len2 = vec3_len2(&vec_to_camera_reflected).max(MIN_POSITIVE_VALUE);
 
 					let vec_to_camera_normal_angle_cos =
 						(vec_to_camera_normal_dot * inv_sqrt_fast(vec_to_camera_len2)).max(0.0);
@@ -689,7 +715,7 @@ fn build_surface_impl_5_static_params<
 					let vec_to_light = light.pos - pos;
 
 					let shadow_factor = cube_shadow_map_fetch(shadow_cube_map, &vec_to_light);
-					let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
+					let vec_to_light_len2 = vec3_len2(&vec_to_light).max(MIN_POSITIVE_VALUE);
 					let shadow_distance_factor = shadow_factor * inv_fast(vec_to_light_len2);
 
 					let diffuse_intensity = if SPECULAR_TYPE == SPECULAR_TYPE_METAL
@@ -699,7 +725,7 @@ fn build_surface_impl_5_static_params<
 					}
 					else
 					{
-						(normal.dot(vec_to_light) * inv_sqrt_fast(vec_to_light_len2)).max(0.0)
+						(vec3_dot(&normal, &vec_to_light) * inv_sqrt_fast(vec_to_light_len2)).max(0.0)
 					};
 
 					let specular_intensity = if SPECULAR_TYPE == SPECULAR_TYPE_NONE
@@ -709,7 +735,7 @@ fn build_surface_impl_5_static_params<
 					}
 					else
 					{
-						let vec_to_camera_reflected_light_angle_cos = vec_to_camera_reflected.dot(vec_to_light) *
+						let vec_to_camera_reflected_light_angle_cos = vec3_dot(&vec_to_camera_reflected, &vec_to_light) *
 							inv_sqrt_fast(vec_to_camera_len2 * vec_to_light_len2);
 
 						let glossiness_scaled = GLOSSINESS_SCALE * texel_value.glossiness;
@@ -721,8 +747,11 @@ fn build_surface_impl_5_static_params<
 					{
 						SPECULAR_TYPE_NONE =>
 						{
-							total_light_albedo_modulated =
-								vec4_scalar_mul_add(color4, shadow_distance_factor, total_light_albedo_modulated);
+							total_light_albedo_modulated = vec4_scalar_mul_add(
+								color4,
+								diffuse_intensity * shadow_distance_factor,
+								total_light_albedo_modulated,
+							);
 						},
 						SPECULAR_TYPE_DIELECTRIC =>
 						{
@@ -1089,6 +1118,27 @@ fn vec4_scalar_mul_add(x: [f32; 4], y: f32, z: [f32; 4]) -> [f32; 4]
 fn vec4_min(x: [f32; 4], y: [f32; 4]) -> [f32; 4]
 {
 	[x[0].min(y[0]), x[1].min(y[1]), x[2].min(y[2]), x[3].min(y[3])]
+}
+
+// Faster version of dot product, because it uses "mul_add".
+fn vec3_dot(a: &Vec3f, b: &Vec3f) -> f32
+{
+	f32::mul_add(a.x, b.x, f32::mul_add(a.y, b.y, a.z * b.z))
+}
+
+// Faster than naive vec = a * scalar + b, because of "mul_add".
+fn vec3_scalar_mul_add(a: &Vec3f, scalar: f32, b: &Vec3f) -> Vec3f
+{
+	Vec3f::new(
+		f32::mul_add(a.x, scalar, b.x),
+		f32::mul_add(a.y, scalar, b.y),
+		f32::mul_add(a.z, scalar, b.z),
+	)
+}
+
+fn vec3_len2(v: &Vec3f) -> f32
+{
+	vec3_dot(v, v)
 }
 
 unsafe fn debug_only_checked_fetch<T: Copy>(data: &[T], address: usize) -> T
