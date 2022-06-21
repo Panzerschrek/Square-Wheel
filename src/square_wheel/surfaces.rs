@@ -449,7 +449,11 @@ fn build_surface_impl_5_static_params<
 			let lightmap_v = lightmap_base_v >> LIGHTAP_SCALE_LOG2;
 			let lightmap_v_plus_one = lightmap_v + 1;
 			debug_assert!(lightmap_v_plus_one < lightmap_size[1]);
-			let k = ((lightmap_base_v & lightmap_fetch_mask) as f32) * inv_lightmap_scale_f + k_shift;
+			let k = f32::mul_add(
+				(lightmap_base_v & lightmap_fetch_mask) as f32,
+				inv_lightmap_scale_f,
+				k_shift,
+			);
 			let base_lightmap_address = lightmap_v * lightmap_size[0];
 			for ((dst, l0), l1) in line_lightmap
 				.iter_mut()
@@ -492,7 +496,11 @@ fn build_surface_impl_5_static_params<
 				debug_assert!(lightmap_u_plus_one < lightmap_size[0]);
 				let l0 = unsafe { debug_only_checked_fetch(&line_lightmap, lightmap_u as usize) };
 				let l1 = unsafe { debug_only_checked_fetch(&line_lightmap, lightmap_u_plus_one as usize) };
-				let k = ((lightmap_base_u & lightmap_fetch_mask) as f32) * inv_lightmap_scale_f + k_shift;
+				let k = f32::mul_add(
+					(lightmap_base_u & lightmap_fetch_mask) as f32,
+					inv_lightmap_scale_f,
+					k_shift,
+				);
 				let l_mixed = LightmapElementOpsT::mix(&l1, &l0, k);
 
 				if SPECULAR_TYPE == SPECULAR_TYPE_NONE
