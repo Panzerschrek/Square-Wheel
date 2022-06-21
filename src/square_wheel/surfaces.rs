@@ -509,7 +509,8 @@ fn build_surface_impl_5_static_params<
 						};
 						for i in 0 .. 3
 						{
-							total_light_albedo_modulated[i] += directional_component.color[i] * dot;
+							total_light_albedo_modulated[i] =
+								f32::mul_add(directional_component.color[i], dot, total_light_albedo_modulated[i]);
 						}
 					}
 				}
@@ -590,31 +591,76 @@ fn build_surface_impl_5_static_params<
 								directional_component.vector_scaled.dot(texel_value.normal).max(0.0);
 
 							let light_intensity_diffuse = diffuse_intensity * one_minus_specular_k;
-							total_light_albedo_modulated[0] += directional_component.color[0] * light_intensity_diffuse;
-							total_light_albedo_modulated[1] += directional_component.color[1] * light_intensity_diffuse;
-							total_light_albedo_modulated[2] += directional_component.color[2] * light_intensity_diffuse;
+							total_light_albedo_modulated[0] = f32::mul_add(
+								directional_component.color[0],
+								light_intensity_diffuse,
+								total_light_albedo_modulated[0],
+							);
+							total_light_albedo_modulated[1] = f32::mul_add(
+								directional_component.color[1],
+								light_intensity_diffuse,
+								total_light_albedo_modulated[1],
+							);
+							total_light_albedo_modulated[2] = f32::mul_add(
+								directional_component.color[2],
+								light_intensity_diffuse,
+								total_light_albedo_modulated[2],
+							);
 
 							let light_intensity_specular = specular_intensity * specular_k * direction_vec_len;
-							total_light_direct[0] += directional_component.color[0] * light_intensity_specular;
-							total_light_direct[1] += directional_component.color[1] * light_intensity_specular;
-							total_light_direct[2] += directional_component.color[2] * light_intensity_specular;
+							total_light_direct[0] = f32::mul_add(
+								directional_component.color[0],
+								light_intensity_specular,
+								total_light_direct[0],
+							);
+							total_light_direct[1] = f32::mul_add(
+								directional_component.color[1],
+								light_intensity_specular,
+								total_light_direct[1],
+							);
+							total_light_direct[2] = f32::mul_add(
+								directional_component.color[2],
+								light_intensity_specular,
+								total_light_direct[2],
+							);
 						}
 						else if SPECULAR_TYPE == SPECULAR_TYPE_METAL
 						{
 							let specular_intensity_scale_factor = specular_intensity * direction_vec_len;
 
 							let light_intensity_modulated = one_minus_specular_k * specular_intensity_scale_factor;
-							total_light_albedo_modulated[0] +=
-								directional_component.color[0] * light_intensity_modulated;
-							total_light_albedo_modulated[1] +=
-								directional_component.color[1] * light_intensity_modulated;
-							total_light_albedo_modulated[2] +=
-								directional_component.color[2] * light_intensity_modulated;
+							total_light_albedo_modulated[0] = f32::mul_add(
+								directional_component.color[0],
+								light_intensity_modulated,
+								total_light_albedo_modulated[0],
+							);
+							total_light_albedo_modulated[1] = f32::mul_add(
+								directional_component.color[1],
+								light_intensity_modulated,
+								total_light_albedo_modulated[1],
+							);
+							total_light_albedo_modulated[2] = f32::mul_add(
+								directional_component.color[2],
+								light_intensity_modulated,
+								total_light_albedo_modulated[2],
+							);
 
 							let light_intensity_direct = specular_k * specular_intensity_scale_factor;
-							total_light_direct[0] += directional_component.color[0] * light_intensity_direct;
-							total_light_direct[1] += directional_component.color[1] * light_intensity_direct;
-							total_light_direct[2] += directional_component.color[2] * light_intensity_direct;
+							total_light_direct[0] = f32::mul_add(
+								directional_component.color[0],
+								light_intensity_direct,
+								total_light_direct[0],
+							);
+							total_light_direct[1] = f32::mul_add(
+								directional_component.color[1],
+								light_intensity_direct,
+								total_light_direct[1],
+							);
+							total_light_direct[2] = f32::mul_add(
+								directional_component.color[2],
+								light_intensity_direct,
+								total_light_direct[2],
+							);
 						}
 					} // If has directional component.
 				} // If specular material.
@@ -706,22 +752,31 @@ fn build_surface_impl_5_static_params<
 					{
 						SPECULAR_TYPE_NONE =>
 						{
-							total_light_albedo_modulated[0] += light.color[0] * shadow_distance_factor;
-							total_light_albedo_modulated[1] += light.color[1] * shadow_distance_factor;
-							total_light_albedo_modulated[2] += light.color[2] * shadow_distance_factor;
+							total_light_albedo_modulated[0] =
+								f32::mul_add(light.color[0], shadow_distance_factor, total_light_albedo_modulated[0]);
+							total_light_albedo_modulated[1] =
+								f32::mul_add(light.color[1], shadow_distance_factor, total_light_albedo_modulated[1]);
+							total_light_albedo_modulated[2] =
+								f32::mul_add(light.color[2], shadow_distance_factor, total_light_albedo_modulated[2]);
 						},
 						SPECULAR_TYPE_DIELECTRIC =>
 						{
 							let light_intensity_diffuse =
 								diffuse_intensity * (1.0 - specular_k) * shadow_distance_factor;
-							total_light_albedo_modulated[0] += light.color[0] * light_intensity_diffuse;
-							total_light_albedo_modulated[1] += light.color[1] * light_intensity_diffuse;
-							total_light_albedo_modulated[2] += light.color[2] * light_intensity_diffuse;
+							total_light_albedo_modulated[0] =
+								f32::mul_add(light.color[0], light_intensity_diffuse, total_light_albedo_modulated[0]);
+							total_light_albedo_modulated[1] =
+								f32::mul_add(light.color[1], light_intensity_diffuse, total_light_albedo_modulated[1]);
+							total_light_albedo_modulated[2] =
+								f32::mul_add(light.color[2], light_intensity_diffuse, total_light_albedo_modulated[2]);
 
 							let light_intensity_specular = specular_intensity * specular_k * shadow_distance_factor;
-							total_light_direct[0] += light.color[0] * light_intensity_specular;
-							total_light_direct[1] += light.color[1] * light_intensity_specular;
-							total_light_direct[2] += light.color[2] * light_intensity_specular;
+							total_light_direct[0] =
+								f32::mul_add(light.color[0], light_intensity_specular, total_light_direct[0]);
+							total_light_direct[1] =
+								f32::mul_add(light.color[1], light_intensity_specular, total_light_direct[1]);
+							total_light_direct[2] =
+								f32::mul_add(light.color[2], light_intensity_specular, total_light_direct[2]);
 						},
 						SPECULAR_TYPE_METAL =>
 						{
@@ -729,14 +784,29 @@ fn build_surface_impl_5_static_params<
 
 							let light_intensity_modulated =
 								(1.0 - specular_k) * specular_intensity_shadow_distance_factor;
-							total_light_albedo_modulated[0] += light.color[0] * light_intensity_modulated;
-							total_light_albedo_modulated[1] += light.color[1] * light_intensity_modulated;
-							total_light_albedo_modulated[2] += light.color[2] * light_intensity_modulated;
+							total_light_albedo_modulated[0] = f32::mul_add(
+								light.color[0],
+								light_intensity_modulated,
+								total_light_albedo_modulated[0],
+							);
+							total_light_albedo_modulated[1] = f32::mul_add(
+								light.color[1],
+								light_intensity_modulated,
+								total_light_albedo_modulated[1],
+							);
+							total_light_albedo_modulated[2] = f32::mul_add(
+								light.color[2],
+								light_intensity_modulated,
+								total_light_albedo_modulated[2],
+							);
 
 							let light_intensity_direct = specular_k * specular_intensity_shadow_distance_factor;
-							total_light_direct[0] += light.color[0] * light_intensity_direct;
-							total_light_direct[1] += light.color[1] * light_intensity_direct;
-							total_light_direct[2] += light.color[2] * light_intensity_direct;
+							total_light_direct[0] =
+								f32::mul_add(light.color[0], light_intensity_direct, total_light_direct[0]);
+							total_light_direct[1] =
+								f32::mul_add(light.color[1], light_intensity_direct, total_light_direct[1]);
+							total_light_direct[2] =
+								f32::mul_add(light.color[2], light_intensity_direct, total_light_direct[2]);
 						},
 						_ =>
 						{
@@ -754,7 +824,7 @@ fn build_surface_impl_5_static_params<
 				let mut c = color_components[i] * total_light_albedo_modulated[i];
 				if SPECULAR_TYPE != SPECULAR_TYPE_NONE
 				{
-					c += total_light_direct[i] * Color32::MAX_RGB_F32_COMPONENTS[i];
+					c = f32::mul_add(total_light_direct[i], Color32::MAX_RGB_F32_COMPONENTS[i], c);
 				}
 				result_color_components[i] = c.min(Color32::MAX_RGB_F32_COMPONENTS[i]);
 			}
@@ -802,9 +872,9 @@ impl LightmapElementOps for LightmapElementOpsSimple
 	{
 		let one_minus_ratio = 1.0 - ratio;
 		[
-			a[0] * ratio + b[0] * one_minus_ratio,
-			a[1] * ratio + b[1] * one_minus_ratio,
-			a[2] * ratio + b[2] * one_minus_ratio,
+			f32::mul_add(a[0], ratio, b[0] * one_minus_ratio),
+			f32::mul_add(a[1], ratio, b[1] * one_minus_ratio),
+			f32::mul_add(a[2], ratio, b[2] * one_minus_ratio),
 		]
 	}
 
@@ -829,18 +899,48 @@ impl LightmapElementOps for LightmapElementOpsDirectional
 		let one_minus_ratio = 1.0 - ratio;
 		Self::LightmapElement {
 			ambient_light: [
-				a.ambient_light[0] * ratio + b.ambient_light[0] * one_minus_ratio,
-				a.ambient_light[1] * ratio + b.ambient_light[1] * one_minus_ratio,
-				a.ambient_light[2] * ratio + b.ambient_light[2] * one_minus_ratio,
+				f32::mul_add(a.ambient_light[0], ratio, b.ambient_light[0] * one_minus_ratio),
+				f32::mul_add(a.ambient_light[1], ratio, b.ambient_light[1] * one_minus_ratio),
+				f32::mul_add(a.ambient_light[2], ratio, b.ambient_light[2] * one_minus_ratio),
 			],
-			light_direction_vector_scaled: a.light_direction_vector_scaled * ratio +
-				b.light_direction_vector_scaled * one_minus_ratio,
-			directional_light_deviation: a.directional_light_deviation * ratio +
+			light_direction_vector_scaled: Vec3f::new(
+				f32::mul_add(
+					a.light_direction_vector_scaled.x,
+					ratio,
+					b.light_direction_vector_scaled.x * one_minus_ratio,
+				),
+				f32::mul_add(
+					a.light_direction_vector_scaled.y,
+					ratio,
+					b.light_direction_vector_scaled.y * one_minus_ratio,
+				),
+				f32::mul_add(
+					a.light_direction_vector_scaled.z,
+					ratio,
+					b.light_direction_vector_scaled.z * one_minus_ratio,
+				),
+			),
+			directional_light_deviation: f32::mul_add(
+				a.directional_light_deviation,
+				ratio,
 				b.directional_light_deviation * one_minus_ratio,
+			),
 			directional_light_color: [
-				a.directional_light_color[0] * ratio + b.directional_light_color[0] * one_minus_ratio,
-				a.directional_light_color[1] * ratio + b.directional_light_color[1] * one_minus_ratio,
-				a.directional_light_color[2] * ratio + b.directional_light_color[2] * one_minus_ratio,
+				f32::mul_add(
+					a.directional_light_color[0],
+					ratio,
+					b.directional_light_color[0] * one_minus_ratio,
+				),
+				f32::mul_add(
+					a.directional_light_color[1],
+					ratio,
+					b.directional_light_color[1] * one_minus_ratio,
+				),
+				f32::mul_add(
+					a.directional_light_color[2],
+					ratio,
+					b.directional_light_color[2] * one_minus_ratio,
+				),
 			],
 		}
 	}
@@ -907,8 +1007,8 @@ fn cube_shadow_map_side_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f, side
 
 	let depth = inv_fast(vec.z.max(MIN_POSITIVE_VALUE));
 	let half_depth = 0.5 * depth;
-	let u_f = (vec.x * half_depth + 0.5).max(0.0).min(ONE_MINUS_EPS) * cubemap_size_f;
-	let v_f = (vec.y * half_depth + 0.5).max(0.0).min(ONE_MINUS_EPS) * cubemap_size_f;
+	let u_f = f32::mul_add(vec.x, half_depth, 0.5).max(0.0).min(ONE_MINUS_EPS) * cubemap_size_f;
+	let v_f = f32::mul_add(vec.y, half_depth, 0.5).max(0.0).min(ONE_MINUS_EPS) * cubemap_size_f;
 	// It is safe to use "unsafe" f32 to int conversion, since NaN and Inf is not possible here.
 	let u = unsafe { u_f.to_int_unchecked::<u32>() };
 	let v = unsafe { v_f.to_int_unchecked::<u32>() };
@@ -924,7 +1024,7 @@ fn get_specular_intensity(vec_to_camera_reflected_light_angle_cos: f32, glossine
 	// This formula is not physically-correct but it gives good results.
 	let x = ((vec_to_camera_reflected_light_angle_cos - 1.0) * glossiness_scaled).max(-2.0);
 	// Shouldn't we use squared scaled glossiness here?
-	(x * (x * 0.25 + 1.0) + 1.0) * glossiness_scaled
+	f32::mul_add(x, f32::mul_add(x, 0.25, 1.0), 1.0) * glossiness_scaled
 }
 
 fn get_fresnel_factor_base(vec_to_camera_normal_angle_cos: f32) -> f32
@@ -938,18 +1038,30 @@ fn get_fresnel_factor_base(vec_to_camera_normal_angle_cos: f32) -> f32
 
 fn get_specular_k_dielectric(fresnel_factor_base: f32, glossiness: f32) -> f32
 {
-	let fresnel_factor = DIELECTRIC_ZERO_REFLECTIVITY + (1.0 - DIELECTRIC_ZERO_REFLECTIVITY) * fresnel_factor_base;
+	let fresnel_factor = f32::mul_add(
+		fresnel_factor_base,
+		1.0 - DIELECTRIC_ZERO_REFLECTIVITY,
+		DIELECTRIC_ZERO_REFLECTIVITY,
+	);
 
 	// For glossy surface we can just use Fresnel factor for diffuse/specular mixing.
 	// But for rough srufaces we can't. Normally we should use some sort of integral of Schlick's approximation.
 	// But it's too expensive. So, just make mix of Fresnel factor depending on view angle with constant factor for absolutely rough surface.
 	// TODO - us non-linear glossiness here?
-	fresnel_factor * glossiness + DIELECTRIC_AVERAGE_REFLECTIVITY * (1.0 - glossiness)
+	f32::mul_add(
+		fresnel_factor,
+		glossiness,
+		DIELECTRIC_AVERAGE_REFLECTIVITY * (1.0 - glossiness),
+	)
 }
 
 fn get_specular_k_metal(fresnel_factor_base: f32, glossiness: f32) -> f32
 {
-	fresnel_factor_base * glossiness + METAL_AVERAGE_SCHLICK_FACTOR * (1.0 - glossiness)
+	f32::mul_add(
+		fresnel_factor_base,
+		glossiness,
+		METAL_AVERAGE_SCHLICK_FACTOR * (1.0 - glossiness),
+	)
 }
 
 const MIN_POSITIVE_VALUE: f32 = 1.0 / ((1 << 30) as f32);
