@@ -485,9 +485,8 @@ fn build_surface_impl_5_static_params<
 
 			let texel_value = unsafe { debug_only_checked_fetch(src_line, src_u as usize) };
 
-			// Use 4-component vectors for colors in order to help compiler in vectorization.
-			let mut total_light_albedo_modulated = [0.0, 0.0, 0.0, 0.0];
-			let mut total_light_direct = [0.0, 0.0, 0.0, 0.0];
+			let mut total_light_albedo_modulated = ColorVec::zero();
+			let mut total_light_direct = ColorVec::zero();
 			if LIGHTAP_SCALE_LOG2 != NO_LIGHTMAP_SCALE
 			{
 				let lightmap_base_u = dst_u + lightmap_tc_shift[0];
@@ -505,9 +504,8 @@ fn build_surface_impl_5_static_params<
 
 				if SPECULAR_TYPE == SPECULAR_TYPE_NONE
 				{
-					let constant_component = LightmapElementOpsT::get_constant_component(&l_mixed);
 					total_light_albedo_modulated =
-						[constant_component[0], constant_component[1], constant_component[2], 0.0];
+						ColorVec::from_color_f32x3(&LightmapElementOpsT::get_constant_component(&l_mixed));
 					if let Some(directional_component) = LightmapElementOpsT::get_directional_component(&l_mixed)
 					{
 						let dot = if USE_NORMAL_MAP
@@ -519,15 +517,10 @@ fn build_surface_impl_5_static_params<
 							directional_component.vector_scaled.z
 						};
 
-						total_light_albedo_modulated = vec4_scalar_mul_add(
-							[
-								directional_component.color[0],
-								directional_component.color[1],
-								directional_component.color[2],
-								0.0,
-							],
+						total_light_albedo_modulated = ColorVec::mul_scalar_add(
+							&ColorVec::from_color_f32x3(&directional_component.color),
 							dot,
-							total_light_albedo_modulated,
+							&total_light_albedo_modulated,
 						);
 					}
 				}
@@ -572,12 +565,11 @@ fn build_surface_impl_5_static_params<
 					};
 					let one_minus_specular_k = 1.0 - specular_k;
 
-					let constant_component = LightmapElementOpsT::get_constant_component(&l_mixed);
-					let constant_component4 =
-						[constant_component[0], constant_component[1], constant_component[2], 0.0];
+					let constant_component =
+						ColorVec::from_color_f32x3(&LightmapElementOpsT::get_constant_component(&l_mixed));
 
-					total_light_albedo_modulated = vec4_scalar_mul(constant_component4, one_minus_specular_k);
-					total_light_direct = vec4_scalar_mul(constant_component4, specular_k);
+					total_light_albedo_modulated = ColorVec::scalar_mul(&constant_component, one_minus_specular_k);
+					total_light_direct = ColorVec::scalar_mul(&constant_component, specular_k);
 
 					if let Some(directional_component) = LightmapElementOpsT::get_directional_component(&l_mixed)
 					{
@@ -599,36 +591,43 @@ fn build_surface_impl_5_static_params<
 							glossiness_corrected_scaled,
 						);
 
-						let color4 = [
-							directional_component.color[0],
-							directional_component.color[1],
-							directional_component.color[2],
-							0.0,
-						];
+						let directional_component_color = ColorVec::from_color_f32x3(&directional_component.color);
 						if SPECULAR_TYPE == SPECULAR_TYPE_DIELECTRIC
 						{
 							let diffuse_intensity =
 								vec3_dot(&directional_component.vector_scaled, &texel_value.normal).max(0.0);
 
 							let light_intensity_diffuse = diffuse_intensity * one_minus_specular_k;
-							total_light_albedo_modulated =
-								vec4_scalar_mul_add(color4, light_intensity_diffuse, total_light_albedo_modulated);
+							total_light_albedo_modulated = ColorVec::mul_scalar_add(
+								&directional_component_color,
+								light_intensity_diffuse,
+								&total_light_albedo_modulated,
+							);
 
 							let light_intensity_specular = specular_intensity * specular_k * direction_vec_len;
-							total_light_direct =
-								vec4_scalar_mul_add(color4, light_intensity_specular, total_light_direct);
+							total_light_direct = ColorVec::mul_scalar_add(
+								&directional_component_color,
+								light_intensity_specular,
+								&total_light_direct,
+							);
 						}
 						else if SPECULAR_TYPE == SPECULAR_TYPE_METAL
 						{
 							let specular_intensity_scale_factor = specular_intensity * direction_vec_len;
 
 							let light_intensity_modulated = one_minus_specular_k * specular_intensity_scale_factor;
-							total_light_albedo_modulated =
-								vec4_scalar_mul_add(color4, light_intensity_modulated, total_light_albedo_modulated);
+							total_light_albedo_modulated = ColorVec::mul_scalar_add(
+								&directional_component_color,
+								light_intensity_modulated,
+								&total_light_albedo_modulated,
+							);
 
 							let light_intensity_direct = specular_k * specular_intensity_scale_factor;
-							total_light_direct =
-								vec4_scalar_mul_add(color4, light_intensity_direct, total_light_direct);
+							total_light_direct = ColorVec::mul_scalar_add(
+								&directional_component_color,
+								light_intensity_direct,
+								&total_light_direct,
+							);
 						}
 					} // If has directional component.
 				} // If specular material.
@@ -742,27 +741,30 @@ fn build_surface_impl_5_static_params<
 						get_specular_intensity(vec_to_camera_reflected_light_angle_cos, glossiness_scaled)
 					};
 
-					let color4 = [light.color[0], light.color[1], light.color[2], 0.0];
+					let light_color = ColorVec::from_color_f32x3(&light.color);
 					match SPECULAR_TYPE
 					{
 						SPECULAR_TYPE_NONE =>
 						{
-							total_light_albedo_modulated = vec4_scalar_mul_add(
-								color4,
+							total_light_albedo_modulated = ColorVec::mul_scalar_add(
+								&light_color,
 								diffuse_intensity * shadow_distance_factor,
-								total_light_albedo_modulated,
+								&total_light_albedo_modulated,
 							);
 						},
 						SPECULAR_TYPE_DIELECTRIC =>
 						{
 							let light_intensity_diffuse =
 								diffuse_intensity * (1.0 - specular_k) * shadow_distance_factor;
-							total_light_albedo_modulated =
-								vec4_scalar_mul_add(color4, light_intensity_diffuse, total_light_albedo_modulated);
+							total_light_albedo_modulated = ColorVec::mul_scalar_add(
+								&light_color,
+								light_intensity_diffuse,
+								&total_light_albedo_modulated,
+							);
 
 							let light_intensity_specular = specular_intensity * specular_k * shadow_distance_factor;
 							total_light_direct =
-								vec4_scalar_mul_add(color4, light_intensity_specular, total_light_direct);
+								ColorVec::mul_scalar_add(&light_color, light_intensity_specular, &total_light_direct);
 						},
 						SPECULAR_TYPE_METAL =>
 						{
@@ -770,12 +772,15 @@ fn build_surface_impl_5_static_params<
 
 							let light_intensity_modulated =
 								(1.0 - specular_k) * specular_intensity_shadow_distance_factor;
-							total_light_albedo_modulated =
-								vec4_scalar_mul_add(color4, light_intensity_modulated, total_light_albedo_modulated);
+							total_light_albedo_modulated = ColorVec::mul_scalar_add(
+								&light_color,
+								light_intensity_modulated,
+								&total_light_albedo_modulated,
+							);
 
 							let light_intensity_direct = specular_k * specular_intensity_shadow_distance_factor;
 							total_light_direct =
-								vec4_scalar_mul_add(color4, light_intensity_direct, total_light_direct);
+								ColorVec::mul_scalar_add(&light_color, light_intensity_direct, &total_light_direct);
 						},
 						_ =>
 						{
@@ -785,35 +790,16 @@ fn build_surface_impl_5_static_params<
 				} // For dynamic lights.
 			} // If use dynmic lights.
 
-			let max_rgb_f32_components = [
-				Color32::MAX_RGB_F32_COMPONENTS[0],
-				Color32::MAX_RGB_F32_COMPONENTS[1],
-				Color32::MAX_RGB_F32_COMPONENTS[2],
-				0.0,
-			];
-			let color_components_3 = texel_value.diffuse.unpack_to_rgb_f32();
-			let mut result_color_components = vec4_mul(
-				[color_components_3[0], color_components_3[1], color_components_3[2], 0.0],
-				total_light_albedo_modulated,
+			let mut result_color = ColorVec::mul(
+				&ColorVec::from_color32(texel_value.diffuse),
+				&total_light_albedo_modulated,
 			);
 			if SPECULAR_TYPE != SPECULAR_TYPE_NONE
 			{
-				result_color_components =
-					vec4_mul_add(total_light_direct, max_rgb_f32_components, result_color_components);
+				result_color = ColorVec::mul_scalar_add(&result_color, 255.0, &total_light_direct);
 			}
-			result_color_components = vec4_min(result_color_components, max_rgb_f32_components);
 
-			// Here we 100% sure that components overflow is not possible (because of "min").
-			// NaNs are not possible here too.
-			let color_packed = unsafe {
-				Color32::from_rgb_f32_unchecked(&[
-					result_color_components[0],
-					result_color_components[1],
-					result_color_components[2],
-				])
-			};
-
-			*dst_texel = color_packed;
+			*dst_texel = result_color.into_color32();
 			src_u += 1;
 			if src_u == (texture.size[0] as i32)
 			{
@@ -997,7 +983,14 @@ fn cube_shadow_map_side_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f, side
 	let texel_address = (u + v * cube_shadow_map.size) as usize;
 	let value = unsafe { debug_only_checked_fetch(&cube_shadow_map.sides[side as usize], texel_address) };
 	// HACK! Correct depth to compensate inaccurate calculation and avoid false self-shadowing.
-	if depth * (1.0 + 1.0 / 1024.0) >= value { 1.0 } else { 0.0 }
+	if depth * (1.0 + 1.0 / 1024.0) >= value
+	{
+		1.0
+	}
+	else
+	{
+		0.0
+	}
 }
 
 fn get_specular_intensity(vec_to_camera_reflected_light_angle_cos: f32, glossiness_scaled: f32) -> f32
@@ -1091,36 +1084,6 @@ fn inv_fast(x: f32) -> f32
 	1.0 / x
 }
 
-fn vec4_mul(x: [f32; 4], y: [f32; 4]) -> [f32; 4]
-{
-	[x[0] * y[0], x[1] * y[1], x[2] * y[2], x[3] * y[3]]
-}
-
-fn vec4_scalar_mul(x: [f32; 4], y: f32) -> [f32; 4]
-{
-	[x[0] * y, x[1] * y, x[2] * y, x[3] * y]
-}
-
-fn vec4_mul_add(x: [f32; 4], y: [f32; 4], z: [f32; 4]) -> [f32; 4]
-{
-	[
-		f32::mul_add(x[0], y[0], z[0]),
-		f32::mul_add(x[1], y[1], z[1]),
-		f32::mul_add(x[2], y[2], z[2]),
-		f32::mul_add(x[3], y[3], z[3]),
-	]
-}
-
-fn vec4_scalar_mul_add(x: [f32; 4], y: f32, z: [f32; 4]) -> [f32; 4]
-{
-	vec4_mul_add(x, [y, y, y, y], z)
-}
-
-fn vec4_min(x: [f32; 4], y: [f32; 4]) -> [f32; 4]
-{
-	[x[0].min(y[0]), x[1].min(y[1]), x[2].min(y[2]), x[3].min(y[3])]
-}
-
 // Faster version of dot product, because it uses "mul_add".
 fn vec3_dot(a: &Vec3f, b: &Vec3f) -> f32
 {
@@ -1141,6 +1104,163 @@ fn vec3_len2(v: &Vec3f) -> f32
 {
 	vec3_dot(v, v)
 }
+
+#[cfg(not(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse")))]
+mod color_vec
+{
+	use super::*;
+
+	// TODO - maybe use here array of 3 floats?
+	#[repr(C, align(32))]
+	pub struct ColorVec([f32; 4]);
+
+	impl ColorVec
+	{
+		pub fn zero() -> Self
+		{
+			Self([0.0, 0.0, 0.0, 0.0])
+		}
+
+		pub fn from_color32(c: Color32) -> Self
+		{
+			let mut res = [0.0; 4];
+			for i in 0 .. 4
+			{
+				res[i] = ((c.get_raw() >> (i * 8)) & 0xFF) as f32;
+			}
+			Self(res)
+		}
+
+		pub fn into_color32(&self) -> Color32
+		{
+			// Here we 100% sure that components overflow is not possible (because of "min").
+			// NaNs are not possible here too.
+			let mut res = 0;
+			unsafe {
+				for i in 0 .. 4
+				{
+					res |= self.0[i].min(255.0).to_int_unchecked::<u32>() << (i * 8);
+				}
+			}
+			Color32::from_raw(res)
+		}
+
+		pub fn from_color_f32x3(c: &[f32; 3]) -> Self
+		{
+			Self([c[0], c[1], c[2], 0.0])
+		}
+
+		pub fn mul(&self, other: &Self) -> Self
+		{
+			Self([
+				self.0[0] * other.0[0],
+				self.0[1] * other.0[1],
+				self.0[2] * other.0[2],
+				self.0[3] * other.0[3],
+			])
+		}
+
+		pub fn scalar_mul(&self, scalar: f32) -> Self
+		{
+			Self([
+				self.0[0] * scalar,
+				self.0[1] * scalar,
+				self.0[2] * scalar,
+				self.0[3] * scalar,
+			])
+		}
+
+		pub fn add(&self, other: &Self) -> Self
+		{
+			Self([
+				self.0[0] + other.0[0],
+				self.0[1] + other.0[1],
+				self.0[2] + other.0[2],
+				self.0[3] + other.0[3],
+			])
+		}
+
+		pub fn mul_scalar_add(&self, scalar: f32, b: &Self) -> Self
+		{
+			Self([
+				f32::mul_add(self.0[0], scalar, b.0[0]),
+				f32::mul_add(self.0[1], scalar, b.0[1]),
+				f32::mul_add(self.0[2], scalar, b.0[2]),
+				f32::mul_add(self.0[3], scalar, b.0[3]),
+			])
+		}
+	}
+} // mod color_vec
+
+#[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
+mod color_vec
+{
+	use super::*;
+	use core::arch::x86_64::*;
+
+	#[repr(C, align(32))]
+	pub struct ColorVec(__m128);
+
+	impl ColorVec
+	{
+		pub fn zero() -> Self
+		{
+			unsafe { Self(_mm_setzero_ps()) }
+		}
+
+		pub fn from_color32(c: Color32) -> Self
+		{
+			unsafe {
+				// TODO - find more compact way to convert [u8; 4] into [u32; 4].
+				let color_32bit = c.get_raw() as i32; // TODO - use unchecked cast here
+				let values_8bit = _mm_cvtsi32_si128(color_32bit);
+				let zero = _mm_setzero_si128();
+				let values_16bit = _mm_unpacklo_epi8(values_8bit, zero);
+				let values_32bit = _mm_unpacklo_epi8(values_16bit, zero);
+				let values_f4 = _mm_cvtepi32_ps(values_32bit);
+				Self(values_f4)
+			}
+		}
+
+		pub fn into_color32(&self) -> Color32
+		{
+			// Here we 100% sure that components overflow is not possible (because of "min").
+			// NaNs are not possible here too.
+			unsafe {
+				// TODO - find more compact way to convert [u32; 4] into [u8; 4].
+				let values_clamped = _mm_min_ps(self.0, _mm_set_ps(255.0, 255.0, 255.0, 255.0));
+				let values_32bit = _mm_cvtps_epi32(values_clamped);
+				let zero = _mm_setzero_si128();
+				let values_16bit = _mm_packus_epi32(values_32bit, zero);
+				let values_8bit = _mm_packus_epi16(values_16bit, zero);
+				let color_32bit = _mm_cvtsi128_si32(values_8bit);
+				Color32::from_raw(color_32bit as u32) // TODO - use unchecked cast here
+			}
+		}
+
+		pub fn from_color_f32x3(c: &[f32; 3]) -> Self
+		{
+			unsafe { Self(_mm_set_ps(0.0, c[0], c[1], c[2])) }
+		}
+
+		pub fn mul(&self, other: &Self) -> Self
+		{
+			unsafe { Self(_mm_mul_ps(self.0, other.0)) }
+		}
+
+		pub fn scalar_mul(&self, scalar: f32) -> Self
+		{
+			unsafe { Self(_mm_mul_ps(self.0, _mm_broadcastss_ps(_mm_set1_ps(scalar)))) }
+		}
+
+		pub fn mul_scalar_add(&self, scalar: f32, b: &Self) -> Self
+		{
+			unsafe { Self(_mm_fmadd_ps(self.0, _mm_broadcastss_ps(_mm_set1_ps(scalar)), b.0)) }
+		}
+	}
+} // mod color_vec
+
+use color_vec::*;
 
 unsafe fn debug_only_checked_fetch<T: Copy>(data: &[T], address: usize) -> T
 {

@@ -23,6 +23,16 @@ impl Color32
 		Color32(((a as u32) << 24) | ((r as u32) << 16) | ((g as u32) << 8) | (b as u32))
 	}
 
+	pub fn from_raw(raw: u32) -> Self
+	{
+		Color32(raw)
+	}
+
+	pub fn get_raw(self) -> u32
+	{
+		self.0
+	}
+
 	pub fn get_inverted(self) -> Self
 	{
 		Color32(!self.0)
