@@ -39,7 +39,7 @@ mod fast_math_impl
 		{
 			unsafe {
 				// TODO - find more compact way to convert [u8; 4] into [u32; 4].
-				let color_32bit = c.get_raw() as i32; // TODO - use unchecked cast here
+				let color_32bit = c.get_raw() as i32;
 				let values_8bit = _mm_cvtsi32_si128(color_32bit);
 				let zero = _mm_setzero_si128();
 				let values_16bit = _mm_unpacklo_epi8(values_8bit, zero);
@@ -61,7 +61,7 @@ mod fast_math_impl
 				let values_16bit = _mm_packus_epi32(values_32bit, zero);
 				let values_8bit = _mm_packus_epi16(values_16bit, zero);
 				let color_32bit = _mm_cvtsi128_si32(values_8bit);
-				Color32::from_raw(color_32bit as u32) // TODO - use unchecked cast here
+				Color32::from_raw(color_32bit as u32)
 			}
 		}
 
