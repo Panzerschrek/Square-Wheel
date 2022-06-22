@@ -796,7 +796,7 @@ fn build_surface_impl_5_static_params<
 			);
 			if SPECULAR_TYPE != SPECULAR_TYPE_NONE
 			{
-				result_color = ColorVec::mul_scalar_add(&result_color, 255.0, &total_light_direct);
+				result_color = ColorVec::mul_scalar_add(&total_light_direct, 255.0, &result_color);
 			}
 
 			*dst_texel = result_color.into_color32();
