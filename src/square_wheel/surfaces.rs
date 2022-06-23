@@ -484,6 +484,7 @@ fn build_surface_impl_5_static_params<
 			let pos = vec3_scalar_mul_add(&u_vec, dst_u as f32, &start_pos_v);
 
 			let texel_value = unsafe { debug_only_checked_fetch(src_line, src_u as usize) };
+			let (texel_normal, texel_glossiness) = texel_value.packed_normal_glossiness.unpack();
 
 			let mut total_light_albedo_modulated = ColorVec::zero();
 			let mut total_light_direct = ColorVec::zero();
@@ -510,7 +511,7 @@ fn build_surface_impl_5_static_params<
 					{
 						let dot = if USE_NORMAL_MAP
 						{
-							vec3_dot(&directional_component.vector_scaled, &texel_value.normal).max(0.0)
+							vec3_dot(&directional_component.vector_scaled, &texel_normal).max(0.0)
 						}
 						else
 						{
@@ -528,7 +529,7 @@ fn build_surface_impl_5_static_params<
 				{
 					let normal = if USE_NORMAL_MAP
 					{
-						texel_value.normal
+						texel_normal
 					}
 					else
 					{
@@ -553,11 +554,11 @@ fn build_surface_impl_5_static_params<
 
 					let specular_k = if SPECULAR_TYPE == SPECULAR_TYPE_DIELECTRIC
 					{
-						get_specular_k_dielectric(fresnel_factor_base, texel_value.glossiness)
+						get_specular_k_dielectric(fresnel_factor_base, texel_glossiness)
 					}
 					else if SPECULAR_TYPE == SPECULAR_TYPE_METAL
 					{
-						get_specular_k_metal(fresnel_factor_base, texel_value.glossiness)
+						get_specular_k_metal(fresnel_factor_base, texel_glossiness)
 					}
 					else
 					{
@@ -581,10 +582,9 @@ fn build_surface_impl_5_static_params<
 								inv_sqrt_fast(vec_to_camera_len2 * direction_vec_len2);
 
 						// Make glossiness smaller for light with large deviation.
-						let glossiness_corrected_scaled = inv_fast(
-							inv_fast(GLOSSINESS_SCALE * texel_value.glossiness) + directional_component.deviation,
-						)
-						.max(0.75);
+						let glossiness_corrected_scaled =
+							inv_fast(inv_fast(GLOSSINESS_SCALE * texel_glossiness) + directional_component.deviation)
+								.max(0.75);
 
 						let specular_intensity = get_specular_intensity(
 							vec_to_camera_reflected_light_angle_cos,
@@ -595,7 +595,7 @@ fn build_surface_impl_5_static_params<
 						if SPECULAR_TYPE == SPECULAR_TYPE_DIELECTRIC
 						{
 							let diffuse_intensity =
-								vec3_dot(&directional_component.vector_scaled, &texel_value.normal).max(0.0);
+								vec3_dot(&directional_component.vector_scaled, &texel_normal).max(0.0);
 
 							let light_intensity_diffuse = diffuse_intensity * one_minus_specular_k;
 							total_light_albedo_modulated = ColorVec::mul_scalar_add(
@@ -640,30 +640,30 @@ fn build_surface_impl_5_static_params<
 					// Normal transformed to world space.
 					Vec3f::new(
 						f32::mul_add(
-							texel_value.normal.x,
+							texel_normal.x,
 							u_vec_normalized.x,
 							f32::mul_add(
-								texel_value.normal.y,
+								texel_normal.y,
 								v_vec_normalized.x,
-								texel_value.normal.z * plane_normal_normalized.x,
+								texel_normal.z * plane_normal_normalized.x,
 							),
 						),
 						f32::mul_add(
-							texel_value.normal.x,
+							texel_normal.x,
 							u_vec_normalized.y,
 							f32::mul_add(
-								texel_value.normal.y,
+								texel_normal.y,
 								v_vec_normalized.y,
-								texel_value.normal.z * plane_normal_normalized.y,
+								texel_normal.z * plane_normal_normalized.y,
 							),
 						),
 						f32::mul_add(
-							texel_value.normal.x,
+							texel_normal.x,
 							u_vec_normalized.z,
 							f32::mul_add(
-								texel_value.normal.y,
+								texel_normal.y,
 								v_vec_normalized.z,
-								texel_value.normal.z * plane_normal_normalized.z,
+								texel_normal.z * plane_normal_normalized.z,
 							),
 						),
 					)
@@ -691,11 +691,11 @@ fn build_surface_impl_5_static_params<
 					let fresnel_factor_base = get_fresnel_factor_base(vec_to_camera_normal_angle_cos);
 					specular_k = if SPECULAR_TYPE == SPECULAR_TYPE_DIELECTRIC
 					{
-						get_specular_k_dielectric(fresnel_factor_base, texel_value.glossiness)
+						get_specular_k_dielectric(fresnel_factor_base, texel_glossiness)
 					}
 					else if SPECULAR_TYPE == SPECULAR_TYPE_METAL
 					{
-						get_specular_k_metal(fresnel_factor_base, texel_value.glossiness)
+						get_specular_k_metal(fresnel_factor_base, texel_glossiness)
 					}
 					else
 					{
@@ -737,7 +737,7 @@ fn build_surface_impl_5_static_params<
 						let vec_to_camera_reflected_light_angle_cos = vec3_dot(&vec_to_camera_reflected, &vec_to_light) *
 							inv_sqrt_fast(vec_to_camera_len2 * vec_to_light_len2);
 
-						let glossiness_scaled = GLOSSINESS_SCALE * texel_value.glossiness;
+						let glossiness_scaled = GLOSSINESS_SCALE * texel_glossiness;
 						get_specular_intensity(vec_to_camera_reflected_light_angle_cos, glossiness_scaled)
 					};
 

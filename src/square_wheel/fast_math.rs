@@ -25,6 +25,42 @@ mod fast_math_impl
 		unsafe { _mm_cvtss_f32(_mm_rcp_ss(_mm_set1_ps(x))) }
 	}
 
+	// Pack 4 floats into 4 signed bytes.
+	pub fn pack_f32x4_into_bytes(v: &[f32; 4], pack_scale: &[f32; 4]) -> i32
+	{
+		unsafe {
+			let values_f = _mm_set_ps(v[3], v[2], v[1], v[0]);
+			let scale = _mm_set_ps(pack_scale[3], pack_scale[2], pack_scale[1], pack_scale[0]);
+			let values_scaled = _mm_mul_ps(values_f, scale);
+			let values_32bit = _mm_cvtps_epi32(values_scaled);
+			let zero = _mm_setzero_si128();
+			let values_16bit = _mm_packs_epi32(values_32bit, zero);
+			let values_8bit = _mm_packs_epi16(values_16bit, zero);
+			let values_packed = _mm_cvtsi128_si32(values_8bit);
+			values_packed
+		}
+	}
+
+	// Unpak 4 signed bytes to floats.
+	pub fn upack_bytes_into_f32x4(b: i32, unpack_scale: &[f32; 4]) -> [f32; 4]
+	{
+		unsafe {
+			let values_8bit = _mm_cvtsi32_si128(b);
+			let zero = _mm_setzero_si128();
+			let values_16bit = _mm_unpacklo_epi8(values_8bit, zero);
+			let values_32bit = _mm_unpacklo_epi8(values_16bit, zero);
+			let values_f4 = _mm_cvtepi32_ps(values_32bit);
+			let scale = _mm_set_ps(unpack_scale[3], unpack_scale[2], unpack_scale[1], unpack_scale[0]);
+			let values_scaled = _mm_mul_ps(values_f4, scale);
+			[
+				f32::from_bits(_mm_extract_ps(values_scaled, 0) as u32),
+				f32::from_bits(_mm_extract_ps(values_scaled, 1) as u32),
+				f32::from_bits(_mm_extract_ps(values_scaled, 2) as u32),
+				f32::from_bits(_mm_extract_ps(values_scaled, 3) as u32),
+			]
+		}
+	}
+
 	#[repr(C, align(32))]
 	pub struct ColorVec(__m128);
 
