@@ -484,7 +484,24 @@ fn build_surface_impl_5_static_params<
 			let pos = vec3_scalar_mul_add(&u_vec, dst_u as f32, &start_pos_v);
 
 			let texel_value = unsafe { debug_only_checked_fetch(src_line, src_u as usize) };
-			let (texel_normal, texel_glossiness) = texel_value.packed_normal_glossiness.unpack();
+			let (texel_normal, texel_glossiness) = if USE_NORMAL_MAP
+			{
+				texel_value.packed_normal_glossiness.unpack()
+			}
+			else
+			{
+				if SPECULAR_TYPE == SPECULAR_TYPE_NONE
+				{
+					(Vec3f::unit_z(), 0.0)
+				}
+				else
+				{
+					(
+						Vec3f::unit_z(),
+						texel_value.packed_normal_glossiness.unpack_glossiness(),
+					)
+				}
+			};
 
 			let mut total_light_albedo_modulated = ColorVec::zero();
 			let mut total_light_direct = ColorVec::zero();

@@ -58,6 +58,11 @@ impl PackedNormalGlossiness
 			values_unpacked[3],
 		)
 	}
+
+	pub fn unpack_glossiness(&self) -> f32
+	{
+		(self.0 >> 24) as f32 * (1.0 / GLOSSINESS_SCALE)
+	}
 }
 
 const NORMAL_SCALE: f32 = 127.0;
