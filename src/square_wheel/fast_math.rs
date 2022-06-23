@@ -72,12 +72,9 @@ mod fast_math_impl
 		pub fn from_color32(c: Color32) -> Self
 		{
 			unsafe {
-				// TODO - find more compact way to convert [u8; 4] into [u32; 4].
 				let color_32bit = c.get_raw() as i32;
 				let values_8bit = _mm_cvtsi32_si128(color_32bit);
-				let zero = _mm_setzero_si128();
-				let values_16bit = _mm_unpacklo_epi8(values_8bit, zero);
-				let values_32bit = _mm_unpacklo_epi8(values_16bit, zero);
+				let values_32bit = _mm_cvtepu8_epi32(values_8bit);
 				let values_f4 = _mm_cvtepi32_ps(values_32bit);
 				Self(values_f4)
 			}
@@ -88,12 +85,10 @@ mod fast_math_impl
 			// Here we 100% sure that components overflow is not possible (because of "min").
 			// NaNs are not possible here too.
 			unsafe {
-				// TODO - find more compact way to convert [u32; 4] into [u8; 4].
 				let values_clamped = _mm_min_ps(self.0, _mm_set_ps(255.0, 255.0, 255.0, 255.0));
 				let values_32bit = _mm_cvtps_epi32(values_clamped);
-				let zero = _mm_setzero_si128();
-				let values_16bit = _mm_packus_epi32(values_32bit, zero);
-				let values_8bit = _mm_packus_epi16(values_16bit, zero);
+				let shuffle_mask = _mm_set_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 12, 8, 4, 0);
+				let values_8bit = _mm_shuffle_epi8(values_32bit, shuffle_mask);
 				let color_32bit = _mm_cvtsi128_si32(values_8bit);
 				Color32::from_raw(color_32bit as u32)
 			}
