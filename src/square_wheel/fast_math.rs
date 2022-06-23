@@ -46,9 +46,7 @@ mod fast_math_impl
 	{
 		unsafe {
 			let values_8bit = _mm_cvtsi32_si128(b);
-			let zero = _mm_setzero_si128();
-			let values_16bit = _mm_unpacklo_epi8(values_8bit, zero);
-			let values_32bit = _mm_unpacklo_epi8(values_16bit, zero);
+			let values_32bit = _mm_cvtepi8_epi32(values_8bit);
 			let values_f4 = _mm_cvtepi32_ps(values_32bit);
 			let scale = _mm_set_ps(unpack_scale[3], unpack_scale[2], unpack_scale[1], unpack_scale[0]);
 			let values_scaled = _mm_mul_ps(values_f4, scale);
