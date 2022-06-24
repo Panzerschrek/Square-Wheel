@@ -35,6 +35,7 @@ pub struct Renderer
 struct RendererPerformanceCounters
 {
 	frame_duration: PerformanceCounter,
+	materials_update: PerformanceCounter,
 	visible_leafs_search: PerformanceCounter,
 	surfaces_preparation: PerformanceCounter,
 	rasterization: PerformanceCounter,
@@ -47,6 +48,7 @@ impl RendererPerformanceCounters
 		let window_size = 100;
 		Self {
 			frame_duration: PerformanceCounter::new(window_size),
+			materials_update: PerformanceCounter::new(window_size),
 			visible_leafs_search: PerformanceCounter::new(window_size),
 			surfaces_preparation: PerformanceCounter::new(window_size),
 			rasterization: PerformanceCounter::new(window_size),
@@ -104,10 +106,21 @@ impl Renderer
 		camera_matrices: &CameraMatrices,
 		inline_models_index: &InlineModelsIndex,
 		test_lights: &[PointLight],
+		frame_time_s: f32,
 	)
 	{
 		self.synchronize_config();
 		self.update_mip_bias();
+
+		let materials_update_start_time = Clock::now();
+
+		self.materials_processor.update(frame_time_s);
+
+		let materials_update_end_time = Clock::now();
+		let materials_update_duration_s = (materials_update_end_time - materials_update_start_time).as_secs_f32();
+		self.performance_counters
+			.materials_update
+			.add_value(materials_update_duration_s);
 
 		let frame_start_time = Clock::now();
 		self.current_frame.next();
@@ -141,10 +154,11 @@ impl Renderer
 				pixels,
 				surface_info,
 				&format!(
-					"frame time: {:04.2}ms\nvisible leafs search: {:04.2}ms\nsurfaces preparation: \
-					 {:04.2}ms\nrasterization: {:04.2}ms\nleafs: {}/{}\nmodels parts: {}\npolygons: {}\nsurfaces \
-					 pixels: {}k\nmip bias: {:04.2}\n",
+					"frame time: {:04.2}ms\nmaterials update: {:04.2}ms\nvisible leafs search: {:04.2}ms\nsurfaces \
+					 preparation: {:04.2}ms\nrasterization: {:04.2}ms\nleafs: {}/{}\nmodels parts: {}\npolygons: \
+					 {}\nsurfaces pixels: {}k\nmip bias: {:04.2}\n",
 					self.performance_counters.frame_duration.get_average_value() * 1000.0,
+					self.performance_counters.materials_update.get_average_value() * 1000.0,
 					self.performance_counters.visible_leafs_search.get_average_value() * 1000.0,
 					self.performance_counters.surfaces_preparation.get_average_value() * 1000.0,
 					self.performance_counters.rasterization.get_average_value() * 1000.0,

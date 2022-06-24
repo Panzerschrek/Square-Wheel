@@ -5,7 +5,7 @@ pub const MAX_MIP: usize = 3;
 pub const NUM_MIPS: usize = MAX_MIP + 1;
 pub type TextureWithMips = [Texture; NUM_MIPS];
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Texture
 {
 	pub size: [u32; 2],

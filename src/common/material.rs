@@ -50,20 +50,20 @@ pub struct Material
 
 	/// If some - use texture turbulence effect.
 	#[serde(default)]
-	turb: Option<TurbParams>,
+	pub turb: Option<TurbParams>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct TurbParams
+pub struct TurbParams
 {
 	/// In pixels.
-	amplitude: f32,
+	pub amplitude: f32,
 
 	/// In pixels.
-	wave_length: f32,
+	pub wave_length: f32,
 
 	/// In seconds.
-	frequency: f32,
+	pub frequency: f32,
 }
 
 impl Default for Material

@@ -65,6 +65,12 @@ impl Game
 		&self.test_lights
 	}
 
+	pub fn get_game_time_s(&self) -> f32
+	{
+		// TODO
+		0.0
+	}
+
 	fn process_commands(&mut self)
 	{
 		let queue_ptr_copy = self.commands_queue.clone();
