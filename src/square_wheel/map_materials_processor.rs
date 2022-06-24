@@ -62,7 +62,7 @@ impl MapMaterialsProcessor
 						*dst_mip = src_mip.clone();
 					}
 
-					make_turb_distortion(turb, current_time_s, src_mip, dst_mip);
+					make_turb_distortion(turb, current_time_s, src_mip, dst_mip, mip_index);
 				}
 			}
 		}
@@ -87,16 +87,31 @@ impl MapMaterialsProcessor
 	}
 }
 
-fn make_turb_distortion(turb: &TurbParams, current_time_s: f32, src: &Texture, dst: &mut Texture)
+fn make_turb_distortion(turb: &TurbParams, current_time_s: f32, src: &Texture, dst: &mut Texture, mip: usize)
 {
-	// TODO - perform actual turb effect.
-	for y in 0 .. src.size[1]
+	// TODO - speed-up this. Use unsfe f32 -> i32 conversion, use indexing without bounds check.
+
+	let mip_scale = 1.0 / ((1 << mip) as f32);
+	let amplitude_corrected = mip_scale * turb.amplitude;
+	let frequency_scaled = mip_scale * std::f32::consts::TAU / turb.wave_length;
+	let time_based_shift = current_time_s * turb.frequency * std::f32::consts::TAU;
+
+	let size = [src.size[0] as i32, src.size[1] as i32];
+
+	// Shift lines.
+	for y in 0 .. size[1]
 	{
-		let shift = y;
-		for x in 0 .. src.size[0]
+		let shift = (((y as f32) * frequency_scaled + time_based_shift).sin() * amplitude_corrected).round() as i32;
+
+		let start_offset = (y * size[0]) as usize;
+		let end_offset = ((y + 1) * size[0]) as usize;
+		let src_line = &src.pixels[start_offset .. end_offset];
+		let dst_line = &mut dst.pixels[start_offset .. end_offset];
+		for (dst, src_x) in dst_line.iter_mut().zip(shift .. size[0] + shift)
 		{
-			dst.pixels[((x + shift).rem_euclid(src.size[0]) + y * src.size[0]) as usize] =
-				src.pixels[(x + y * src.size[0]) as usize];
+			*dst = src_line[src_x.rem_euclid(size[0]) as usize];
 		}
 	}
+
+	// TODO - Shift columns.
 }

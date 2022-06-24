@@ -8,6 +8,7 @@ pub struct Game
 	commands_queue: commands_queue::CommandsQueuePtr<Game>,
 	camera: camera_controller::CameraController,
 	test_lights: Vec<PointLight>,
+	game_time: f32,
 }
 
 impl Game
@@ -34,6 +35,7 @@ impl Game
 			commands_queue,
 			camera: camera_controller::CameraController::new(),
 			test_lights: Vec::new(),
+			game_time: 0.0,
 		}
 	}
 
@@ -42,9 +44,10 @@ impl Game
 		self.camera.update(keyboard_state, time_delta_s);
 	}
 
-	pub fn update(&mut self, _time_delta_s: f32)
+	pub fn update(&mut self, time_delta_s: f32)
 	{
 		self.process_commands();
+		self.game_time += time_delta_s;
 	}
 
 	pub fn get_camera_matrices(&self, surface_info: &system_window::SurfaceInfo) -> CameraMatrices
@@ -67,8 +70,7 @@ impl Game
 
 	pub fn get_game_time_s(&self) -> f32
 	{
-		// TODO
-		0.0
+		self.game_time
 	}
 
 	fn process_commands(&mut self)
