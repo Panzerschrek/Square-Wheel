@@ -93,7 +93,7 @@ fn make_turb_distortion(turb: &TurbParams, current_time_s: f32, src: &Texture, d
 
 	let mip_scale = 1.0 / ((1 << mip) as f32);
 	let amplitude_corrected = mip_scale * turb.amplitude;
-	let frequency_scaled = mip_scale * std::f32::consts::TAU / turb.wave_length;
+	let frequency_scaled = std::f32::consts::TAU / (turb.wave_length * mip_scale);
 	let time_based_shift = current_time_s * turb.frequency * std::f32::consts::TAU;
 
 	let size = [src.size[0] as i32, src.size[1] as i32];
