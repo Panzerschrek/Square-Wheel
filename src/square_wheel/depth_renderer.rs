@@ -90,11 +90,14 @@ impl DepthRenderer
 			// Use depth bias in order to avoid self-shadowing.
 			const DEPTH_BIAS_CONST: f32 = -1.0 / ((1 << 20) as f32);
 			const DEPTH_BIAS_SLOPE: f32 = -1.0;
+			// Scale whole depth equation a bit in order to compensate depth calculation errors in surfaces preparation code.
+			const DEPTH_EQUATION_SCALE: f32 = 1.0 - 1.0 / 1024.0;
 			let depth_equation = DepthEquation {
-				d_inv_z_dx,
-				d_inv_z_dy,
-				k: plane_transformed.z / plane_transformed_w +
-					DEPTH_BIAS_CONST + DEPTH_BIAS_SLOPE * (d_inv_z_dx.abs() + d_inv_z_dy.abs()),
+				d_inv_z_dx: DEPTH_EQUATION_SCALE * d_inv_z_dx,
+				d_inv_z_dy: DEPTH_EQUATION_SCALE * d_inv_z_dy,
+				k: DEPTH_EQUATION_SCALE *
+					(plane_transformed.z / plane_transformed_w +
+						DEPTH_BIAS_CONST + DEPTH_BIAS_SLOPE * (d_inv_z_dx.abs() + d_inv_z_dy.abs())),
 			};
 
 			let mut vertices_transformed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
