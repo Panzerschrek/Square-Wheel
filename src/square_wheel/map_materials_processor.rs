@@ -107,13 +107,22 @@ fn make_turb_distortion(
 	let amplitude_corrected = mip_scale * turb.amplitude;
 	let frequency_scaled = std::f32::consts::TAU / (turb.wave_length * mip_scale);
 	let time_based_shift = current_time_s * turb.frequency * std::f32::consts::TAU;
+	let constant_shift = [
+		turb.scroll_speed[0] * (current_time_s * mip_scale),
+		turb.scroll_speed[1] * (current_time_s * mip_scale),
+	];
 
 	let size = [src.size[0] as i32, src.size[1] as i32];
 
 	// Shift rows.
 	for y in 0 .. size[1]
 	{
-		let shift = (((y as f32) * frequency_scaled + time_based_shift).sin() * amplitude_corrected).round() as i32;
+		let shift = f32::mul_add(
+			f32::mul_add(y as f32, frequency_scaled, time_based_shift).sin(),
+			amplitude_corrected,
+			constant_shift[0],
+		)
+		.round() as i32;
 
 		let start_offset = (y * size[0]) as usize;
 		let end_offset = ((y + 1) * size[0]) as usize;
@@ -142,7 +151,12 @@ fn make_turb_distortion(
 			*temp_dst = dst.pixels[(x + y * size[0]) as usize];
 		}
 
-		let shift = (((x as f32) * frequency_scaled + time_based_shift).sin() * amplitude_corrected).round() as i32;
+		let shift = f32::mul_add(
+			f32::mul_add(x as f32, frequency_scaled, time_based_shift).sin(),
+			amplitude_corrected,
+			constant_shift[1],
+		)
+		.round() as i32;
 
 		let mut src_y = shift.rem_euclid(size[1]);
 		for y in 0 .. size[1]

@@ -64,6 +64,10 @@ pub struct TurbParams
 
 	/// In seconds.
 	pub frequency: f32,
+
+	/// Pixels/s.
+	#[serde(default)]
+	pub scroll_speed: [f32; 2],
 }
 
 impl Default for Material
