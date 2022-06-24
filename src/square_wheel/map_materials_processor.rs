@@ -7,6 +7,7 @@ pub struct MapMaterialsProcessor
 	textures: Vec<TextureWithMips>,
 	// Store here only animated textures.
 	textures_modified: Vec<TextureWithMips>,
+	temp_buffer: Vec<TextureElement>,
 }
 
 impl MapMaterialsProcessor
@@ -41,11 +42,15 @@ impl MapMaterialsProcessor
 			materials,
 			textures,
 			textures_modified,
+			temp_buffer: Vec::new(),
 		}
 	}
 
 	pub fn update(&mut self, current_time_s: f32)
 	{
+		// TODO - maybe perform lazy update (on demand)?
+
+		// TODO - maybe use parallel for here?
 		for (material, (src_texture, dst_texture)) in self
 			.materials
 			.iter()
@@ -62,7 +67,7 @@ impl MapMaterialsProcessor
 						*dst_mip = src_mip.clone();
 					}
 
-					make_turb_distortion(turb, current_time_s, src_mip, dst_mip, mip_index);
+					make_turb_distortion(turb, current_time_s, src_mip, dst_mip, mip_index, &mut self.temp_buffer);
 				}
 			}
 		}
@@ -87,9 +92,16 @@ impl MapMaterialsProcessor
 	}
 }
 
-fn make_turb_distortion(turb: &TurbParams, current_time_s: f32, src: &Texture, dst: &mut Texture, mip: usize)
+fn make_turb_distortion(
+	turb: &TurbParams,
+	current_time_s: f32,
+	src: &Texture,
+	dst: &mut Texture,
+	mip: usize,
+	temp_buffer: &mut Vec<TextureElement>,
+)
 {
-	// TODO - speed-up this. Use unsfe f32 -> i32 conversion, use indexing without bounds check.
+	// TODO - speed-up this. Use unsafe f32 -> i32 conversion, use indexing without bounds check.
 
 	let mip_scale = 1.0 / ((1 << mip) as f32);
 	let amplitude_corrected = mip_scale * turb.amplitude;
@@ -98,7 +110,7 @@ fn make_turb_distortion(turb: &TurbParams, current_time_s: f32, src: &Texture, d
 
 	let size = [src.size[0] as i32, src.size[1] as i32];
 
-	// Shift lines.
+	// Shift rows.
 	for y in 0 .. size[1]
 	{
 		let shift = (((y as f32) * frequency_scaled + time_based_shift).sin() * amplitude_corrected).round() as i32;
@@ -113,5 +125,21 @@ fn make_turb_distortion(turb: &TurbParams, current_time_s: f32, src: &Texture, d
 		}
 	}
 
-	// TODO - Shift columns.
+	// Shift columns.
+	temp_buffer.resize(size[1] as usize, TextureElement::default());
+
+	for x in 0 .. size[0]
+	{
+		for (temp_dst, y) in temp_buffer.iter_mut().zip(0 .. size[1])
+		{
+			*temp_dst = dst.pixels[(x + y * size[0]) as usize];
+		}
+
+		let shift = (((x as f32) * frequency_scaled + time_based_shift).sin() * amplitude_corrected).round() as i32;
+
+		for y in 0 .. size[1]
+		{
+			dst.pixels[(x + y * size[0]) as usize] = temp_buffer[(y + shift).rem_euclid(size[1]) as usize];
+		}
+	}
 }
