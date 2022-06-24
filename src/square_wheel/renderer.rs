@@ -1,11 +1,11 @@
 use super::{
 	config, depth_renderer::*, draw_ordering, frame_number::*, inline_models_index::*, light::*,
-	map_visibility_calculator::*, performance_counter::*, rasterizer::*, rect_splitting, renderer_config::*,
-	shadow_map::*, surfaces::*, text_printer, textures::*,
+	map_materials_processor::*, map_visibility_calculator::*, performance_counter::*, rasterizer::*, rect_splitting,
+	renderer_config::*, shadow_map::*, surfaces::*, text_printer, textures::*,
 };
 use common::{
-	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, color::*, fixed_math::*, lightmap, material,
-	math_types::*, matrix::*, plane::*, shared_mut_slice::*, system_window,
+	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, color::*, fixed_math::*, lightmap, math_types::*,
+	matrix::*, plane::*, shared_mut_slice::*, system_window,
 };
 use rayon::prelude::*;
 use std::sync::Arc;
@@ -28,8 +28,7 @@ pub struct Renderer
 	num_visible_surfaces_pixels: usize,
 	current_frame_visible_polygons: Vec<u32>,
 	mip_bias: f32,
-	textures: Vec<TextureWithMips>,
-	map_materials: Vec<material::Material>,
+	materials_processor: MapMaterialsProcessor,
 	performance_counters: RendererPerformanceCounters,
 }
 
@@ -76,29 +75,8 @@ impl Renderer
 		let config_parsed = RendererConfig::from_app_config(&app_config);
 		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
 
-		// TODO - cache materials globally.
-		let materials = material::load_materials(&std::path::PathBuf::from(config_parsed.materials_path.clone()));
-
-		let mut map_materials = Vec::with_capacity(map.textures.len());
-		for texture_name in &map.textures
-		{
-			let material_name_string = bsp_map_compact::get_texture_string(texture_name);
-			let material = if let Some(material) = materials.get(material_name_string)
-			{
-				material.clone()
-			}
-			else
-			{
-				println!("Failed to find material \"{}\"", material_name_string);
-				material::Material::default()
-			};
-			map_materials.push(material);
-		}
-
-		let textures = load_textures(
-			&map_materials,
-			&std::path::PathBuf::from(config_parsed.textures_path.clone()),
-		);
+		let materials_processor =
+			MapMaterialsProcessor::new(&*map, &config_parsed.materials_path, &config_parsed.textures_path);
 
 		Renderer {
 			app_config,
@@ -114,8 +92,7 @@ impl Renderer
 			visibility_calculator: MapVisibilityCalculator::new(map.clone()),
 			shadows_maps_renderer: DepthRenderer::new(map.clone()),
 			map,
-			textures,
-			map_materials,
+			materials_processor,
 			performance_counters: RendererPerformanceCounters::new(),
 		}
 	}
@@ -488,7 +465,7 @@ impl Renderer
 			return;
 		}
 
-		if !self.map_materials[polygon.texture as usize].draw
+		if !self.materials_processor.get_material(polygon.texture).draw
 		{
 			// Do not prepare surfaces for invisible polygons.
 			return;
@@ -663,7 +640,7 @@ impl Renderer
 		let directional_lightmaps_data = &self.map.directional_lightmaps_data;
 		let polygons = &self.map.polygons;
 		let polygons_data = &self.polygons_data;
-		let textures = &self.textures;
+		let materials_processor = &self.materials_processor;
 
 		let use_directional_lightmap = self.config.use_directional_lightmaps && !directional_lightmaps_data.is_empty();
 
@@ -674,7 +651,7 @@ impl Renderer
 			let polygon_data = &polygons_data[polygon_index as usize];
 			let surface_size = polygon_data.surface_size;
 
-			let texture = &textures[polygon.texture as usize][polygon_data.mip as usize];
+			let texture = &materials_processor.get_texture(polygon.texture)[polygon_data.mip as usize];
 			let surface_data = unsafe {
 				&mut surfaces_pixels_shared.get()[polygon_data.surface_pixels_offset ..
 					polygon_data.surface_pixels_offset + (surface_size[0] * surface_size[1]) as usize]
