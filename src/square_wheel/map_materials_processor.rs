@@ -119,9 +119,16 @@ fn make_turb_distortion(
 		let end_offset = ((y + 1) * size[0]) as usize;
 		let src_line = &src.pixels[start_offset .. end_offset];
 		let dst_line = &mut dst.pixels[start_offset .. end_offset];
-		for (dst, src_x) in dst_line.iter_mut().zip(shift .. size[0] + shift)
+
+		let mut src_x = shift.rem_euclid(size[0]);
+		for dst in dst_line
 		{
-			*dst = src_line[src_x.rem_euclid(size[0]) as usize];
+			*dst = src_line[src_x as usize];
+			src_x += 1;
+			if src_x == size[0]
+			{
+				src_x = 0;
+			}
 		}
 	}
 
@@ -137,9 +144,15 @@ fn make_turb_distortion(
 
 		let shift = (((x as f32) * frequency_scaled + time_based_shift).sin() * amplitude_corrected).round() as i32;
 
+		let mut src_y = shift.rem_euclid(size[1]);
 		for y in 0 .. size[1]
 		{
-			dst.pixels[(x + y * size[0]) as usize] = temp_buffer[(y + shift).rem_euclid(size[1]) as usize];
+			dst.pixels[(x + y * size[0]) as usize] = temp_buffer[src_y as usize];
+			src_y += 1;
+			if src_y == size[1]
+			{
+				src_y = 0;
+			}
 		}
 	}
 }
