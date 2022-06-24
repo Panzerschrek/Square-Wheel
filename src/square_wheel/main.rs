@@ -6,6 +6,7 @@ mod config;
 mod console;
 mod depth_renderer;
 mod draw_ordering;
+mod fast_math;
 mod frame_number;
 mod host;
 mod host_config;

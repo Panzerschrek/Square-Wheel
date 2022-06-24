@@ -1,4 +1,4 @@
-use super::{light::*, shadow_map::*, textures};
+use super::{fast_math::*, light::*, shadow_map::*, textures};
 use common::{bsp_map_compact, color::*, lightmap, math_types::*, plane::*};
 
 pub type LightWithShadowMap<'a, 'b> = (&'a PointLight, &'b CubeShadowMap);
@@ -423,12 +423,12 @@ fn build_surface_impl_5_static_params<
 		u_vec * ((surface_tc_min[0]) as f32 + 0.5) +
 		v_vec * ((surface_tc_min[1]) as f32 + 0.5);
 
-	let plane_normal_normalized = plane.vec * inv_sqrt_fast(plane.vec.magnitude2());
+	let plane_normal_normalized = plane.vec * inv_sqrt_fast(vec3_len2(&plane.vec));
 
 	// Use texture basis vectors as basis for normal transformation.
 	// This may be inaccurate if texture is non-uniformly stretched or shifted, but it is still fine for most cases.
-	let u_vec_normalized = u_vec * inv_sqrt_fast(u_vec.magnitude2().max(MIN_POSITIVE_VALUE));
-	let v_vec_normalized = v_vec * inv_sqrt_fast(v_vec.magnitude2().max(MIN_POSITIVE_VALUE));
+	let u_vec_normalized = u_vec * inv_sqrt_fast(vec3_len2(&u_vec).max(MIN_POSITIVE_VALUE));
+	let v_vec_normalized = v_vec * inv_sqrt_fast(vec3_len2(&v_vec).max(MIN_POSITIVE_VALUE));
 
 	// TODO - use uninitialized memory instead.
 	let mut line_lightmap = unsafe {
@@ -449,7 +449,11 @@ fn build_surface_impl_5_static_params<
 			let lightmap_v = lightmap_base_v >> LIGHTAP_SCALE_LOG2;
 			let lightmap_v_plus_one = lightmap_v + 1;
 			debug_assert!(lightmap_v_plus_one < lightmap_size[1]);
-			let k = ((lightmap_base_v & lightmap_fetch_mask) as f32) * inv_lightmap_scale_f + k_shift;
+			let k = f32::mul_add(
+				(lightmap_base_v & lightmap_fetch_mask) as f32,
+				inv_lightmap_scale_f,
+				k_shift,
+			);
 			let base_lightmap_address = lightmap_v * lightmap_size[0];
 			for ((dst, l0), l1) in line_lightmap
 				.iter_mut()
@@ -474,15 +478,33 @@ fn build_surface_impl_5_static_params<
 		let src_line = &texture.pixels[src_line_start .. src_line_start + (texture.size[0] as usize)];
 		let mut src_u = surface_tc_min[0].rem_euclid(texture.size[0] as i32);
 		let mut dst_u = 0;
-		let start_pos_v = start_pos + (dst_v as f32) * v_vec;
+		let start_pos_v = vec3_scalar_mul_add(&v_vec, dst_v as f32, &start_pos);
 		for dst_texel in dst_line.iter_mut()
 		{
-			let pos = start_pos_v + (dst_u as f32) * u_vec;
+			let pos = vec3_scalar_mul_add(&u_vec, dst_u as f32, &start_pos_v);
 
 			let texel_value = unsafe { debug_only_checked_fetch(src_line, src_u as usize) };
+			let (texel_normal, texel_glossiness) = if USE_NORMAL_MAP
+			{
+				texel_value.packed_normal_glossiness.unpack()
+			}
+			else
+			{
+				if SPECULAR_TYPE == SPECULAR_TYPE_NONE
+				{
+					(Vec3f::unit_z(), 0.0)
+				}
+				else
+				{
+					(
+						Vec3f::unit_z(),
+						texel_value.packed_normal_glossiness.unpack_glossiness(),
+					)
+				}
+			};
 
-			let mut total_light_albedo_modulated = [0.0, 0.0, 0.0];
-			let mut total_light_direct = [0.0, 0.0, 0.0];
+			let mut total_light_albedo_modulated = ColorVec::zero();
+			let mut total_light_direct = ColorVec::zero();
 			if LIGHTAP_SCALE_LOG2 != NO_LIGHTMAP_SCALE
 			{
 				let lightmap_base_u = dst_u + lightmap_tc_shift[0];
@@ -491,33 +513,40 @@ fn build_surface_impl_5_static_params<
 				debug_assert!(lightmap_u_plus_one < lightmap_size[0]);
 				let l0 = unsafe { debug_only_checked_fetch(&line_lightmap, lightmap_u as usize) };
 				let l1 = unsafe { debug_only_checked_fetch(&line_lightmap, lightmap_u_plus_one as usize) };
-				let k = ((lightmap_base_u & lightmap_fetch_mask) as f32) * inv_lightmap_scale_f + k_shift;
+				let k = f32::mul_add(
+					(lightmap_base_u & lightmap_fetch_mask) as f32,
+					inv_lightmap_scale_f,
+					k_shift,
+				);
 				let l_mixed = LightmapElementOpsT::mix(&l1, &l0, k);
 
 				if SPECULAR_TYPE == SPECULAR_TYPE_NONE
 				{
-					total_light_albedo_modulated = LightmapElementOpsT::get_constant_component(&l_mixed);
+					total_light_albedo_modulated =
+						ColorVec::from_color_f32x3(&LightmapElementOpsT::get_constant_component(&l_mixed));
 					if let Some(directional_component) = LightmapElementOpsT::get_directional_component(&l_mixed)
 					{
 						let dot = if USE_NORMAL_MAP
 						{
-							directional_component.vector_scaled.dot(texel_value.normal).max(0.0)
+							vec3_dot(&directional_component.vector_scaled, &texel_normal).max(0.0)
 						}
 						else
 						{
 							directional_component.vector_scaled.z
 						};
-						for i in 0 .. 3
-						{
-							total_light_albedo_modulated[i] += directional_component.color[i] * dot;
-						}
+
+						total_light_albedo_modulated = ColorVec::mul_scalar_add(
+							&ColorVec::from_color_f32x3(&directional_component.color),
+							dot,
+							&total_light_albedo_modulated,
+						);
 					}
 				}
 				else
 				{
 					let normal = if USE_NORMAL_MAP
 					{
-						texel_value.normal
+						texel_normal
 					}
 					else
 					{
@@ -526,15 +555,15 @@ fn build_surface_impl_5_static_params<
 
 					let vec_to_camera = cam_pos - pos;
 					let vec_to_camera_texture_space = Vec3f::new(
-						vec_to_camera.dot(u_vec_normalized),
-						vec_to_camera.dot(v_vec_normalized),
-						vec_to_camera.dot(plane_normal_normalized),
+						vec3_dot(&vec_to_camera, &u_vec_normalized),
+						vec3_dot(&vec_to_camera, &v_vec_normalized),
+						vec3_dot(&vec_to_camera, &plane_normal_normalized),
 					);
 
-					let vec_to_camera_normal_dot = vec_to_camera_texture_space.dot(normal);
+					let vec_to_camera_normal_dot = vec3_dot(&vec_to_camera_texture_space, &normal);
 					let vec_to_camera_reflected =
 						normal * (2.0 * vec_to_camera_normal_dot) - vec_to_camera_texture_space;
-					let vec_to_camera_len2 = vec_to_camera_reflected.magnitude2().max(MIN_POSITIVE_VALUE);
+					let vec_to_camera_len2 = vec3_len2(&vec_to_camera_reflected).max(MIN_POSITIVE_VALUE);
 
 					let vec_to_camera_normal_angle_cos =
 						(vec_to_camera_normal_dot * inv_sqrt_fast(vec_to_camera_len2)).max(0.0);
@@ -542,11 +571,11 @@ fn build_surface_impl_5_static_params<
 
 					let specular_k = if SPECULAR_TYPE == SPECULAR_TYPE_DIELECTRIC
 					{
-						get_specular_k_dielectric(fresnel_factor_base, texel_value.glossiness)
+						get_specular_k_dielectric(fresnel_factor_base, texel_glossiness)
 					}
 					else if SPECULAR_TYPE == SPECULAR_TYPE_METAL
 					{
-						get_specular_k_metal(fresnel_factor_base, texel_value.glossiness)
+						get_specular_k_metal(fresnel_factor_base, texel_glossiness)
 					}
 					else
 					{
@@ -554,66 +583,68 @@ fn build_surface_impl_5_static_params<
 					};
 					let one_minus_specular_k = 1.0 - specular_k;
 
-					let constant_component = LightmapElementOpsT::get_constant_component(&l_mixed);
+					let constant_component =
+						ColorVec::from_color_f32x3(&LightmapElementOpsT::get_constant_component(&l_mixed));
 
-					total_light_albedo_modulated[0] = constant_component[0] * one_minus_specular_k;
-					total_light_albedo_modulated[1] = constant_component[1] * one_minus_specular_k;
-					total_light_albedo_modulated[2] = constant_component[2] * one_minus_specular_k;
-
-					total_light_direct[0] = constant_component[0] * specular_k;
-					total_light_direct[1] = constant_component[1] * specular_k;
-					total_light_direct[2] = constant_component[2] * specular_k;
+					total_light_albedo_modulated = ColorVec::scalar_mul(&constant_component, one_minus_specular_k);
+					total_light_direct = ColorVec::scalar_mul(&constant_component, specular_k);
 
 					if let Some(directional_component) = LightmapElementOpsT::get_directional_component(&l_mixed)
 					{
-						let direction_vec_len2 = directional_component.vector_scaled.magnitude2();
+						let direction_vec_len2 = vec3_len2(&directional_component.vector_scaled);
 						let direction_vec_len = direction_vec_len2 * inv_sqrt_fast(direction_vec_len2);
 
-						let vec_to_camera_reflected_light_angle_cos = vec_to_camera_reflected
-							.dot(directional_component.vector_scaled) *
-							inv_sqrt_fast(vec_to_camera_len2 * direction_vec_len2);
+						let vec_to_camera_reflected_light_angle_cos =
+							vec3_dot(&vec_to_camera_reflected, &directional_component.vector_scaled) *
+								inv_sqrt_fast(vec_to_camera_len2 * direction_vec_len2);
 
 						// Make glossiness smaller for light with large deviation.
-						let glossiness_corrected_scaled = (1.0 /
-							((1.0 / (GLOSSINESS_SCALE * texel_value.glossiness)) + directional_component.deviation))
-							.max(0.75);
+						let glossiness_corrected_scaled =
+							inv_fast(inv_fast(GLOSSINESS_SCALE * texel_glossiness) + directional_component.deviation)
+								.max(0.75);
 
 						let specular_intensity = get_specular_intensity(
 							vec_to_camera_reflected_light_angle_cos,
 							glossiness_corrected_scaled,
 						);
 
+						let directional_component_color = ColorVec::from_color_f32x3(&directional_component.color);
 						if SPECULAR_TYPE == SPECULAR_TYPE_DIELECTRIC
 						{
 							let diffuse_intensity =
-								directional_component.vector_scaled.dot(texel_value.normal).max(0.0);
+								vec3_dot(&directional_component.vector_scaled, &texel_normal).max(0.0);
 
 							let light_intensity_diffuse = diffuse_intensity * one_minus_specular_k;
-							total_light_albedo_modulated[0] += directional_component.color[0] * light_intensity_diffuse;
-							total_light_albedo_modulated[1] += directional_component.color[1] * light_intensity_diffuse;
-							total_light_albedo_modulated[2] += directional_component.color[2] * light_intensity_diffuse;
+							total_light_albedo_modulated = ColorVec::mul_scalar_add(
+								&directional_component_color,
+								light_intensity_diffuse,
+								&total_light_albedo_modulated,
+							);
 
 							let light_intensity_specular = specular_intensity * specular_k * direction_vec_len;
-							total_light_direct[0] += directional_component.color[0] * light_intensity_specular;
-							total_light_direct[1] += directional_component.color[1] * light_intensity_specular;
-							total_light_direct[2] += directional_component.color[2] * light_intensity_specular;
+							total_light_direct = ColorVec::mul_scalar_add(
+								&directional_component_color,
+								light_intensity_specular,
+								&total_light_direct,
+							);
 						}
 						else if SPECULAR_TYPE == SPECULAR_TYPE_METAL
 						{
 							let specular_intensity_scale_factor = specular_intensity * direction_vec_len;
 
 							let light_intensity_modulated = one_minus_specular_k * specular_intensity_scale_factor;
-							total_light_albedo_modulated[0] +=
-								directional_component.color[0] * light_intensity_modulated;
-							total_light_albedo_modulated[1] +=
-								directional_component.color[1] * light_intensity_modulated;
-							total_light_albedo_modulated[2] +=
-								directional_component.color[2] * light_intensity_modulated;
+							total_light_albedo_modulated = ColorVec::mul_scalar_add(
+								&directional_component_color,
+								light_intensity_modulated,
+								&total_light_albedo_modulated,
+							);
 
 							let light_intensity_direct = specular_k * specular_intensity_scale_factor;
-							total_light_direct[0] += directional_component.color[0] * light_intensity_direct;
-							total_light_direct[1] += directional_component.color[1] * light_intensity_direct;
-							total_light_direct[2] += directional_component.color[2] * light_intensity_direct;
+							total_light_direct = ColorVec::mul_scalar_add(
+								&directional_component_color,
+								light_intensity_direct,
+								&total_light_direct,
+							);
 						}
 					} // If has directional component.
 				} // If specular material.
@@ -624,9 +655,35 @@ fn build_surface_impl_5_static_params<
 				let normal = if USE_NORMAL_MAP
 				{
 					// Normal transformed to world space.
-					texel_value.normal.x * u_vec_normalized +
-						texel_value.normal.y * v_vec_normalized +
-						texel_value.normal.z * plane_normal_normalized
+					Vec3f::new(
+						f32::mul_add(
+							texel_normal.x,
+							u_vec_normalized.x,
+							f32::mul_add(
+								texel_normal.y,
+								v_vec_normalized.x,
+								texel_normal.z * plane_normal_normalized.x,
+							),
+						),
+						f32::mul_add(
+							texel_normal.x,
+							u_vec_normalized.y,
+							f32::mul_add(
+								texel_normal.y,
+								v_vec_normalized.y,
+								texel_normal.z * plane_normal_normalized.y,
+							),
+						),
+						f32::mul_add(
+							texel_normal.x,
+							u_vec_normalized.z,
+							f32::mul_add(
+								texel_normal.y,
+								v_vec_normalized.z,
+								texel_normal.z * plane_normal_normalized.z,
+							),
+						),
+					)
 				}
 				else
 				{
@@ -641,9 +698,9 @@ fn build_surface_impl_5_static_params<
 					// Calculate reflected view angle and fresnel factor based on it.
 					// Use these data later for calculation o specular light for all dynamic lights.
 					let vec_to_camera = cam_pos - pos;
-					let vec_to_camera_normal_dot = vec_to_camera.dot(normal);
+					let vec_to_camera_normal_dot = vec3_dot(&vec_to_camera, &normal);
 					vec_to_camera_reflected = normal * (2.0 * vec_to_camera_normal_dot) - vec_to_camera;
-					vec_to_camera_len2 = vec_to_camera_reflected.magnitude2().max(MIN_POSITIVE_VALUE);
+					vec_to_camera_len2 = vec3_len2(&vec_to_camera_reflected).max(MIN_POSITIVE_VALUE);
 
 					let vec_to_camera_normal_angle_cos =
 						(vec_to_camera_normal_dot * inv_sqrt_fast(vec_to_camera_len2)).max(0.0);
@@ -651,11 +708,11 @@ fn build_surface_impl_5_static_params<
 					let fresnel_factor_base = get_fresnel_factor_base(vec_to_camera_normal_angle_cos);
 					specular_k = if SPECULAR_TYPE == SPECULAR_TYPE_DIELECTRIC
 					{
-						get_specular_k_dielectric(fresnel_factor_base, texel_value.glossiness)
+						get_specular_k_dielectric(fresnel_factor_base, texel_glossiness)
 					}
 					else if SPECULAR_TYPE == SPECULAR_TYPE_METAL
 					{
-						get_specular_k_metal(fresnel_factor_base, texel_value.glossiness)
+						get_specular_k_metal(fresnel_factor_base, texel_glossiness)
 					}
 					else
 					{
@@ -674,8 +731,8 @@ fn build_surface_impl_5_static_params<
 					let vec_to_light = light.pos - pos;
 
 					let shadow_factor = cube_shadow_map_fetch(shadow_cube_map, &vec_to_light);
-					let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
-					let shadow_distance_factor = shadow_factor / vec_to_light_len2;
+					let vec_to_light_len2 = vec3_len2(&vec_to_light).max(MIN_POSITIVE_VALUE);
+					let shadow_distance_factor = shadow_factor * inv_fast(vec_to_light_len2);
 
 					let diffuse_intensity = if SPECULAR_TYPE == SPECULAR_TYPE_METAL
 					{
@@ -684,7 +741,7 @@ fn build_surface_impl_5_static_params<
 					}
 					else
 					{
-						(normal.dot(vec_to_light) * inv_sqrt_fast(vec_to_light_len2)).max(0.0)
+						(vec3_dot(&normal, &vec_to_light) * inv_sqrt_fast(vec_to_light_len2)).max(0.0)
 					};
 
 					let specular_intensity = if SPECULAR_TYPE == SPECULAR_TYPE_NONE
@@ -694,33 +751,37 @@ fn build_surface_impl_5_static_params<
 					}
 					else
 					{
-						let vec_to_camera_reflected_light_angle_cos = vec_to_camera_reflected.dot(vec_to_light) *
+						let vec_to_camera_reflected_light_angle_cos = vec3_dot(&vec_to_camera_reflected, &vec_to_light) *
 							inv_sqrt_fast(vec_to_camera_len2 * vec_to_light_len2);
 
-						let glossiness_scaled = GLOSSINESS_SCALE * texel_value.glossiness;
+						let glossiness_scaled = GLOSSINESS_SCALE * texel_glossiness;
 						get_specular_intensity(vec_to_camera_reflected_light_angle_cos, glossiness_scaled)
 					};
 
+					let light_color = ColorVec::from_color_f32x3(&light.color);
 					match SPECULAR_TYPE
 					{
 						SPECULAR_TYPE_NONE =>
 						{
-							total_light_albedo_modulated[0] += light.color[0] * shadow_distance_factor;
-							total_light_albedo_modulated[1] += light.color[1] * shadow_distance_factor;
-							total_light_albedo_modulated[2] += light.color[2] * shadow_distance_factor;
+							total_light_albedo_modulated = ColorVec::mul_scalar_add(
+								&light_color,
+								diffuse_intensity * shadow_distance_factor,
+								&total_light_albedo_modulated,
+							);
 						},
 						SPECULAR_TYPE_DIELECTRIC =>
 						{
 							let light_intensity_diffuse =
 								diffuse_intensity * (1.0 - specular_k) * shadow_distance_factor;
-							total_light_albedo_modulated[0] += light.color[0] * light_intensity_diffuse;
-							total_light_albedo_modulated[1] += light.color[1] * light_intensity_diffuse;
-							total_light_albedo_modulated[2] += light.color[2] * light_intensity_diffuse;
+							total_light_albedo_modulated = ColorVec::mul_scalar_add(
+								&light_color,
+								light_intensity_diffuse,
+								&total_light_albedo_modulated,
+							);
 
 							let light_intensity_specular = specular_intensity * specular_k * shadow_distance_factor;
-							total_light_direct[0] += light.color[0] * light_intensity_specular;
-							total_light_direct[1] += light.color[1] * light_intensity_specular;
-							total_light_direct[2] += light.color[2] * light_intensity_specular;
+							total_light_direct =
+								ColorVec::mul_scalar_add(&light_color, light_intensity_specular, &total_light_direct);
 						},
 						SPECULAR_TYPE_METAL =>
 						{
@@ -728,14 +789,15 @@ fn build_surface_impl_5_static_params<
 
 							let light_intensity_modulated =
 								(1.0 - specular_k) * specular_intensity_shadow_distance_factor;
-							total_light_albedo_modulated[0] += light.color[0] * light_intensity_modulated;
-							total_light_albedo_modulated[1] += light.color[1] * light_intensity_modulated;
-							total_light_albedo_modulated[2] += light.color[2] * light_intensity_modulated;
+							total_light_albedo_modulated = ColorVec::mul_scalar_add(
+								&light_color,
+								light_intensity_modulated,
+								&total_light_albedo_modulated,
+							);
 
 							let light_intensity_direct = specular_k * specular_intensity_shadow_distance_factor;
-							total_light_direct[0] += light.color[0] * light_intensity_direct;
-							total_light_direct[1] += light.color[1] * light_intensity_direct;
-							total_light_direct[2] += light.color[2] * light_intensity_direct;
+							total_light_direct =
+								ColorVec::mul_scalar_add(&light_color, light_intensity_direct, &total_light_direct);
 						},
 						_ =>
 						{
@@ -745,24 +807,16 @@ fn build_surface_impl_5_static_params<
 				} // For dynamic lights.
 			} // If use dynmic lights.
 
-			let color_components = texel_value.diffuse.unpack_to_rgb_f32();
-
-			let mut result_color_components = [0.0, 0.0, 0.0];
-			for i in 0 .. 3
+			let mut result_color = ColorVec::mul(
+				&ColorVec::from_color32(texel_value.diffuse),
+				&total_light_albedo_modulated,
+			);
+			if SPECULAR_TYPE != SPECULAR_TYPE_NONE
 			{
-				let mut c = color_components[i] * total_light_albedo_modulated[i];
-				if SPECULAR_TYPE != SPECULAR_TYPE_NONE
-				{
-					c += total_light_direct[i] * Color32::MAX_RGB_F32_COMPONENTS[i];
-				}
-				result_color_components[i] = c.min(Color32::MAX_RGB_F32_COMPONENTS[i]);
+				result_color = ColorVec::mul_scalar_add(&total_light_direct, 255.0, &result_color);
 			}
 
-			// Here we 100% sure that components overflow is not possible (because of "min").
-			// NaNs are not possible here too.
-			let color_packed = unsafe { Color32::from_rgb_f32_unchecked(&result_color_components) };
-
-			*dst_texel = color_packed;
+			*dst_texel = result_color.into_color32();
 			src_u += 1;
 			if src_u == (texture.size[0] as i32)
 			{
@@ -801,9 +855,9 @@ impl LightmapElementOps for LightmapElementOpsSimple
 	{
 		let one_minus_ratio = 1.0 - ratio;
 		[
-			a[0] * ratio + b[0] * one_minus_ratio,
-			a[1] * ratio + b[1] * one_minus_ratio,
-			a[2] * ratio + b[2] * one_minus_ratio,
+			f32::mul_add(a[0], ratio, b[0] * one_minus_ratio),
+			f32::mul_add(a[1], ratio, b[1] * one_minus_ratio),
+			f32::mul_add(a[2], ratio, b[2] * one_minus_ratio),
 		]
 	}
 
@@ -828,18 +882,48 @@ impl LightmapElementOps for LightmapElementOpsDirectional
 		let one_minus_ratio = 1.0 - ratio;
 		Self::LightmapElement {
 			ambient_light: [
-				a.ambient_light[0] * ratio + b.ambient_light[0] * one_minus_ratio,
-				a.ambient_light[1] * ratio + b.ambient_light[1] * one_minus_ratio,
-				a.ambient_light[2] * ratio + b.ambient_light[2] * one_minus_ratio,
+				f32::mul_add(a.ambient_light[0], ratio, b.ambient_light[0] * one_minus_ratio),
+				f32::mul_add(a.ambient_light[1], ratio, b.ambient_light[1] * one_minus_ratio),
+				f32::mul_add(a.ambient_light[2], ratio, b.ambient_light[2] * one_minus_ratio),
 			],
-			light_direction_vector_scaled: a.light_direction_vector_scaled * ratio +
-				b.light_direction_vector_scaled * one_minus_ratio,
-			directional_light_deviation: a.directional_light_deviation * ratio +
+			light_direction_vector_scaled: Vec3f::new(
+				f32::mul_add(
+					a.light_direction_vector_scaled.x,
+					ratio,
+					b.light_direction_vector_scaled.x * one_minus_ratio,
+				),
+				f32::mul_add(
+					a.light_direction_vector_scaled.y,
+					ratio,
+					b.light_direction_vector_scaled.y * one_minus_ratio,
+				),
+				f32::mul_add(
+					a.light_direction_vector_scaled.z,
+					ratio,
+					b.light_direction_vector_scaled.z * one_minus_ratio,
+				),
+			),
+			directional_light_deviation: f32::mul_add(
+				a.directional_light_deviation,
+				ratio,
 				b.directional_light_deviation * one_minus_ratio,
+			),
 			directional_light_color: [
-				a.directional_light_color[0] * ratio + b.directional_light_color[0] * one_minus_ratio,
-				a.directional_light_color[1] * ratio + b.directional_light_color[1] * one_minus_ratio,
-				a.directional_light_color[2] * ratio + b.directional_light_color[2] * one_minus_ratio,
+				f32::mul_add(
+					a.directional_light_color[0],
+					ratio,
+					b.directional_light_color[0] * one_minus_ratio,
+				),
+				f32::mul_add(
+					a.directional_light_color[1],
+					ratio,
+					b.directional_light_color[1] * one_minus_ratio,
+				),
+				f32::mul_add(
+					a.directional_light_color[2],
+					ratio,
+					b.directional_light_color[2] * one_minus_ratio,
+				),
 			],
 		}
 	}
@@ -904,10 +988,10 @@ fn cube_shadow_map_side_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f, side
 	const ONE_MINUS_EPS: f32 = 1.0 - 1.0 / 65536.0;
 	let cubemap_size_f = cube_shadow_map.size as f32;
 
-	let depth = 1.0 / vec.z.max(MIN_POSITIVE_VALUE);
+	let depth = inv_fast(vec.z.max(MIN_POSITIVE_VALUE));
 	let half_depth = 0.5 * depth;
-	let u_f = (vec.x * half_depth + 0.5).max(0.0).min(ONE_MINUS_EPS) * cubemap_size_f;
-	let v_f = (vec.y * half_depth + 0.5).max(0.0).min(ONE_MINUS_EPS) * cubemap_size_f;
+	let u_f = f32::mul_add(vec.x, half_depth, 0.5).max(0.0).min(ONE_MINUS_EPS) * cubemap_size_f;
+	let v_f = f32::mul_add(vec.y, half_depth, 0.5).max(0.0).min(ONE_MINUS_EPS) * cubemap_size_f;
 	// It is safe to use "unsafe" f32 to int conversion, since NaN and Inf is not possible here.
 	let u = unsafe { u_f.to_int_unchecked::<u32>() };
 	let v = unsafe { v_f.to_int_unchecked::<u32>() };
@@ -915,7 +999,14 @@ fn cube_shadow_map_side_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f, side
 	debug_assert!(v < cube_shadow_map.size);
 	let texel_address = (u + v * cube_shadow_map.size) as usize;
 	let value = unsafe { debug_only_checked_fetch(&cube_shadow_map.sides[side as usize], texel_address) };
-	return if depth >= value { 1.0 } else { 0.0 };
+	if depth >= value
+	{
+		1.0
+	}
+	else
+	{
+		0.0
+	}
 }
 
 fn get_specular_intensity(vec_to_camera_reflected_light_angle_cos: f32, glossiness_scaled: f32) -> f32
@@ -923,7 +1014,7 @@ fn get_specular_intensity(vec_to_camera_reflected_light_angle_cos: f32, glossine
 	// This formula is not physically-correct but it gives good results.
 	let x = ((vec_to_camera_reflected_light_angle_cos - 1.0) * glossiness_scaled).max(-2.0);
 	// Shouldn't we use squared scaled glossiness here?
-	(x * (x * 0.25 + 1.0) + 1.0) * glossiness_scaled
+	f32::mul_add(x, f32::mul_add(x, 0.25, 1.0), 1.0) * glossiness_scaled
 }
 
 fn get_fresnel_factor_base(vec_to_camera_normal_angle_cos: f32) -> f32
@@ -937,18 +1028,30 @@ fn get_fresnel_factor_base(vec_to_camera_normal_angle_cos: f32) -> f32
 
 fn get_specular_k_dielectric(fresnel_factor_base: f32, glossiness: f32) -> f32
 {
-	let fresnel_factor = DIELECTRIC_ZERO_REFLECTIVITY + (1.0 - DIELECTRIC_ZERO_REFLECTIVITY) * fresnel_factor_base;
+	let fresnel_factor = f32::mul_add(
+		fresnel_factor_base,
+		1.0 - DIELECTRIC_ZERO_REFLECTIVITY,
+		DIELECTRIC_ZERO_REFLECTIVITY,
+	);
 
 	// For glossy surface we can just use Fresnel factor for diffuse/specular mixing.
 	// But for rough srufaces we can't. Normally we should use some sort of integral of Schlick's approximation.
 	// But it's too expensive. So, just make mix of Fresnel factor depending on view angle with constant factor for absolutely rough surface.
 	// TODO - us non-linear glossiness here?
-	fresnel_factor * glossiness + DIELECTRIC_AVERAGE_REFLECTIVITY * (1.0 - glossiness)
+	f32::mul_add(
+		fresnel_factor,
+		glossiness,
+		DIELECTRIC_AVERAGE_REFLECTIVITY * (1.0 - glossiness),
+	)
 }
 
 fn get_specular_k_metal(fresnel_factor_base: f32, glossiness: f32) -> f32
 {
-	fresnel_factor_base * glossiness + METAL_AVERAGE_SCHLICK_FACTOR * (1.0 - glossiness)
+	f32::mul_add(
+		fresnel_factor_base,
+		glossiness,
+		METAL_AVERAGE_SCHLICK_FACTOR * (1.0 - glossiness),
+	)
 }
 
 const MIN_POSITIVE_VALUE: f32 = 1.0 / ((1 << 30) as f32);
@@ -959,23 +1062,25 @@ const METAL_AVERAGE_SCHLICK_FACTOR: f32 = 0.5;
 
 const GLOSSINESS_SCALE: f32 = 64.0;
 
-// Relative erorr <= 1.5 * 2^(-12)
-#[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
-fn inv_sqrt_fast(x: f32) -> f32
+// Faster version of dot product, because it uses "mul_add".
+fn vec3_dot(a: &Vec3f, b: &Vec3f) -> f32
 {
-	unsafe { core::arch::x86_64::_mm_cvtss_f32(core::arch::x86_64::_mm_rsqrt_ss(core::arch::x86_64::_mm_set1_ps(x))) }
+	f32::mul_add(a.x, b.x, f32::mul_add(a.y, b.y, a.z * b.z))
 }
 
-#[cfg(all(target_arch = "x86", target_feature = "sse"))]
-fn inv_sqrt_fast(x: f32) -> f32
+// Faster than naive vec = a * scalar + b, because of "mul_add".
+fn vec3_scalar_mul_add(a: &Vec3f, scalar: f32, b: &Vec3f) -> Vec3f
 {
-	unsafe { core::arch::x86::_mm_cvtss_f32(core::arch::x86::_mm_rsqrt_ss(core::arch::x86::_mm_set1_ps(x))) }
+	Vec3f::new(
+		f32::mul_add(a.x, scalar, b.x),
+		f32::mul_add(a.y, scalar, b.y),
+		f32::mul_add(a.z, scalar, b.z),
+	)
 }
 
-#[cfg(not(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse")))]
-fn inv_sqrt_fast(x: f32) -> f32
+fn vec3_len2(v: &Vec3f) -> f32
 {
-	1.0 / sqrt(x)
+	vec3_dot(v, v)
 }
 
 unsafe fn debug_only_checked_fetch<T: Copy>(data: &[T], address: usize) -> T

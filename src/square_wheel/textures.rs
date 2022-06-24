@@ -1,3 +1,4 @@
+use super::fast_math::*;
 use common::{color::*, image, material, math_types::*};
 
 // MAX_MIP must be not greater, than LIGHTMAP_SCALE_LOG2
@@ -16,13 +17,56 @@ pub struct Texture
 }
 
 #[derive(Copy, Clone)]
+#[repr(C, align(8))] // TODO - tune usage of alignment.
 pub struct TextureElement
 {
 	pub diffuse: Color32,
-	/// Normal is always normalized.
-	pub normal: Vec3f,
-	pub glossiness: f32,
+	pub packed_normal_glossiness: PackedNormalGlossiness,
 }
+
+#[derive(Copy, Clone)]
+pub struct PackedNormalGlossiness(i32);
+
+impl PackedNormalGlossiness
+{
+	pub fn pack(normal_normalized: &Vec3f, glossiness: f32) -> Self
+	{
+		Self(pack_f32x4_into_bytes(
+			&[
+				normal_normalized.x,
+				normal_normalized.y,
+				normal_normalized.z,
+				glossiness,
+			],
+			&[NORMAL_SCALE, NORMAL_SCALE, NORMAL_SCALE, GLOSSINESS_SCALE],
+		))
+	}
+
+	pub fn unpack(&self) -> (Vec3f, f32)
+	{
+		let values_unpacked = upack_bytes_into_f32x4(
+			self.0,
+			&[
+				1.0 / NORMAL_SCALE,
+				1.0 / NORMAL_SCALE,
+				1.0 / NORMAL_SCALE,
+				1.0 / GLOSSINESS_SCALE,
+			],
+		);
+		(
+			Vec3f::new(values_unpacked[0], values_unpacked[1], values_unpacked[2]),
+			values_unpacked[3],
+		)
+	}
+
+	pub fn unpack_glossiness(&self) -> f32
+	{
+		(self.0 >> 24) as f32 * (1.0 / GLOSSINESS_SCALE)
+	}
+}
+
+const NORMAL_SCALE: f32 = 127.0;
+const GLOSSINESS_SCALE: f32 = 127.0;
 
 impl Default for TextureElement
 {
@@ -30,8 +74,7 @@ impl Default for TextureElement
 	{
 		Self {
 			diffuse: Color32::black(),
-			normal: Vec3f::unit_z(),
-			glossiness: 0.0,
+			packed_normal_glossiness: PackedNormalGlossiness::pack(&Vec3f::unit_z(), 0.0),
 		}
 	}
 }
@@ -116,9 +159,9 @@ fn make_stub_image() -> image::Image
 
 fn make_texture(
 	diffuse: image::Image,
-	normals: Option<image::Image>,
+	mut normals: Option<image::Image>,
 	glossiness: f32,
-	glossiness_map: Option<image::Image>,
+	mut glossiness_map: Option<image::Image>,
 	is_metal: bool,
 ) -> Texture
 {
@@ -132,46 +175,54 @@ fn make_texture(
 		is_metal,
 	};
 
-	for (dst, src) in result.pixels.iter_mut().zip(diffuse.pixels.iter())
+	if let Some(n) = &mut normals
 	{
-		dst.diffuse = *src;
-		dst.glossiness = glossiness_clamped.max(MIN_VALID_GLOSSINESS);
-	}
-
-	if let Some(mut n) = normals
-	{
-		// Normally normal map must have same size as diffuse texture.
-		// But in case if it is not true - reseze normal map.
 		if n.size != diffuse.size
 		{
 			let n_resized = resize_image(&n, diffuse.size);
-			n = n_resized;
+			*n = n_resized;
 		}
-		for (dst, src) in result.pixels.iter_mut().zip(n.pixels.iter())
+	}
+	if let Some(g) = &mut glossiness_map
+	{
+		if g.size != diffuse.size
 		{
-			let rgb = src.get_rgb();
+			let g_resized = resize_image(&g, diffuse.size);
+			*g = g_resized;
+		}
+	}
+
+	for (index, (dst, src)) in result.pixels.iter_mut().zip(diffuse.pixels.iter()).enumerate()
+	{
+		dst.diffuse = *src;
+
+		let normal = if let Some(n) = &normals
+		{
+			let rgb = n.pixels[index].get_rgb();
 			let zero_level = 128;
 			let normal = Vec3f::new(
 				((rgb[0] as i32) - zero_level) as f32,
 				((rgb[1] as i32) - zero_level) as f32,
 				((rgb[2] as i32) - zero_level) as f32,
 			);
-			dst.normal = renormalize_normal(normal);
+			renormalize_normal(normal)
 		}
-	}
+		else
+		{
+			Vec3f::unit_z()
+		};
 
-	if let Some(mut g) = glossiness_map
-	{
-		if g.size != diffuse.size
+		let glossiness = if let Some(g) = &glossiness_map
 		{
-			let g_resized = resize_image(&g, diffuse.size);
-			g = g_resized;
+			g.pixels[index].get_rgb()[0] as f32 / 255.0
 		}
-		for (dst, src) in result.pixels.iter_mut().zip(g.pixels.iter())
+		else
 		{
-			let rgb = src.get_rgb();
-			dst.glossiness = ((rgb[0] as f32) / 255.0).max(MIN_VALID_GLOSSINESS);
+			glossiness_clamped
 		}
+		.max(MIN_VALID_GLOSSINESS);
+
+		dst.packed_normal_glossiness = PackedNormalGlossiness::pack(&normal, glossiness);
 	}
 
 	result
@@ -235,16 +286,23 @@ fn build_mips(mip0: Texture) -> TextureWithMips
 
 				dst.diffuse = Color32::get_average_4([p00.diffuse, p01.diffuse, p10.diffuse, p11.diffuse]);
 
-				let normals_sum = p00.normal + p01.normal + p10.normal + p11.normal;
+				let (p00_normal, p00_glossiness) = p00.packed_normal_glossiness.unpack();
+				let (p01_normal, p01_glossiness) = p01.packed_normal_glossiness.unpack();
+				let (p10_normal, p10_glossiness) = p10.packed_normal_glossiness.unpack();
+				let (p11_normal, p11_glossiness) = p11.packed_normal_glossiness.unpack();
+
+				let normals_sum = p00_normal + p01_normal + p10_normal + p11_normal;
 				let normals_sum_len2 = normals_sum.magnitude2();
-				dst.normal = normals_sum / normals_sum_len2.sqrt().max(0.000001);
+				let dst_normal = normals_sum / normals_sum_len2.sqrt().max(0.000001);
 
 				// For perfectly flat surface length of normals sum is 4.
 				// For surface with normal variation this value is less than 4.
 				// So, reduce glossiness in order to compensate normal variations.
-				let average_glossiness = (p00.glossiness + p01.glossiness + p10.glossiness + p11.glossiness) * 0.25;
+				let average_glossiness = (p00_glossiness + p01_glossiness + p10_glossiness + p11_glossiness) * 0.25;
 				let glossines_reduce_factor = normals_sum_len2 * normals_sum_len2 * (1.0 / 256.0);
-				dst.glossiness = (average_glossiness * glossines_reduce_factor).max(MIN_VALID_GLOSSINESS);
+				let dst_glossiness = (average_glossiness * glossines_reduce_factor).max(MIN_VALID_GLOSSINESS);
+
+				dst.packed_normal_glossiness = PackedNormalGlossiness::pack(&dst_normal, dst_glossiness);
 			}
 		}
 		result[i] = mip;
