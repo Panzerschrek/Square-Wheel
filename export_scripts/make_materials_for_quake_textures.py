@@ -4,8 +4,13 @@ import os
 import sys
 
 def generate_material_json(texture_file_name):
-	# TODO - process sky, whater textures specially. Also generate proper materials for animated textures.
-	return { "diffuse": texture_file_name }
+	# TODO - process sky textures specially. Also generate proper materials for animated textures and deal wirh fullbrights.
+	res = { "diffuse": texture_file_name }
+	if texture_file_name.startswith("*"):
+		res["turb"] = { "amplitude" : 4.0, "wave_length" : 64.0, "frequency" : 0.1875 }
+		if texture_file_name.find("WATER") != -1:
+			res["glossiness"] = 1.0
+	return res
 
 
 def main():

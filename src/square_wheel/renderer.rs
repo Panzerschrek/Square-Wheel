@@ -1,11 +1,11 @@
 use super::{
 	config, depth_renderer::*, draw_ordering, frame_number::*, inline_models_index::*, light::*,
-	map_visibility_calculator::*, performance_counter::*, rasterizer::*, rect_splitting, renderer_config::*,
-	shadow_map::*, surfaces::*, text_printer, textures::*,
+	map_materials_processor::*, map_visibility_calculator::*, performance_counter::*, rasterizer::*, rect_splitting,
+	renderer_config::*, shadow_map::*, surfaces::*, text_printer, textures::*,
 };
 use common::{
-	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, color::*, fixed_math::*, lightmap, material,
-	math_types::*, matrix::*, plane::*, shared_mut_slice::*, system_window,
+	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, color::*, fixed_math::*, lightmap, math_types::*,
+	matrix::*, plane::*, shared_mut_slice::*, system_window,
 };
 use rayon::prelude::*;
 use std::sync::Arc;
@@ -28,14 +28,14 @@ pub struct Renderer
 	num_visible_surfaces_pixels: usize,
 	current_frame_visible_polygons: Vec<u32>,
 	mip_bias: f32,
-	textures: Vec<TextureWithMips>,
-	map_materials: Vec<material::Material>,
+	materials_processor: MapMaterialsProcessor,
 	performance_counters: RendererPerformanceCounters,
 }
 
 struct RendererPerformanceCounters
 {
 	frame_duration: PerformanceCounter,
+	materials_update: PerformanceCounter,
 	visible_leafs_search: PerformanceCounter,
 	surfaces_preparation: PerformanceCounter,
 	rasterization: PerformanceCounter,
@@ -48,6 +48,7 @@ impl RendererPerformanceCounters
 		let window_size = 100;
 		Self {
 			frame_duration: PerformanceCounter::new(window_size),
+			materials_update: PerformanceCounter::new(window_size),
 			visible_leafs_search: PerformanceCounter::new(window_size),
 			surfaces_preparation: PerformanceCounter::new(window_size),
 			rasterization: PerformanceCounter::new(window_size),
@@ -76,29 +77,8 @@ impl Renderer
 		let config_parsed = RendererConfig::from_app_config(&app_config);
 		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
 
-		// TODO - cache materials globally.
-		let materials = material::load_materials(&std::path::PathBuf::from(config_parsed.materials_path.clone()));
-
-		let mut map_materials = Vec::with_capacity(map.textures.len());
-		for texture_name in &map.textures
-		{
-			let material_name_string = bsp_map_compact::get_texture_string(texture_name);
-			let material = if let Some(material) = materials.get(material_name_string)
-			{
-				material.clone()
-			}
-			else
-			{
-				println!("Failed to find material \"{}\"", material_name_string);
-				material::Material::default()
-			};
-			map_materials.push(material);
-		}
-
-		let textures = load_textures(
-			&map_materials,
-			&std::path::PathBuf::from(config_parsed.textures_path.clone()),
-		);
+		let materials_processor =
+			MapMaterialsProcessor::new(&*map, &config_parsed.materials_path, &config_parsed.textures_path);
 
 		Renderer {
 			app_config,
@@ -114,8 +94,7 @@ impl Renderer
 			visibility_calculator: MapVisibilityCalculator::new(map.clone()),
 			shadows_maps_renderer: DepthRenderer::new(map.clone()),
 			map,
-			textures,
-			map_materials,
+			materials_processor,
 			performance_counters: RendererPerformanceCounters::new(),
 		}
 	}
@@ -127,10 +106,21 @@ impl Renderer
 		camera_matrices: &CameraMatrices,
 		inline_models_index: &InlineModelsIndex,
 		test_lights: &[PointLight],
+		frame_time_s: f32,
 	)
 	{
 		self.synchronize_config();
 		self.update_mip_bias();
+
+		let materials_update_start_time = Clock::now();
+
+		self.materials_processor.update(frame_time_s);
+
+		let materials_update_end_time = Clock::now();
+		let materials_update_duration_s = (materials_update_end_time - materials_update_start_time).as_secs_f32();
+		self.performance_counters
+			.materials_update
+			.add_value(materials_update_duration_s);
 
 		let frame_start_time = Clock::now();
 		self.current_frame.next();
@@ -164,10 +154,11 @@ impl Renderer
 				pixels,
 				surface_info,
 				&format!(
-					"frame time: {:04.2}ms\nvisible leafs search: {:04.2}ms\nsurfaces preparation: \
-					 {:04.2}ms\nrasterization: {:04.2}ms\nleafs: {}/{}\nmodels parts: {}\npolygons: {}\nsurfaces \
-					 pixels: {}k\nmip bias: {:04.2}\n",
+					"frame time: {:04.2}ms\nmaterials update: {:04.2}ms\nvisible leafs search: {:04.2}ms\nsurfaces \
+					 preparation: {:04.2}ms\nrasterization: {:04.2}ms\nleafs: {}/{}\nmodels parts: {}\npolygons: \
+					 {}\nsurfaces pixels: {}k\nmip bias: {:04.2}\n",
 					self.performance_counters.frame_duration.get_average_value() * 1000.0,
+					self.performance_counters.materials_update.get_average_value() * 1000.0,
 					self.performance_counters.visible_leafs_search.get_average_value() * 1000.0,
 					self.performance_counters.surfaces_preparation.get_average_value() * 1000.0,
 					self.performance_counters.rasterization.get_average_value() * 1000.0,
@@ -488,7 +479,7 @@ impl Renderer
 			return;
 		}
 
-		if !self.map_materials[polygon.texture as usize].draw
+		if !self.materials_processor.get_material(polygon.texture).draw
 		{
 			// Do not prepare surfaces for invisible polygons.
 			return;
@@ -663,7 +654,7 @@ impl Renderer
 		let directional_lightmaps_data = &self.map.directional_lightmaps_data;
 		let polygons = &self.map.polygons;
 		let polygons_data = &self.polygons_data;
-		let textures = &self.textures;
+		let materials_processor = &self.materials_processor;
 
 		let use_directional_lightmap = self.config.use_directional_lightmaps && !directional_lightmaps_data.is_empty();
 
@@ -674,7 +665,7 @@ impl Renderer
 			let polygon_data = &polygons_data[polygon_index as usize];
 			let surface_size = polygon_data.surface_size;
 
-			let texture = &textures[polygon.texture as usize][polygon_data.mip as usize];
+			let texture = &materials_processor.get_texture(polygon.texture)[polygon_data.mip as usize];
 			let surface_data = unsafe {
 				&mut surfaces_pixels_shared.get()[polygon_data.surface_pixels_offset ..
 					polygon_data.surface_pixels_offset + (surface_size[0] * surface_size[1]) as usize]

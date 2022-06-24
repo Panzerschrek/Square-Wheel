@@ -267,6 +267,7 @@ impl Host
 				&camera_matrices,
 				&active_map.inline_models_index,
 				active_map.game.get_test_lights(),
+				active_map.game.get_game_time_s(),
 			);
 		}
 		self.console.borrow().draw(pixels, surface_info);

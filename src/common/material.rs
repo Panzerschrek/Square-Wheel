@@ -47,6 +47,27 @@ pub struct Material
 	/// Used during lightmaps preparation.
 	#[serde(default)]
 	pub emissive_light: [f32; 3],
+
+	/// If some - use texture turbulence effect.
+	#[serde(default)]
+	pub turb: Option<TurbParams>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TurbParams
+{
+	/// In pixels.
+	pub amplitude: f32,
+
+	/// In pixels.
+	pub wave_length: f32,
+
+	/// In seconds.
+	pub frequency: f32,
+
+	/// Pixels/s.
+	#[serde(default)]
+	pub scroll_speed: [f32; 2],
 }
 
 impl Default for Material
@@ -64,6 +85,7 @@ impl Default for Material
 			blocks_view: true,
 			light: true,
 			emissive_light: [0.0, 0.0, 0.0],
+			turb: None,
 		}
 	}
 }

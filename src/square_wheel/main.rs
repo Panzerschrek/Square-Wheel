@@ -12,6 +12,7 @@ mod host;
 mod host_config;
 mod inline_models_index;
 mod light;
+mod map_materials_processor;
 mod map_visibility_calculator;
 mod performance_counter;
 mod rasterizer;
