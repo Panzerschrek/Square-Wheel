@@ -2,7 +2,7 @@
 
 pub use fast_math_impl::*;
 
-#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse"))]
+#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse4.1"))]
 mod fast_math_impl
 {
 	use common::color::*;
@@ -116,19 +116,41 @@ mod fast_math_impl
 	} // impl ColorVec
 }
 
-#[cfg(not(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse")))]
+#[cfg(not(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse4.1")))]
 mod fast_math_impl
 {
 	use common::color::*;
 
 	pub fn inv_sqrt_fast(x: f32) -> f32
 	{
-		1.0 / sqrt(x)
+		1.0 / x.sqrt()
 	}
 
 	pub fn inv_fast(x: f32) -> f32
 	{
 		1.0 / x
+	}
+
+	// Pack 4 floats into 4 signed bytes.
+	pub fn pack_f32x4_into_bytes(v: &[f32; 4], pack_scale: &[f32; 4]) -> i32
+	{
+		let mut res = 0;
+		for i in 0 .. 4
+		{
+			res |= ((v[i] * pack_scale[i]) as i32) << (i * 8);
+		}
+		res
+	}
+
+	// Unpak 4 signed bytes to floats.
+	pub fn upack_bytes_into_f32x4(b: i32, unpack_scale: &[f32; 4]) -> [f32; 4]
+	{
+		let mut res = [0.0; 4];
+		for i in 0 .. 4
+		{
+			res[i] = ((((b as u32) >> (i * 8)) & 0xFF) as f32) * unpack_scale[i];
+		}
+		res
 	}
 
 	// TODO - maybe use here array of 3 floats?
