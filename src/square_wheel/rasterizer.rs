@@ -175,24 +175,29 @@ impl<'a> Rasterizer<'a>
 	{
 		debug_assert!(texture_data.len() >= (texture_info.size[0] * texture_info.size[1]) as usize);
 
-		let d_inv_z_dx = (INV_Z_SCALE * depth_equation.d_inv_z_dx) as i64;
-		let d_inv_z_dy = (INV_Z_SCALE * depth_equation.d_inv_z_dy) as i64;
+		let d_inv_z_dx = unchecked_to_int64(INV_Z_SCALE * depth_equation.d_inv_z_dx);
+		let d_inv_z_dy = unchecked_to_int64(INV_Z_SCALE * depth_equation.d_inv_z_dy);
 		// Add extra 0.5 to shift to pixel center.
-		let inv_z_k =
-			(INV_Z_SCALE * (depth_equation.k + (depth_equation.d_inv_z_dx + depth_equation.d_inv_z_dy) * 0.5)) as i64;
+		let inv_z_k = unchecked_to_int64(
+			INV_Z_SCALE * (depth_equation.k + (depth_equation.d_inv_z_dx + depth_equation.d_inv_z_dy) * 0.5),
+		);
 		let d_tc_dx = [
-			(TC_SCALE * tex_coord_equation.d_tc_dx[0]) as i64,
-			(TC_SCALE * tex_coord_equation.d_tc_dx[1]) as i64,
+			unchecked_to_int64(TC_SCALE * tex_coord_equation.d_tc_dx[0]),
+			unchecked_to_int64(TC_SCALE * tex_coord_equation.d_tc_dx[1]),
 		];
 		let d_tc_dy = [
-			(TC_SCALE * tex_coord_equation.d_tc_dy[0]) as i64,
-			(TC_SCALE * tex_coord_equation.d_tc_dy[1]) as i64,
+			unchecked_to_int64(TC_SCALE * tex_coord_equation.d_tc_dy[0]),
+			unchecked_to_int64(TC_SCALE * tex_coord_equation.d_tc_dy[1]),
 		];
 		let tc_k = [
-			(TC_SCALE *
-				(tex_coord_equation.k[0] + (tex_coord_equation.d_tc_dx[0] + tex_coord_equation.d_tc_dy[0]) * 0.5)) as i64,
-			(TC_SCALE *
-				(tex_coord_equation.k[1] + (tex_coord_equation.d_tc_dx[1] + tex_coord_equation.d_tc_dy[1]) * 0.5)) as i64,
+			unchecked_to_int64(
+				TC_SCALE *
+					(tex_coord_equation.k[0] + (tex_coord_equation.d_tc_dx[0] + tex_coord_equation.d_tc_dy[0]) * 0.5),
+			),
+			unchecked_to_int64(
+				TC_SCALE *
+					(tex_coord_equation.k[1] + (tex_coord_equation.d_tc_dx[1] + tex_coord_equation.d_tc_dy[1]) * 0.5),
+			),
 		];
 
 		let texture_size_minus_one = [texture_info.size[0] - 1, texture_info.size[1] - 1];
@@ -351,24 +356,29 @@ impl<'a> Rasterizer<'a>
 
 		const LINE_TC_SHIFT: i64 = 16;
 
-		let d_inv_z_dx = (INV_Z_SCALE * depth_equation.d_inv_z_dx) as i64;
-		let d_inv_z_dy = (INV_Z_SCALE * depth_equation.d_inv_z_dy) as i64;
+		let d_inv_z_dx = unchecked_to_int64(INV_Z_SCALE * depth_equation.d_inv_z_dx);
+		let d_inv_z_dy = unchecked_to_int64(INV_Z_SCALE * depth_equation.d_inv_z_dy);
 		// Add extra 0.5 to shift to pixel center.
-		let inv_z_k =
-			(INV_Z_SCALE * (depth_equation.k + (depth_equation.d_inv_z_dx + depth_equation.d_inv_z_dy) * 0.5)) as i64;
+		let inv_z_k = unchecked_to_int64(
+			INV_Z_SCALE * (depth_equation.k + (depth_equation.d_inv_z_dx + depth_equation.d_inv_z_dy) * 0.5),
+		);
 		let d_tc_dx = [
-			(TC_SCALE * tex_coord_equation.d_tc_dx[0]) as i64,
-			(TC_SCALE * tex_coord_equation.d_tc_dx[1]) as i64,
+			unchecked_to_int64(TC_SCALE * tex_coord_equation.d_tc_dx[0]),
+			unchecked_to_int64(TC_SCALE * tex_coord_equation.d_tc_dx[1]),
 		];
 		let d_tc_dy = [
-			(TC_SCALE * tex_coord_equation.d_tc_dy[0]) as i64,
-			(TC_SCALE * tex_coord_equation.d_tc_dy[1]) as i64,
+			unchecked_to_int64(TC_SCALE * tex_coord_equation.d_tc_dy[0]),
+			unchecked_to_int64(TC_SCALE * tex_coord_equation.d_tc_dy[1]),
 		];
 		let tc_k = [
-			(TC_SCALE *
-				(tex_coord_equation.k[0] + (tex_coord_equation.d_tc_dx[0] + tex_coord_equation.d_tc_dy[0]) * 0.5)) as i64,
-			(TC_SCALE *
-				(tex_coord_equation.k[1] + (tex_coord_equation.d_tc_dx[1] + tex_coord_equation.d_tc_dy[1]) * 0.5)) as i64,
+			unchecked_to_int64(
+				TC_SCALE *
+					(tex_coord_equation.k[0] + (tex_coord_equation.d_tc_dx[0] + tex_coord_equation.d_tc_dy[0]) * 0.5),
+			),
+			unchecked_to_int64(
+				TC_SCALE *
+					(tex_coord_equation.k[1] + (tex_coord_equation.d_tc_dx[1] + tex_coord_equation.d_tc_dy[1]) * 0.5),
+			),
 		];
 
 		let texture_width = texture_info.size[0] as u32;
@@ -494,39 +504,47 @@ impl<'a> Rasterizer<'a>
 		{
 			let max_tc = int_to_fixed16(texture_info.size[i]) - 1;
 
-			let tc_start_left = f32_to_fixed16(
-				z_start_left *
-					(x_start_left * tex_coord_equation.d_tc_dx[i] +
-						y_start_f32 * tex_coord_equation.d_tc_dy[i] +
-						tex_coord_equation.k[i]),
-			)
-			.max(0)
-			.min(max_tc);
-			let tc_end_left = f32_to_fixed16(
-				z_end_left *
-					(x_end_left * tex_coord_equation.d_tc_dx[i] +
-						y_end_f32 * tex_coord_equation.d_tc_dy[i] +
-						tex_coord_equation.k[i]),
-			)
-			.max(0)
-			.min(max_tc);
+			let tc_start_left = unsafe {
+				f32_to_fixed16_unchecked(
+					z_start_left *
+						(x_start_left * tex_coord_equation.d_tc_dx[i] +
+							y_start_f32 * tex_coord_equation.d_tc_dy[i] +
+							tex_coord_equation.k[i]),
+				)
+				.max(0)
+				.min(max_tc)
+			};
+			let tc_end_left = unsafe {
+				f32_to_fixed16_unchecked(
+					z_end_left *
+						(x_end_left * tex_coord_equation.d_tc_dx[i] +
+							y_end_f32 * tex_coord_equation.d_tc_dy[i] +
+							tex_coord_equation.k[i]),
+				)
+				.max(0)
+				.min(max_tc)
+			};
 
-			let tc_start_right = f32_to_fixed16(
-				z_start_right *
-					(x_start_right * tex_coord_equation.d_tc_dx[i] +
-						y_start_f32 * tex_coord_equation.d_tc_dy[i] +
-						tex_coord_equation.k[i]),
-			)
-			.max(0)
-			.min(max_tc);
-			let tc_end_right = f32_to_fixed16(
-				z_end_right *
-					(x_end_right * tex_coord_equation.d_tc_dx[i] +
-						y_end_f32 * tex_coord_equation.d_tc_dy[i] +
-						tex_coord_equation.k[i]),
-			)
-			.max(0)
-			.min(max_tc);
+			let tc_start_right = unsafe {
+				f32_to_fixed16_unchecked(
+					z_start_right *
+						(x_start_right * tex_coord_equation.d_tc_dx[i] +
+							y_start_f32 * tex_coord_equation.d_tc_dy[i] +
+							tex_coord_equation.k[i]),
+				)
+				.max(0)
+				.min(max_tc)
+			};
+			let tc_end_right = unsafe {
+				f32_to_fixed16_unchecked(
+					z_end_right *
+						(x_end_right * tex_coord_equation.d_tc_dx[i] +
+							y_end_f32 * tex_coord_equation.d_tc_dy[i] +
+							tex_coord_equation.k[i]),
+				)
+				.max(0)
+				.min(max_tc)
+			};
 
 			d_tc_left[i] = fixed16_div(tc_end_left - tc_start_left, y_delta_for_tc_interpoltion);
 			d_tc_right[i] = fixed16_div(tc_end_right - tc_start_right, y_delta_for_tc_interpoltion);
@@ -812,6 +830,12 @@ fn unchecked_div(x: u32, y: u32) -> u32
 fn unchecked_div(x: u32, y: u32) -> u32
 {
 	x / y
+}
+
+fn unchecked_to_int64(x: f32) -> i64
+{
+	// Do not care about overflow, infinity, NaN. It is almost impossible.
+	unsafe { x.to_int_unchecked::<i64>() }
 }
 
 fn unchecked_texture_fetch(texture_data: &[Color32], texel_address: usize) -> Color32
