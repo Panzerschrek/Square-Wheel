@@ -291,7 +291,10 @@ impl Host
 		}
 		self.active_map = None;
 
-		let map_path = bsp_map_save_load::normalize_bsp_map_file_path(std::path::PathBuf::from(args[0].clone()));
+		let mut map_path = std::path::PathBuf::from(self.config.maps_path.clone());
+		map_path.push(args[0].clone());
+
+		map_path = bsp_map_save_load::normalize_bsp_map_file_path(map_path);
 		match bsp_map_save_load::load_map(&map_path)
 		{
 			Ok(Some(map)) =>

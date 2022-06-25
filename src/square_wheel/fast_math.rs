@@ -213,7 +213,6 @@ mod fast_math_impl
 			])
 		}
 
-
 		pub fn mul_scalar_add(&self, scalar: f32, b: &Self) -> Self
 		{
 			Self([
