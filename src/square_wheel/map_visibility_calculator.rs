@@ -9,6 +9,7 @@ pub struct MapVisibilityCalculator
 	leafs_data: Vec<LeafData>,
 	portals_data: Vec<PortalData>,
 	leafs_search_waves: LeafsSearchWavesPair,
+	is_inside_leaf_volume: bool,
 }
 
 #[derive(Default, Copy, Clone)]
@@ -44,6 +45,7 @@ impl MapVisibilityCalculator
 			portals_data: vec![PortalData::default(); map.portals.len()],
 			leafs_search_waves: LeafsSearchWavesPair::default(),
 			map,
+			is_inside_leaf_volume: true,
 		}
 	}
 
@@ -53,6 +55,8 @@ impl MapVisibilityCalculator
 		let root_node = (self.map.nodes.len() - 1) as u32;
 		let current_leaf = self.find_current_leaf(root_node, &camera_matrices.planes_matrix);
 		self.mark_reachable_leafs_iterative(current_leaf, camera_matrices, &frame_bounds);
+
+		self.is_inside_leaf_volume = self.is_inside_leaf_volume(camera_matrices, current_leaf);
 	}
 
 	pub fn get_current_frame_leaf_bounds(&self, leaf_index: u32) -> Option<ClippingPolygon>
@@ -66,6 +70,11 @@ impl MapVisibilityCalculator
 		{
 			Some(leaf_data.current_frame_bounds)
 		}
+	}
+
+	pub fn is_current_camera_inside_leaf_volume(&self) -> bool
+	{
+		self.is_inside_leaf_volume
 	}
 
 	fn find_current_leaf(&self, mut index: u32, planes_matrix: &Mat4f) -> u32
@@ -198,6 +207,22 @@ impl MapVisibilityCalculator
 				break;
 			}
 		}
+	}
+
+	fn is_inside_leaf_volume(&self, camera_matrices: &CameraMatrices, leaf_index: u32) -> bool
+	{
+		let leaf = &self.map.leafs[leaf_index as usize];
+		for polygon in
+			&self.map.polygons[leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize]
+		{
+			let plane_transformed = camera_matrices.planes_matrix * polygon.plane.vec.extend(-polygon.plane.dist);
+			if plane_transformed.w < 0.0
+			{
+				return false;
+			}
+		}
+
+		true
 	}
 }
 

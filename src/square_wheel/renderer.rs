@@ -41,6 +41,7 @@ struct RendererPerformanceCounters
 	materials_update: PerformanceCounter,
 	visible_leafs_search: PerformanceCounter,
 	surfaces_preparation: PerformanceCounter,
+	background_fill: PerformanceCounter,
 	rasterization: PerformanceCounter,
 }
 
@@ -54,6 +55,7 @@ impl RendererPerformanceCounters
 			materials_update: PerformanceCounter::new(window_size),
 			visible_leafs_search: PerformanceCounter::new(window_size),
 			surfaces_preparation: PerformanceCounter::new(window_size),
+			background_fill: PerformanceCounter::new(window_size),
 			rasterization: PerformanceCounter::new(window_size),
 		}
 	}
@@ -168,6 +170,10 @@ impl Renderer
 				self.performance_counters.surfaces_preparation.get_average_value() * 1000.0
 			));
 			debug_stats_printer.add_line(format!(
+				"background fill: {:04.2}ms",
+				self.performance_counters.background_fill.get_average_value() * 1000.0
+			));
+			debug_stats_printer.add_line(format!(
 				"rasterization: {:04.2}ms",
 				self.performance_counters.rasterization.get_average_value() * 1000.0
 			));
@@ -260,10 +266,19 @@ impl Renderer
 			.add_value(surfaces_preparation_duration_s);
 
 		// Clear background (if needed) only before performing rasterization.
-		if self.config.clear_background
+		// Clear bacgrkound only if camera is located outside of volume of current leaf, defined as space at front of all leaf polygons.
+		// If camera is inside volume space, we do not need to fill background because (normally) no gaps between map geometry should be visible.
+		let background_fill_start_time = Clock::now();
+		if self.config.clear_background && !self.visibility_calculator.is_current_camera_inside_leaf_volume()
 		{
 			draw_background(pixels, ColorVec::from_color_f32x3(&[8.0, 16.0, 32.0]).into());
 		}
+
+		let background_fill_end_time = Clock::now();
+		let background_fill_duration_s = (background_fill_end_time - background_fill_start_time).as_secs_f32();
+		self.performance_counters
+			.background_fill
+			.add_value(background_fill_duration_s);
 
 		let rasterization_start_time = Clock::now();
 		self.perform_rasterization(pixels, surface_info, camera_matrices, inline_models_index, root_node);
