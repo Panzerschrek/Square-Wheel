@@ -270,6 +270,14 @@ impl Host
 				active_map.game.get_game_time_s(),
 			);
 		}
+		else
+		{
+			// Just clear background. TODO - maybe draw some background pattern or image?
+			for pixel in pixels.iter_mut()
+			{
+				*pixel = Color32::black();
+			}
+		}
 		self.console.borrow().draw(pixels, surface_info);
 
 		text_printer::print(
