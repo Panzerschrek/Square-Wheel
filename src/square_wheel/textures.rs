@@ -303,8 +303,8 @@ fn build_mips(mip0: Texture) -> TextureWithMips
 	result
 }
 
-// Do not allow absolte zero roughness. Limit it to some small value.
-const MIN_VALID_ROUGHNESS: f32 = 1.0 / 64.0;
+// Do not allow absolte zero roughness. Limit this value to integer 1 in compressed format.
+const MIN_VALID_ROUGHNESS: f32 = 1.0 / (ROUGHNESS_SCALE - 1.0);
 
 fn renormalize_normal(normal: Vec3f) -> Vec3f
 {
