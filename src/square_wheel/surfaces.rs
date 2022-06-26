@@ -303,7 +303,7 @@ fn build_surface_impl_4_static_params<
 	out_surface_data: &mut [Color32],
 )
 {
-	if texture.has_non_zero_glossiness
+	if texture.has_non_one_roughness
 	{
 		if texture.is_metal
 		{
@@ -484,9 +484,9 @@ fn build_surface_impl_5_static_params<
 			let pos = vec3_scalar_mul_add(&u_vec, dst_u as f32, &start_pos_v);
 
 			let texel_value = unsafe { debug_only_checked_fetch(src_line, src_u as usize) };
-			let (texel_normal, texel_glossiness) = if USE_NORMAL_MAP
+			let (texel_normal, texel_roughness) = if USE_NORMAL_MAP
 			{
-				texel_value.packed_normal_glossiness.unpack()
+				texel_value.packed_normal_roughness.unpack()
 			}
 			else
 			{
@@ -496,10 +496,7 @@ fn build_surface_impl_5_static_params<
 				}
 				else
 				{
-					(
-						Vec3f::unit_z(),
-						texel_value.packed_normal_glossiness.unpack_glossiness(),
-					)
+					(Vec3f::unit_z(), texel_value.packed_normal_roughness.unpack_roughness())
 				}
 			};
 
@@ -571,11 +568,11 @@ fn build_surface_impl_5_static_params<
 
 					let specular_k = if SPECULAR_TYPE == SPECULAR_TYPE_DIELECTRIC
 					{
-						get_specular_k_dielectric(fresnel_factor_base, texel_glossiness)
+						get_specular_k_dielectric(fresnel_factor_base, texel_roughness)
 					}
 					else if SPECULAR_TYPE == SPECULAR_TYPE_METAL
 					{
-						get_specular_k_metal(fresnel_factor_base, texel_glossiness)
+						get_specular_k_metal(fresnel_factor_base, texel_roughness)
 					}
 					else
 					{
@@ -598,14 +595,12 @@ fn build_surface_impl_5_static_params<
 							vec3_dot(&vec_to_camera_reflected, &directional_component.vector_scaled) *
 								inv_sqrt_fast(vec_to_camera_len2 * direction_vec_len2);
 
-						// Make glossiness smaller for light with large deviation.
-						let glossiness_corrected_scaled =
-							inv_fast(texel_glossiness + directional_component.deviation).max(0.75);
+						// Make roughness greater  for light with large deviation.
+						let inv_roughness_corrected =
+							inv_fast(texel_roughness + directional_component.deviation).max(0.75);
 
-						let specular_intensity = get_specular_intensity(
-							vec_to_camera_reflected_light_angle_cos,
-							glossiness_corrected_scaled,
-						);
+						let specular_intensity =
+							get_specular_intensity(vec_to_camera_reflected_light_angle_cos, inv_roughness_corrected);
 
 						let directional_component_color = ColorVec::from_color_f32x3(&directional_component.color);
 						if SPECULAR_TYPE == SPECULAR_TYPE_DIELECTRIC
@@ -707,11 +702,11 @@ fn build_surface_impl_5_static_params<
 					let fresnel_factor_base = get_fresnel_factor_base(vec_to_camera_normal_angle_cos);
 					specular_k = if SPECULAR_TYPE == SPECULAR_TYPE_DIELECTRIC
 					{
-						get_specular_k_dielectric(fresnel_factor_base, texel_glossiness)
+						get_specular_k_dielectric(fresnel_factor_base, texel_roughness)
 					}
 					else if SPECULAR_TYPE == SPECULAR_TYPE_METAL
 					{
-						get_specular_k_metal(fresnel_factor_base, texel_glossiness)
+						get_specular_k_metal(fresnel_factor_base, texel_roughness)
 					}
 					else
 					{
@@ -753,8 +748,8 @@ fn build_surface_impl_5_static_params<
 						let vec_to_camera_reflected_light_angle_cos = vec3_dot(&vec_to_camera_reflected, &vec_to_light) *
 							inv_sqrt_fast(vec_to_camera_len2 * vec_to_light_len2);
 
-						let glossiness_scaled = inv_fast(texel_glossiness);
-						get_specular_intensity(vec_to_camera_reflected_light_angle_cos, glossiness_scaled)
+						let inv_roughness = inv_fast(texel_roughness);
+						get_specular_intensity(vec_to_camera_reflected_light_angle_cos, inv_roughness)
 					};
 
 					let light_color = ColorVec::from_color_f32x3(&light.color);
@@ -1008,12 +1003,12 @@ fn cube_shadow_map_side_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f, side
 	}
 }
 
-fn get_specular_intensity(vec_to_camera_reflected_light_angle_cos: f32, glossiness_scaled: f32) -> f32
+fn get_specular_intensity(vec_to_camera_reflected_light_angle_cos: f32, inv_roughness: f32) -> f32
 {
 	// This formula is not physically-correct but it gives good results.
-	let x = ((vec_to_camera_reflected_light_angle_cos - 1.0) * glossiness_scaled).max(-2.0);
-	// Shouldn't we use squared scaled glossiness here?
-	f32::mul_add(x, f32::mul_add(x, 0.25, 1.0), 1.0) * glossiness_scaled
+	let x = ((vec_to_camera_reflected_light_angle_cos - 1.0) * inv_roughness).max(-2.0);
+	// Shouldn't we use squared inverted roughness here?
+	f32::mul_add(x, f32::mul_add(x, 0.25, 1.0), 1.0) * inv_roughness
 }
 
 fn get_fresnel_factor_base(vec_to_camera_normal_angle_cos: f32) -> f32
@@ -1025,7 +1020,7 @@ fn get_fresnel_factor_base(vec_to_camera_normal_angle_cos: f32) -> f32
 	one_minus_angle_cos2 * one_minus_angle_cos2 * one_minus_angle_cos
 }
 
-fn get_specular_k_dielectric(fresnel_factor_base: f32, glossiness: f32) -> f32
+fn get_specular_k_dielectric(fresnel_factor_base: f32, roughness: f32) -> f32
 {
 	let fresnel_factor = f32::mul_add(
 		fresnel_factor_base,
@@ -1036,20 +1031,19 @@ fn get_specular_k_dielectric(fresnel_factor_base: f32, glossiness: f32) -> f32
 	// For glossy surface we can just use Fresnel factor for diffuse/specular mixing.
 	// But for rough srufaces we can't. Normally we should use some sort of integral of Schlick's approximation.
 	// But it's too expensive. So, just make mix of Fresnel factor depending on view angle with constant factor for absolutely rough surface.
-	// TODO - us non-linear glossiness here?
 	f32::mul_add(
 		fresnel_factor,
-		glossiness,
-		DIELECTRIC_AVERAGE_REFLECTIVITY * (1.0 - glossiness),
+		1.0 - roughness,
+		DIELECTRIC_AVERAGE_REFLECTIVITY * roughness,
 	)
 }
 
-fn get_specular_k_metal(fresnel_factor_base: f32, glossiness: f32) -> f32
+fn get_specular_k_metal(fresnel_factor_base: f32, roughness: f32) -> f32
 {
 	f32::mul_add(
 		fresnel_factor_base,
-		glossiness,
-		METAL_AVERAGE_SCHLICK_FACTOR * (1.0 - glossiness),
+		1.0 - roughness,
+		METAL_AVERAGE_SCHLICK_FACTOR * roughness,
 	)
 }
 

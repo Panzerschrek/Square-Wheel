@@ -12,7 +12,7 @@ pub struct Texture
 	pub size: [u32; 2],
 	pub pixels: Vec<TextureElement>,
 	pub has_normal_map: bool, // If false, normals data is trivial.
-	pub has_non_zero_glossiness: bool,
+	pub has_non_one_roughness: bool,
 	pub is_metal: bool,
 }
 
@@ -21,24 +21,19 @@ pub struct Texture
 pub struct TextureElement
 {
 	pub diffuse: Color32,
-	pub packed_normal_glossiness: PackedNormalGlossiness,
+	pub packed_normal_roughness: PackedNormalRoughness,
 }
 
 #[derive(Copy, Clone)]
-pub struct PackedNormalGlossiness(i32);
+pub struct PackedNormalRoughness(i32);
 
-impl PackedNormalGlossiness
+impl PackedNormalRoughness
 {
-	pub fn pack(normal_normalized: &Vec3f, glossiness: f32) -> Self
+	pub fn pack(normal_normalized: &Vec3f, roughness: f32) -> Self
 	{
 		Self(pack_f32x4_into_bytes(
-			&[
-				normal_normalized.x,
-				normal_normalized.y,
-				normal_normalized.z,
-				glossiness,
-			],
-			&[NORMAL_SCALE, NORMAL_SCALE, NORMAL_SCALE, GLOSSINESS_SCALE],
+			&[normal_normalized.x, normal_normalized.y, normal_normalized.z, roughness],
+			&[NORMAL_SCALE, NORMAL_SCALE, NORMAL_SCALE, ROUGHNESS_SCALE],
 		))
 	}
 
@@ -50,7 +45,7 @@ impl PackedNormalGlossiness
 				1.0 / NORMAL_SCALE,
 				1.0 / NORMAL_SCALE,
 				1.0 / NORMAL_SCALE,
-				1.0 / GLOSSINESS_SCALE,
+				1.0 / ROUGHNESS_SCALE,
 			],
 		);
 		(
@@ -59,14 +54,14 @@ impl PackedNormalGlossiness
 		)
 	}
 
-	pub fn unpack_glossiness(&self) -> f32
+	pub fn unpack_roughness(&self) -> f32
 	{
-		(self.0 >> 24) as f32 * (1.0 / GLOSSINESS_SCALE)
+		(self.0 >> 24) as f32 * (1.0 / ROUGHNESS_SCALE)
 	}
 }
 
 const NORMAL_SCALE: f32 = 127.0;
-const GLOSSINESS_SCALE: f32 = 127.0;
+const ROUGHNESS_SCALE: f32 = 127.0;
 
 impl Default for TextureElement
 {
@@ -74,7 +69,7 @@ impl Default for TextureElement
 	{
 		Self {
 			diffuse: Color32::black(),
-			packed_normal_glossiness: PackedNormalGlossiness::pack(&Vec3f::unit_z(), 0.0),
+			packed_normal_roughness: PackedNormalRoughness::pack(&Vec3f::unit_z(), 1.0),
 		}
 	}
 }
@@ -106,16 +101,16 @@ pub fn load_textures(materials: &[material::Material], textures_path: &std::path
 			None
 		};
 
-		let glossiness_map = if let Some(glossiness_map_texture) = &material.glossiness_map
+		let roughness_map = if let Some(roughness_map_texture) = &material.roughness_map
 		{
-			load_image(&glossiness_map_texture.clone(), textures_path)
+			load_image(&roughness_map_texture.clone(), textures_path)
 		}
 		else
 		{
 			None
 		};
 
-		let mip0 = make_texture(diffuse, normals, material.glossiness, glossiness_map, material.is_metal);
+		let mip0 = make_texture(diffuse, normals, material.roughness, roughness_map, material.is_metal);
 
 		result.push(build_mips(mip0));
 	}
@@ -160,18 +155,18 @@ fn make_stub_image() -> image::Image
 fn make_texture(
 	diffuse: image::Image,
 	mut normals: Option<image::Image>,
-	glossiness: f32,
-	mut glossiness_map: Option<image::Image>,
+	roughness: f32,
+	mut roughness_map: Option<image::Image>,
 	is_metal: bool,
 ) -> Texture
 {
-	let glossiness_clamped = glossiness.max(0.0).min(1.0);
+	let roughness_clamped = roughness.max(0.0).min(1.0);
 
 	let mut result = Texture {
 		size: diffuse.size,
 		pixels: vec![TextureElement::default(); (diffuse.size[0] * diffuse.size[1]) as usize],
 		has_normal_map: normals.is_some(),
-		has_non_zero_glossiness: glossiness_clamped > 0.0 || glossiness_map.is_some(),
+		has_non_one_roughness: roughness_clamped < 1.0 || roughness_map.is_some(),
 		is_metal,
 	};
 
@@ -183,12 +178,12 @@ fn make_texture(
 			*n = n_resized;
 		}
 	}
-	if let Some(g) = &mut glossiness_map
+	if let Some(r) = &mut roughness_map
 	{
-		if g.size != diffuse.size
+		if r.size != diffuse.size
 		{
-			let g_resized = resize_image(&g, diffuse.size);
-			*g = g_resized;
+			let r_resized = resize_image(&r, diffuse.size);
+			*r = r_resized;
 		}
 	}
 
@@ -212,17 +207,17 @@ fn make_texture(
 			Vec3f::unit_z()
 		};
 
-		let glossiness = if let Some(g) = &glossiness_map
+		let roughness = if let Some(r) = &roughness_map
 		{
-			g.pixels[index].get_rgb()[0] as f32 / 255.0
+			r.pixels[index].get_rgb()[0] as f32 / 255.0
 		}
 		else
 		{
-			glossiness_clamped
+			roughness_clamped
 		}
-		.max(MIN_VALID_GLOSSINESS);
+		.max(MIN_VALID_ROUGHNESS);
 
-		dst.packed_normal_glossiness = PackedNormalGlossiness::pack(&normal, glossiness);
+		dst.packed_normal_roughness = PackedNormalRoughness::pack(&normal, roughness);
 	}
 
 	result
@@ -262,7 +257,7 @@ fn build_mips(mip0: Texture) -> TextureWithMips
 			size: [prev_mip.size[0] >> 1, prev_mip.size[1] >> 1],
 			pixels: Vec::new(),
 			has_normal_map: prev_mip.has_normal_map,
-			has_non_zero_glossiness: prev_mip.has_non_zero_glossiness,
+			has_non_one_roughness: prev_mip.has_non_one_roughness,
 			is_metal: prev_mip.is_metal,
 		};
 
@@ -286,23 +281,20 @@ fn build_mips(mip0: Texture) -> TextureWithMips
 
 				dst.diffuse = Color32::get_average_4([p00.diffuse, p01.diffuse, p10.diffuse, p11.diffuse]);
 
-				let (p00_normal, p00_glossiness) = p00.packed_normal_glossiness.unpack();
-				let (p01_normal, p01_glossiness) = p01.packed_normal_glossiness.unpack();
-				let (p10_normal, p10_glossiness) = p10.packed_normal_glossiness.unpack();
-				let (p11_normal, p11_glossiness) = p11.packed_normal_glossiness.unpack();
+				let (p00_normal, p00_roughness) = p00.packed_normal_roughness.unpack();
+				let (p01_normal, p01_roughness) = p01.packed_normal_roughness.unpack();
+				let (p10_normal, p10_roughness) = p10.packed_normal_roughness.unpack();
+				let (p11_normal, p11_roughness) = p11.packed_normal_roughness.unpack();
 
 				let normals_sum = p00_normal + p01_normal + p10_normal + p11_normal;
 				let normals_sum_len2 = normals_sum.magnitude2();
 				let dst_normal = normals_sum / normals_sum_len2.sqrt().max(0.000001);
 
-				// For perfectly flat surface length of normals sum is 4.
-				// For surface with normal variation this value is less than 4.
-				// So, reduce glossiness in order to compensate normal variations.
-				let average_glossiness = (p00_glossiness + p01_glossiness + p10_glossiness + p11_glossiness) * 0.25;
-				let glossines_reduce_factor = normals_sum_len2 * normals_sum_len2 * (1.0 / 256.0);
-				let dst_glossiness = (average_glossiness * glossines_reduce_factor).max(MIN_VALID_GLOSSINESS);
+				let average_roughness = (p00_roughness + p01_roughness + p10_roughness + p11_roughness) * 0.25;
+				// TODO - increase roughness in case of large normals variation.
+				let dst_roughness = average_roughness.max(MIN_VALID_ROUGHNESS);
 
-				dst.packed_normal_glossiness = PackedNormalGlossiness::pack(&dst_normal, dst_glossiness);
+				dst.packed_normal_roughness = PackedNormalRoughness::pack(&dst_normal, dst_roughness);
 			}
 		}
 		result[i] = mip;
@@ -311,8 +303,8 @@ fn build_mips(mip0: Texture) -> TextureWithMips
 	result
 }
 
-// Do not allow absolte zero glossiness. Limit it to some small value.
-const MIN_VALID_GLOSSINESS: f32 = 1.0 / 72.0;
+// Do not allow absolte zero roughness. Limit it to some small value.
+const MIN_VALID_ROUGHNESS: f32 = 1.0 / 64.0;
 
 fn renormalize_normal(normal: Vec3f) -> Vec3f
 {
