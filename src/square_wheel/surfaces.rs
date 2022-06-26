@@ -600,8 +600,7 @@ fn build_surface_impl_5_static_params<
 
 						// Make glossiness smaller for light with large deviation.
 						let glossiness_corrected_scaled =
-							inv_fast(inv_fast(GLOSSINESS_SCALE * texel_glossiness) + directional_component.deviation)
-								.max(0.75);
+							inv_fast(texel_glossiness + directional_component.deviation).max(0.75);
 
 						let specular_intensity = get_specular_intensity(
 							vec_to_camera_reflected_light_angle_cos,
@@ -754,7 +753,7 @@ fn build_surface_impl_5_static_params<
 						let vec_to_camera_reflected_light_angle_cos = vec3_dot(&vec_to_camera_reflected, &vec_to_light) *
 							inv_sqrt_fast(vec_to_camera_len2 * vec_to_light_len2);
 
-						let glossiness_scaled = GLOSSINESS_SCALE * texel_glossiness;
+						let glossiness_scaled = inv_fast(texel_glossiness);
 						get_specular_intensity(vec_to_camera_reflected_light_angle_cos, glossiness_scaled)
 					};
 
@@ -1059,8 +1058,6 @@ const MIN_POSITIVE_VALUE: f32 = 1.0 / ((1 << 30) as f32);
 const DIELECTRIC_ZERO_REFLECTIVITY: f32 = 0.04;
 const DIELECTRIC_AVERAGE_REFLECTIVITY: f32 = DIELECTRIC_ZERO_REFLECTIVITY * 3.0;
 const METAL_AVERAGE_SCHLICK_FACTOR: f32 = 0.5;
-
-const GLOSSINESS_SCALE: f32 = 64.0;
 
 // Faster version of dot product, because it uses "mul_add".
 fn vec3_dot(a: &Vec3f, b: &Vec3f) -> f32
