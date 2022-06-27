@@ -287,12 +287,20 @@ fn build_mips(mip0: Texture) -> TextureWithMips
 				let (p11_normal, p11_roughness) = p11.packed_normal_roughness.unpack();
 
 				let normals_sum = p00_normal + p01_normal + p10_normal + p11_normal;
-				let normals_sum_len2 = normals_sum.magnitude2();
-				let dst_normal = normals_sum / normals_sum_len2.sqrt().max(0.000001);
+				let normals_lens_sum =
+					(p00_normal.magnitude() + p01_normal.magnitude() + p10_normal.magnitude() + p11_normal.magnitude())
+						.max(0.000001);
+				let normals_sum_len = normals_sum.magnitude().max(0.000001);
+
+				let dst_normal = normals_sum / normals_sum_len;
+
+				// Increase roughness proportional to deviation of normal.
+				let half_normal_deviation_cos = normals_sum_len / normals_lens_sum;
+				const MIN_HALF_NORMAL_DEVIATION_COS: f32 = 0.5;
+				let normal_deviation = (1.0 - half_normal_deviation_cos) / (1.0 - MIN_HALF_NORMAL_DEVIATION_COS);
 
 				let average_roughness = (p00_roughness + p01_roughness + p10_roughness + p11_roughness) * 0.25;
-				// TODO - increase roughness in case of large normals variation.
-				let dst_roughness = average_roughness.max(MIN_VALID_ROUGHNESS);
+				let dst_roughness = (average_roughness + normal_deviation).max(MIN_VALID_ROUGHNESS).min(1.0);
 
 				dst.packed_normal_roughness = PackedNormalRoughness::pack(&dst_normal, dst_roughness);
 			}
