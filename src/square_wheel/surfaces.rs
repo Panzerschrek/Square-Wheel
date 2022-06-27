@@ -1007,8 +1007,7 @@ fn get_specular_intensity(vec_to_camera_reflected_light_angle_cos: f32, inv_roug
 {
 	if false
 	{
-		// Old formula. Specular are is bounded.
-
+		// Old formula. Specular is bounded.
 		let x = ((vec_to_camera_reflected_light_angle_cos - 1.0) * inv_roughness).max(-2.0);
 
 		// With susch params f(-2) = 0, f(0) = 0.75, integral(-2, 0) = 0.5.
@@ -1020,8 +1019,7 @@ fn get_specular_intensity(vec_to_camera_reflected_light_angle_cos: f32, inv_roug
 	}
 	else
 	{
-		// New formula. Just a little bit slower, specular are is unbounded.
-
+		// New formula. Just a little bit slower, specular is unbounded.
 		let x = (vec_to_camera_reflected_light_angle_cos - 1.0) * inv_roughness;
 
 		// Integral of this function is equal to 1 / 2 in range (-inf, 0] and 3 / 8 in range [-2; 0].

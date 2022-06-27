@@ -160,13 +160,11 @@ fn make_texture(
 	is_metal: bool,
 ) -> Texture
 {
-	let roughness_clamped = roughness.max(0.0).min(1.0);
-
 	let mut result = Texture {
 		size: diffuse.size,
 		pixels: vec![TextureElement::default(); (diffuse.size[0] * diffuse.size[1]) as usize],
 		has_normal_map: normals.is_some(),
-		has_non_one_roughness: roughness_clamped < 1.0 || roughness_map.is_some(),
+		has_non_one_roughness: roughness < 1.0 || roughness_map.is_some(),
 		is_metal,
 	};
 
@@ -213,9 +211,10 @@ fn make_texture(
 		}
 		else
 		{
-			roughness_clamped
+			roughness
 		}
-		.max(MIN_VALID_ROUGHNESS);
+		.max(MIN_VALID_ROUGHNESS)
+		.min(1.0);
 
 		dst.packed_normal_roughness = PackedNormalRoughness::pack(&normal, roughness);
 	}
@@ -294,7 +293,7 @@ fn build_mips(mip0: Texture) -> TextureWithMips
 
 				let dst_normal = normals_sum / normals_sum_len;
 
-				// Increase roughness proportional to deviation of normal.
+				// Increase roughness by adding deviation of normal.
 				let half_normal_deviation_cos = normals_sum_len / normals_lens_sum;
 				const MIN_HALF_NORMAL_DEVIATION_COS: f32 = 0.5;
 				let normal_deviation = (1.0 - half_normal_deviation_cos) / (1.0 - MIN_HALF_NORMAL_DEVIATION_COS);
