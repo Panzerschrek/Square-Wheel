@@ -1005,15 +1005,32 @@ fn cube_shadow_map_side_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f, side
 
 fn get_specular_intensity(vec_to_camera_reflected_light_angle_cos: f32, inv_roughness: f32) -> f32
 {
-	// This formula is not physically-correct but it gives good results.
-	let x = ((vec_to_camera_reflected_light_angle_cos - 1.0) * inv_roughness).max(-2.0);
+	if false
+	{
+		// Old formula. Specular are is bounded.
 
-	// With susch params f(-2) = 0, f(0) = 0.75, integral(-2, 0) = 0.5.
-	// Integral of this function (multiplied by 2 * Pi) over sphere must be identical to integral for diffuse light over hemisphere (Lambertian law).
-	let a = 0.1875;
-	let b = 0.75;
-	let c = 0.75;
-	f32::mul_add(x, f32::mul_add(x, a, b), c) * inv_roughness
+		let x = ((vec_to_camera_reflected_light_angle_cos - 1.0) * inv_roughness).max(-2.0);
+
+		// With susch params f(-2) = 0, f(0) = 0.75, integral(-2, 0) = 0.5.
+		// Integral of this function (multiplied by 2 * Pi) over sphere must be identical to integral for diffuse light over hemisphere (Lambertian law).
+		let a = 0.1875;
+		let b = 0.75;
+		let c = 0.75;
+		f32::mul_add(x, f32::mul_add(x, a, b), c) * inv_roughness
+	}
+	else
+	{
+		// New formula. Just a little bit slower, specular are is unbounded.
+
+		let x = (vec_to_camera_reflected_light_angle_cos - 1.0) * inv_roughness;
+
+		// Integral of this function is equal to 1 / 2 in range (-inf, 0] and 3 / 8 in range [-2; 0].
+		const SQRT_7: f32 = 2.645751311;
+		const A: f32 = 2.0 * std::f32::consts::PI / SQRT_7;
+		const B: f32 = std::f32::consts::PI * SQRT_7 / 2.0;
+
+		inv_fast(f32::mul_add(x * x, B, A)) * inv_roughness
+	}
 }
 
 fn get_fresnel_factor_base(vec_to_camera_normal_angle_cos: f32) -> f32
