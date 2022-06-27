@@ -687,6 +687,8 @@ fn build_surface_impl_5_static_params<
 				let vec_to_camera_reflected;
 				let vec_to_camera_len2;
 				let specular_k;
+				let inv_roughness;
+
 				if SPECULAR_TYPE != SPECULAR_TYPE_NONE
 				{
 					// Calculate reflected view angle and fresnel factor based on it.
@@ -712,12 +714,15 @@ fn build_surface_impl_5_static_params<
 					{
 						0.0
 					};
+
+					inv_roughness = inv_fast(texel_roughness)
 				}
 				else
 				{
 					vec_to_camera_reflected = Vec3f::zero();
 					vec_to_camera_len2 = MIN_POSITIVE_VALUE;
 					specular_k = 0.0;
+					inv_roughness = 0.0;
 				}
 
 				for (light, shadow_cube_map) in dynamic_lights
@@ -748,7 +753,6 @@ fn build_surface_impl_5_static_params<
 						let vec_to_camera_reflected_light_angle_cos = vec3_dot(&vec_to_camera_reflected, &vec_to_light) *
 							inv_sqrt_fast(vec_to_camera_len2 * vec_to_light_len2);
 
-						let inv_roughness = inv_fast(texel_roughness);
 						get_specular_intensity(vec_to_camera_reflected_light_angle_cos, inv_roughness)
 					};
 
