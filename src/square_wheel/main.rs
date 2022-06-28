@@ -4,6 +4,7 @@ mod commands_processor;
 mod commands_queue;
 mod config;
 mod console;
+mod debug_stats_printer;
 mod depth_renderer;
 mod draw_ordering;
 mod fast_math;

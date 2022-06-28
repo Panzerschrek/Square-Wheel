@@ -1,6 +1,6 @@
 use super::{
-	commands_processor, commands_queue, config, console, host_config::*, inline_models_index, postprocessor::*,
-	renderer, test_game, text_printer, ticks_counter::*,
+	commands_processor, commands_queue, config, console, debug_stats_printer::*, host_config::*, inline_models_index,
+	postprocessor::*, renderer, test_game, text_printer, ticks_counter::*,
 };
 use common::{bsp_map_save_load, color::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
@@ -29,6 +29,7 @@ struct ActiveMap
 	renderer: renderer::Renderer,
 	postprocessor: Postprocessor,
 	inline_models_index: inline_models_index::InlineModelsIndex,
+	debug_stats_printer: DebugStatsPrinter,
 }
 
 impl Host
@@ -278,6 +279,7 @@ impl Host
 					&active_map.inline_models_index,
 					active_map.game.get_test_lights(),
 					active_map.game.get_game_time_s(),
+					&mut active_map.debug_stats_printer,
 				);
 
 				active_map
@@ -293,8 +295,11 @@ impl Host
 					&active_map.inline_models_index,
 					active_map.game.get_test_lights(),
 					active_map.game.get_game_time_s(),
+					&mut active_map.debug_stats_printer,
 				);
 			}
+
+			active_map.debug_stats_printer.flush(pixels, surface_info);
 		}
 		else
 		{
@@ -339,6 +344,7 @@ impl Host
 					renderer: renderer::Renderer::new(self.app_config.clone(), map_rc.clone()),
 					postprocessor: Postprocessor::new(),
 					inline_models_index: inline_models_index::InlineModelsIndex::new(map_rc),
+					debug_stats_printer: DebugStatsPrinter::new(self.config.show_debug_stats),
 				});
 			},
 			Ok(None) =>

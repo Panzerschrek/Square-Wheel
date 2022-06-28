@@ -1,7 +1,7 @@
 use super::{
-	config, depth_renderer::*, draw_ordering, fast_math::*, frame_number::*, inline_models_index::*, light::*,
-	map_materials_processor::*, map_visibility_calculator::*, performance_counter::*, rasterizer::*, rect_splitting,
-	renderer_config::*, shadow_map::*, surfaces::*, text_printer, textures::*,
+	config, debug_stats_printer::*, depth_renderer::*, draw_ordering, fast_math::*, frame_number::*,
+	inline_models_index::*, light::*, map_materials_processor::*, map_visibility_calculator::*, performance_counter::*,
+	rasterizer::*, rect_splitting, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
 };
 use common::{
 	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, math_types::*, matrix::*,
@@ -110,6 +110,7 @@ impl Renderer
 		inline_models_index: &InlineModelsIndex,
 		test_lights: &[PointLight],
 		frame_time_s: f32,
+		debug_stats_printer: &mut DebugStatsPrinter,
 	) where
 		ColorVec: Into<ColorT>,
 		ColorT: Copy + Send + Sync,
@@ -136,7 +137,7 @@ impl Renderer
 		let frame_duration_s = (frame_end_time - frame_start_time).as_secs_f32();
 		self.performance_counters.frame_duration.add_value(frame_duration_s);
 
-		if self.config.show_stats
+		if debug_stats_printer.show_debug_stats()
 		{
 			let mut num_visible_leafs = 0;
 			let mut num_visible_models_parts = 0;
@@ -152,32 +153,34 @@ impl Renderer
 				}
 			}
 
-			// TODO - fix this
-			/*
-			text_printer::print(
-				pixels,
-				surface_info,
-				&format!(
-					"frame time: {:04.2}ms\nmaterials update: {:04.2}ms\nvisible leafs search: {:04.2}ms\nsurfaces \
-					 preparation: {:04.2}ms\nrasterization: {:04.2}ms\nleafs: {}/{}\nmodels parts: {}\npolygons: \
-					 {}\nsurfaces pixels: {}k\nmip bias: {:04.2}\n",
-					self.performance_counters.frame_duration.get_average_value() * 1000.0,
-					self.performance_counters.materials_update.get_average_value() * 1000.0,
-					self.performance_counters.visible_leafs_search.get_average_value() * 1000.0,
-					self.performance_counters.surfaces_preparation.get_average_value() * 1000.0,
-					self.performance_counters.rasterization.get_average_value() * 1000.0,
-					num_visible_leafs,
-					self.map.leafs.len(),
-					num_visible_models_parts,
-					self.current_frame_visible_polygons.len(),
-					(self.num_visible_surfaces_pixels + 1023) / 1024,
-					self.mip_bias,
-				),
-				0,
-				0,
-				Color32::from_rgb(255, 255, 255),
-			);
-			* */
+			debug_stats_printer.add_line(format!(
+				"frame time: {:04.2}ms",
+				self.performance_counters.frame_duration.get_average_value() * 1000.0
+			));
+			debug_stats_printer.add_line(format!(
+				"materials update: {:04.2}ms",
+				self.performance_counters.materials_update.get_average_value() * 1000.0
+			));
+			debug_stats_printer.add_line(format!(
+				"visible leafs search: {:04.2}ms",
+				self.performance_counters.visible_leafs_search.get_average_value() * 1000.0
+			));
+			debug_stats_printer.add_line(format!(
+				"surfaces  preparation: {:04.2}ms",
+				self.performance_counters.surfaces_preparation.get_average_value() * 1000.0
+			));
+			debug_stats_printer.add_line(format!(
+				"rasterization: {:04.2}ms",
+				self.performance_counters.rasterization.get_average_value() * 1000.0
+			));
+			debug_stats_printer.add_line(format!("leafs: {}/{}", num_visible_leafs, self.map.leafs.len()));
+			debug_stats_printer.add_line(format!("models parts: {}", num_visible_models_parts));
+			debug_stats_printer.add_line(format!("polygons: {}", self.current_frame_visible_polygons.len()));
+			debug_stats_printer.add_line(format!(
+				"surfaces pixels: {}k",
+				(self.num_visible_surfaces_pixels + 1023) / 1024
+			));
+			debug_stats_printer.add_line(format!("mip bias: {}", self.mip_bias));
 		}
 	}
 

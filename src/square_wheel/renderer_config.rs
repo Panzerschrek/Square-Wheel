@@ -8,9 +8,6 @@ pub struct RendererConfig
 	pub clear_background: bool,
 
 	#[serde(default)]
-	pub show_stats: bool,
-
-	#[serde(default)]
 	pub debug_draw_depth: bool,
 
 	#[serde(default)]

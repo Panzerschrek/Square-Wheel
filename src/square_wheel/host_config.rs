@@ -12,6 +12,9 @@ pub struct HostConfig
 	pub num_threads: f32,
 
 	#[serde(default)]
+	pub show_debug_stats: bool,
+
+	#[serde(default)]
 	pub fullscreen_mode: f32,
 
 	#[serde(default)]
