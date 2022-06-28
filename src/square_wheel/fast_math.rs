@@ -141,6 +141,16 @@ mod fast_math_impl
 		{
 			unsafe { Self(_mm_fmadd_ps(self.0, _mm_broadcastss_ps(_mm_set1_ps(scalar)), b.0)) }
 		}
+
+		pub fn mul_add(&self, b: &Self, c: &Self) -> Self
+		{
+			unsafe { Self(_mm_fmadd_ps(self.0, b.0, c.0)) }
+		}
+
+		pub fn div(&self, other: &Self) -> Self
+		{
+			unsafe { Self(_mm_div_ps(self.0, other.0)) }
+		}
 	} // impl ColorVec
 }
 
@@ -272,6 +282,26 @@ mod fast_math_impl
 				f32::mul_add(self.0[1], scalar, b.0[1]),
 				f32::mul_add(self.0[2], scalar, b.0[2]),
 				f32::mul_add(self.0[3], scalar, b.0[3]),
+			])
+		}
+
+		pub fn mul_add(&self, b: &Self, c: &Self) -> Self
+		{
+			Self([
+				f32::mul_add(self.0[0], b.0[0], c.0[0]),
+				f32::mul_add(self.0[1], b.0[1], c.0[1]),
+				f32::mul_add(self.0[2], b.0[2], c.0[2]),
+				f32::mul_add(self.0[3], b.0[3], c.0[3]),
+			])
+		}
+
+		pub fn div(&self, other: &Self) -> Self
+		{
+			Self([
+				self.0[0] / other.0[0],
+				self.0[1] / other.0[1],
+				self.0[2] / other.0[2],
+				self.0[3] / other.0[3],
 			])
 		}
 	} // impl ColorVec

@@ -40,6 +40,16 @@ impl Postprocessor
 			);
 		}
 
+		// Use Reinhard formula for tonemapping.
+
+		let scale = 1.0; // TODO - make this dependent on exposure.
+		let inv_scale = 1.0 / scale;
+
+		let inv_scale_vec = ColorVec::from_color_f32x3(&[inv_scale, inv_scale, inv_scale]);
+
+		let inv_255 = 1.0 / 255.0;
+		let inv_255_vec = ColorVec::from_color_f32x3(&[inv_255, inv_255, inv_255]);
+
 		for y in 0 .. surface_size[1]
 		{
 			let src_line = &self.hdr_buffer[y * self.hdr_buffer_size[0] .. (y + 1) * self.hdr_buffer_size[0]];
@@ -47,8 +57,8 @@ impl Postprocessor
 			for (dst, &src) in dst_line.iter_mut().zip(src_line.iter())
 			{
 				let c = ColorVec::from_color64(src);
-				// TODO - perform tonemapping.
-				*dst = c.into();
+				let c_mapped = ColorVec::div(&c, &ColorVec::mul_add(&c, &inv_255_vec, &inv_scale_vec));
+				*dst = c_mapped.into();
 			}
 		}
 	}
