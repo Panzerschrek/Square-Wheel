@@ -16,6 +16,9 @@ pub struct HostConfig
 
 	#[serde(default)]
 	pub maps_path: String,
+
+	#[serde(default)]
+	pub hdr_rendering: bool,
 }
 
 impl HostConfig

@@ -4,8 +4,8 @@ use super::{
 	renderer_config::*, shadow_map::*, surfaces::*, text_printer, textures::*,
 };
 use common::{
-	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, color::*, fixed_math::*, lightmap, math_types::*,
-	matrix::*, plane::*, shared_mut_slice::*, system_window,
+	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, math_types::*, matrix::*,
+	plane::*, shared_mut_slice::*, system_window,
 };
 use rayon::prelude::*;
 use std::sync::Arc;
@@ -102,15 +102,17 @@ impl Renderer
 		}
 	}
 
-	pub fn draw_frame(
+	pub fn draw_frame<ColorT>(
 		&mut self,
-		pixels: &mut [Color32],
+		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
 		inline_models_index: &InlineModelsIndex,
 		test_lights: &[PointLight],
 		frame_time_s: f32,
-	)
+	) where
+		ColorVec: Into<ColorT>,
+		ColorT: Copy + Send + Sync,
 	{
 		self.synchronize_config();
 		self.update_mip_bias();
@@ -150,6 +152,8 @@ impl Renderer
 				}
 			}
 
+			// TODO - fix this
+			/*
 			text_printer::print(
 				pixels,
 				surface_info,
@@ -173,6 +177,7 @@ impl Renderer
 				0,
 				Color32::from_rgb(255, 255, 255),
 			);
+			* */
 		}
 	}
 

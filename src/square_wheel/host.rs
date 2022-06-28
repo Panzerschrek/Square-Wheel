@@ -1,6 +1,6 @@
 use super::{
-	commands_processor, commands_queue, config, console, host_config::*, inline_models_index, renderer, test_game,
-	text_printer, ticks_counter::*,
+	commands_processor, commands_queue, config, console, host_config::*, inline_models_index, postprocessor::*,
+	renderer, test_game, text_printer, ticks_counter::*,
 };
 use common::{bsp_map_save_load, color::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
@@ -27,6 +27,7 @@ struct ActiveMap
 {
 	game: test_game::Game,
 	renderer: renderer::Renderer,
+	postprocessor: Postprocessor,
 	inline_models_index: inline_models_index::InlineModelsIndex,
 }
 
@@ -261,14 +262,37 @@ impl Host
 		{
 			let camera_matrices = active_map.game.get_camera_matrices(surface_info);
 
-			active_map.renderer.draw_frame(
-				pixels,
-				surface_info,
-				&camera_matrices,
-				&active_map.inline_models_index,
-				active_map.game.get_test_lights(),
-				active_map.game.get_game_time_s(),
-			);
+			if self.config.hdr_rendering
+			{
+				let hdr_buffer_size = [surface_info.width, surface_info.height];
+				let hdr_buffer = active_map.postprocessor.get_hdr_buffer(hdr_buffer_size);
+
+				active_map.renderer.draw_frame(
+					hdr_buffer,
+					&system_window::SurfaceInfo {
+						width: hdr_buffer_size[0],
+						height: hdr_buffer_size[1],
+						pitch: hdr_buffer_size[0],
+					},
+					&camera_matrices,
+					&active_map.inline_models_index,
+					active_map.game.get_test_lights(),
+					active_map.game.get_game_time_s(),
+				);
+
+				active_map.postprocessor.perform_postprocessing(pixels, surface_info);
+			}
+			else
+			{
+				active_map.renderer.draw_frame(
+					pixels,
+					surface_info,
+					&camera_matrices,
+					&active_map.inline_models_index,
+					active_map.game.get_test_lights(),
+					active_map.game.get_game_time_s(),
+				);
+			}
 		}
 		else
 		{
@@ -311,6 +335,7 @@ impl Host
 				self.active_map = Some(ActiveMap {
 					game: test_game::Game::new(self.commands_processor.clone(), self.console.clone()),
 					renderer: renderer::Renderer::new(self.app_config.clone(), map_rc.clone()),
+					postprocessor: Postprocessor::new(),
 					inline_models_index: inline_models_index::InlineModelsIndex::new(map_rc),
 				});
 			},

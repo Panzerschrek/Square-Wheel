@@ -80,6 +80,17 @@ mod fast_math_impl
 			}
 		}
 
+		pub fn from_color64(c: Color64) -> Self
+		{
+			unsafe {
+				let color_64bit = c.get_raw() as i64;
+				let values_16bit = _mm_cvtsi64_si128(color_64bit);
+				let values_32bit = _mm_cvtepu16_epi32(values_16bit);
+				let values_f4 = _mm_cvtepi32_ps(values_32bit);
+				Self(values_f4)
+			}
+		}
+
 		pub fn into_color32(&self) -> Color32
 		{
 			// Here we 100% sure that components overflow is not possible (because of "min").
@@ -104,7 +115,7 @@ mod fast_math_impl
 				let values_clamped = _mm_min_ps(self.0, _mm_set_ps(max_val, max_val, max_val, max_val));
 				let values_32bit = _mm_cvtps_epi32(values_clamped);
 				// TODO - check correctness of this mask.
-				let shuffle_mask = _mm_set_epi8(0, 0, 0, 0, 0, 0, 0, 0, 13, 12, 9, 8, 5, 4, 0, 0);
+				let shuffle_mask = _mm_set_epi8(0, 0, 0, 0, 0, 0, 0, 0, 13, 12, 9, 8, 5, 4, 1, 0);
 				let values_16bit = _mm_shuffle_epi8(values_32bit, shuffle_mask);
 				let color_64bit = _mm_cvtsi128_si64(values_16bit);
 				Color64::from_raw(color_64bit as u64)
@@ -187,6 +198,16 @@ mod fast_math_impl
 			for i in 0 .. 4
 			{
 				res[i] = ((c.get_raw() >> (i * 8)) & 0xFF) as f32;
+			}
+			Self(res)
+		}
+
+		pub fn from_color64(c: Color64) -> Self
+		{
+			let mut res = [0.0; 4];
+			for i in 0 .. 4
+			{
+				res[i] = ((c.get_raw() >> (i * 16)) & 0xFFFF) as f32;
 			}
 			Self(res)
 		}
