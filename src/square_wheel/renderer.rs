@@ -70,6 +70,9 @@ struct DrawPolygonData
 	surface_tc_min: [i32; 2],
 }
 
+type RasterizerLDR<'a> = Rasterizer<'a, Color32>;
+type RasterizerT<'a> = RasterizerLDR<'a>;
+
 impl Renderer
 {
 	pub fn new(app_config: config::ConfigSharedPtr, map: Arc<bsp_map_compact::BSPMap>) -> Self
@@ -298,7 +301,7 @@ impl Renderer
 		let num_threads = rayon::current_num_threads();
 		if num_threads == 1
 		{
-			let mut rasterizer = Rasterizer::new(
+			let mut rasterizer = RasterizerT::new(
 				pixels,
 				&surface_info,
 				ClipRect {
@@ -764,7 +767,7 @@ impl Renderer
 
 	fn draw_tree_r(
 		&self,
-		rasterizer: &mut Rasterizer,
+		rasterizer: &mut RasterizerT,
 		camera_matrices: &CameraMatrices,
 		viewport_clippung_polygon: &ClippingPolygon,
 		inline_models_index: &InlineModelsIndex,
@@ -807,7 +810,7 @@ impl Renderer
 
 	fn draw_leaf(
 		&self,
-		rasterizer: &mut Rasterizer,
+		rasterizer: &mut RasterizerT,
 		camera_matrices: &CameraMatrices,
 		bounds: &ClippingPolygon,
 		inline_models_index: &InlineModelsIndex,
@@ -890,7 +893,7 @@ impl Renderer
 
 	fn draw_model_polygon(
 		&self,
-		rasterizer: &mut Rasterizer,
+		rasterizer: &mut RasterizerT,
 		model_transform_matrix: &Mat4f,
 		view_matrix: &Mat4f,
 		clip_planes: &ClippingPolygonPlanes,
@@ -1063,7 +1066,7 @@ fn draw_crosshair(pixels: &mut [Color32], surface_info: &system_window::SurfaceI
 }
 
 fn draw_polygon(
-	rasterizer: &mut Rasterizer,
+	rasterizer: &mut RasterizerT,
 	clip_planes: &ClippingPolygonPlanes,
 	vertices_transformed: &[Vec3f],
 	depth_equation: &DepthEquation,
