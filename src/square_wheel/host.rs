@@ -280,7 +280,9 @@ impl Host
 					active_map.game.get_game_time_s(),
 				);
 
-				active_map.postprocessor.perform_postprocessing(pixels, surface_info);
+				active_map
+					.postprocessor
+					.perform_postprocessing(pixels, surface_info, self.config.hdr_exposure);
 			}
 			else
 			{

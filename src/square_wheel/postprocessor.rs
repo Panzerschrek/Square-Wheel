@@ -29,7 +29,12 @@ impl Postprocessor
 		&mut self.hdr_buffer[.. required_size]
 	}
 
-	pub fn perform_postprocessing(&self, pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo)
+	pub fn perform_postprocessing(
+		&self,
+		pixels: &mut [Color32],
+		surface_info: &system_window::SurfaceInfo,
+		exposure: f32,
+	)
 	{
 		let surface_size = [surface_info.width, surface_info.height];
 		if self.hdr_buffer_size != surface_size
@@ -42,8 +47,7 @@ impl Postprocessor
 
 		// Use Reinhard formula for tonemapping.
 
-		let scale = 1.0; // TODO - make this dependent on exposure.
-		let inv_scale = 1.0 / scale;
+		let inv_scale = 1.0 / exposure;
 
 		let inv_scale_vec = ColorVec::from_color_f32x3(&[inv_scale, inv_scale, inv_scale]);
 
