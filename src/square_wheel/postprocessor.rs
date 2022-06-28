@@ -1,11 +1,29 @@
-use super::fast_math::*;
+use super::{debug_stats_printer::*, fast_math::*, performance_counter::*};
 use common::{color::*, system_window};
 
 pub struct Postprocessor
 {
 	hdr_buffer_size: [usize; 2],
 	hdr_buffer: Vec<Color64>,
+	performance_counters: PostprocessorPerformanceCounters,
 }
+
+struct PostprocessorPerformanceCounters
+{
+	tonemapping_duration: PerformanceCounter,
+}
+
+impl PostprocessorPerformanceCounters
+{
+	fn new() -> Self
+	{
+		let window_size = 100;
+		Self {
+			tonemapping_duration: PerformanceCounter::new(window_size),
+		}
+	}
+}
+type Clock = std::time::Instant;
 
 impl Postprocessor
 {
@@ -14,6 +32,7 @@ impl Postprocessor
 		Self {
 			hdr_buffer_size: [0, 0],
 			hdr_buffer: Vec::new(),
+			performance_counters: PostprocessorPerformanceCounters::new(),
 		}
 	}
 
@@ -30,10 +49,11 @@ impl Postprocessor
 	}
 
 	pub fn perform_postprocessing(
-		&self,
+		&mut self,
 		pixels: &mut [Color32],
 		surface_info: &system_window::SurfaceInfo,
 		exposure: f32,
+		debug_stats_printer: &mut DebugStatsPrinter,
 	)
 	{
 		let surface_size = [surface_info.width, surface_info.height];
@@ -44,6 +64,8 @@ impl Postprocessor
 				self.hdr_buffer_size, surface_size
 			);
 		}
+
+		let tonemapping_start_time = Clock::now();
 
 		// Use Reinhard formula for tonemapping.
 
@@ -64,6 +86,20 @@ impl Postprocessor
 				let c_mapped = ColorVec::div(&c, &ColorVec::mul_add(&c, &inv_255_vec, &inv_scale_vec));
 				*dst = c_mapped.into();
 			}
+		}
+
+		let tonemapping_end_time = Clock::now();
+		let mtonemapping_duration_s = (tonemapping_end_time - tonemapping_start_time).as_secs_f32();
+		self.performance_counters
+			.tonemapping_duration
+			.add_value(mtonemapping_duration_s);
+
+		if debug_stats_printer.show_debug_stats()
+		{
+			debug_stats_printer.add_line(format!(
+				"tonemapping time: {:04.2}ms",
+				self.performance_counters.tonemapping_duration.get_average_value() * 1000.0
+			));
 		}
 	}
 }

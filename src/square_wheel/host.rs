@@ -282,9 +282,12 @@ impl Host
 					&mut active_map.debug_stats_printer,
 				);
 
-				active_map
-					.postprocessor
-					.perform_postprocessing(pixels, surface_info, self.config.hdr_exposure);
+				active_map.postprocessor.perform_postprocessing(
+					pixels,
+					surface_info,
+					self.config.hdr_exposure,
+					&mut active_map.debug_stats_printer,
+				);
 			}
 			else
 			{
