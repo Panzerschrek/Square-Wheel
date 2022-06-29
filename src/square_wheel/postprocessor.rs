@@ -82,13 +82,18 @@ impl Postprocessor
 			);
 		}
 
-		let bloom_calculation_start_time = Clock::now();
+		let use_bloom = true;
 
-		self.perform_bloom();
+		if use_bloom
+		{
+			let bloom_calculation_start_time = Clock::now();
 
-		let bloom_calculation_end_time = Clock::now();
-		let bloom_duration_s = (bloom_calculation_end_time - bloom_calculation_start_time).as_secs_f32();
-		self.performance_counters.bloom_duration.add_value(bloom_duration_s);
+			self.perform_bloom();
+
+			let bloom_calculation_end_time = Clock::now();
+			let bloom_duration_s = (bloom_calculation_end_time - bloom_calculation_start_time).as_secs_f32();
+			self.performance_counters.bloom_duration.add_value(bloom_duration_s);
+		}
 
 		let tonemapping_start_time = Clock::now();
 
@@ -101,50 +106,28 @@ impl Postprocessor
 		let inv_255 = 1.0 / 255.0;
 		let inv_255_vec = ColorVec::from_color_f32x3(&[inv_255, inv_255, inv_255]);
 
-		// It is safe to share destination buffer since each thead writes into its own regon.
-		let pixels_shared = SharedMutSlice::new(pixels);
-
-		let convert_line = |y| {
-			let pixels_unshared = unsafe { pixels_shared.get() };
-			let src_line = &self.hdr_buffer[y * self.hdr_buffer_size[0] .. (y + 1) * self.hdr_buffer_size[0]];
-			let dst_line = &mut pixels_unshared[y * surface_info.pitch .. (y + 1) * surface_info.pitch];
-			for (dst, &src) in dst_line.iter_mut().zip(src_line.iter())
-			{
-				let c = ColorVec::from_color64(src);
-				let c_mapped = ColorVec::div(&c, &ColorVec::mul_add(&c, &inv_255_vec, &inv_scale_vec));
-				*dst = c_mapped.into();
-			}
-		};
-
-		let num_threads = rayon::current_num_threads();
-		if num_threads == 1
+		if use_bloom
 		{
-			for y in 0 .. surface_size[1]
-			{
-				convert_line(y);
-			}
-
-			// TEMP code. Fix it!!!
-			let bloom_scale = 0.125;
+			let bloom_scale = 0.25; // TODO - read it from config.
 			for src_y in 0 .. self.bloom_buffer_size[1]
 			{
 				for src_x in 0 .. self.bloom_buffer_size[0]
 				{
-					// TODO - use unchecked indexing operator.
-					let bloom_src = self.bloom_buffers[0][src_x + src_y * self.bloom_buffer_size[0]];
+					let bloom_src =
+						debug_checked_fetch(&self.bloom_buffers[0], src_x + src_y * self.bloom_buffer_size[0]);
 					let bloom_c = ColorVec::from_color64(bloom_src);
 					for dx in 0 .. BLOOM_BUFFER_SCALE
 					{
 						for dy in 0 .. BLOOM_BUFFER_SCALE
 						{
-							// TODO - use unchecked indexing operator.
 							let dst_x = src_x * BLOOM_BUFFER_SCALE + dx;
 							let dst_y = src_y * BLOOM_BUFFER_SCALE + dy;
-							let c = self.hdr_buffer[dst_x + dst_y * self.hdr_buffer_size[0]];
+							let c = debug_checked_fetch(&self.hdr_buffer, dst_x + dst_y * self.hdr_buffer_size[0]);
 							let c_vec = ColorVec::from_color64(c);
 							let sum = ColorVec::mul_scalar_add(&bloom_c, bloom_scale, &c_vec);
+							// let sum = bloom_c;
 							let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
-							pixels[dst_x + dst_y * surface_info.pitch] = c_mapped.into();
+							debug_checked_store(pixels, dst_x + dst_y * surface_info.pitch, c_mapped.into());
 						}
 					}
 				}
@@ -152,21 +135,47 @@ impl Postprocessor
 		}
 		else
 		{
-			let mut ranges = [[0, 0]; 64];
-			for i in 0 .. num_threads
-			{
-				ranges[i] = [
-					surface_size[1] * i / num_threads,
-					surface_size[1] * (i + 1) / num_threads,
-				];
-			}
+			// It is safe to share destination buffer since each thead writes into its own regon.
+			let pixels_shared = SharedMutSlice::new(pixels);
 
-			ranges[.. num_threads].par_iter().for_each(|range| {
-				for y in range[0] .. range[1]
+			let convert_line = |y| {
+				let pixels_unshared = unsafe { pixels_shared.get() };
+				let src_line = &self.hdr_buffer[y * self.hdr_buffer_size[0] .. (y + 1) * self.hdr_buffer_size[0]];
+				let dst_line = &mut pixels_unshared[y * surface_info.pitch .. (y + 1) * surface_info.pitch];
+				for (dst, &src) in dst_line.iter_mut().zip(src_line.iter())
+				{
+					let c = ColorVec::from_color64(src);
+					let c_mapped = ColorVec::div(&c, &ColorVec::mul_add(&c, &inv_255_vec, &inv_scale_vec));
+					*dst = c_mapped.into();
+				}
+			};
+
+			let num_threads = rayon::current_num_threads();
+			if num_threads == 1
+			{
+				for y in 0 .. surface_size[1]
 				{
 					convert_line(y);
 				}
-			});
+			}
+			else
+			{
+				let mut ranges = [[0, 0]; 64];
+				for i in 0 .. num_threads
+				{
+					ranges[i] = [
+						surface_size[1] * i / num_threads,
+						surface_size[1] * (i + 1) / num_threads,
+					];
+				}
+
+				ranges[.. num_threads].par_iter().for_each(|range| {
+					for y in range[0] .. range[1]
+					{
+						convert_line(y);
+					}
+				});
+			}
 		}
 
 		let tonemapping_end_time = Clock::now();
@@ -207,27 +216,29 @@ impl Postprocessor
 						let src_x = dst_x * BLOOM_BUFFER_SCALE + dx;
 						let src_y = dst_y * BLOOM_BUFFER_SCALE + dy;
 
-						// TODO - use unchecked indexing operator.
-						let src = self.hdr_buffer[src_x + src_y * self.hdr_buffer_size[0]];
+						let src = debug_checked_fetch(&self.hdr_buffer, src_x + src_y * self.hdr_buffer_size[0]);
 						let c = ColorVec::from_color64(src);
 						sum = ColorVec::add(&sum, &c);
 					}
 				}
 
 				let average = ColorVec::mul(&sum, &average_scaler_vec);
-				// TODO - use unchecked indexing operator.
-				self.bloom_buffers[0][dst_x + dst_y * self.bloom_buffer_size[0]] = average.into_color64();
+				debug_checked_store(
+					&mut self.bloom_buffers[0],
+					dst_x + dst_y * self.bloom_buffer_size[0],
+					average.into_color64(),
+				);
 			}
 		}
 
 		// TODO - handle leftover pixels in borders.
 
-		let sigma: f32 = 2.0;
+		let sigma: f32 = 3.0;
 		let blur_radius = ((3.0 * sigma - 0.5).ceil().max(0.0) as usize).max(MAX_GAUSSIAN_KERNEL_RADIUS);
 
 		let blur_kernel = compute_gaussian_kernel(sigma, blur_radius);
 
-		// TODO - speed-up bluring code. Use unchecked indexing, process borders specially.
+		// TODO - speed-up bluring code - process borders specially, use integer computations.
 
 		// Perform horizontal blur. Use buffer 0 as source and buffer 1 as destination.
 		for dst_y in 0 .. self.bloom_buffer_size[1]
@@ -240,13 +251,23 @@ impl Postprocessor
 				{
 					let src_x = (dx + (dst_x as i32)).max(0).min(self.bloom_buffer_size[0] as i32 - 1);
 					let src_y = dst_y;
-					let src = self.bloom_buffers[0][(src_x as usize) + src_y * self.bloom_buffer_size[0]];
+					let src = debug_checked_fetch(
+						&self.bloom_buffers[0],
+						(src_x as usize) + src_y * self.bloom_buffer_size[0],
+					);
 					let src_vec = ColorVec::from_color64(src);
-					sum = ColorVec::mul_scalar_add(&src_vec, blur_kernel[(dx + (blur_radius as i32)) as usize], &sum);
+					sum = ColorVec::mul_scalar_add(
+						&src_vec,
+						debug_checked_fetch(&blur_kernel, (dx + (blur_radius as i32)) as usize),
+						&sum,
+					);
 				}
 
-				// TODO - use unchecked indexing operator.
-				self.bloom_buffers[1][dst_x + dst_y * self.bloom_buffer_size[0]] = sum.into_color64();
+				debug_checked_store(
+					&mut self.bloom_buffers[1],
+					dst_x + dst_y * self.bloom_buffer_size[0],
+					sum.into_color64(),
+				);
 			}
 		}
 
@@ -261,13 +282,23 @@ impl Postprocessor
 				{
 					let src_x = dst_x;
 					let src_y = (dy + (dst_y as i32)).max(0).min(self.bloom_buffer_size[1] as i32 - 1);
-					let src = self.bloom_buffers[1][src_x + (src_y as usize) * self.bloom_buffer_size[0]];
+					let src = debug_checked_fetch(
+						&self.bloom_buffers[1],
+						src_x + (src_y as usize) * self.bloom_buffer_size[0],
+					);
 					let src_vec = ColorVec::from_color64(src);
-					sum = ColorVec::mul_scalar_add(&src_vec, blur_kernel[(dy + (blur_radius as i32)) as usize], &sum);
+					sum = ColorVec::mul_scalar_add(
+						&src_vec,
+						debug_checked_fetch(&blur_kernel, (dy + (blur_radius as i32)) as usize),
+						&sum,
+					);
 				}
 
-				// TODO - use unchecked indexing operator.
-				self.bloom_buffers[0][dst_x + dst_y * self.bloom_buffer_size[0]] = sum.into_color64();
+				debug_checked_store(
+					&mut self.bloom_buffers[0],
+					dst_x + dst_y * self.bloom_buffer_size[0],
+					sum.into_color64(),
+				);
 			}
 		}
 	}
@@ -297,4 +328,28 @@ fn compute_gaussian_kernel(sigma: f32, radius: usize) -> [f32; MAX_GAUSSIAN_KERN
 	}
 
 	result
+}
+
+fn debug_checked_fetch<T: Copy>(data: &[T], index: usize) -> T
+{
+	#[cfg(debug_assertions)]
+	{
+		data[index]
+	}
+	#[cfg(not(debug_assertions))]
+	unsafe {
+		*data.get_unchecked(index)
+	}
+}
+
+fn debug_checked_store<T: Copy>(data: &mut [T], index: usize, value: T)
+{
+	#[cfg(debug_assertions)]
+	{
+		data[index] = value
+	}
+	#[cfg(not(debug_assertions))]
+	unsafe {
+		*data.get_unchecked_mut(index) = value
+	}
 }
