@@ -205,18 +205,18 @@ impl Postprocessor
 
 		for dst_y in 0 .. self.bloom_buffer_size[1]
 		{
+			let src_y_base = dst_y * BLOOM_BUFFER_SCALE;
 			for dst_x in 0 .. self.bloom_buffer_size[0]
 			{
+				let src_x_base = dst_x * BLOOM_BUFFER_SCALE;
 				// TODO - use integer vector computations.
 				let mut sum = ColorVec::zero();
 				for dy in 0 .. BLOOM_BUFFER_SCALE
 				{
+					let src_line_offset = (src_y_base + dy) * self.hdr_buffer_size[0];
 					for dx in 0 .. BLOOM_BUFFER_SCALE
 					{
-						let src_x = dst_x * BLOOM_BUFFER_SCALE + dx;
-						let src_y = dst_y * BLOOM_BUFFER_SCALE + dy;
-
-						let src = debug_checked_fetch(&self.hdr_buffer, src_x + src_y * self.hdr_buffer_size[0]);
+						let src = debug_checked_fetch(&self.hdr_buffer, src_x_base + dx + src_line_offset);
 						let c = ColorVec::from_color64(src);
 						sum = ColorVec::add(&sum, &c);
 					}
@@ -239,46 +239,41 @@ impl Postprocessor
 		let blur_kernel = compute_gaussian_kernel(sigma, blur_radius);
 
 		// TODO - speed-up bluring code - process borders specially, use integer computations.
+		let radius_i = blur_radius as i32;
 
 		// Perform horizontal blur. Use buffer 0 as source and buffer 1 as destination.
 		for dst_y in 0 .. self.bloom_buffer_size[1]
 		{
+			let line_offset = dst_y * self.bloom_buffer_size[0];
 			for dst_x in 0 .. self.bloom_buffer_size[0]
 			{
 				// TODO - use integer vector computations.
 				let mut sum = ColorVec::zero();
-				for dx in -(blur_radius as i32) ..= (blur_radius as i32)
+				for dx in -radius_i ..= radius_i
 				{
 					let src_x = (dx + (dst_x as i32)).max(0).min(self.bloom_buffer_size[0] as i32 - 1);
-					let src_y = dst_y;
-					let src = debug_checked_fetch(
-						&self.bloom_buffers[0],
-						(src_x as usize) + src_y * self.bloom_buffer_size[0],
-					);
+					let src = debug_checked_fetch(&self.bloom_buffers[0], (src_x as usize) + line_offset);
 					let src_vec = ColorVec::from_color64(src);
 					sum = ColorVec::mul_scalar_add(
 						&src_vec,
-						debug_checked_fetch(&blur_kernel, (dx + (blur_radius as i32)) as usize),
+						debug_checked_fetch(&blur_kernel, (dx + radius_i) as usize),
 						&sum,
 					);
 				}
 
-				debug_checked_store(
-					&mut self.bloom_buffers[1],
-					dst_x + dst_y * self.bloom_buffer_size[0],
-					sum.into_color64(),
-				);
+				debug_checked_store(&mut self.bloom_buffers[1], dst_x + line_offset, sum.into_color64());
 			}
 		}
 
 		// Perform vertical blur. Use buffer 1 as source and buffer 0 as destination.
 		for dst_y in 0 .. self.bloom_buffer_size[1]
 		{
+			let dst_line_offset = dst_y * self.bloom_buffer_size[0];
 			for dst_x in 0 .. self.bloom_buffer_size[0]
 			{
 				// TODO - use integer vector computations.
 				let mut sum = ColorVec::zero();
-				for dy in -(blur_radius as i32) ..= (blur_radius as i32)
+				for dy in -radius_i ..= radius_i
 				{
 					let src_x = dst_x;
 					let src_y = (dy + (dst_y as i32)).max(0).min(self.bloom_buffer_size[1] as i32 - 1);
@@ -289,16 +284,12 @@ impl Postprocessor
 					let src_vec = ColorVec::from_color64(src);
 					sum = ColorVec::mul_scalar_add(
 						&src_vec,
-						debug_checked_fetch(&blur_kernel, (dy + (blur_radius as i32)) as usize),
+						debug_checked_fetch(&blur_kernel, (dy + radius_i) as usize),
 						&sum,
 					);
 				}
 
-				debug_checked_store(
-					&mut self.bloom_buffers[0],
-					dst_x + dst_y * self.bloom_buffer_size[0],
-					sum.into_color64(),
-				);
+				debug_checked_store(&mut self.bloom_buffers[0], dst_x + dst_line_offset, sum.into_color64());
 			}
 		}
 	}
