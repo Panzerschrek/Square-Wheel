@@ -234,7 +234,7 @@ impl Postprocessor
 		// TODO - handle leftover pixels in borders.
 
 		let sigma: f32 = 3.0;
-		let blur_radius = ((3.0 * sigma - 0.5).ceil().max(0.0) as usize).max(MAX_GAUSSIAN_KERNEL_RADIUS);
+		let blur_radius = ((3.0 * sigma - 0.5).ceil().max(0.0) as usize).min(MAX_GAUSSIAN_KERNEL_RADIUS);
 
 		let blur_kernel = compute_gaussian_kernel(sigma, blur_radius);
 
