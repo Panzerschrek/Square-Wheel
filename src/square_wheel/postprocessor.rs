@@ -1,5 +1,6 @@
 use super::{debug_stats_printer::*, fast_math::*, performance_counter::*};
-use common::{color::*, system_window};
+use common::{color::*, shared_mut_slice::*, system_window};
+use rayon::prelude::*;
 
 pub struct Postprocessor
 {
@@ -76,23 +77,53 @@ impl Postprocessor
 		let inv_255 = 1.0 / 255.0;
 		let inv_255_vec = ColorVec::from_color_f32x3(&[inv_255, inv_255, inv_255]);
 
-		for y in 0 .. surface_size[1]
-		{
+		// It is safe to share destination buffer since each thead writes into its own regon.
+		let pixels_shared = SharedMutSlice::new(pixels);
+
+		let convert_line = |y| {
+			let pixels_unshared = unsafe { pixels_shared.get() };
 			let src_line = &self.hdr_buffer[y * self.hdr_buffer_size[0] .. (y + 1) * self.hdr_buffer_size[0]];
-			let dst_line = &mut pixels[y * surface_info.pitch .. (y + 1) * surface_info.pitch];
+			let dst_line = &mut pixels_unshared[y * surface_info.pitch .. (y + 1) * surface_info.pitch];
 			for (dst, &src) in dst_line.iter_mut().zip(src_line.iter())
 			{
 				let c = ColorVec::from_color64(src);
 				let c_mapped = ColorVec::div(&c, &ColorVec::mul_add(&c, &inv_255_vec, &inv_scale_vec));
 				*dst = c_mapped.into();
 			}
+		};
+
+		let num_threads = rayon::current_num_threads();
+		if num_threads == 1
+		{
+			for y in 0 .. surface_size[1]
+			{
+				convert_line(y);
+			}
+		}
+		else
+		{
+			let mut ranges = [[0, 0]; 64];
+			for i in 0 .. num_threads
+			{
+				ranges[i] = [
+					surface_size[1] * i / num_threads,
+					surface_size[1] * (i + 1) / num_threads,
+				];
+			}
+
+			ranges[.. num_threads].par_iter().for_each(|range| {
+				for y in range[0] .. range[1]
+				{
+					convert_line(y);
+				}
+			});
 		}
 
 		let tonemapping_end_time = Clock::now();
-		let mtonemapping_duration_s = (tonemapping_end_time - tonemapping_start_time).as_secs_f32();
+		let tonemapping_duration_s = (tonemapping_end_time - tonemapping_start_time).as_secs_f32();
 		self.performance_counters
 			.tonemapping_duration
-			.add_value(mtonemapping_duration_s);
+			.add_value(tonemapping_duration_s);
 
 		if debug_stats_printer.show_debug_stats()
 		{
