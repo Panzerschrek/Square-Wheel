@@ -127,6 +127,11 @@ mod fast_math_impl
 			unsafe { Self(_mm_set_ps(0.0, c[0], c[1], c[2])) }
 		}
 
+		pub fn add(&self, other: &Self) -> Self
+		{
+			unsafe { Self(_mm_add_ps(self.0, other.0)) }
+		}
+
 		pub fn mul(&self, other: &Self) -> Self
 		{
 			unsafe { Self(_mm_mul_ps(self.0, other.0)) }
@@ -253,6 +258,16 @@ mod fast_math_impl
 		pub fn from_color_f32x3(c: &[f32; 3]) -> Self
 		{
 			Self([c[0], c[1], c[2], 0.0])
+		}
+
+		pub fn add(&self, other: &Self) -> Self
+		{
+			Self([
+				self.0[0] + other.0[0],
+				self.0[1] + other.0[1],
+				self.0[2] + other.0[2],
+				self.0[3] + other.0[3],
+			])
 		}
 
 		pub fn mul(&self, other: &Self) -> Self

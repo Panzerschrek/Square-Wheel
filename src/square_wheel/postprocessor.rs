@@ -7,11 +7,14 @@ pub struct Postprocessor
 	hdr_buffer_size: [usize; 2],
 	hdr_buffer: Vec<Color64>,
 	performance_counters: PostprocessorPerformanceCounters,
+	bloom_buffer_size: [usize; 2],
+	bloom_buffers: [Vec<Color64>; 2]
 }
 
 struct PostprocessorPerformanceCounters
 {
 	tonemapping_duration: PerformanceCounter,
+	bloom_duration: PerformanceCounter,
 }
 
 impl PostprocessorPerformanceCounters
@@ -21,6 +24,7 @@ impl PostprocessorPerformanceCounters
 		let window_size = 100;
 		Self {
 			tonemapping_duration: PerformanceCounter::new(window_size),
+			bloom_duration: PerformanceCounter::new(window_size),
 		}
 	}
 }
@@ -34,6 +38,8 @@ impl Postprocessor
 			hdr_buffer_size: [0, 0],
 			hdr_buffer: Vec::new(),
 			performance_counters: PostprocessorPerformanceCounters::new(),
+			bloom_buffer_size: [0, 0],
+			bloom_buffers: [ Vec::new(), Vec::new() ],
 		}
 	}
 
@@ -45,6 +51,16 @@ impl Postprocessor
 			self.hdr_buffer.resize(required_size, Color64::black());
 		}
 		self.hdr_buffer_size = size;
+
+		self.bloom_buffer_size = [size[0] / BLOOM_BUFFER_SCALE, size[1] / BLOOM_BUFFER_SCALE ];
+		let bloom_buffer_required_size = self.bloom_buffer_size[0] * self.bloom_buffer_size[1];
+		for bloom_buffer in &mut self.bloom_buffers
+		{
+			if bloom_buffer.len() < bloom_buffer_required_size
+			{
+				bloom_buffer.resize(bloom_buffer_required_size, Color64::black());
+			}
+		}
 
 		&mut self.hdr_buffer[.. required_size]
 	}
@@ -66,6 +82,17 @@ impl Postprocessor
 			);
 		}
 
+		let bloom_calculation_start_time = Clock::now();
+
+		self.perform_bloom();
+
+		let bloom_calculation_end_time = Clock::now();
+		let bloom_duration_s = (bloom_calculation_end_time - bloom_calculation_start_time).as_secs_f32();
+		self.performance_counters
+			.bloom_duration
+			.add_value(bloom_duration_s);
+
+		
 		let tonemapping_start_time = Clock::now();
 
 		// Use Reinhard formula for tonemapping.
@@ -128,9 +155,48 @@ impl Postprocessor
 		if debug_stats_printer.show_debug_stats()
 		{
 			debug_stats_printer.add_line(format!(
+				"bloom time: {:04.2}ms",
+				self.performance_counters.bloom_duration.get_average_value() * 1000.0
+			));
+			debug_stats_printer.add_line(format!(
 				"tonemapping time: {:04.2}ms",
 				self.performance_counters.tonemapping_duration.get_average_value() * 1000.0
 			));
 		}
 	}
+
+	fn perform_bloom(&mut self)
+	{
+		// First step - downsample HDR buffer into bloom buffer #0.
+		let average_scaler = 1.0 / ((BLOOM_BUFFER_SCALE * BLOOM_BUFFER_SCALE) as f32);
+		let average_scaler_vec = ColorVec::from_color_f32x3(&[average_scaler, average_scaler, average_scaler]);
+		
+		for dst_y in 0 .. self.bloom_buffer_size[1]
+		{
+			for dst_x in 0 .. self.bloom_buffer_size[0]
+			{
+				// TODO - use integer vector computations.
+				let mut sum = ColorVec::zero();
+				for dy in 0 .. BLOOM_BUFFER_SCALE
+				{
+					for dx in 0 .. BLOOM_BUFFER_SCALE
+					{
+						let src_x = dst_x * BLOOM_BUFFER_SCALE + dx;
+						let src_y = dst_y * BLOOM_BUFFER_SCALE + dy;
+
+						// TODO - use unchecked indexing operator.
+						let src = self.hdr_buffer[ src_x + src_y * self.hdr_buffer_size[0] ];
+						let c = ColorVec::from_color64(src);
+						sum = ColorVec::add(&sum, &c);
+					}
+				}
+
+				let average = ColorVec::mul(&sum, &average_scaler_vec);
+				// TODO - use unchecked indexing operator.
+				self.bloom_buffers[0][ dst_x + dst_y * self.bloom_buffer_size[0] ] = average.into_color64();
+			}
+		}
+	}
 }
+
+const BLOOM_BUFFER_SCALE : usize = 4;
