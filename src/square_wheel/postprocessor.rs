@@ -8,7 +8,7 @@ pub struct Postprocessor
 	hdr_buffer: Vec<Color64>,
 	performance_counters: PostprocessorPerformanceCounters,
 	bloom_buffer_size: [usize; 2],
-	bloom_buffers: [Vec<Color64>; 2]
+	bloom_buffers: [Vec<Color64>; 2],
 }
 
 struct PostprocessorPerformanceCounters
@@ -39,7 +39,7 @@ impl Postprocessor
 			hdr_buffer: Vec::new(),
 			performance_counters: PostprocessorPerformanceCounters::new(),
 			bloom_buffer_size: [0, 0],
-			bloom_buffers: [ Vec::new(), Vec::new() ],
+			bloom_buffers: [Vec::new(), Vec::new()],
 		}
 	}
 
@@ -52,7 +52,7 @@ impl Postprocessor
 		}
 		self.hdr_buffer_size = size;
 
-		self.bloom_buffer_size = [size[0] / BLOOM_BUFFER_SCALE, size[1] / BLOOM_BUFFER_SCALE ];
+		self.bloom_buffer_size = [size[0] / BLOOM_BUFFER_SCALE, size[1] / BLOOM_BUFFER_SCALE];
 		let bloom_buffer_required_size = self.bloom_buffer_size[0] * self.bloom_buffer_size[1];
 		for bloom_buffer in &mut self.bloom_buffers
 		{
@@ -88,11 +88,8 @@ impl Postprocessor
 
 		let bloom_calculation_end_time = Clock::now();
 		let bloom_duration_s = (bloom_calculation_end_time - bloom_calculation_start_time).as_secs_f32();
-		self.performance_counters
-			.bloom_duration
-			.add_value(bloom_duration_s);
+		self.performance_counters.bloom_duration.add_value(bloom_duration_s);
 
-		
 		let tonemapping_start_time = Clock::now();
 
 		// Use Reinhard formula for tonemapping.
@@ -125,6 +122,32 @@ impl Postprocessor
 			for y in 0 .. surface_size[1]
 			{
 				convert_line(y);
+			}
+
+			// TEMP code. Fix it!!!
+			let bloom_scale = 0.125;
+			for src_y in 0 .. self.bloom_buffer_size[1]
+			{
+				for src_x in 0 .. self.bloom_buffer_size[0]
+				{
+					// TODO - use unchecked indexing operator.
+					let bloom_src = self.bloom_buffers[0][src_x + src_y * self.bloom_buffer_size[0]];
+					let bloom_c = ColorVec::from_color64(bloom_src);
+					for dx in 0 .. BLOOM_BUFFER_SCALE
+					{
+						for dy in 0 .. BLOOM_BUFFER_SCALE
+						{
+							// TODO - use unchecked indexing operator.
+							let dst_x = src_x * BLOOM_BUFFER_SCALE + dx;
+							let dst_y = src_y * BLOOM_BUFFER_SCALE + dy;
+							let c = self.hdr_buffer[dst_x + dst_y * self.hdr_buffer_size[0]];
+							let c_vec = ColorVec::from_color64(c);
+							let sum = ColorVec::mul_scalar_add(&bloom_c, bloom_scale, &c_vec);
+							let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
+							pixels[dst_x + dst_y * surface_info.pitch] = c_mapped.into();
+						}
+					}
+				}
 			}
 		}
 		else
@@ -170,7 +193,7 @@ impl Postprocessor
 		// First step - downsample HDR buffer into bloom buffer #0.
 		let average_scaler = 1.0 / ((BLOOM_BUFFER_SCALE * BLOOM_BUFFER_SCALE) as f32);
 		let average_scaler_vec = ColorVec::from_color_f32x3(&[average_scaler, average_scaler, average_scaler]);
-		
+
 		for dst_y in 0 .. self.bloom_buffer_size[1]
 		{
 			for dst_x in 0 .. self.bloom_buffer_size[0]
@@ -185,7 +208,7 @@ impl Postprocessor
 						let src_y = dst_y * BLOOM_BUFFER_SCALE + dy;
 
 						// TODO - use unchecked indexing operator.
-						let src = self.hdr_buffer[ src_x + src_y * self.hdr_buffer_size[0] ];
+						let src = self.hdr_buffer[src_x + src_y * self.hdr_buffer_size[0]];
 						let c = ColorVec::from_color64(src);
 						sum = ColorVec::add(&sum, &c);
 					}
@@ -193,9 +216,11 @@ impl Postprocessor
 
 				let average = ColorVec::mul(&sum, &average_scaler_vec);
 				// TODO - use unchecked indexing operator.
-				self.bloom_buffers[0][ dst_x + dst_y * self.bloom_buffer_size[0] ] = average.into_color64();
+				self.bloom_buffers[0][dst_x + dst_y * self.bloom_buffer_size[0]] = average.into_color64();
 			}
 		}
+
+		// TODO - handle leftover pixels in borders.
 	}
 }
 
