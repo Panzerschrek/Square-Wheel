@@ -80,17 +80,45 @@ mod fast_math_impl
 			}
 		}
 
+		pub fn from_color64(c: Color64) -> Self
+		{
+			unsafe {
+				let color_64bit = c.get_raw() as i64;
+				let values_16bit = _mm_cvtsi64_si128(color_64bit);
+				let values_32bit = _mm_cvtepu16_epi32(values_16bit);
+				let values_f4 = _mm_cvtepi32_ps(values_32bit);
+				Self(values_f4)
+			}
+		}
+
 		pub fn into_color32(&self) -> Color32
 		{
 			// Here we 100% sure that components overflow is not possible (because of "min").
 			// NaNs are not possible here too.
 			unsafe {
-				let values_clamped = _mm_min_ps(self.0, _mm_set_ps(255.0, 255.0, 255.0, 255.0));
+				let max_val = 255.0;
+				let values_clamped = _mm_min_ps(self.0, _mm_set_ps(max_val, max_val, max_val, max_val));
 				let values_32bit = _mm_cvtps_epi32(values_clamped);
 				let shuffle_mask = _mm_set_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 12, 8, 4, 0);
 				let values_8bit = _mm_shuffle_epi8(values_32bit, shuffle_mask);
 				let color_32bit = _mm_cvtsi128_si32(values_8bit);
 				Color32::from_raw(color_32bit as u32)
+			}
+		}
+
+		pub fn into_color64(&self) -> Color64
+		{
+			// Here we 100% sure that components overflow is not possible (because of "min").
+			// NaNs are not possible here too.
+			unsafe {
+				let max_val = 65535.0;
+				let values_clamped = _mm_min_ps(self.0, _mm_set_ps(max_val, max_val, max_val, max_val));
+				let values_32bit = _mm_cvtps_epi32(values_clamped);
+				// TODO - check correctness of this mask.
+				let shuffle_mask = _mm_set_epi8(0, 0, 0, 0, 0, 0, 0, 0, 13, 12, 9, 8, 5, 4, 1, 0);
+				let values_16bit = _mm_shuffle_epi8(values_32bit, shuffle_mask);
+				let color_64bit = _mm_cvtsi128_si64(values_16bit);
+				Color64::from_raw(color_64bit as u64)
 			}
 		}
 
@@ -112,6 +140,16 @@ mod fast_math_impl
 		pub fn mul_scalar_add(&self, scalar: f32, b: &Self) -> Self
 		{
 			unsafe { Self(_mm_fmadd_ps(self.0, _mm_broadcastss_ps(_mm_set1_ps(scalar)), b.0)) }
+		}
+
+		pub fn mul_add(&self, b: &Self, c: &Self) -> Self
+		{
+			unsafe { Self(_mm_fmadd_ps(self.0, b.0, c.0)) }
+		}
+
+		pub fn div(&self, other: &Self) -> Self
+		{
+			unsafe { Self(_mm_div_ps(self.0, other.0)) }
 		}
 	} // impl ColorVec
 }
@@ -174,6 +212,16 @@ mod fast_math_impl
 			Self(res)
 		}
 
+		pub fn from_color64(c: Color64) -> Self
+		{
+			let mut res = [0.0; 4];
+			for i in 0 .. 4
+			{
+				res[i] = ((c.get_raw() >> (i * 16)) & 0xFFFF) as f32;
+			}
+			Self(res)
+		}
+
 		pub fn into_color32(&self) -> Color32
 		{
 			// Here we 100% sure that components overflow is not possible (because of "min").
@@ -186,6 +234,20 @@ mod fast_math_impl
 				}
 			}
 			Color32::from_raw(res)
+		}
+
+		pub fn into_color64(&self) -> Color64
+		{
+			// Here we 100% sure that components overflow is not possible (because of "min").
+			// NaNs are not possible here too.
+			let mut res = 0;
+			unsafe {
+				for i in 0 .. 4
+				{
+					res |= self.0[i].min(65535.0).to_int_unchecked::<u64>() << (i * 16);
+				}
+			}
+			Color64::from_raw(res)
 		}
 
 		pub fn from_color_f32x3(c: &[f32; 3]) -> Self
@@ -222,5 +284,43 @@ mod fast_math_impl
 				f32::mul_add(self.0[3], scalar, b.0[3]),
 			])
 		}
+
+		pub fn mul_add(&self, b: &Self, c: &Self) -> Self
+		{
+			Self([
+				f32::mul_add(self.0[0], b.0[0], c.0[0]),
+				f32::mul_add(self.0[1], b.0[1], c.0[1]),
+				f32::mul_add(self.0[2], b.0[2], c.0[2]),
+				f32::mul_add(self.0[3], b.0[3], c.0[3]),
+			])
+		}
+
+		pub fn div(&self, other: &Self) -> Self
+		{
+			Self([
+				self.0[0] / other.0[0],
+				self.0[1] / other.0[1],
+				self.0[2] / other.0[2],
+				self.0[3] / other.0[3],
+			])
+		}
 	} // impl ColorVec
+}
+
+use common::color::*;
+
+impl Into<Color32> for ColorVec
+{
+	fn into(self) -> Color32
+	{
+		self.into_color32()
+	}
+}
+
+impl Into<Color64> for ColorVec
+{
+	fn into(self) -> Color64
+	{
+		self.into_color64()
+	}
 }

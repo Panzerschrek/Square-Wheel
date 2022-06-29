@@ -1,4 +1,4 @@
-use common::{color::*, fixed_math::*, system_window};
+use common::{fixed_math::*, system_window};
 
 // Use trait object with constants as replacement for C++ value template parameters.
 pub trait RasterizerSettings
@@ -14,17 +14,16 @@ pub enum TetureCoordinatesInterpolationMode
 	Affine,
 }
 
-pub struct Rasterizer<'a>
+pub struct Rasterizer<'a, ColorT: Copy>
 {
-	color_buffer: &'a mut [Color32],
+	color_buffer: &'a mut [ColorT],
 	row_size: i32,
 	clip_rect: ClipRect,
 }
 
-impl<'a> Rasterizer<'a>
+impl<'a, ColorT: Copy> Rasterizer<'a, ColorT>
 {
-	pub fn new(color_buffer: &'a mut [Color32], surface_info: &system_window::SurfaceInfo, clip_rect: ClipRect)
-		-> Self
+	pub fn new(color_buffer: &'a mut [ColorT], surface_info: &system_window::SurfaceInfo, clip_rect: ClipRect) -> Self
 	{
 		Rasterizer {
 			color_buffer,
@@ -40,7 +39,7 @@ impl<'a> Rasterizer<'a>
 		depth_equation: &DepthEquation,
 		tex_coord_equation: &TexCoordEquation,
 		texture_info: &TextureInfo,
-		texture_data: &[Color32],
+		texture_data: &[ColorT],
 	)
 	{
 		let draw_func = match Settings::TEXTURE_COORDINATES_INTERPOLATION_MODE
@@ -170,7 +169,7 @@ impl<'a> Rasterizer<'a>
 		depth_equation: &DepthEquation,
 		tex_coord_equation: &TexCoordEquation,
 		texture_info: &TextureInfo,
-		texture_data: &[Color32],
+		texture_data: &[ColorT],
 	)
 	{
 		debug_assert!(texture_data.len() >= (texture_info.size[0] * texture_info.size[1]) as usize);
@@ -349,7 +348,7 @@ impl<'a> Rasterizer<'a>
 		depth_equation: &DepthEquation,
 		tex_coord_equation: &TexCoordEquation,
 		texture_info: &TextureInfo,
-		texture_data: &[Color32],
+		texture_data: &[ColorT],
 	)
 	{
 		debug_assert!(texture_data.len() >= (texture_info.size[0] * texture_info.size[1]) as usize);
@@ -472,7 +471,7 @@ impl<'a> Rasterizer<'a>
 		depth_equation: &DepthEquation,
 		tex_coord_equation: &TexCoordEquation,
 		texture_info: &TextureInfo,
-		texture_data: &[Color32],
+		texture_data: &[ColorT],
 	)
 	{
 		debug_assert!(texture_data.len() >= (texture_info.size[0] * texture_info.size[1]) as usize);
@@ -838,7 +837,7 @@ fn unchecked_to_int64(x: f32) -> i64
 	unsafe { x.to_int_unchecked::<i64>() }
 }
 
-fn unchecked_texture_fetch(texture_data: &[Color32], texel_address: usize) -> Color32
+fn unchecked_texture_fetch<ColorT: Copy>(texture_data: &[ColorT], texel_address: usize) -> ColorT
 {
 	// operator [] checks bounds and calls panic! handler in case if index is out of bounds.
 	// This check is useless here since we clamp texture coordnates properly.

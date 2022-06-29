@@ -12,10 +12,19 @@ pub struct HostConfig
 	pub num_threads: f32,
 
 	#[serde(default)]
+	pub show_debug_stats: bool,
+
+	#[serde(default)]
 	pub fullscreen_mode: f32,
 
 	#[serde(default)]
 	pub maps_path: String,
+
+	#[serde(default)]
+	pub hdr_rendering: bool,
+
+	#[serde(default = "default_one")]
+	pub hdr_exposure: f32,
 }
 
 impl HostConfig
@@ -37,4 +46,9 @@ impl HostConfig
 fn max_fps_default() -> f32
 {
 	120.0
+}
+
+fn default_one() -> f32
+{
+	1.0
 }

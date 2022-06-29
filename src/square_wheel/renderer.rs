@@ -1,11 +1,11 @@
 use super::{
-	config, depth_renderer::*, draw_ordering, frame_number::*, inline_models_index::*, light::*,
-	map_materials_processor::*, map_visibility_calculator::*, performance_counter::*, rasterizer::*, rect_splitting,
-	renderer_config::*, shadow_map::*, surfaces::*, text_printer, textures::*,
+	config, debug_stats_printer::*, depth_renderer::*, draw_ordering, fast_math::*, frame_number::*,
+	inline_models_index::*, light::*, map_materials_processor::*, map_visibility_calculator::*, performance_counter::*,
+	rasterizer::*, rect_splitting, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
 };
 use common::{
-	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, color::*, fixed_math::*, lightmap, math_types::*,
-	matrix::*, plane::*, shared_mut_slice::*, system_window,
+	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, math_types::*, matrix::*,
+	plane::*, shared_mut_slice::*, system_window,
 };
 use rayon::prelude::*;
 use std::sync::Arc;
@@ -24,7 +24,10 @@ pub struct Renderer
 	shadows_maps_renderer: DepthRenderer,
 	polygons_data: Vec<DrawPolygonData>,
 	vertices_transformed: Vec<Vec3f>,
-	surfaces_pixels: Vec<Color32>,
+	// Store surfaces pixels as raw array.
+	// Use specific color while preparing surfaces or performing rasterization.
+	// TODO - make sure alignment is correct.
+	surfaces_pixels: Vec<u8>,
 	num_visible_surfaces_pixels: usize,
 	current_frame_visible_polygons: Vec<u32>,
 	mip_bias: f32,
@@ -99,15 +102,18 @@ impl Renderer
 		}
 	}
 
-	pub fn draw_frame(
+	pub fn draw_frame<ColorT>(
 		&mut self,
-		pixels: &mut [Color32],
+		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
 		inline_models_index: &InlineModelsIndex,
 		test_lights: &[PointLight],
 		frame_time_s: f32,
-	)
+		debug_stats_printer: &mut DebugStatsPrinter,
+	) where
+		ColorVec: Into<ColorT>,
+		ColorT: Copy + Send + Sync,
 	{
 		self.synchronize_config();
 		self.update_mip_bias();
@@ -127,14 +133,11 @@ impl Renderer
 
 		self.draw_map(pixels, surface_info, camera_matrices, inline_models_index, test_lights);
 
-		// TODO - remove such temporary fuinction.
-		draw_crosshair(pixels, surface_info);
-
 		let frame_end_time = Clock::now();
 		let frame_duration_s = (frame_end_time - frame_start_time).as_secs_f32();
 		self.performance_counters.frame_duration.add_value(frame_duration_s);
 
-		if self.config.show_stats
+		if debug_stats_printer.show_debug_stats()
 		{
 			let mut num_visible_leafs = 0;
 			let mut num_visible_models_parts = 0;
@@ -150,40 +153,49 @@ impl Renderer
 				}
 			}
 
-			text_printer::print(
-				pixels,
-				surface_info,
-				&format!(
-					"frame time: {:04.2}ms\nmaterials update: {:04.2}ms\nvisible leafs search: {:04.2}ms\nsurfaces \
-					 preparation: {:04.2}ms\nrasterization: {:04.2}ms\nleafs: {}/{}\nmodels parts: {}\npolygons: \
-					 {}\nsurfaces pixels: {}k\nmip bias: {:04.2}\n",
-					self.performance_counters.frame_duration.get_average_value() * 1000.0,
-					self.performance_counters.materials_update.get_average_value() * 1000.0,
-					self.performance_counters.visible_leafs_search.get_average_value() * 1000.0,
-					self.performance_counters.surfaces_preparation.get_average_value() * 1000.0,
-					self.performance_counters.rasterization.get_average_value() * 1000.0,
-					num_visible_leafs,
-					self.map.leafs.len(),
-					num_visible_models_parts,
-					self.current_frame_visible_polygons.len(),
-					(self.num_visible_surfaces_pixels + 1023) / 1024,
-					self.mip_bias,
-				),
-				0,
-				0,
-				Color32::from_rgb(255, 255, 255),
-			);
+			debug_stats_printer.add_line(format!(
+				"frame time: {:04.2}ms",
+				self.performance_counters.frame_duration.get_average_value() * 1000.0
+			));
+			debug_stats_printer.add_line(format!(
+				"materials update: {:04.2}ms",
+				self.performance_counters.materials_update.get_average_value() * 1000.0
+			));
+			debug_stats_printer.add_line(format!(
+				"visible leafs search: {:04.2}ms",
+				self.performance_counters.visible_leafs_search.get_average_value() * 1000.0
+			));
+			debug_stats_printer.add_line(format!(
+				"surfaces  preparation: {:04.2}ms",
+				self.performance_counters.surfaces_preparation.get_average_value() * 1000.0
+			));
+			debug_stats_printer.add_line(format!(
+				"rasterization: {:04.2}ms",
+				self.performance_counters.rasterization.get_average_value() * 1000.0
+			));
+			debug_stats_printer.add_line(format!("leafs: {}/{}", num_visible_leafs, self.map.leafs.len()));
+			debug_stats_printer.add_line(format!("models parts: {}", num_visible_models_parts));
+			debug_stats_printer.add_line(format!("polygons: {}", self.current_frame_visible_polygons.len()));
+			debug_stats_printer.add_line(format!(
+				"surfaces pixels: {}k",
+				(self.num_visible_surfaces_pixels + 1023) / 1024
+			));
+			debug_stats_printer.add_line(format!("mip bias: {}", self.mip_bias));
 		}
 	}
 
-	fn draw_map(
+	// TODO - reduce amount of code, dependent on ColorT. Extract more ColorT-independent code into separate functions.
+	// We need to do this in order to minimize result executable size.
+	fn draw_map<ColorT>(
 		&mut self,
-		pixels: &mut [Color32],
+		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
 		inline_models_index: &InlineModelsIndex,
 		test_lights: &[PointLight],
-	)
+	) where
+		ColorVec: Into<ColorT>,
+		ColorT: Copy + Send + Sync,
 	{
 		let depth_map_size = 256;
 		let mut test_lights_shadow_maps = Vec::with_capacity(test_lights.len());
@@ -232,6 +244,7 @@ impl Renderer
 		let surfaces_preparation_start_time = Clock::now();
 
 		self.prepare_polygons_surfaces(camera_matrices, inline_models_index);
+		self.allocate_surfaces_pixels::<ColorT>();
 
 		{
 			// TODO - avoid allocation.
@@ -240,7 +253,7 @@ impl Renderer
 			{
 				lights_with_shadow_maps.push((light, shadow_map));
 			}
-			self.build_polygons_surfaces(camera_matrices, &lights_with_shadow_maps);
+			self.build_polygons_surfaces::<ColorT>(camera_matrices, &lights_with_shadow_maps);
 		}
 
 		let surfaces_preparation_end_time = Clock::now();
@@ -253,7 +266,7 @@ impl Renderer
 		// Clear background (if needed) only before performing rasterization.
 		if self.config.clear_background
 		{
-			draw_background(pixels);
+			draw_background(pixels, ColorVec::from_color_f32x3(&[8.0, 16.0, 32.0]).into());
 		}
 
 		let rasterization_start_time = Clock::now();
@@ -273,22 +286,25 @@ impl Renderer
 					for x in 0 .. depth_map_size
 					{
 						let depth = shadow_map.sides[5][(x + y * depth_map_size) as usize];
-						let z = (0.5 / depth).max(0.0).min(255.0) as u8;
-						pixels[(x as usize) + (y as usize) * surface_info.pitch] = Color32::from_rgb(z, z, z);
+						let z = 0.5 / depth;
+						pixels[(x as usize) + (y as usize) * surface_info.pitch] =
+							ColorVec::from_color_f32x3(&[z, z, z]).into();
 					}
 				}
 			}
 		}
 	}
 
-	fn perform_rasterization(
+	fn perform_rasterization<ColorT>(
 		&self,
-		pixels: &mut [Color32],
+		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
 		inline_models_index: &InlineModelsIndex,
 		root_node: u32,
-	)
+	) where
+		ColorVec: Into<ColorT>,
+		ColorT: Copy,
 	{
 		let screen_rect = rect_splitting::Rect {
 			min: Vec2f::new(0.0, 0.0),
@@ -450,14 +466,17 @@ impl Renderer
 			}
 		}
 
-		// Resize surfaces pixels vector only up to avoid filling it with zeros each frame.
-		if self.surfaces_pixels.len() < surfaces_pixels_accumulated_offset
-		{
-			self.surfaces_pixels
-				.resize(surfaces_pixels_accumulated_offset, Color32::black());
-		}
-
 		self.num_visible_surfaces_pixels = surfaces_pixels_accumulated_offset;
+	}
+
+	fn allocate_surfaces_pixels<ColorT>(&mut self)
+	{
+		// Resize surfaces pixels vector only up to avoid filling it with zeros each frame.
+		let target_size = self.num_visible_surfaces_pixels * std::mem::size_of::<ColorT>();
+		if self.surfaces_pixels.len() < target_size
+		{
+			self.surfaces_pixels.resize(target_size, 0);
+		}
 	}
 
 	fn prepare_polygon_surface(
@@ -644,7 +663,9 @@ impl Renderer
 		self.current_frame_visible_polygons.push(polygon_index as u32);
 	}
 
-	fn build_polygons_surfaces(&mut self, camera_matrices: &CameraMatrices, lights: &[LightWithShadowMap])
+	fn build_polygons_surfaces<ColorT>(&mut self, camera_matrices: &CameraMatrices, lights: &[LightWithShadowMap])
+	where
+		ColorVec: Into<ColorT>,
 	{
 		// Perform parallel surfaces building.
 		// Use "unsafe" to write into surfaces data concurrently.
@@ -658,7 +679,8 @@ impl Renderer
 
 		let use_directional_lightmap = self.config.use_directional_lightmaps && !directional_lightmaps_data.is_empty();
 
-		let surfaces_pixels_shared = SharedMutSlice::new(&mut self.surfaces_pixels);
+		let surfaces_pixels_casted = unsafe { self.surfaces_pixels.align_to_mut::<ColorT>().1 };
+		let surfaces_pixels_shared = SharedMutSlice::new(surfaces_pixels_casted);
 
 		let func = |&polygon_index| {
 			let polygon = &polygons[polygon_index as usize];
@@ -762,14 +784,16 @@ impl Renderer
 		}
 	}
 
-	fn draw_tree_r(
+	fn draw_tree_r<'a, ColorT>(
 		&self,
-		rasterizer: &mut Rasterizer,
+		rasterizer: &mut Rasterizer<'a, ColorT>,
 		camera_matrices: &CameraMatrices,
 		viewport_clippung_polygon: &ClippingPolygon,
 		inline_models_index: &InlineModelsIndex,
 		current_index: u32,
-	)
+	) where
+		ColorVec: Into<ColorT>,
+		ColorT: Copy,
 	{
 		if current_index >= bsp_map_compact::FIRST_LEAF_INDEX
 		{
@@ -805,14 +829,16 @@ impl Renderer
 		}
 	}
 
-	fn draw_leaf(
+	fn draw_leaf<'a, ColorT>(
 		&self,
-		rasterizer: &mut Rasterizer,
+		rasterizer: &mut Rasterizer<'a, ColorT>,
 		camera_matrices: &CameraMatrices,
 		bounds: &ClippingPolygon,
 		inline_models_index: &InlineModelsIndex,
 		leaf_index: u32,
-	)
+	) where
+		ColorVec: Into<ColorT>,
+		ColorT: Copy,
 	{
 		let leaf = &self.map.leafs[leaf_index as usize];
 
@@ -836,9 +862,7 @@ impl Renderer
 				&polygon_data.depth_equation,
 				&polygon_data.tex_coord_equation,
 				&polygon_data.surface_size,
-				&self.surfaces_pixels[polygon_data.surface_pixels_offset ..
-					polygon_data.surface_pixels_offset +
-						((polygon_data.surface_size[0] * polygon_data.surface_size[1]) as usize)],
+				self.get_polygon_surface_data(polygon_data),
 			);
 		}
 
@@ -888,15 +912,17 @@ impl Renderer
 		}
 	}
 
-	fn draw_model_polygon(
+	fn draw_model_polygon<'a, ColorT>(
 		&self,
-		rasterizer: &mut Rasterizer,
+		rasterizer: &mut Rasterizer<'a, ColorT>,
 		model_transform_matrix: &Mat4f,
 		view_matrix: &Mat4f,
 		clip_planes: &ClippingPolygonPlanes,
 		leaf_index: u32,
 		polygon_index: u32,
-	)
+	) where
+		ColorVec: Into<ColorT>,
+		ColorT: Copy,
 	{
 		let leaf = &self.map.leafs[leaf_index as usize];
 
@@ -981,10 +1007,16 @@ impl Renderer
 			&polygon_data.depth_equation,
 			&polygon_data.tex_coord_equation,
 			&polygon_data.surface_size,
-			&self.surfaces_pixels[polygon_data.surface_pixels_offset ..
-				polygon_data.surface_pixels_offset +
-					((polygon_data.surface_size[0] * polygon_data.surface_size[1]) as usize)],
+			self.get_polygon_surface_data(polygon_data),
 		);
+	}
+
+	fn get_polygon_surface_data<ColorT>(&self, polygon_data: &DrawPolygonData) -> &[ColorT]
+	{
+		let pixels_casted = unsafe { self.surfaces_pixels.align_to::<ColorT>().1 };
+		&pixels_casted[polygon_data.surface_pixels_offset ..
+			polygon_data.surface_pixels_offset +
+				((polygon_data.surface_size[0] * polygon_data.surface_size[1]) as usize)]
 	}
 
 	fn update_mip_bias(&mut self)
@@ -1033,43 +1065,38 @@ impl Renderer
 	}
 }
 
-fn draw_background(pixels: &mut [Color32])
+fn draw_background<ColorT: Copy + Send + Sync>(pixels: &mut [ColorT], color: ColorT)
 {
 	let num_threads = rayon::current_num_threads();
 	if num_threads == 1
 	{
-		draw_background_impl(pixels);
+		draw_background_impl(pixels, color);
 	}
 	else
 	{
 		let num_pixels = pixels.len();
 		pixels.par_chunks_mut(num_pixels / num_threads).for_each(|pixels_part| {
-			draw_background_impl(pixels_part);
+			draw_background_impl(pixels_part, color);
 		});
 	}
 }
 
-fn draw_background_impl(pixels: &mut [Color32])
+fn draw_background_impl<ColorT: Copy>(pixels: &mut [ColorT], color: ColorT)
 {
 	for pixel in pixels
 	{
-		*pixel = Color32::from_rgb(32, 16, 8);
+		*pixel = color;
 	}
 }
 
-fn draw_crosshair(pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo)
-{
-	pixels[surface_info.width / 2 + surface_info.height / 2 * surface_info.pitch] = Color32::from_rgb(255, 255, 255);
-}
-
-fn draw_polygon(
-	rasterizer: &mut Rasterizer,
+fn draw_polygon<'a, T: Copy>(
+	rasterizer: &mut Rasterizer<'a, T>,
 	clip_planes: &ClippingPolygonPlanes,
 	vertices_transformed: &[Vec3f],
 	depth_equation: &DepthEquation,
 	tex_coord_equation: &TexCoordEquation,
 	texture_size: &[u32; 2],
-	texture_data: &[Color32],
+	texture_data: &[T],
 )
 {
 	if vertices_transformed.len() < 3

@@ -1,9 +1,9 @@
 use super::{fast_math::*, light::*, shadow_map::*, textures};
-use common::{bsp_map_compact, color::*, lightmap, math_types::*, plane::*};
+use common::{bsp_map_compact, lightmap, math_types::*, plane::*};
 
 pub type LightWithShadowMap<'a, 'b> = (&'a PointLight, &'b CubeShadowMap);
 
-pub fn build_surface_simple_lightmap(
+pub fn build_surface_simple_lightmap<ColorT>(
 	plane: &Plane,
 	tex_coord_equation: &[Plane; 2],
 	surface_size: [u32; 2],
@@ -15,10 +15,11 @@ pub fn build_surface_simple_lightmap(
 	lightmap_data: &[bsp_map_compact::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
-	out_surface_data: &mut [Color32],
-)
+	out_surface_data: &mut [ColorT],
+) where
+	ColorVec: Into<ColorT>,
 {
-	build_surface_impl_1_static_params::<LightmapElementOpsSimple>(
+	build_surface_impl_2_static_params::<ColorT, LightmapElementOpsSimple>(
 		plane,
 		tex_coord_equation,
 		surface_size,
@@ -34,7 +35,7 @@ pub fn build_surface_simple_lightmap(
 	);
 }
 
-pub fn build_surface_directional_lightmap(
+pub fn build_surface_directional_lightmap<ColorT>(
 	plane: &Plane,
 	tex_coord_equation: &[Plane; 2],
 	surface_size: [u32; 2],
@@ -46,10 +47,11 @@ pub fn build_surface_directional_lightmap(
 	lightmap_data: &[bsp_map_compact::DirectionalLightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
-	out_surface_data: &mut [Color32],
-)
+	out_surface_data: &mut [ColorT],
+) where
+	ColorVec: Into<ColorT>,
 {
-	build_surface_impl_1_static_params::<LightmapElementOpsDirectional>(
+	build_surface_impl_2_static_params::<ColorT, LightmapElementOpsDirectional>(
 		plane,
 		tex_coord_equation,
 		surface_size,
@@ -65,7 +67,7 @@ pub fn build_surface_directional_lightmap(
 	);
 }
 
-fn build_surface_impl_1_static_params<LightmapElementOpsT: LightmapElementOps>(
+fn build_surface_impl_2_static_params<ColorT, LightmapElementOpsT: LightmapElementOps>(
 	plane: &Plane,
 	tex_coord_equation: &[Plane; 2],
 	surface_size: [u32; 2],
@@ -77,14 +79,15 @@ fn build_surface_impl_1_static_params<LightmapElementOpsT: LightmapElementOps>(
 	lightmap_data: &[LightmapElementOpsT::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
-	out_surface_data: &mut [Color32],
-)
+	out_surface_data: &mut [ColorT],
+) where
+	ColorVec: Into<ColorT>,
 {
 	// Perform call in each branch instead of assigning function to function pointer and calling it later because LLVM compiler can't inline call via pointer.
 	// Proper inlining is very important here - it can reduce call overhead and merge identical code.
 	if lightmap_data.is_empty()
 	{
-		build_surface_impl_2_static_params::<LightmapElementOpsT, NO_LIGHTMAP_SCALE>(
+		build_surface_impl_3_static_params::<ColorT, LightmapElementOpsT, NO_LIGHTMAP_SCALE>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -100,7 +103,7 @@ fn build_surface_impl_1_static_params<LightmapElementOpsT: LightmapElementOps>(
 	}
 	else if lightmap_scale_log2 == 0
 	{
-		build_surface_impl_2_static_params::<LightmapElementOpsT, 0>(
+		build_surface_impl_3_static_params::<ColorT, LightmapElementOpsT, 0>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -116,7 +119,7 @@ fn build_surface_impl_1_static_params<LightmapElementOpsT: LightmapElementOps>(
 	}
 	else if lightmap_scale_log2 == 1
 	{
-		build_surface_impl_2_static_params::<LightmapElementOpsT, 1>(
+		build_surface_impl_3_static_params::<ColorT, LightmapElementOpsT, 1>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -132,7 +135,7 @@ fn build_surface_impl_1_static_params<LightmapElementOpsT: LightmapElementOps>(
 	}
 	else if lightmap_scale_log2 == 2
 	{
-		build_surface_impl_2_static_params::<LightmapElementOpsT, 2>(
+		build_surface_impl_3_static_params::<ColorT, LightmapElementOpsT, 2>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -148,7 +151,7 @@ fn build_surface_impl_1_static_params<LightmapElementOpsT: LightmapElementOps>(
 	}
 	else if lightmap_scale_log2 == 3
 	{
-		build_surface_impl_2_static_params::<LightmapElementOpsT, 3>(
+		build_surface_impl_3_static_params::<ColorT, LightmapElementOpsT, 3>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -164,7 +167,7 @@ fn build_surface_impl_1_static_params<LightmapElementOpsT: LightmapElementOps>(
 	}
 	else if lightmap_scale_log2 == 4
 	{
-		build_surface_impl_2_static_params::<LightmapElementOpsT, 4>(
+		build_surface_impl_3_static_params::<ColorT, LightmapElementOpsT, 4>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -184,7 +187,7 @@ fn build_surface_impl_1_static_params<LightmapElementOpsT: LightmapElementOps>(
 	}
 }
 
-fn build_surface_impl_2_static_params<LightmapElementOpsT: LightmapElementOps, const LIGHTAP_SCALE_LOG2: u32>(
+fn build_surface_impl_3_static_params<ColorT, LightmapElementOpsT: LightmapElementOps, const LIGHTAP_SCALE_LOG2: u32>(
 	plane: &Plane,
 	tex_coord_equation: &[Plane; 2],
 	surface_size: [u32; 2],
@@ -195,12 +198,13 @@ fn build_surface_impl_2_static_params<LightmapElementOpsT: LightmapElementOps, c
 	lightmap_data: &[LightmapElementOpsT::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
-	out_surface_data: &mut [Color32],
-)
+	out_surface_data: &mut [ColorT],
+) where
+	ColorVec: Into<ColorT>,
 {
 	if dynamic_lights.is_empty()
 	{
-		build_surface_impl_3_static_params::<LightmapElementOpsT, LIGHTAP_SCALE_LOG2, false>(
+		build_surface_impl_4_static_params::<ColorT, LightmapElementOpsT, LIGHTAP_SCALE_LOG2, false>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -216,59 +220,7 @@ fn build_surface_impl_2_static_params<LightmapElementOpsT: LightmapElementOps, c
 	}
 	else
 	{
-		build_surface_impl_3_static_params::<LightmapElementOpsT, LIGHTAP_SCALE_LOG2, true>(
-			plane,
-			tex_coord_equation,
-			surface_size,
-			surface_tc_min,
-			texture,
-			lightmap_size,
-			lightmap_tc_shift,
-			lightmap_data,
-			dynamic_lights,
-			cam_pos,
-			out_surface_data,
-		);
-	}
-}
-
-fn build_surface_impl_3_static_params<
-	LightmapElementOpsT: LightmapElementOps,
-	const LIGHTAP_SCALE_LOG2: u32,
-	const USE_DYNAMIC_LIGHTS: bool,
->(
-	plane: &Plane,
-	tex_coord_equation: &[Plane; 2],
-	surface_size: [u32; 2],
-	surface_tc_min: [i32; 2],
-	texture: &textures::Texture,
-	lightmap_size: [u32; 2],
-	lightmap_tc_shift: [u32; 2],
-	lightmap_data: &[LightmapElementOpsT::LightmapElement],
-	dynamic_lights: &[LightWithShadowMap],
-	cam_pos: &Vec3f,
-	out_surface_data: &mut [Color32],
-)
-{
-	if texture.has_normal_map
-	{
-		build_surface_impl_4_static_params::<LightmapElementOpsT, LIGHTAP_SCALE_LOG2, USE_DYNAMIC_LIGHTS, true>(
-			plane,
-			tex_coord_equation,
-			surface_size,
-			surface_tc_min,
-			texture,
-			lightmap_size,
-			lightmap_tc_shift,
-			lightmap_data,
-			dynamic_lights,
-			cam_pos,
-			out_surface_data,
-		);
-	}
-	else
-	{
-		build_surface_impl_4_static_params::<LightmapElementOpsT, LIGHTAP_SCALE_LOG2, USE_DYNAMIC_LIGHTS, false>(
+		build_surface_impl_4_static_params::<ColorT, LightmapElementOpsT, LIGHTAP_SCALE_LOG2, true>(
 			plane,
 			tex_coord_equation,
 			surface_size,
@@ -285,6 +237,61 @@ fn build_surface_impl_3_static_params<
 }
 
 fn build_surface_impl_4_static_params<
+	ColorT,
+	LightmapElementOpsT: LightmapElementOps,
+	const LIGHTAP_SCALE_LOG2: u32,
+	const USE_DYNAMIC_LIGHTS: bool,
+>(
+	plane: &Plane,
+	tex_coord_equation: &[Plane; 2],
+	surface_size: [u32; 2],
+	surface_tc_min: [i32; 2],
+	texture: &textures::Texture,
+	lightmap_size: [u32; 2],
+	lightmap_tc_shift: [u32; 2],
+	lightmap_data: &[LightmapElementOpsT::LightmapElement],
+	dynamic_lights: &[LightWithShadowMap],
+	cam_pos: &Vec3f,
+	out_surface_data: &mut [ColorT],
+) where
+	ColorVec: Into<ColorT>,
+{
+	if texture.has_normal_map
+	{
+		build_surface_impl_5_static_params::<ColorT, LightmapElementOpsT, LIGHTAP_SCALE_LOG2, USE_DYNAMIC_LIGHTS, true>(
+			plane,
+			tex_coord_equation,
+			surface_size,
+			surface_tc_min,
+			texture,
+			lightmap_size,
+			lightmap_tc_shift,
+			lightmap_data,
+			dynamic_lights,
+			cam_pos,
+			out_surface_data,
+		);
+	}
+	else
+	{
+		build_surface_impl_5_static_params::<ColorT, LightmapElementOpsT, LIGHTAP_SCALE_LOG2, USE_DYNAMIC_LIGHTS, false>(
+			plane,
+			tex_coord_equation,
+			surface_size,
+			surface_tc_min,
+			texture,
+			lightmap_size,
+			lightmap_tc_shift,
+			lightmap_data,
+			dynamic_lights,
+			cam_pos,
+			out_surface_data,
+		);
+	}
+}
+
+fn build_surface_impl_5_static_params<
+	ColorT,
 	LightmapElementOpsT: LightmapElementOps,
 	const LIGHTAP_SCALE_LOG2: u32,
 	const USE_DYNAMIC_LIGHTS: bool,
@@ -300,14 +307,16 @@ fn build_surface_impl_4_static_params<
 	lightmap_data: &[LightmapElementOpsT::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
-	out_surface_data: &mut [Color32],
-)
+	out_surface_data: &mut [ColorT],
+) where
+	ColorVec: Into<ColorT>,
 {
 	if texture.has_non_one_roughness
 	{
 		if texture.is_metal
 		{
-			build_surface_impl_5_static_params::<
+			build_surface_impl_6_static_params::<
+				ColorT,
 				LightmapElementOpsT,
 				LIGHTAP_SCALE_LOG2,
 				USE_DYNAMIC_LIGHTS,
@@ -329,7 +338,8 @@ fn build_surface_impl_4_static_params<
 		}
 		else
 		{
-			build_surface_impl_5_static_params::<
+			build_surface_impl_6_static_params::<
+				ColorT,
 				LightmapElementOpsT,
 				LIGHTAP_SCALE_LOG2,
 				USE_DYNAMIC_LIGHTS,
@@ -352,7 +362,8 @@ fn build_surface_impl_4_static_params<
 	}
 	else
 	{
-		build_surface_impl_5_static_params::<
+		build_surface_impl_6_static_params::<
+			ColorT,
 			LightmapElementOpsT,
 			LIGHTAP_SCALE_LOG2,
 			USE_DYNAMIC_LIGHTS,
@@ -382,7 +393,8 @@ pub const NO_LIGHTMAP_SCALE: u32 = 31;
 
 // Specify various settings as template params in order to get most efficient code for current combination of params.
 // Use chained dispatch in order to convert dynamic params into static.
-fn build_surface_impl_5_static_params<
+fn build_surface_impl_6_static_params<
+	ColorT,
 	LightmapElementOpsT: LightmapElementOps,
 	const LIGHTAP_SCALE_LOG2: u32,
 	const USE_DYNAMIC_LIGHTS: bool,
@@ -399,8 +411,9 @@ fn build_surface_impl_5_static_params<
 	lightmap_data: &[LightmapElementOpsT::LightmapElement],
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
-	out_surface_data: &mut [Color32],
-)
+	out_surface_data: &mut [ColorT],
+) where
+	ColorVec: Into<ColorT>,
 {
 	// Calculate inverse matrix for tex_coord equation and plane equation in order to calculate world position for UV.
 	// TODO - project tc equation to surface plane?
@@ -814,7 +827,7 @@ fn build_surface_impl_5_static_params<
 				result_color = ColorVec::mul_scalar_add(&total_light_direct, 255.0, &result_color);
 			}
 
-			*dst_texel = result_color.into_color32();
+			*dst_texel = result_color.into();
 			src_u += 1;
 			if src_u == (texture.size[0] as i32)
 			{

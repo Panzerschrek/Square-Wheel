@@ -106,3 +106,39 @@ impl Color32
 		)
 	}
 }
+
+#[derive(Clone, Copy)]
+pub struct Color64(u64);
+
+impl Color64
+{
+	pub fn black() -> Self
+	{
+		Color64(0)
+	}
+
+	pub fn from_rgb(r: u16, g: u16, b: u16) -> Self
+	{
+		Color64(((r as u64) << 32) | ((g as u64) << 16) | (b as u64))
+	}
+
+	pub fn from_rgba(r: u16, g: u16, b: u16, a: u16) -> Self
+	{
+		Color64(((a as u64) << 48) | ((r as u64) << 32) | ((g as u64) << 16) | (b as u64))
+	}
+
+	pub fn from_raw(raw: u64) -> Self
+	{
+		Color64(raw)
+	}
+
+	pub fn get_raw(self) -> u64
+	{
+		self.0
+	}
+
+	pub fn get_half_dark(self) -> Self
+	{
+		Color64((self.0 & 0xFFFEFFFEFFFEFFFE) >> 1)
+	}
+}
