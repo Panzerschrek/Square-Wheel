@@ -199,6 +199,7 @@ mod fast_math_impl
 
 	// TODO - maybe use here array of 3 floats?
 	#[repr(C, align(32))]
+	#[derive(Copy, Clone)]
 	pub struct ColorVec([f32; 4]);
 
 	impl ColorVec

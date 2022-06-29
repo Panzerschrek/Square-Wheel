@@ -131,7 +131,7 @@ impl Postprocessor
 				for src_x in 0 .. self.bloom_buffer_size[0]
 				{
 					// TODO - use unchecked indexing operator.
-					let bloom_src = self.bloom_buffers[1][src_x + src_y * self.bloom_buffer_size[0]];
+					let bloom_src = self.bloom_buffers[0][src_x + src_y * self.bloom_buffer_size[0]];
 					let bloom_c = ColorVec::from_color64(bloom_src);
 					for dx in 0 .. BLOOM_BUFFER_SCALE
 					{
@@ -227,7 +227,9 @@ impl Postprocessor
 
 		let blur_kernel = compute_gaussian_kernel(sigma, blur_radius);
 
-		// Perform horizontal blur.
+		// TODO - speed-up bluring code. Use unchecked indexing, process borders specially.
+
+		// Perform horizontal blur. Use buffer 0 as source and buffer 1 as destination.
 		for dst_y in 0 .. self.bloom_buffer_size[1]
 		{
 			for dst_x in 0 .. self.bloom_buffer_size[0]
@@ -245,6 +247,27 @@ impl Postprocessor
 
 				// TODO - use unchecked indexing operator.
 				self.bloom_buffers[1][dst_x + dst_y * self.bloom_buffer_size[0]] = sum.into_color64();
+			}
+		}
+
+		// Perform vertical blur. Use buffer 1 as source and buffer 0 as destination.
+		for dst_y in 0 .. self.bloom_buffer_size[1]
+		{
+			for dst_x in 0 .. self.bloom_buffer_size[0]
+			{
+				// TODO - use integer vector computations.
+				let mut sum = ColorVec::zero();
+				for dy in -(blur_radius as i32) ..= (blur_radius as i32)
+				{
+					let src_x = dst_x;
+					let src_y = (dy + (dst_y as i32)).max(0).min(self.bloom_buffer_size[1] as i32 - 1);
+					let src = self.bloom_buffers[1][src_x + (src_y as usize) * self.bloom_buffer_size[0]];
+					let src_vec = ColorVec::from_color64(src);
+					sum = ColorVec::mul_scalar_add(&src_vec, blur_kernel[(dy + (blur_radius as i32)) as usize], &sum);
+				}
+
+				// TODO - use unchecked indexing operator.
+				self.bloom_buffers[0][dst_x + dst_y * self.bloom_buffer_size[0]] = sum.into_color64();
 			}
 		}
 	}
