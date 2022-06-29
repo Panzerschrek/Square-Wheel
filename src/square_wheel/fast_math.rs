@@ -60,6 +60,7 @@ mod fast_math_impl
 	}
 
 	#[repr(C, align(32))]
+	#[derive(Copy, Clone)]
 	pub struct ColorVec(__m128);
 
 	impl ColorVec

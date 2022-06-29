@@ -131,7 +131,7 @@ impl Postprocessor
 				for src_x in 0 .. self.bloom_buffer_size[0]
 				{
 					// TODO - use unchecked indexing operator.
-					let bloom_src = self.bloom_buffers[0][src_x + src_y * self.bloom_buffer_size[0]];
+					let bloom_src = self.bloom_buffers[1][src_x + src_y * self.bloom_buffer_size[0]];
 					let bloom_c = ColorVec::from_color64(bloom_src);
 					for dx in 0 .. BLOOM_BUFFER_SCALE
 					{
@@ -221,7 +221,57 @@ impl Postprocessor
 		}
 
 		// TODO - handle leftover pixels in borders.
+
+		let sigma: f32 = 2.0;
+		let blur_radius = ((3.0 * sigma - 0.5).ceil().max(0.0) as usize).max(MAX_GAUSSIAN_KERNEL_RADIUS);
+
+		let blur_kernel = compute_gaussian_kernel(sigma, blur_radius);
+
+		// Perform horizontal blur.
+		for dst_y in 0 .. self.bloom_buffer_size[1]
+		{
+			for dst_x in 0 .. self.bloom_buffer_size[0]
+			{
+				// TODO - use integer vector computations.
+				let mut sum = ColorVec::zero();
+				for dx in -(blur_radius as i32) ..= (blur_radius as i32)
+				{
+					let src_x = (dx + (dst_x as i32)).max(0).min(self.bloom_buffer_size[0] as i32 - 1);
+					let src_y = dst_y;
+					let src = self.bloom_buffers[0][(src_x as usize) + src_y * self.bloom_buffer_size[0]];
+					let src_vec = ColorVec::from_color64(src);
+					sum = ColorVec::mul_scalar_add(&src_vec, blur_kernel[(dx + (blur_radius as i32)) as usize], &sum);
+				}
+
+				// TODO - use unchecked indexing operator.
+				self.bloom_buffers[1][dst_x + dst_y * self.bloom_buffer_size[0]] = sum.into_color64();
+			}
+		}
 	}
 }
 
-const BLOOM_BUFFER_SCALE : usize = 4;
+const BLOOM_BUFFER_SCALE: usize = 4;
+
+const MAX_GAUSSIAN_KERNEL_RADIUS: usize = 16;
+const MAX_GAUSSIAN_KERNEL_SIZE: usize = 1 + 2 * MAX_GAUSSIAN_KERNEL_RADIUS;
+
+fn compute_gaussian_kernel(sigma: f32, radius: usize) -> [f32; MAX_GAUSSIAN_KERNEL_SIZE]
+{
+	let mut result = [0.0; MAX_GAUSSIAN_KERNEL_SIZE];
+
+	for x in -(radius as i32) ..= (radius as i32)
+	{
+		const SAMPLES: [f32; 4] = [-0.375, -0.125, 0.125, 0.375];
+		let mut val = 0.0;
+		for sample in SAMPLES
+		{
+			let coord = (x as f32) + sample;
+			val += (-0.5 * (coord / sigma) * (coord / sigma)).exp() / (sigma * std::f32::consts::TAU.sqrt());
+		}
+		let average = val / (SAMPLES.len() as f32);
+
+		result[(x + (radius as i32)) as usize] = average
+	}
+
+	result
+}
