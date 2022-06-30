@@ -128,11 +128,6 @@ mod fast_math_impl
 			unsafe { Self(_mm_set_ps(0.0, c[0], c[1], c[2])) }
 		}
 
-		pub fn add(&self, other: &Self) -> Self
-		{
-			unsafe { Self(_mm_add_ps(self.0, other.0)) }
-		}
-
 		pub fn mul(&self, other: &Self) -> Self
 		{
 			unsafe { Self(_mm_mul_ps(self.0, other.0)) }
@@ -170,16 +165,6 @@ mod fast_math_impl
 			unsafe { Self(_mm_setzero_si128()) }
 		}
 
-		pub fn from_color32(c: Color32) -> Self
-		{
-			unsafe {
-				let color_32bit = c.get_raw() as i32;
-				let values_8bit = _mm_cvtsi32_si128(color_32bit);
-				let values_32bit = _mm_cvtepu8_epi32(values_8bit);
-				Self(values_32bit)
-			}
-		}
-
 		pub fn from_color64(c: Color64) -> Self
 		{
 			unsafe {
@@ -187,17 +172,6 @@ mod fast_math_impl
 				let values_16bit = _mm_cvtsi64_si128(color_64bit);
 				let values_32bit = _mm_cvtepu16_epi32(values_16bit);
 				Self(values_32bit)
-			}
-		}
-
-		pub fn into_color32(&self) -> Color32
-		{
-			unsafe {
-				let zero = _mm_setzero_si128();
-				let values_16bit = _mm_packus_epi32(self.0, zero);
-				let values_8bit = _mm_packus_epi16(values_16bit, zero);
-				let color_32bit = _mm_cvtsi128_si32(values_8bit);
-				Color32::from_raw(color_32bit as u32)
 			}
 		}
 
@@ -216,11 +190,6 @@ mod fast_math_impl
 			unsafe { Self(_mm_add_epi32(self.0, other.0)) }
 		}
 
-		pub fn mul(&self, other: &Self) -> Self
-		{
-			unsafe { Self(_mm_mullo_epi32(self.0, other.0)) }
-		}
-
 		pub fn mul_scalar(&self, scalar: u32) -> Self
 		{
 			let scalar_i32 = scalar as i32;
@@ -230,11 +199,6 @@ mod fast_math_impl
 					_mm_set_epi32(scalar_i32, scalar_i32, scalar_i32, scalar_i32),
 				))
 			}
-		}
-
-		pub fn shift_left<const COUNT: i32>(&self) -> Self
-		{
-			unsafe { Self(_mm_slli_epi32(self.0, COUNT)) }
 		}
 
 		pub fn shift_right<const COUNT: i32>(&self) -> Self
@@ -346,16 +310,6 @@ mod fast_math_impl
 			Self([c[0], c[1], c[2], 0.0])
 		}
 
-		pub fn add(&self, other: &Self) -> Self
-		{
-			Self([
-				self.0[0] + other.0[0],
-				self.0[1] + other.0[1],
-				self.0[2] + other.0[2],
-				self.0[3] + other.0[3],
-			])
-		}
-
 		pub fn mul(&self, other: &Self) -> Self
 		{
 			Self([
@@ -418,16 +372,6 @@ mod fast_math_impl
 			Self([0; 4])
 		}
 
-		pub fn from_color32(c: Color32) -> Self
-		{
-			let mut res = [0; 4];
-			for i in 0 .. 4
-			{
-				res[i] = (c.get_raw() >> (i * 8)) & 0xFF;
-			}
-			Self(res)
-		}
-
 		pub fn from_color64(c: Color64) -> Self
 		{
 			let mut res = [0; 4];
@@ -436,16 +380,6 @@ mod fast_math_impl
 				res[i] = ((c.get_raw() >> (i * 16)) & 0xFFFF) as u32;
 			}
 			Self(res)
-		}
-
-		pub fn into_color32(&self) -> Color32
-		{
-			let mut res = 0;
-			for i in 0 .. 4
-			{
-				res |= self.0[i] << (i * 8);
-			}
-			Color32::from_raw(res)
 		}
 
 		pub fn into_color64(&self) -> Color64
@@ -468,32 +402,12 @@ mod fast_math_impl
 			Self(res)
 		}
 
-		pub fn mul(&self, other: &Self) -> Self
-		{
-			let mut res = [0; 4];
-			for i in 0 .. 4
-			{
-				res[i] = self.0[i] * other.0[i]
-			}
-			Self(res)
-		}
-
 		pub fn mul_scalar(&self, scalar: u32) -> Self
 		{
 			let mut res = [0; 4];
 			for i in 0 .. 4
 			{
 				res[i] = self.0[i] * scalar
-			}
-			Self(res)
-		}
-
-		pub fn shift_left<const COUNT: i32>(&self) -> Self
-		{
-			let mut res = [0; 4];
-			for i in 0 .. 4
-			{
-				res[i] = self.0[i] << COUNT
 			}
 			Self(res)
 		}
