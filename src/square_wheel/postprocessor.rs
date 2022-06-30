@@ -156,8 +156,9 @@ impl Postprocessor
 		if debug_stats_printer.show_debug_stats()
 		{
 			debug_stats_printer.add_line(format!(
-				"bloom time: {:04.2}ms",
-				self.performance_counters.bloom_duration.get_average_value() * 1000.0
+				"bloom time: {:04.2}ms (scale {})",
+				self.performance_counters.bloom_duration.get_average_value() * 1000.0,
+				bloom_buffer_scale,
 			));
 			debug_stats_printer.add_line(format!(
 				"tonemapping time: {:04.2}ms",
@@ -376,16 +377,24 @@ impl Postprocessor
 			let line_offset = dst_y * self.bloom_buffer_size[0];
 			for dst_x in 0 .. self.bloom_buffer_size[0]
 			{
-				let mut sum = ColorVecI::zero();
-				for dx in -radius_i ..= radius_i
+				// Optimization: fetch and scale center pixel, than fetch and scale pairs of side pixels.
+				// We can do this since blur is symmetrical.
+				let mut sum = ColorVecI::mul_scalar(
+					&ColorVecI::from_color64(debug_checked_fetch(&self.bloom_buffers[0], dst_x + line_offset)),
+					debug_checked_fetch(&blur_kernel_i, radius_i as usize),
+				);
+				for dx in 1 ..= radius_i
 				{
-					let src_x = (dx + (dst_x as i32)).max(0).min(bloom_buffer_size_minus_one[0]);
-					let src = debug_checked_fetch(&self.bloom_buffers[0], (src_x as usize) + line_offset);
-					let src_vec = ColorVecI::from_color64(src);
-					let val_scaled =
-						ColorVecI::mul_scalar(&src_vec, debug_checked_fetch(&blur_kernel_i, (dx + radius_i) as usize));
-					sum = ColorVecI::add(&sum, &val_scaled);
+					let src_x_0 = ((dst_x as i32) - dx).max(0);
+					let src_x_1 = ((dst_x as i32) + dx).min(bloom_buffer_size_minus_one[0]);
+					let src_0 = debug_checked_fetch(&self.bloom_buffers[0], (src_x_0 as usize) + line_offset);
+					let src_1 = debug_checked_fetch(&self.bloom_buffers[0], (src_x_1 as usize) + line_offset);
+					let two_sum = ColorVecI::add(&ColorVecI::from_color64(src_0), &ColorVecI::from_color64(src_1));
+					let two_sum_scaled =
+						ColorVecI::mul_scalar(&two_sum, debug_checked_fetch(&blur_kernel_i, (dx + radius_i) as usize));
+					sum = ColorVecI::add(&sum, &two_sum_scaled);
 				}
+
 				let sum_shifted = ColorVecI::shift_right::<COLOR_SHIFT>(&sum);
 				debug_checked_store(
 					&mut self.bloom_buffers[1],
@@ -401,20 +410,33 @@ impl Postprocessor
 			let dst_line_offset = dst_y * self.bloom_buffer_size[0];
 			for dst_x in 0 .. self.bloom_buffer_size[0]
 			{
-				let mut sum = ColorVecI::zero();
-				for dy in -radius_i ..= radius_i
-				{
-					let src_x = dst_x;
-					let src_y = (dy + (dst_y as i32)).max(0).min(bloom_buffer_size_minus_one[1]);
-					let src = debug_checked_fetch(
+				let src_x = dst_x;
+				let mut sum = ColorVecI::mul_scalar(
+					&ColorVecI::from_color64(debug_checked_fetch(
 						&self.bloom_buffers[1],
-						src_x + (src_y as usize) * self.bloom_buffer_size[0],
+						src_x + dst_y * self.bloom_buffer_size[0],
+					)),
+					debug_checked_fetch(&blur_kernel_i, radius_i as usize),
+				);
+
+				for dy in 1 ..= radius_i
+				{
+					let src_y_0 = ((dst_y as i32) - dy).max(0);
+					let src_y_1 = ((dst_y as i32) + dy).min(bloom_buffer_size_minus_one[1]);
+					let src_0 = debug_checked_fetch(
+						&self.bloom_buffers[1],
+						src_x + (src_y_0 as usize) * self.bloom_buffer_size[0],
 					);
-					let src_vec = ColorVecI::from_color64(src);
-					let val_scaled =
-						ColorVecI::mul_scalar(&src_vec, debug_checked_fetch(&blur_kernel_i, (dy + radius_i) as usize));
-					sum = ColorVecI::add(&sum, &val_scaled);
+					let src_1 = debug_checked_fetch(
+						&self.bloom_buffers[1],
+						src_x + (src_y_1 as usize) * self.bloom_buffer_size[0],
+					);
+					let two_sum = ColorVecI::add(&ColorVecI::from_color64(src_0), &ColorVecI::from_color64(src_1));
+					let two_sum_scaled =
+						ColorVecI::mul_scalar(&two_sum, debug_checked_fetch(&blur_kernel_i, (dy + radius_i) as usize));
+					sum = ColorVecI::add(&sum, &two_sum_scaled);
 				}
+
 				let sum_shifted = ColorVecI::shift_right::<COLOR_SHIFT>(&sum);
 				debug_checked_store(
 					&mut self.bloom_buffers[0],
