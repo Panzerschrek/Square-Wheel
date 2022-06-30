@@ -52,16 +52,6 @@ impl Postprocessor
 		}
 		self.hdr_buffer_size = size;
 
-		self.bloom_buffer_size = [size[0] / BLOOM_BUFFER_SCALE, size[1] / BLOOM_BUFFER_SCALE];
-		let bloom_buffer_required_size = self.bloom_buffer_size[0] * self.bloom_buffer_size[1];
-		for bloom_buffer in &mut self.bloom_buffers
-		{
-			if bloom_buffer.len() < bloom_buffer_required_size
-			{
-				bloom_buffer.resize(bloom_buffer_required_size, Color64::black());
-			}
-		}
-
 		&mut self.hdr_buffer[.. required_size]
 	}
 
@@ -85,11 +75,12 @@ impl Postprocessor
 
 		let use_bloom = bloom_sigma > 0.0;
 
+		let mut bloom_buffer_scale = 1;
 		if use_bloom
 		{
 			let bloom_calculation_start_time = Clock::now();
 
-			self.perform_bloom(bloom_sigma);
+			bloom_buffer_scale = self.perform_bloom(bloom_sigma);
 
 			let bloom_calculation_end_time = Clock::now();
 			let bloom_duration_s = (bloom_calculation_end_time - bloom_calculation_start_time).as_secs_f32();
@@ -109,33 +100,7 @@ impl Postprocessor
 
 		if use_bloom
 		{
-			let bloom_scale = 0.25; // TODO - read it from config.
-			for src_y in 0 .. self.bloom_buffer_size[1]
-			{
-				let dst_y_base = src_y * BLOOM_BUFFER_SCALE;
-				let src_line_offset = src_y * self.bloom_buffer_size[0];
-				for src_x in 0 .. self.bloom_buffer_size[0]
-				{
-					let dst_x_base = src_x * BLOOM_BUFFER_SCALE;
-					let bloom_src = debug_checked_fetch(&self.bloom_buffers[0], src_x + src_line_offset);
-					let bloom_c = ColorVec::from_color64(bloom_src);
-					for dy in 0 .. BLOOM_BUFFER_SCALE
-					{
-						let dst_y = dst_y_base + dy;
-						let hdr_buffer_line_offset = dst_x_base + dst_y * self.hdr_buffer_size[0];
-						let pixels_line_offset = dst_x_base + dst_y * surface_info.pitch;
-						for dx in 0 .. BLOOM_BUFFER_SCALE
-						{
-							let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
-							let c_vec = ColorVec::from_color64(c);
-							let sum = ColorVec::mul_scalar_add(&bloom_c, bloom_scale, &c_vec);
-							// let sum = bloom_c;
-							let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
-							debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
-						}
-					}
-				}
-			}
+			self.perform_tonemapping_with_bloom(pixels, surface_info, inv_scale_vec, inv_255_vec, bloom_buffer_scale);
 		}
 		else
 		{
@@ -201,7 +166,158 @@ impl Postprocessor
 		}
 	}
 
-	fn perform_bloom(&mut self, bloom_sigma: f32)
+	fn perform_tonemapping_with_bloom(
+		&self,
+		pixels: &mut [Color32],
+		surface_info: &system_window::SurfaceInfo,
+		inv_scale_vec: ColorVec,
+		inv_255_vec: ColorVec,
+		bloom_buffer_scale: usize,
+	)
+	{
+		match bloom_buffer_scale
+		{
+			0 => self.perform_tonemapping_with_bloom_impl::<MIN_BLOOM_BUFFER_SCALE>(
+				pixels,
+				surface_info,
+				inv_scale_vec,
+				inv_255_vec,
+			),
+			1 => self.perform_tonemapping_with_bloom_impl::<MIN_BLOOM_BUFFER_SCALE>(
+				pixels,
+				surface_info,
+				inv_scale_vec,
+				inv_255_vec,
+			),
+			2 => self.perform_tonemapping_with_bloom_impl::<MIN_BLOOM_BUFFER_SCALE>(
+				pixels,
+				surface_info,
+				inv_scale_vec,
+				inv_255_vec,
+			),
+			3 => self.perform_tonemapping_with_bloom_impl::<3>(pixels, surface_info, inv_scale_vec, inv_255_vec),
+			4 => self.perform_tonemapping_with_bloom_impl::<4>(pixels, surface_info, inv_scale_vec, inv_255_vec),
+			5 => self.perform_tonemapping_with_bloom_impl::<5>(pixels, surface_info, inv_scale_vec, inv_255_vec),
+			6 => self.perform_tonemapping_with_bloom_impl::<6>(pixels, surface_info, inv_scale_vec, inv_255_vec),
+			7 => self.perform_tonemapping_with_bloom_impl::<7>(pixels, surface_info, inv_scale_vec, inv_255_vec),
+			8 => self.perform_tonemapping_with_bloom_impl::<8>(pixels, surface_info, inv_scale_vec, inv_255_vec),
+			9 => self.perform_tonemapping_with_bloom_impl::<9>(pixels, surface_info, inv_scale_vec, inv_255_vec),
+			10 => self.perform_tonemapping_with_bloom_impl::<10>(pixels, surface_info, inv_scale_vec, inv_255_vec),
+			_ => self.perform_tonemapping_with_bloom_impl::<MAX_BLOOM_BUFFER_SCALE>(
+				pixels,
+				surface_info,
+				inv_scale_vec,
+				inv_255_vec,
+			),
+		}
+	}
+
+	fn perform_tonemapping_with_bloom_impl<const BLOOM_BUFFER_SCALE: usize>(
+		&self,
+		pixels: &mut [Color32],
+		surface_info: &system_window::SurfaceInfo,
+		inv_scale_vec: ColorVec,
+		inv_255_vec: ColorVec,
+	)
+	{
+		let bloom_scale = 0.25; // TODO - read it from config.
+		for src_y in 0 .. self.bloom_buffer_size[1]
+		{
+			let dst_y_base = src_y * BLOOM_BUFFER_SCALE;
+			let src_line_offset = src_y * self.bloom_buffer_size[0];
+			for src_x in 0 .. self.bloom_buffer_size[0]
+			{
+				let dst_x_base = src_x * BLOOM_BUFFER_SCALE;
+				let bloom_src = debug_checked_fetch(&self.bloom_buffers[0], src_x + src_line_offset);
+				let bloom_c = ColorVec::from_color64(bloom_src);
+				for dy in 0 .. BLOOM_BUFFER_SCALE
+				{
+					let dst_y = dst_y_base + dy;
+					let hdr_buffer_line_offset = dst_x_base + dst_y * self.hdr_buffer_size[0];
+					let pixels_line_offset = dst_x_base + dst_y * surface_info.pitch;
+					for dx in 0 .. BLOOM_BUFFER_SCALE
+					{
+						let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
+						let c_vec = ColorVec::from_color64(c);
+						let sum = ColorVec::mul_scalar_add(&bloom_c, bloom_scale, &c_vec);
+						// let sum = bloom_c;
+						let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
+						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
+					}
+				}
+			}
+		}
+	}
+
+	fn perform_bloom(&mut self, bloom_sigma: f32) -> usize
+	{
+		let bloom_buffer_scale = (bloom_sigma / 4.0)
+			.ceil()
+			.max(MIN_BLOOM_BUFFER_SCALE as f32)
+			.min(MAX_BLOOM_BUFFER_SCALE as f32) as usize;
+
+		self.bloom_buffer_size = [
+			self.hdr_buffer_size[0] / bloom_buffer_scale,
+			self.hdr_buffer_size[1] / bloom_buffer_scale,
+		];
+		let bloom_buffer_required_size = self.bloom_buffer_size[0] * self.bloom_buffer_size[1];
+		for bloom_buffer in &mut self.bloom_buffers
+		{
+			if bloom_buffer.len() < bloom_buffer_required_size
+			{
+				bloom_buffer.resize(bloom_buffer_required_size, Color64::black());
+			}
+		}
+
+		match bloom_buffer_scale
+		{
+			0 => self.downscale_hdr_buffer::<MIN_BLOOM_BUFFER_SCALE>(),
+			1 => self.downscale_hdr_buffer::<MIN_BLOOM_BUFFER_SCALE>(),
+			2 => self.downscale_hdr_buffer::<MIN_BLOOM_BUFFER_SCALE>(),
+			3 => self.downscale_hdr_buffer::<3>(),
+			4 => self.downscale_hdr_buffer::<4>(),
+			5 => self.downscale_hdr_buffer::<5>(),
+			6 => self.downscale_hdr_buffer::<6>(),
+			7 => self.downscale_hdr_buffer::<7>(),
+			8 => self.downscale_hdr_buffer::<8>(),
+			9 => self.downscale_hdr_buffer::<9>(),
+			10 => self.downscale_hdr_buffer::<10>(),
+			_ => self.downscale_hdr_buffer::<MAX_BLOOM_BUFFER_SCALE>(),
+		}
+
+		let bloom_sigma_corrected = bloom_sigma / (bloom_buffer_scale as f32);
+
+		let blur_radius =
+			((3.0 * bloom_sigma_corrected - 0.5).ceil().max(0.0) as usize).min(MAX_GAUSSIAN_KERNEL_RADIUS);
+		let blur_kernel = compute_gaussian_kernel(bloom_sigma_corrected, blur_radius);
+		// Use approach with constant blur size in order to use optimized (unrolled) code for each radius.
+		match blur_radius
+		{
+			0 =>
+			{},
+			1 => self.perform_blur_impl::<1>(&blur_kernel),
+			2 => self.perform_blur_impl::<2>(&blur_kernel),
+			3 => self.perform_blur_impl::<3>(&blur_kernel),
+			4 => self.perform_blur_impl::<4>(&blur_kernel),
+			5 => self.perform_blur_impl::<5>(&blur_kernel),
+			6 => self.perform_blur_impl::<6>(&blur_kernel),
+			7 => self.perform_blur_impl::<7>(&blur_kernel),
+			8 => self.perform_blur_impl::<8>(&blur_kernel),
+			9 => self.perform_blur_impl::<9>(&blur_kernel),
+			10 => self.perform_blur_impl::<10>(&blur_kernel),
+			11 => self.perform_blur_impl::<11>(&blur_kernel),
+			12 => self.perform_blur_impl::<12>(&blur_kernel),
+			13 => self.perform_blur_impl::<13>(&blur_kernel),
+			14 => self.perform_blur_impl::<14>(&blur_kernel),
+			15 => self.perform_blur_impl::<15>(&blur_kernel),
+			16 => self.perform_blur_impl::<16>(&blur_kernel),
+			_ => self.perform_blur_impl::<MAX_GAUSSIAN_KERNEL_RADIUS>(&blur_kernel),
+		}
+
+		bloom_buffer_scale
+	}
+
+	fn downscale_hdr_buffer<const BLOOM_BUFFER_SCALE: usize>(&mut self)
 	{
 		// First step - downsample HDR buffer into bloom buffer #0.
 		let average_scaler = 1.0 / ((BLOOM_BUFFER_SCALE * BLOOM_BUFFER_SCALE) as f32);
@@ -238,32 +354,6 @@ impl Postprocessor
 		}
 
 		// TODO - handle leftover pixels in borders.
-
-		let blur_radius = ((3.0 * bloom_sigma - 0.5).ceil().max(0.0) as usize).min(MAX_GAUSSIAN_KERNEL_RADIUS);
-		let blur_kernel = compute_gaussian_kernel(bloom_sigma, blur_radius);
-		// Use approach with constant blur size in order to use optimized (unrolled) code for each radius.
-		match blur_radius
-		{
-			0 =>
-			{},
-			1 => self.perform_blur_impl::<1>(&blur_kernel),
-			2 => self.perform_blur_impl::<2>(&blur_kernel),
-			3 => self.perform_blur_impl::<3>(&blur_kernel),
-			4 => self.perform_blur_impl::<4>(&blur_kernel),
-			5 => self.perform_blur_impl::<5>(&blur_kernel),
-			6 => self.perform_blur_impl::<6>(&blur_kernel),
-			7 => self.perform_blur_impl::<7>(&blur_kernel),
-			8 => self.perform_blur_impl::<8>(&blur_kernel),
-			9 => self.perform_blur_impl::<9>(&blur_kernel),
-			10 => self.perform_blur_impl::<10>(&blur_kernel),
-			11 => self.perform_blur_impl::<11>(&blur_kernel),
-			12 => self.perform_blur_impl::<12>(&blur_kernel),
-			13 => self.perform_blur_impl::<13>(&blur_kernel),
-			14 => self.perform_blur_impl::<14>(&blur_kernel),
-			15 => self.perform_blur_impl::<15>(&blur_kernel),
-			16 => self.perform_blur_impl::<16>(&blur_kernel),
-			_ => self.perform_blur_impl::<MAX_GAUSSIAN_KERNEL_RADIUS>(&blur_kernel),
-		}
 	}
 
 	fn perform_blur_impl<const RADIUS: usize>(&mut self, blur_kernel: &[f32; MAX_GAUSSIAN_KERNEL_SIZE])
@@ -329,7 +419,8 @@ impl Postprocessor
 	}
 }
 
-const BLOOM_BUFFER_SCALE: usize = 4;
+const MIN_BLOOM_BUFFER_SCALE: usize = 3;
+const MAX_BLOOM_BUFFER_SCALE: usize = 10;
 
 const MAX_GAUSSIAN_KERNEL_RADIUS: usize = 16;
 const MAX_GAUSSIAN_KERNEL_SIZE: usize = 1 + 2 * MAX_GAUSSIAN_KERNEL_RADIUS;
