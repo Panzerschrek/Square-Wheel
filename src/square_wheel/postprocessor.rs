@@ -210,6 +210,7 @@ impl Postprocessor
 		for dst_y in 0 .. self.bloom_buffer_size[1]
 		{
 			let src_y_base = dst_y * BLOOM_BUFFER_SCALE;
+			let dst_line_offset = dst_y * self.bloom_buffer_size[0];
 			for dst_x in 0 .. self.bloom_buffer_size[0]
 			{
 				let src_x_base = dst_x * BLOOM_BUFFER_SCALE;
@@ -218,9 +219,10 @@ impl Postprocessor
 				for dy in 0 .. BLOOM_BUFFER_SCALE
 				{
 					let src_line_offset = (src_y_base + dy) * self.hdr_buffer_size[0];
+					let src_offset = src_x_base + src_line_offset;
 					for dx in 0 .. BLOOM_BUFFER_SCALE
 					{
-						let src = debug_checked_fetch(&self.hdr_buffer, src_x_base + dx + src_line_offset);
+						let src = debug_checked_fetch(&self.hdr_buffer, dx + src_offset);
 						let c = ColorVec::from_color64(src);
 						sum = ColorVec::add(&sum, &c);
 					}
@@ -229,7 +231,7 @@ impl Postprocessor
 				let average = ColorVec::mul(&sum, &average_scaler_vec);
 				debug_checked_store(
 					&mut self.bloom_buffers[0],
-					dst_x + dst_y * self.bloom_buffer_size[0],
+					dst_x + dst_line_offset,
 					average.into_color64(),
 				);
 			}
@@ -238,11 +240,40 @@ impl Postprocessor
 		// TODO - handle leftover pixels in borders.
 
 		let blur_radius = ((3.0 * bloom_sigma - 0.5).ceil().max(0.0) as usize).min(MAX_GAUSSIAN_KERNEL_RADIUS);
-
 		let blur_kernel = compute_gaussian_kernel(bloom_sigma, blur_radius);
+		// Use approach with constant blur size in order to use optimized (unrolled) code for each radius.
+		match blur_radius
+		{
+			0 =>
+			{},
+			1 => self.perform_blur_impl::<1>(&blur_kernel),
+			2 => self.perform_blur_impl::<2>(&blur_kernel),
+			3 => self.perform_blur_impl::<3>(&blur_kernel),
+			4 => self.perform_blur_impl::<4>(&blur_kernel),
+			5 => self.perform_blur_impl::<5>(&blur_kernel),
+			6 => self.perform_blur_impl::<6>(&blur_kernel),
+			7 => self.perform_blur_impl::<7>(&blur_kernel),
+			8 => self.perform_blur_impl::<8>(&blur_kernel),
+			9 => self.perform_blur_impl::<9>(&blur_kernel),
+			10 => self.perform_blur_impl::<10>(&blur_kernel),
+			11 => self.perform_blur_impl::<11>(&blur_kernel),
+			12 => self.perform_blur_impl::<12>(&blur_kernel),
+			13 => self.perform_blur_impl::<13>(&blur_kernel),
+			14 => self.perform_blur_impl::<14>(&blur_kernel),
+			15 => self.perform_blur_impl::<15>(&blur_kernel),
+			16 => self.perform_blur_impl::<16>(&blur_kernel),
+			_ => self.perform_blur_impl::<MAX_GAUSSIAN_KERNEL_RADIUS>(&blur_kernel),
+		}
+	}
 
+	fn perform_blur_impl<const RADIUS: usize>(&mut self, blur_kernel: &[f32; MAX_GAUSSIAN_KERNEL_SIZE])
+	{
 		// TODO - speed-up bluring code - process borders specially, use integer computations.
-		let radius_i = blur_radius as i32;
+		let radius_i = RADIUS as i32;
+		let bloom_buffer_size_minus_one = [
+			self.bloom_buffer_size[0] as i32 - 1,
+			self.bloom_buffer_size[1] as i32 - 1,
+		];
 
 		// Perform horizontal blur. Use buffer 0 as source and buffer 1 as destination.
 		for dst_y in 0 .. self.bloom_buffer_size[1]
@@ -254,12 +285,12 @@ impl Postprocessor
 				let mut sum = ColorVec::zero();
 				for dx in -radius_i ..= radius_i
 				{
-					let src_x = (dx + (dst_x as i32)).max(0).min(self.bloom_buffer_size[0] as i32 - 1);
+					let src_x = (dx + (dst_x as i32)).max(0).min(bloom_buffer_size_minus_one[0]);
 					let src = debug_checked_fetch(&self.bloom_buffers[0], (src_x as usize) + line_offset);
 					let src_vec = ColorVec::from_color64(src);
 					sum = ColorVec::mul_scalar_add(
 						&src_vec,
-						debug_checked_fetch(&blur_kernel, (dx + radius_i) as usize),
+						debug_checked_fetch(blur_kernel, (dx + radius_i) as usize),
 						&sum,
 					);
 				}
@@ -279,7 +310,7 @@ impl Postprocessor
 				for dy in -radius_i ..= radius_i
 				{
 					let src_x = dst_x;
-					let src_y = (dy + (dst_y as i32)).max(0).min(self.bloom_buffer_size[1] as i32 - 1);
+					let src_y = (dy + (dst_y as i32)).max(0).min(bloom_buffer_size_minus_one[1]);
 					let src = debug_checked_fetch(
 						&self.bloom_buffers[1],
 						src_x + (src_y as usize) * self.bloom_buffer_size[0],
@@ -287,7 +318,7 @@ impl Postprocessor
 					let src_vec = ColorVec::from_color64(src);
 					sum = ColorVec::mul_scalar_add(
 						&src_vec,
-						debug_checked_fetch(&blur_kernel, (dy + radius_i) as usize),
+						debug_checked_fetch(blur_kernel, (dy + radius_i) as usize),
 						&sum,
 					);
 				}
