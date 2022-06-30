@@ -356,7 +356,14 @@ impl Postprocessor
 
 	fn perform_blur_impl<const RADIUS: usize>(&mut self, blur_kernel: &[f32; MAX_GAUSSIAN_KERNEL_SIZE])
 	{
-		// TODO - speed-up bluring code - process borders specially, use integer computations.
+		const COLOR_SHIFT: i32 = 14;
+		let mut blur_kernel_i = [0; MAX_GAUSSIAN_KERNEL_SIZE];
+		for (dst, src) in blur_kernel_i.iter_mut().zip(blur_kernel.iter())
+		{
+			*dst = (src * ((1 << COLOR_SHIFT) as f32)) as u32;
+		}
+
+		// TODO - speed-up bluring code - process borders specially.
 		let radius_i = RADIUS as i32;
 		let bloom_buffer_size_minus_one = [
 			self.bloom_buffer_size[0] as i32 - 1,
@@ -369,21 +376,22 @@ impl Postprocessor
 			let line_offset = dst_y * self.bloom_buffer_size[0];
 			for dst_x in 0 .. self.bloom_buffer_size[0]
 			{
-				// TODO - use integer vector computations.
-				let mut sum = ColorVec::zero();
+				let mut sum = ColorVecI::zero();
 				for dx in -radius_i ..= radius_i
 				{
 					let src_x = (dx + (dst_x as i32)).max(0).min(bloom_buffer_size_minus_one[0]);
 					let src = debug_checked_fetch(&self.bloom_buffers[0], (src_x as usize) + line_offset);
-					let src_vec = ColorVec::from_color64(src);
-					sum = ColorVec::mul_scalar_add(
-						&src_vec,
-						debug_checked_fetch(blur_kernel, (dx + radius_i) as usize),
-						&sum,
-					);
+					let src_vec = ColorVecI::from_color64(src);
+					let val_scaled =
+						ColorVecI::mul_scalar(&src_vec, debug_checked_fetch(&blur_kernel_i, (dx + radius_i) as usize));
+					sum = ColorVecI::add(&sum, &val_scaled);
 				}
-
-				debug_checked_store(&mut self.bloom_buffers[1], dst_x + line_offset, sum.into_color64());
+				let sum_shifted = ColorVecI::shift_right::<COLOR_SHIFT>(&sum);
+				debug_checked_store(
+					&mut self.bloom_buffers[1],
+					dst_x + line_offset,
+					sum_shifted.into_color64(),
+				);
 			}
 		}
 
@@ -393,8 +401,7 @@ impl Postprocessor
 			let dst_line_offset = dst_y * self.bloom_buffer_size[0];
 			for dst_x in 0 .. self.bloom_buffer_size[0]
 			{
-				// TODO - use integer vector computations.
-				let mut sum = ColorVec::zero();
+				let mut sum = ColorVecI::zero();
 				for dy in -radius_i ..= radius_i
 				{
 					let src_x = dst_x;
@@ -403,15 +410,17 @@ impl Postprocessor
 						&self.bloom_buffers[1],
 						src_x + (src_y as usize) * self.bloom_buffer_size[0],
 					);
-					let src_vec = ColorVec::from_color64(src);
-					sum = ColorVec::mul_scalar_add(
-						&src_vec,
-						debug_checked_fetch(blur_kernel, (dy + radius_i) as usize),
-						&sum,
-					);
+					let src_vec = ColorVecI::from_color64(src);
+					let val_scaled =
+						ColorVecI::mul_scalar(&src_vec, debug_checked_fetch(&blur_kernel_i, (dy + radius_i) as usize));
+					sum = ColorVecI::add(&sum, &val_scaled);
 				}
-
-				debug_checked_store(&mut self.bloom_buffers[0], dst_x + dst_line_offset, sum.into_color64());
+				let sum_shifted = ColorVecI::shift_right::<COLOR_SHIFT>(&sum);
+				debug_checked_store(
+					&mut self.bloom_buffers[0],
+					dst_x + dst_line_offset,
+					sum_shifted.into_color64(),
+				);
 			}
 		}
 	}
