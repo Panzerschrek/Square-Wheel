@@ -286,6 +286,7 @@ impl Host
 					pixels,
 					surface_info,
 					self.config.hdr_exposure,
+					self.config.hdr_bloom_sigma,
 					&mut active_map.debug_stats_printer,
 				);
 			}

@@ -70,6 +70,7 @@ impl Postprocessor
 		pixels: &mut [Color32],
 		surface_info: &system_window::SurfaceInfo,
 		exposure: f32,
+		bloom_sigma: f32,
 		debug_stats_printer: &mut DebugStatsPrinter,
 	)
 	{
@@ -88,7 +89,7 @@ impl Postprocessor
 		{
 			let bloom_calculation_start_time = Clock::now();
 
-			self.perform_bloom();
+			self.perform_bloom(bloom_sigma);
 
 			let bloom_calculation_end_time = Clock::now();
 			let bloom_duration_s = (bloom_calculation_end_time - bloom_calculation_start_time).as_secs_f32();
@@ -197,7 +198,7 @@ impl Postprocessor
 		}
 	}
 
-	fn perform_bloom(&mut self)
+	fn perform_bloom(&mut self, bloom_sigma: f32)
 	{
 		// First step - downsample HDR buffer into bloom buffer #0.
 		let average_scaler = 1.0 / ((BLOOM_BUFFER_SCALE * BLOOM_BUFFER_SCALE) as f32);
@@ -233,10 +234,9 @@ impl Postprocessor
 
 		// TODO - handle leftover pixels in borders.
 
-		let sigma: f32 = 3.0;
-		let blur_radius = ((3.0 * sigma - 0.5).ceil().max(0.0) as usize).min(MAX_GAUSSIAN_KERNEL_RADIUS);
+		let blur_radius = ((3.0 * bloom_sigma - 0.5).ceil().max(0.0) as usize).min(MAX_GAUSSIAN_KERNEL_RADIUS);
 
-		let blur_kernel = compute_gaussian_kernel(sigma, blur_radius);
+		let blur_kernel = compute_gaussian_kernel(bloom_sigma, blur_radius);
 
 		// TODO - speed-up bluring code - process borders specially, use integer computations.
 		let radius_i = blur_radius as i32;

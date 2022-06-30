@@ -25,6 +25,9 @@ pub struct HostConfig
 
 	#[serde(default = "default_one")]
 	pub hdr_exposure: f32,
+
+	#[serde(default = "default_one")]
+	pub hdr_bloom_sigma: f32,
 }
 
 impl HostConfig
