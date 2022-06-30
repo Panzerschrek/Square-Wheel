@@ -251,7 +251,7 @@ impl Postprocessor
 
 	fn perform_bloom(&mut self, bloom_sigma: f32) -> usize
 	{
-		let bloom_buffer_scale = (bloom_sigma / 4.0)
+		let bloom_buffer_scale = (bloom_sigma / 2.0)
 			.ceil()
 			.max(MIN_BLOOM_BUFFER_SCALE as f32)
 			.min(MAX_BLOOM_BUFFER_SCALE as f32) as usize;
@@ -319,9 +319,8 @@ impl Postprocessor
 
 	fn downscale_hdr_buffer<const BLOOM_BUFFER_SCALE: usize>(&mut self)
 	{
-		// First step - downsample HDR buffer into bloom buffer #0.
-		let average_scaler = 1.0 / ((BLOOM_BUFFER_SCALE * BLOOM_BUFFER_SCALE) as f32);
-		let average_scaler_vec = ColorVec::from_color_f32x3(&[average_scaler, average_scaler, average_scaler]);
+		const COLOR_SHIFT: i32 = 8;
+		let average_scaler = (1 << COLOR_SHIFT) / ((BLOOM_BUFFER_SCALE * BLOOM_BUFFER_SCALE) as u32);
 
 		for dst_y in 0 .. self.bloom_buffer_size[1]
 		{
@@ -330,8 +329,7 @@ impl Postprocessor
 			for dst_x in 0 .. self.bloom_buffer_size[0]
 			{
 				let src_x_base = dst_x * BLOOM_BUFFER_SCALE;
-				// TODO - use integer vector computations.
-				let mut sum = ColorVec::zero();
+				let mut sum = ColorVecI::zero();
 				for dy in 0 .. BLOOM_BUFFER_SCALE
 				{
 					let src_line_offset = (src_y_base + dy) * self.hdr_buffer_size[0];
@@ -339,12 +337,12 @@ impl Postprocessor
 					for dx in 0 .. BLOOM_BUFFER_SCALE
 					{
 						let src = debug_checked_fetch(&self.hdr_buffer, dx + src_offset);
-						let c = ColorVec::from_color64(src);
-						sum = ColorVec::add(&sum, &c);
+						let c = ColorVecI::from_color64(src);
+						sum = ColorVecI::add(&sum, &c);
 					}
 				}
 
-				let average = ColorVec::mul(&sum, &average_scaler_vec);
+				let average = ColorVecI::shift_right::<COLOR_SHIFT>(&ColorVecI::mul_scalar(&sum, average_scaler));
 				debug_checked_store(
 					&mut self.bloom_buffers[0],
 					dst_x + dst_line_offset,
