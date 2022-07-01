@@ -154,6 +154,8 @@ impl Host
 					.process_input(&self.window.borrow_mut().get_keyboard_state(), time_delta_s);
 			}
 			active_map.game.update(time_delta_s);
+
+			active_map.postprocessor.synchronize_config();
 		}
 
 		let witndow_ptr_clone = self.window.clone();
@@ -263,7 +265,7 @@ impl Host
 		{
 			let camera_matrices = active_map.game.get_camera_matrices(surface_info);
 
-			if self.config.hdr_rendering
+			if active_map.postprocessor.use_hdr_rendering()
 			{
 				let hdr_buffer_size = [surface_info.width, surface_info.height];
 				let hdr_buffer = active_map.postprocessor.get_hdr_buffer(hdr_buffer_size);
@@ -285,8 +287,6 @@ impl Host
 				active_map.postprocessor.perform_postprocessing(
 					pixels,
 					surface_info,
-					self.config.hdr_exposure,
-					self.config.hdr_bloom_sigma,
 					&mut active_map.debug_stats_printer,
 				);
 			}
@@ -346,7 +346,7 @@ impl Host
 				self.active_map = Some(ActiveMap {
 					game: test_game::Game::new(self.commands_processor.clone(), self.console.clone()),
 					renderer: renderer::Renderer::new(self.app_config.clone(), map_rc.clone()),
-					postprocessor: Postprocessor::new(),
+					postprocessor: Postprocessor::new(self.app_config.clone()),
 					inline_models_index: inline_models_index::InlineModelsIndex::new(map_rc),
 					debug_stats_printer: DebugStatsPrinter::new(self.config.show_debug_stats),
 				});

@@ -19,15 +19,6 @@ pub struct HostConfig
 
 	#[serde(default)]
 	pub maps_path: String,
-
-	#[serde(default)]
-	pub hdr_rendering: bool,
-
-	#[serde(default = "default_one")]
-	pub hdr_exposure: f32,
-
-	#[serde(default = "default_one")]
-	pub hdr_bloom_sigma: f32,
 }
 
 impl HostConfig
@@ -49,9 +40,4 @@ impl HostConfig
 fn max_fps_default() -> f32
 {
 	120.0
-}
-
-fn default_one() -> f32
-{
-	1.0
 }

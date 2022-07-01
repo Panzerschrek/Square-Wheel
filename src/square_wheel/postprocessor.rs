@@ -1,9 +1,12 @@
-use super::{debug_stats_printer::*, fast_math::*, performance_counter::*};
+use super::{config, debug_stats_printer::*, fast_math::*, performance_counter::*, postprocessor_config::*};
 use common::{color::*, shared_mut_slice::*, system_window};
 use rayon::prelude::*;
 
 pub struct Postprocessor
 {
+	app_config: config::ConfigSharedPtr,
+	config: PostprocessorConfig,
+
 	hdr_buffer_size: [usize; 2],
 	hdr_buffer: Vec<Color64>,
 	performance_counters: PostprocessorPerformanceCounters,
@@ -32,9 +35,14 @@ type Clock = std::time::Instant;
 
 impl Postprocessor
 {
-	pub fn new() -> Self
+	pub fn new(app_config: config::ConfigSharedPtr) -> Self
 	{
+		let config_parsed = PostprocessorConfig::from_app_config(&app_config);
+		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
+
 		Self {
+			app_config,
+			config: config_parsed,
 			hdr_buffer_size: [0, 0],
 			hdr_buffer: Vec::new(),
 			performance_counters: PostprocessorPerformanceCounters::new(),
@@ -59,8 +67,6 @@ impl Postprocessor
 		&mut self,
 		pixels: &mut [Color32],
 		surface_info: &system_window::SurfaceInfo,
-		exposure: f32,
-		bloom_sigma: f32,
 		debug_stats_printer: &mut DebugStatsPrinter,
 	)
 	{
@@ -73,14 +79,14 @@ impl Postprocessor
 			);
 		}
 
-		let use_bloom = bloom_sigma > 0.0;
+		let use_bloom = self.config.bloom_sigma > 0.0;
 
 		let mut bloom_buffer_scale = 1;
 		if use_bloom
 		{
 			let bloom_calculation_start_time = Clock::now();
 
-			bloom_buffer_scale = self.perform_bloom(bloom_sigma);
+			bloom_buffer_scale = self.perform_bloom();
 
 			let bloom_calculation_end_time = Clock::now();
 			let bloom_duration_s = (bloom_calculation_end_time - bloom_calculation_start_time).as_secs_f32();
@@ -91,8 +97,7 @@ impl Postprocessor
 
 		// Use Reinhard formula for tonemapping.
 
-		let inv_scale = 1.0 / exposure;
-
+		let inv_scale = 1.0 / self.config.exposure;
 		let inv_scale_vec = ColorVec::from_color_f32x3(&[inv_scale, inv_scale, inv_scale]);
 
 		let inv_255 = 1.0 / 255.0;
@@ -221,8 +226,7 @@ impl Postprocessor
 		inv_255_vec: ColorVec,
 	)
 	{
-		let nearest_filter = false;
-		if nearest_filter
+		if !self.config.linear_bloom_filter
 		{
 			self.perform_tonemapping_with_bloom_nearest::<BLOOM_BUFFER_SCALE>(
 				pixels,
@@ -431,9 +435,9 @@ impl Postprocessor
 		}
 	}
 
-	fn perform_bloom(&mut self, bloom_sigma: f32) -> usize
+	fn perform_bloom(&mut self) -> usize
 	{
-		let bloom_buffer_scale = (bloom_sigma / 2.0)
+		let bloom_buffer_scale = (self.config.bloom_sigma / 2.0)
 			.ceil()
 			.max(MIN_BLOOM_BUFFER_SCALE as f32)
 			.min(MAX_BLOOM_BUFFER_SCALE as f32) as usize;
@@ -467,7 +471,7 @@ impl Postprocessor
 			_ => self.downscale_hdr_buffer::<MAX_BLOOM_BUFFER_SCALE>(),
 		}
 
-		let bloom_sigma_corrected = bloom_sigma / (bloom_buffer_scale as f32);
+		let bloom_sigma_corrected = self.config.bloom_sigma / (bloom_buffer_scale as f32);
 
 		let blur_radius =
 			((3.0 * bloom_sigma_corrected - 0.5).ceil().max(0.0) as usize).min(MAX_GAUSSIAN_KERNEL_RADIUS);
@@ -587,10 +591,9 @@ impl Postprocessor
 
 		// Reduce all weights by bloom scale factor for second blur pass.
 		// Do this in order to avoid additional multiplication while applying bloom.
-		let bloom_scale = 0.25; // TODO - read it from config.
 		for (dst, src) in blur_kernel_i.iter_mut().zip(blur_kernel.iter())
 		{
-			*dst = (src * bloom_scale * ((1 << COLOR_SHIFT) as f32)) as u32;
+			*dst = (src * self.config.bloom_scale * ((1 << COLOR_SHIFT) as f32)) as u32;
 		}
 
 		// Perform vertical blur. Use buffer 1 as source and buffer 0 as destination.
@@ -634,6 +637,16 @@ impl Postprocessor
 				);
 			}
 		}
+	}
+
+	pub fn synchronize_config(&mut self)
+	{
+		self.config = PostprocessorConfig::from_app_config(&self.app_config);
+	}
+
+	pub fn use_hdr_rendering(&self) -> bool
+	{
+		self.config.hdr_rendering
 	}
 }
 
