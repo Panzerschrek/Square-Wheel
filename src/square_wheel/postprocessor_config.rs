@@ -13,6 +13,9 @@ pub struct PostprocessorConfig
 	#[serde(default = "default_one")]
 	pub bloom_sigma: f32,
 
+	#[serde(default = "default_one")]
+	pub bloom_buffer_scale_log2: f32,
+
 	#[serde(default = "default_bloom_scale")]
 	pub bloom_scale: f32,
 

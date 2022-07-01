@@ -195,20 +195,9 @@ impl Postprocessor
 				inv_scale_vec,
 				inv_255_vec,
 			),
-			2 => self.perform_tonemapping_with_bloom_impl::<MIN_BLOOM_BUFFER_SCALE>(
-				pixels,
-				surface_info,
-				inv_scale_vec,
-				inv_255_vec,
-			),
-			3 => self.perform_tonemapping_with_bloom_impl::<3>(pixels, surface_info, inv_scale_vec, inv_255_vec),
+			2 => self.perform_tonemapping_with_bloom_impl::<2>(pixels, surface_info, inv_scale_vec, inv_255_vec),
 			4 => self.perform_tonemapping_with_bloom_impl::<4>(pixels, surface_info, inv_scale_vec, inv_255_vec),
-			5 => self.perform_tonemapping_with_bloom_impl::<5>(pixels, surface_info, inv_scale_vec, inv_255_vec),
-			6 => self.perform_tonemapping_with_bloom_impl::<6>(pixels, surface_info, inv_scale_vec, inv_255_vec),
-			7 => self.perform_tonemapping_with_bloom_impl::<7>(pixels, surface_info, inv_scale_vec, inv_255_vec),
 			8 => self.perform_tonemapping_with_bloom_impl::<8>(pixels, surface_info, inv_scale_vec, inv_255_vec),
-			9 => self.perform_tonemapping_with_bloom_impl::<9>(pixels, surface_info, inv_scale_vec, inv_255_vec),
-			10 => self.perform_tonemapping_with_bloom_impl::<10>(pixels, surface_info, inv_scale_vec, inv_255_vec),
 			_ => self.perform_tonemapping_with_bloom_impl::<MAX_BLOOM_BUFFER_SCALE>(
 				pixels,
 				surface_info,
@@ -609,10 +598,13 @@ impl Postprocessor
 
 	fn perform_bloom(&mut self) -> usize
 	{
-		let bloom_buffer_scale = (self.config.bloom_sigma / 2.0)
+		let bloom_buffer_scale = self
+			.config
+			.bloom_buffer_scale_log2
 			.ceil()
-			.max(MIN_BLOOM_BUFFER_SCALE as f32)
-			.min(MAX_BLOOM_BUFFER_SCALE as f32) as usize;
+			.max(MIN_BLOOM_BUFFER_SCALE_LOG2 as f32)
+			.min(MAX_BLOOM_BUFFER_SCALE_LOG2 as f32)
+			.exp2() as usize;
 
 		self.bloom_buffer_size = [
 			self.hdr_buffer_size[0] / bloom_buffer_scale,
@@ -631,15 +623,9 @@ impl Postprocessor
 		{
 			0 => self.downscale_hdr_buffer::<MIN_BLOOM_BUFFER_SCALE>(),
 			1 => self.downscale_hdr_buffer::<MIN_BLOOM_BUFFER_SCALE>(),
-			2 => self.downscale_hdr_buffer::<MIN_BLOOM_BUFFER_SCALE>(),
-			3 => self.downscale_hdr_buffer::<3>(),
+			2 => self.downscale_hdr_buffer::<2>(),
 			4 => self.downscale_hdr_buffer::<4>(),
-			5 => self.downscale_hdr_buffer::<5>(),
-			6 => self.downscale_hdr_buffer::<6>(),
-			7 => self.downscale_hdr_buffer::<7>(),
 			8 => self.downscale_hdr_buffer::<8>(),
-			9 => self.downscale_hdr_buffer::<9>(),
-			10 => self.downscale_hdr_buffer::<10>(),
 			_ => self.downscale_hdr_buffer::<MAX_BLOOM_BUFFER_SCALE>(),
 		}
 
@@ -813,6 +799,7 @@ impl Postprocessor
 
 	pub fn synchronize_config(&mut self)
 	{
+		// TODO - fix wrong config params and update app config.
 		self.config = PostprocessorConfig::from_app_config(&self.app_config);
 	}
 
@@ -822,8 +809,11 @@ impl Postprocessor
 	}
 }
 
-const MIN_BLOOM_BUFFER_SCALE: usize = 3;
-const MAX_BLOOM_BUFFER_SCALE: usize = 10;
+// Support only power of two scale to reduce specialized code size.
+const MIN_BLOOM_BUFFER_SCALE_LOG2: usize = 1;
+const MAX_BLOOM_BUFFER_SCALE_LOG2: usize = 3;
+const MIN_BLOOM_BUFFER_SCALE: usize = 1 << MIN_BLOOM_BUFFER_SCALE_LOG2;
+const MAX_BLOOM_BUFFER_SCALE: usize = 1 << MAX_BLOOM_BUFFER_SCALE_LOG2;
 
 const MAX_GAUSSIAN_KERNEL_RADIUS: usize = 16;
 const MAX_GAUSSIAN_KERNEL_SIZE: usize = 1 + 2 * MAX_GAUSSIAN_KERNEL_RADIUS;
