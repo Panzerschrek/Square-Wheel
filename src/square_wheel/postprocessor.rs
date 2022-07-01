@@ -224,7 +224,6 @@ impl Postprocessor
 		let columns_left = self.hdr_buffer_size[0] - self.bloom_buffer_size[0] * BLOOM_BUFFER_SCALE;
 		let lines_left = self.hdr_buffer_size[1] - self.bloom_buffer_size[1] * BLOOM_BUFFER_SCALE;
 
-		let bloom_scale = 0.25; // TODO - read it from config.
 		for src_y in 0 .. self.bloom_buffer_size[1]
 		{
 			let dst_y_base = src_y * BLOOM_BUFFER_SCALE;
@@ -243,7 +242,7 @@ impl Postprocessor
 					{
 						let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
 						let c_vec = ColorVec::from_color64(c);
-						let sum = ColorVec::mul_scalar_add(&bloom_c, bloom_scale, &c_vec);
+						let sum = ColorVec::add(&bloom_c, &c_vec);
 						// let sum = bloom_c;
 						let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
 						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
@@ -268,7 +267,7 @@ impl Postprocessor
 					{
 						let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
 						let c_vec = ColorVec::from_color64(c);
-						let sum = ColorVec::mul_scalar_add(&bloom_c, bloom_scale, &c_vec);
+						let sum = ColorVec::add(&bloom_c, &c_vec);
 						let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
 						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
 					}
@@ -294,7 +293,7 @@ impl Postprocessor
 					{
 						let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
 						let c_vec = ColorVec::from_color64(c);
-						let sum = ColorVec::mul_scalar_add(&bloom_c, bloom_scale, &c_vec);
+						let sum = ColorVec::add(&bloom_c, &c_vec);
 						let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
 						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
 					}
@@ -318,7 +317,7 @@ impl Postprocessor
 					{
 						let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
 						let c_vec = ColorVec::from_color64(c);
-						let sum = ColorVec::mul_scalar_add(&bloom_c, bloom_scale, &c_vec);
+						let sum = ColorVec::add(&bloom_c, &c_vec);
 						let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
 						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
 					}
@@ -479,6 +478,14 @@ impl Postprocessor
 					sum_shifted.into_color64(),
 				);
 			}
+		}
+
+		// Reduce all weights by bloom scale factor for second blur pass.
+		// Do this in order to avoid additional multiplication while applying bloom.
+		let bloom_scale = 0.25; // TODO - read it from config.
+		for (dst, src) in blur_kernel_i.iter_mut().zip(blur_kernel.iter())
+		{
+			*dst = (src * bloom_scale * ((1 << COLOR_SHIFT) as f32)) as u32;
 		}
 
 		// Perform vertical blur. Use buffer 1 as source and buffer 0 as destination.
