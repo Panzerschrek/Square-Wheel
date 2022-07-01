@@ -378,6 +378,40 @@ impl Postprocessor
 		// TODO - handle borders.
 		// TODO - optimize this.
 
+		// Lower border.
+		{
+			let dst_y_base = 0;
+			let mut bloom_src_0_0 = ColorVec::from_color64(debug_checked_fetch(&self.bloom_buffers[0], 0));
+			for src_x in 0 .. self.bloom_buffer_size[0] - 1
+			{
+				let dst_x_base = src_x * BLOOM_BUFFER_SCALE + BLOOM_BUFFER_SCALE / 2;
+
+				let bloom_src_1_0 = ColorVec::from_color64(debug_checked_fetch(&self.bloom_buffers[0], src_x + 1));
+
+				for dy in 0 .. BLOOM_BUFFER_SCALE / 2
+				{
+					let dst_y = dst_y_base + dy;
+					let hdr_buffer_line_offset = dst_x_base + dst_y * self.hdr_buffer_size[0];
+					let pixels_line_offset = dst_x_base + dst_y * surface_info.pitch;
+					for dx in 0 .. BLOOM_BUFFER_SCALE
+					{
+						let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
+						let x_mix_factor = mix_factors[dx];
+						let one_minus_x_mix_factor = 1.0 - x_mix_factor;
+						let sum = ColorVec::mul_scalar_add(
+							&bloom_src_0_0,
+							one_minus_x_mix_factor,
+							&ColorVec::mul_scalar_add(&bloom_src_1_0, x_mix_factor, &ColorVec::from_color64(c)),
+						);
+						let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
+						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
+					}
+				}
+
+				bloom_src_0_0 = bloom_src_1_0;
+			}
+		}
+		// Main image.
 		for src_y in 0 .. self.bloom_buffer_size[1] - 1
 		{
 			let dst_y_base = src_y * BLOOM_BUFFER_SCALE + BLOOM_BUFFER_SCALE / 2;
@@ -461,8 +495,8 @@ impl Postprocessor
 				bloom_src_0_1 = bloom_src_1_1;
 			}
 			// Right border.
-			let righ_border_begin_x = (self.bloom_buffer_size[0] - 1) * BLOOM_BUFFER_SCALE + BLOOM_BUFFER_SCALE / 2;
-			let right_border_size = self.hdr_buffer_size[0] - righ_border_begin_x;
+			let right_border_begin_x = (self.bloom_buffer_size[0] - 1) * BLOOM_BUFFER_SCALE + BLOOM_BUFFER_SCALE / 2;
+			let right_border_size = self.hdr_buffer_size[0] - right_border_begin_x;
 			for dy in 0 .. BLOOM_BUFFER_SCALE
 			{
 				let y_mix_factor = mix_factors[dy];
@@ -474,8 +508,8 @@ impl Postprocessor
 				);
 
 				let dst_y = dst_y_base + dy;
-				let hdr_buffer_line_offset = righ_border_begin_x + dst_y * self.hdr_buffer_size[0];
-				let pixels_line_offset = righ_border_begin_x + dst_y * surface_info.pitch;
+				let hdr_buffer_line_offset = right_border_begin_x + dst_y * self.hdr_buffer_size[0];
+				let pixels_line_offset = right_border_begin_x + dst_y * surface_info.pitch;
 				for dx in 0 .. right_border_size
 				{
 					let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
@@ -483,6 +517,45 @@ impl Postprocessor
 					let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
 					debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
 				}
+			}
+		}
+		// Upper border.
+		{
+			let upper_border_begin_y = (self.bloom_buffer_size[1] - 1) * BLOOM_BUFFER_SCALE + BLOOM_BUFFER_SCALE / 2;
+			let upper_border_size = self.hdr_buffer_size[1] - upper_border_begin_y;
+			let dst_y_base = upper_border_begin_y;
+
+			let src_line_offset = (self.bloom_buffer_size[1] - 1) * self.bloom_buffer_size[0];
+			let mut bloom_src_0_0 =
+				ColorVec::from_color64(debug_checked_fetch(&self.bloom_buffers[0], src_line_offset));
+			for src_x in 0 .. self.bloom_buffer_size[0] - 1
+			{
+				let dst_x_base = src_x * BLOOM_BUFFER_SCALE + BLOOM_BUFFER_SCALE / 2;
+
+				let bloom_src_1_0 =
+					ColorVec::from_color64(debug_checked_fetch(&self.bloom_buffers[0], src_x + 1 + src_line_offset));
+
+				for dy in 0 .. upper_border_size
+				{
+					let dst_y = dst_y_base + dy;
+					let hdr_buffer_line_offset = dst_x_base + dst_y * self.hdr_buffer_size[0];
+					let pixels_line_offset = dst_x_base + dst_y * surface_info.pitch;
+					for dx in 0 .. BLOOM_BUFFER_SCALE
+					{
+						let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
+						let x_mix_factor = mix_factors[dx];
+						let one_minus_x_mix_factor = 1.0 - x_mix_factor;
+						let sum = ColorVec::mul_scalar_add(
+							&bloom_src_0_0,
+							one_minus_x_mix_factor,
+							&ColorVec::mul_scalar_add(&bloom_src_1_0, x_mix_factor, &ColorVec::from_color64(c)),
+						);
+						let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
+						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
+					}
+				}
+
+				bloom_src_0_0 = bloom_src_1_0;
 			}
 		}
 	}
