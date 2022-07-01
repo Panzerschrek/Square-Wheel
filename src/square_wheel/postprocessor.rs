@@ -221,6 +221,35 @@ impl Postprocessor
 		inv_255_vec: ColorVec,
 	)
 	{
+		let nearest_filter = false;
+		if nearest_filter
+		{
+			self.perform_tonemapping_with_bloom_nearest::<BLOOM_BUFFER_SCALE>(
+				pixels,
+				surface_info,
+				inv_scale_vec,
+				inv_255_vec,
+			);
+		}
+		else
+		{
+			self.perform_tonemapping_with_bloom_linear::<BLOOM_BUFFER_SCALE>(
+				pixels,
+				surface_info,
+				inv_scale_vec,
+				inv_255_vec,
+			);
+		}
+	}
+
+	fn perform_tonemapping_with_bloom_nearest<const BLOOM_BUFFER_SCALE: usize>(
+		&self,
+		pixels: &mut [Color32],
+		surface_info: &system_window::SurfaceInfo,
+		inv_scale_vec: ColorVec,
+		inv_255_vec: ColorVec,
+	)
+	{
 		let columns_left = self.hdr_buffer_size[0] - self.bloom_buffer_size[0] * BLOOM_BUFFER_SCALE;
 		let lines_left = self.hdr_buffer_size[1] - self.bloom_buffer_size[1] * BLOOM_BUFFER_SCALE;
 
@@ -318,6 +347,82 @@ impl Postprocessor
 						let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
 						let c_vec = ColorVec::from_color64(c);
 						let sum = ColorVec::add(&bloom_c, &c_vec);
+						let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
+						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
+					}
+				}
+			}
+		}
+	}
+
+	fn perform_tonemapping_with_bloom_linear<const BLOOM_BUFFER_SCALE: usize>(
+		&self,
+		pixels: &mut [Color32],
+		surface_info: &system_window::SurfaceInfo,
+		inv_scale_vec: ColorVec,
+		inv_255_vec: ColorVec,
+	)
+	{
+		let mut mix_factors = [0.0; BLOOM_BUFFER_SCALE];
+		let bloom_buffer_scale_f = BLOOM_BUFFER_SCALE as f32;
+		for i in 0 .. BLOOM_BUFFER_SCALE
+		{
+			mix_factors[i] = (((BLOOM_BUFFER_SCALE + 1) & 1) as f32) / (2.0 * bloom_buffer_scale_f) +
+				(i as f32) / bloom_buffer_scale_f;
+		}
+
+		// TODO - handle borders.
+		// TODO - optimize this.
+
+		for src_y in 0 .. self.bloom_buffer_size[1] - 1
+		{
+			let dst_y_base = src_y * BLOOM_BUFFER_SCALE + BLOOM_BUFFER_SCALE / 2;
+			let src_line_offset = src_y * self.bloom_buffer_size[0];
+			for src_x in 0 .. self.bloom_buffer_size[0] - 1
+			{
+				let dst_x_base = src_x * BLOOM_BUFFER_SCALE + BLOOM_BUFFER_SCALE / 2;
+
+				let bloom_src_0_0 =
+					ColorVec::from_color64(debug_checked_fetch(&self.bloom_buffers[0], src_x + src_line_offset));
+				let bloom_src_0_1 = ColorVec::from_color64(debug_checked_fetch(
+					&self.bloom_buffers[0],
+					src_x + src_line_offset + self.bloom_buffer_size[0],
+				));
+				let bloom_src_1_0 =
+					ColorVec::from_color64(debug_checked_fetch(&self.bloom_buffers[0], src_x + 1 + src_line_offset));
+				let bloom_src_1_1 = ColorVec::from_color64(debug_checked_fetch(
+					&self.bloom_buffers[0],
+					src_x + 1 + src_line_offset + self.bloom_buffer_size[0],
+				));
+
+				for dy in 0 .. BLOOM_BUFFER_SCALE
+				{
+					let y_mix_factor = mix_factors[dy];
+					let one_minus_y_mix_factor = 1.0 - y_mix_factor;
+					let bloom_src_left = ColorVec::mul_scalar_add(
+						&bloom_src_0_0,
+						one_minus_y_mix_factor,
+						&ColorVec::scalar_mul(&bloom_src_0_1, y_mix_factor),
+					);
+					let bloom_src_right = ColorVec::mul_scalar_add(
+						&bloom_src_1_0,
+						one_minus_y_mix_factor,
+						&ColorVec::scalar_mul(&bloom_src_1_1, y_mix_factor),
+					);
+
+					let dst_y = dst_y_base + dy;
+					let hdr_buffer_line_offset = dst_x_base + dst_y * self.hdr_buffer_size[0];
+					let pixels_line_offset = dst_x_base + dst_y * surface_info.pitch;
+					for dx in 0 .. BLOOM_BUFFER_SCALE
+					{
+						let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
+						let x_mix_factor = mix_factors[dx];
+						let one_minus_x_mix_factor = 1.0 - x_mix_factor;
+						let sum = ColorVec::mul_scalar_add(
+							&bloom_src_left,
+							one_minus_x_mix_factor,
+							&ColorVec::mul_scalar_add(&bloom_src_right, x_mix_factor, &ColorVec::from_color64(c)),
+						);
 						let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
 						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
 					}
