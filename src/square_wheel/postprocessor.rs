@@ -375,8 +375,11 @@ impl Postprocessor
 				(i as f32) / bloom_buffer_scale_f;
 		}
 
-		// TODO - handle borders.
-		// TODO - optimize this.
+		let right_border_begin_x = (self.bloom_buffer_size[0] - 1) * BLOOM_BUFFER_SCALE + BLOOM_BUFFER_SCALE / 2;
+		let right_border_size = self.hdr_buffer_size[0] - right_border_begin_x;
+
+		let upper_border_begin_y = (self.bloom_buffer_size[1] - 1) * BLOOM_BUFFER_SCALE + BLOOM_BUFFER_SCALE / 2;
+		let upper_border_size = self.hdr_buffer_size[1] - upper_border_begin_y;
 
 		// Lower border.
 		{
@@ -495,8 +498,6 @@ impl Postprocessor
 				bloom_src_0_1 = bloom_src_1_1;
 			}
 			// Right border.
-			let right_border_begin_x = (self.bloom_buffer_size[0] - 1) * BLOOM_BUFFER_SCALE + BLOOM_BUFFER_SCALE / 2;
-			let right_border_size = self.hdr_buffer_size[0] - right_border_begin_x;
 			for dy in 0 .. BLOOM_BUFFER_SCALE
 			{
 				let y_mix_factor = mix_factors[dy];
@@ -521,8 +522,6 @@ impl Postprocessor
 		}
 		// Upper border.
 		{
-			let upper_border_begin_y = (self.bloom_buffer_size[1] - 1) * BLOOM_BUFFER_SCALE + BLOOM_BUFFER_SCALE / 2;
-			let upper_border_size = self.hdr_buffer_size[1] - upper_border_begin_y;
 			let dst_y_base = upper_border_begin_y;
 
 			let src_line_offset = (self.bloom_buffer_size[1] - 1) * self.bloom_buffer_size[0];
@@ -558,6 +557,54 @@ impl Postprocessor
 				bloom_src_0_0 = bloom_src_1_0;
 			}
 		}
+
+		// Process corners.
+		let mut process_corner = |x_start, x_end, y_start, y_end, bloom_value| {
+			for y in y_start .. y_end
+			{
+				let hdr_buffer_line_offset = y * self.hdr_buffer_size[0];
+				let pixels_line_offset = y * surface_info.pitch;
+				for x in x_start .. x_end
+				{
+					let c = debug_checked_fetch(&self.hdr_buffer, x + hdr_buffer_line_offset);
+					let sum = ColorVec::add(&bloom_value, &ColorVec::from_color64(c));
+					let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
+					debug_checked_store(pixels, x + pixels_line_offset, c_mapped.into());
+				}
+			}
+		};
+
+		process_corner(
+			0,
+			BLOOM_BUFFER_SCALE / 2,
+			0,
+			BLOOM_BUFFER_SCALE / 2,
+			ColorVec::from_color64(self.bloom_buffers[0][0]),
+		);
+		process_corner(
+			right_border_begin_x,
+			self.hdr_buffer_size[0],
+			0,
+			BLOOM_BUFFER_SCALE / 2,
+			ColorVec::from_color64(self.bloom_buffers[0][self.bloom_buffer_size[0] - 1]),
+		);
+		process_corner(
+			0,
+			BLOOM_BUFFER_SCALE / 2,
+			upper_border_begin_y,
+			self.hdr_buffer_size[1],
+			ColorVec::from_color64(self.bloom_buffers[0][(self.bloom_buffer_size[1] - 1) * self.bloom_buffer_size[0]]),
+		);
+		process_corner(
+			right_border_begin_x,
+			self.hdr_buffer_size[0],
+			upper_border_begin_y,
+			self.hdr_buffer_size[1],
+			ColorVec::from_color64(
+				self.bloom_buffers[0]
+					[self.bloom_buffer_size[0] - 1 + (self.bloom_buffer_size[1] - 1) * self.bloom_buffer_size[0]],
+			),
+		);
 	}
 
 	fn perform_bloom(&mut self) -> usize
