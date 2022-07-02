@@ -117,7 +117,7 @@ impl Postprocessor
 				// It is safe to share destination buffer since each thead writes into its own regon.
 				let pixels_shared = SharedMutSlice::new(pixels);
 
-				let mut ranges = [[0, 0]; 64];
+				let mut ranges = [[0, 0]; MAX_THREADS];
 				for i in 0 .. num_threads
 				{
 					ranges[i] = [
@@ -140,31 +140,16 @@ impl Postprocessor
 		}
 		else
 		{
-			// It is safe to share destination buffer since each thead writes into its own regon.
-			let pixels_shared = SharedMutSlice::new(pixels);
-
-			let convert_lines_range = |y_start, y_end| {
-				for y in y_start .. y_end
-				{
-					let pixels_unshared = unsafe { pixels_shared.get() };
-					let src_line = &self.hdr_buffer[y * self.hdr_buffer_size[0] .. (y + 1) * self.hdr_buffer_size[0]];
-					let dst_line = &mut pixels_unshared[y * surface_info.pitch .. (y + 1) * surface_info.pitch];
-					for (dst, &src) in dst_line.iter_mut().zip(src_line.iter())
-					{
-						let c = ColorVec::from_color64(src);
-						let c_mapped = tonemapping_function.do_it(&c);
-						*dst = c_mapped.into();
-					}
-				}
-			};
-
 			if num_threads == 1
 			{
-				convert_lines_range(0, surface_size[1]);
+				self.perform_tonemapping(pixels, surface_info, 0, surface_size[1], tonemapping_function);
 			}
 			else
 			{
-				let mut ranges = [[0, 0]; 64];
+				// It is safe to share destination buffer since each thead writes into its own regon.
+				let pixels_shared = SharedMutSlice::new(pixels);
+
+				let mut ranges = [[0, 0]; MAX_THREADS];
 				for i in 0 .. num_threads
 				{
 					ranges[i] = [
@@ -173,7 +158,8 @@ impl Postprocessor
 					];
 				}
 				ranges[.. num_threads].par_iter().for_each(|range| {
-					convert_lines_range(range[0], range[1]);
+					let pixels = unsafe { pixels_shared.get() };
+					self.perform_tonemapping(pixels, surface_info, range[0], range[1], tonemapping_function);
 				});
 			}
 		}
@@ -195,6 +181,28 @@ impl Postprocessor
 				"tonemapping time: {:04.2}ms",
 				self.performance_counters.tonemapping_duration.get_average_value() * 1000.0
 			));
+		}
+	}
+
+	fn perform_tonemapping(
+		&self,
+		pixels: &mut [Color32],
+		surface_info: &system_window::SurfaceInfo,
+		y_start: usize,
+		y_end: usize,
+		tonemapping_function: TonemappingFunction,
+	)
+	{
+		for y in y_start .. y_end
+		{
+			let src_line = &self.hdr_buffer[y * self.hdr_buffer_size[0] .. (y + 1) * self.hdr_buffer_size[0]];
+			let dst_line = &mut pixels[y * surface_info.pitch .. (y + 1) * surface_info.pitch];
+			for (dst, &src) in dst_line.iter_mut().zip(src_line.iter())
+			{
+				let c = ColorVec::from_color64(src);
+				let c_mapped = tonemapping_function.do_it(&c);
+				*dst = c_mapped.into();
+			}
 		}
 	}
 
@@ -880,6 +888,8 @@ const MAX_BLOOM_BUFFER_SCALE: usize = 1 << MAX_BLOOM_BUFFER_SCALE_LOG2;
 
 const MAX_GAUSSIAN_KERNEL_RADIUS: usize = 16;
 const MAX_GAUSSIAN_KERNEL_SIZE: usize = 1 + 2 * MAX_GAUSSIAN_KERNEL_RADIUS;
+
+const MAX_THREADS: usize = 64;
 
 #[derive(Copy, Clone)]
 struct TonemappingFunction
