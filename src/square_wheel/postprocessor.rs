@@ -97,34 +97,70 @@ impl Postprocessor
 
 		let tonemapping_function = TonemappingFunction::new(self.config.exposure);
 
+		let num_threads = rayon::current_num_threads();
+
 		if use_bloom
 		{
-			self.perform_tonemapping_with_bloom(pixels, surface_info, tonemapping_function, bloom_buffer_scale);
+			if num_threads == 1
+			{
+				self.perform_tonemapping_with_bloom(
+					pixels,
+					surface_info,
+					0,
+					self.bloom_buffer_size[1],
+					tonemapping_function,
+					bloom_buffer_scale,
+				);
+			}
+			else
+			{
+				// It is safe to share destination buffer since each thead writes into its own regon.
+				let pixels_shared = SharedMutSlice::new(pixels);
+
+				let mut ranges = [[0, 0]; 64];
+				for i in 0 .. num_threads
+				{
+					ranges[i] = [
+						self.bloom_buffer_size[1] * i / num_threads,
+						self.bloom_buffer_size[1] * (i + 1) / num_threads,
+					];
+				}
+				ranges[.. num_threads].par_iter().for_each(|range| {
+					let pixels = unsafe { pixels_shared.get() };
+					self.perform_tonemapping_with_bloom(
+						pixels,
+						surface_info,
+						range[0],
+						range[1],
+						tonemapping_function,
+						bloom_buffer_scale,
+					);
+				});
+			}
 		}
 		else
 		{
 			// It is safe to share destination buffer since each thead writes into its own regon.
 			let pixels_shared = SharedMutSlice::new(pixels);
 
-			let convert_line = |y| {
-				let pixels_unshared = unsafe { pixels_shared.get() };
-				let src_line = &self.hdr_buffer[y * self.hdr_buffer_size[0] .. (y + 1) * self.hdr_buffer_size[0]];
-				let dst_line = &mut pixels_unshared[y * surface_info.pitch .. (y + 1) * surface_info.pitch];
-				for (dst, &src) in dst_line.iter_mut().zip(src_line.iter())
+			let convert_lines_range = |y_start, y_end| {
+				for y in y_start .. y_end
 				{
-					let c = ColorVec::from_color64(src);
-					let c_mapped = tonemapping_function.do_it(&c);
-					*dst = c_mapped.into();
+					let pixels_unshared = unsafe { pixels_shared.get() };
+					let src_line = &self.hdr_buffer[y * self.hdr_buffer_size[0] .. (y + 1) * self.hdr_buffer_size[0]];
+					let dst_line = &mut pixels_unshared[y * surface_info.pitch .. (y + 1) * surface_info.pitch];
+					for (dst, &src) in dst_line.iter_mut().zip(src_line.iter())
+					{
+						let c = ColorVec::from_color64(src);
+						let c_mapped = tonemapping_function.do_it(&c);
+						*dst = c_mapped.into();
+					}
 				}
 			};
 
-			let num_threads = rayon::current_num_threads();
 			if num_threads == 1
 			{
-				for y in 0 .. surface_size[1]
-				{
-					convert_line(y);
-				}
+				convert_lines_range(0, surface_size[1]);
 			}
 			else
 			{
@@ -136,12 +172,8 @@ impl Postprocessor
 						surface_size[1] * (i + 1) / num_threads,
 					];
 				}
-
 				ranges[.. num_threads].par_iter().for_each(|range| {
-					for y in range[0] .. range[1]
-					{
-						convert_line(y);
-					}
+					convert_lines_range(range[0], range[1]);
 				});
 			}
 		}
@@ -170,6 +202,8 @@ impl Postprocessor
 		&self,
 		pixels: &mut [Color32],
 		surface_info: &system_window::SurfaceInfo,
+		src_y_start: usize,
+		src_y_end: usize,
 		tonemapping_function: TonemappingFunction,
 		bloom_buffer_scale: usize,
 	)
@@ -179,19 +213,43 @@ impl Postprocessor
 			0 => self.perform_tonemapping_with_bloom_impl::<MIN_BLOOM_BUFFER_SCALE>(
 				pixels,
 				surface_info,
+				src_y_start,
+				src_y_end,
 				tonemapping_function,
 			),
 			1 => self.perform_tonemapping_with_bloom_impl::<MIN_BLOOM_BUFFER_SCALE>(
 				pixels,
 				surface_info,
+				src_y_start,
+				src_y_end,
 				tonemapping_function,
 			),
-			2 => self.perform_tonemapping_with_bloom_impl::<2>(pixels, surface_info, tonemapping_function),
-			4 => self.perform_tonemapping_with_bloom_impl::<4>(pixels, surface_info, tonemapping_function),
-			8 => self.perform_tonemapping_with_bloom_impl::<8>(pixels, surface_info, tonemapping_function),
+			2 => self.perform_tonemapping_with_bloom_impl::<2>(
+				pixels,
+				surface_info,
+				src_y_start,
+				src_y_end,
+				tonemapping_function,
+			),
+			4 => self.perform_tonemapping_with_bloom_impl::<4>(
+				pixels,
+				surface_info,
+				src_y_start,
+				src_y_end,
+				tonemapping_function,
+			),
+			8 => self.perform_tonemapping_with_bloom_impl::<8>(
+				pixels,
+				surface_info,
+				src_y_start,
+				src_y_end,
+				tonemapping_function,
+			),
 			_ => self.perform_tonemapping_with_bloom_impl::<MAX_BLOOM_BUFFER_SCALE>(
 				pixels,
 				surface_info,
+				src_y_start,
+				src_y_end,
 				tonemapping_function,
 			),
 		}
@@ -201,6 +259,8 @@ impl Postprocessor
 		&self,
 		pixels: &mut [Color32],
 		surface_info: &system_window::SurfaceInfo,
+		src_y_start: usize,
+		src_y_end: usize,
 		tonemapping_function: TonemappingFunction,
 	)
 	{
@@ -209,6 +269,8 @@ impl Postprocessor
 			self.perform_tonemapping_with_bloom_nearest::<BLOOM_BUFFER_SCALE>(
 				pixels,
 				surface_info,
+				src_y_start,
+				src_y_end,
 				tonemapping_function,
 			);
 		}
@@ -217,6 +279,8 @@ impl Postprocessor
 			self.perform_tonemapping_with_bloom_linear::<BLOOM_BUFFER_SCALE>(
 				pixels,
 				surface_info,
+				src_y_start,
+				src_y_end,
 				tonemapping_function,
 			);
 		}
@@ -226,13 +290,15 @@ impl Postprocessor
 		&self,
 		pixels: &mut [Color32],
 		surface_info: &system_window::SurfaceInfo,
+		src_y_start: usize,
+		src_y_end: usize,
 		tonemapping_function: TonemappingFunction,
 	)
 	{
 		let columns_left = self.hdr_buffer_size[0] - self.bloom_buffer_size[0] * BLOOM_BUFFER_SCALE;
 		let lines_left = self.hdr_buffer_size[1] - self.bloom_buffer_size[1] * BLOOM_BUFFER_SCALE;
 
-		for src_y in 0 .. self.bloom_buffer_size[1]
+		for src_y in src_y_start .. src_y_end
 		{
 			let dst_y_base = src_y * BLOOM_BUFFER_SCALE;
 			let src_line_offset = src_y * self.bloom_buffer_size[0];
@@ -283,7 +349,7 @@ impl Postprocessor
 			}
 		}
 		// Leftover lines.
-		if lines_left > 0
+		if lines_left > 0 && src_y_end >= self.bloom_buffer_size[1]
 		{
 			let src_line_offset = (self.bloom_buffer_size[1] - 1) * self.bloom_buffer_size[0];
 			let dst_y_base = self.bloom_buffer_size[1] * BLOOM_BUFFER_SCALE;
@@ -338,6 +404,8 @@ impl Postprocessor
 		&self,
 		pixels: &mut [Color32],
 		surface_info: &system_window::SurfaceInfo,
+		src_y_start: usize,
+		src_y_end: usize,
 		tonemapping_function: TonemappingFunction,
 	)
 	{
@@ -356,6 +424,7 @@ impl Postprocessor
 		let upper_border_size = self.hdr_buffer_size[1] - upper_border_begin_y;
 
 		// Lower border.
+		if src_y_start == 0
 		{
 			let dst_y_base = 0;
 			let mut bloom_src_0_0 = ColorVec::from_color64(debug_checked_fetch(&self.bloom_buffers[0], 0));
@@ -389,7 +458,7 @@ impl Postprocessor
 			}
 		}
 		// Main image.
-		for src_y in 0 .. self.bloom_buffer_size[1] - 1
+		for src_y in src_y_start .. src_y_end.min(self.bloom_buffer_size[1] - 1)
 		{
 			let dst_y_base = src_y * BLOOM_BUFFER_SCALE + BLOOM_BUFFER_SCALE / 2;
 			let src_line_offset = src_y * self.bloom_buffer_size[0];
@@ -495,6 +564,7 @@ impl Postprocessor
 			}
 		}
 		// Upper border.
+		if src_y_end >= self.bloom_buffer_size[1]
 		{
 			let dst_y_base = upper_border_begin_y;
 
@@ -548,37 +618,45 @@ impl Postprocessor
 			}
 		};
 
-		process_corner(
-			0,
-			BLOOM_BUFFER_SCALE / 2,
-			0,
-			BLOOM_BUFFER_SCALE / 2,
-			ColorVec::from_color64(self.bloom_buffers[0][0]),
-		);
-		process_corner(
-			right_border_begin_x,
-			self.hdr_buffer_size[0],
-			0,
-			BLOOM_BUFFER_SCALE / 2,
-			ColorVec::from_color64(self.bloom_buffers[0][self.bloom_buffer_size[0] - 1]),
-		);
-		process_corner(
-			0,
-			BLOOM_BUFFER_SCALE / 2,
-			upper_border_begin_y,
-			self.hdr_buffer_size[1],
-			ColorVec::from_color64(self.bloom_buffers[0][(self.bloom_buffer_size[1] - 1) * self.bloom_buffer_size[0]]),
-		);
-		process_corner(
-			right_border_begin_x,
-			self.hdr_buffer_size[0],
-			upper_border_begin_y,
-			self.hdr_buffer_size[1],
-			ColorVec::from_color64(
-				self.bloom_buffers[0]
-					[self.bloom_buffer_size[0] - 1 + (self.bloom_buffer_size[1] - 1) * self.bloom_buffer_size[0]],
-			),
-		);
+		if src_y_start == 0
+		{
+			process_corner(
+				0,
+				BLOOM_BUFFER_SCALE / 2,
+				0,
+				BLOOM_BUFFER_SCALE / 2,
+				ColorVec::from_color64(self.bloom_buffers[0][0]),
+			);
+			process_corner(
+				right_border_begin_x,
+				self.hdr_buffer_size[0],
+				0,
+				BLOOM_BUFFER_SCALE / 2,
+				ColorVec::from_color64(self.bloom_buffers[0][self.bloom_buffer_size[0] - 1]),
+			);
+		}
+		if src_y_end >= self.bloom_buffer_size[1]
+		{
+			process_corner(
+				0,
+				BLOOM_BUFFER_SCALE / 2,
+				upper_border_begin_y,
+				self.hdr_buffer_size[1],
+				ColorVec::from_color64(
+					self.bloom_buffers[0][(self.bloom_buffer_size[1] - 1) * self.bloom_buffer_size[0]],
+				),
+			);
+			process_corner(
+				right_border_begin_x,
+				self.hdr_buffer_size[0],
+				upper_border_begin_y,
+				self.hdr_buffer_size[1],
+				ColorVec::from_color64(
+					self.bloom_buffers[0]
+						[self.bloom_buffer_size[0] - 1 + (self.bloom_buffer_size[1] - 1) * self.bloom_buffer_size[0]],
+				),
+			);
+		}
 	}
 
 	fn perform_bloom(&mut self) -> usize
