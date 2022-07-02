@@ -95,17 +95,11 @@ impl Postprocessor
 
 		let tonemapping_start_time = Clock::now();
 
-		// Use Reinhard formula for tonemapping.
-
-		let inv_scale = 1.0 / self.config.exposure;
-		let inv_scale_vec = ColorVec::from_color_f32x3(&[inv_scale, inv_scale, inv_scale]);
-
-		let inv_255 = 1.0 / 255.0;
-		let inv_255_vec = ColorVec::from_color_f32x3(&[inv_255, inv_255, inv_255]);
+		let tonemapping_function = TonemappingFunction::new(self.config.exposure);
 
 		if use_bloom
 		{
-			self.perform_tonemapping_with_bloom(pixels, surface_info, inv_scale_vec, inv_255_vec, bloom_buffer_scale);
+			self.perform_tonemapping_with_bloom(pixels, surface_info, tonemapping_function, bloom_buffer_scale);
 		}
 		else
 		{
@@ -119,7 +113,7 @@ impl Postprocessor
 				for (dst, &src) in dst_line.iter_mut().zip(src_line.iter())
 				{
 					let c = ColorVec::from_color64(src);
-					let c_mapped = ColorVec::div(&c, &ColorVec::mul_add(&c, &inv_255_vec, &inv_scale_vec));
+					let c_mapped = tonemapping_function.do_it(&c);
 					*dst = c_mapped.into();
 				}
 			};
@@ -176,8 +170,7 @@ impl Postprocessor
 		&self,
 		pixels: &mut [Color32],
 		surface_info: &system_window::SurfaceInfo,
-		inv_scale_vec: ColorVec,
-		inv_255_vec: ColorVec,
+		tonemapping_function: TonemappingFunction,
 		bloom_buffer_scale: usize,
 	)
 	{
@@ -186,23 +179,20 @@ impl Postprocessor
 			0 => self.perform_tonemapping_with_bloom_impl::<MIN_BLOOM_BUFFER_SCALE>(
 				pixels,
 				surface_info,
-				inv_scale_vec,
-				inv_255_vec,
+				tonemapping_function,
 			),
 			1 => self.perform_tonemapping_with_bloom_impl::<MIN_BLOOM_BUFFER_SCALE>(
 				pixels,
 				surface_info,
-				inv_scale_vec,
-				inv_255_vec,
+				tonemapping_function,
 			),
-			2 => self.perform_tonemapping_with_bloom_impl::<2>(pixels, surface_info, inv_scale_vec, inv_255_vec),
-			4 => self.perform_tonemapping_with_bloom_impl::<4>(pixels, surface_info, inv_scale_vec, inv_255_vec),
-			8 => self.perform_tonemapping_with_bloom_impl::<8>(pixels, surface_info, inv_scale_vec, inv_255_vec),
+			2 => self.perform_tonemapping_with_bloom_impl::<2>(pixels, surface_info, tonemapping_function),
+			4 => self.perform_tonemapping_with_bloom_impl::<4>(pixels, surface_info, tonemapping_function),
+			8 => self.perform_tonemapping_with_bloom_impl::<8>(pixels, surface_info, tonemapping_function),
 			_ => self.perform_tonemapping_with_bloom_impl::<MAX_BLOOM_BUFFER_SCALE>(
 				pixels,
 				surface_info,
-				inv_scale_vec,
-				inv_255_vec,
+				tonemapping_function,
 			),
 		}
 	}
@@ -211,8 +201,7 @@ impl Postprocessor
 		&self,
 		pixels: &mut [Color32],
 		surface_info: &system_window::SurfaceInfo,
-		inv_scale_vec: ColorVec,
-		inv_255_vec: ColorVec,
+		tonemapping_function: TonemappingFunction,
 	)
 	{
 		if !self.config.linear_bloom_filter
@@ -220,8 +209,7 @@ impl Postprocessor
 			self.perform_tonemapping_with_bloom_nearest::<BLOOM_BUFFER_SCALE>(
 				pixels,
 				surface_info,
-				inv_scale_vec,
-				inv_255_vec,
+				tonemapping_function,
 			);
 		}
 		else
@@ -229,8 +217,7 @@ impl Postprocessor
 			self.perform_tonemapping_with_bloom_linear::<BLOOM_BUFFER_SCALE>(
 				pixels,
 				surface_info,
-				inv_scale_vec,
-				inv_255_vec,
+				tonemapping_function,
 			);
 		}
 	}
@@ -239,8 +226,7 @@ impl Postprocessor
 		&self,
 		pixels: &mut [Color32],
 		surface_info: &system_window::SurfaceInfo,
-		inv_scale_vec: ColorVec,
-		inv_255_vec: ColorVec,
+		tonemapping_function: TonemappingFunction,
 	)
 	{
 		let columns_left = self.hdr_buffer_size[0] - self.bloom_buffer_size[0] * BLOOM_BUFFER_SCALE;
@@ -266,7 +252,7 @@ impl Postprocessor
 						let c_vec = ColorVec::from_color64(c);
 						let sum = ColorVec::add(&bloom_c, &c_vec);
 						// let sum = bloom_c;
-						let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
+						let c_mapped = tonemapping_function.do_it(&sum);
 						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
 					}
 				}
@@ -290,7 +276,7 @@ impl Postprocessor
 						let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
 						let c_vec = ColorVec::from_color64(c);
 						let sum = ColorVec::add(&bloom_c, &c_vec);
-						let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
+						let c_mapped = tonemapping_function.do_it(&sum);
 						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
 					}
 				}
@@ -316,7 +302,7 @@ impl Postprocessor
 						let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
 						let c_vec = ColorVec::from_color64(c);
 						let sum = ColorVec::add(&bloom_c, &c_vec);
-						let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
+						let c_mapped = tonemapping_function.do_it(&sum);
 						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
 					}
 				}
@@ -340,7 +326,7 @@ impl Postprocessor
 						let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
 						let c_vec = ColorVec::from_color64(c);
 						let sum = ColorVec::add(&bloom_c, &c_vec);
-						let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
+						let c_mapped = tonemapping_function.do_it(&sum);
 						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
 					}
 				}
@@ -352,8 +338,7 @@ impl Postprocessor
 		&self,
 		pixels: &mut [Color32],
 		surface_info: &system_window::SurfaceInfo,
-		inv_scale_vec: ColorVec,
-		inv_255_vec: ColorVec,
+		tonemapping_function: TonemappingFunction,
 	)
 	{
 		let mut mix_factors = [0.0; BLOOM_BUFFER_SCALE];
@@ -395,7 +380,7 @@ impl Postprocessor
 							one_minus_x_mix_factor,
 							&ColorVec::mul_scalar_add(&bloom_src_1_0, x_mix_factor, &ColorVec::from_color64(c)),
 						);
-						let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
+						let c_mapped = tonemapping_function.do_it(&sum);
 						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
 					}
 				}
@@ -434,7 +419,7 @@ impl Postprocessor
 				{
 					let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
 					let sum = ColorVec::add(&bloom_src, &ColorVec::from_color64(c));
-					let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
+					let c_mapped = tonemapping_function.do_it(&sum);
 					debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
 				}
 			}
@@ -478,7 +463,7 @@ impl Postprocessor
 							one_minus_x_mix_factor,
 							&ColorVec::mul_scalar_add(&bloom_src_right, x_mix_factor, &ColorVec::from_color64(c)),
 						);
-						let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
+						let c_mapped = tonemapping_function.do_it(&sum);
 						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
 					}
 				}
@@ -504,7 +489,7 @@ impl Postprocessor
 				{
 					let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
 					let sum = ColorVec::add(&bloom_src, &ColorVec::from_color64(c));
-					let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
+					let c_mapped = tonemapping_function.do_it(&sum);
 					debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
 				}
 			}
@@ -538,7 +523,7 @@ impl Postprocessor
 							one_minus_x_mix_factor,
 							&ColorVec::mul_scalar_add(&bloom_src_1_0, x_mix_factor, &ColorVec::from_color64(c)),
 						);
-						let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
+						let c_mapped = tonemapping_function.do_it(&sum);
 						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
 					}
 				}
@@ -557,7 +542,7 @@ impl Postprocessor
 				{
 					let c = debug_checked_fetch(&self.hdr_buffer, x + hdr_buffer_line_offset);
 					let sum = ColorVec::add(&bloom_value, &ColorVec::from_color64(c));
-					let c_mapped = ColorVec::div(&sum, &ColorVec::mul_add(&sum, &inv_255_vec, &inv_scale_vec));
+					let c_mapped = tonemapping_function.do_it(&sum);
 					debug_checked_store(pixels, x + pixels_line_offset, c_mapped.into());
 				}
 			}
@@ -817,6 +802,33 @@ const MAX_BLOOM_BUFFER_SCALE: usize = 1 << MAX_BLOOM_BUFFER_SCALE_LOG2;
 
 const MAX_GAUSSIAN_KERNEL_RADIUS: usize = 16;
 const MAX_GAUSSIAN_KERNEL_SIZE: usize = 1 + 2 * MAX_GAUSSIAN_KERNEL_RADIUS;
+
+#[derive(Copy, Clone)]
+struct TonemappingFunction
+{
+	inv_scale_vec: ColorVec,
+	inv_255_vec: ColorVec,
+}
+
+impl TonemappingFunction
+{
+	fn new(exposure: f32) -> Self
+	{
+		let inv_scale = 1.0 / exposure;
+		let inv_255 = 1.0 / 255.0;
+
+		Self {
+			inv_scale_vec: ColorVec::from_color_f32x3(&[inv_scale, inv_scale, inv_scale]),
+			inv_255_vec: ColorVec::from_color_f32x3(&[inv_255, inv_255, inv_255]),
+		}
+	}
+
+	fn do_it(&self, c: &ColorVec) -> ColorVec
+	{
+		// Use Reinhard formula for tonemapping.
+		ColorVec::div(c, &ColorVec::mul_add(c, &self.inv_255_vec, &self.inv_scale_vec))
+	}
+}
 
 fn compute_gaussian_kernel(sigma: f32, radius: usize) -> [f32; MAX_GAUSSIAN_KERNEL_SIZE]
 {
