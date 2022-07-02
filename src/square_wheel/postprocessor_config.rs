@@ -7,6 +7,9 @@ pub struct PostprocessorConfig
 	#[serde(default)]
 	pub hdr_rendering: bool,
 
+	#[serde(default)]
+	pub use_multithreadig: bool,
+
 	#[serde(default = "default_one")]
 	pub exposure: f32,
 
