@@ -4,8 +4,8 @@ use super::{
 	rasterizer::*, rect_splitting, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
 };
 use common::{
-	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, math_types::*, matrix::*,
-	plane::*, shared_mut_slice::*, system_window,
+	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, material, math_types::*,
+	matrix::*, plane::*, shared_mut_slice::*, system_window,
 };
 use rayon::prelude::*;
 use std::sync::Arc;
@@ -855,6 +855,7 @@ impl Renderer
 				&polygon_data.tex_coord_equation,
 				&polygon_data.surface_size,
 				self.get_polygon_surface_data(polygon_data),
+				self.materials_processor.get_material(polygon.texture).blending_mode,
 			);
 		}
 
@@ -998,6 +999,7 @@ impl Renderer
 			&polygon_data.tex_coord_equation,
 			&polygon_data.surface_size,
 			self.get_polygon_surface_data(polygon_data),
+			self.materials_processor.get_material(polygon.texture).blending_mode,
 		);
 	}
 
@@ -1087,6 +1089,7 @@ fn draw_polygon<'a, ColorT: AbstractColor>(
 	tex_coord_equation: &TexCoordEquation,
 	texture_size: &[u32; 2],
 	texture_data: &[ColorT],
+	blending_mode: material::BlendingMode,
 )
 {
 	if vertices_transformed.len() < 3
@@ -1165,6 +1168,7 @@ fn draw_polygon<'a, ColorT: AbstractColor>(
 			&texture_info,
 			texture_data,
 			TetureCoordinatesInterpolationMode::Affine,
+			blending_mode,
 		);
 	}
 	else
@@ -1206,6 +1210,7 @@ fn draw_polygon<'a, ColorT: AbstractColor>(
 				&texture_info,
 				texture_data,
 				TetureCoordinatesInterpolationMode::LineZCorrection,
+				blending_mode,
 			);
 		}
 		else
@@ -1217,6 +1222,7 @@ fn draw_polygon<'a, ColorT: AbstractColor>(
 				&texture_info,
 				texture_data,
 				TetureCoordinatesInterpolationMode::FullPerspective,
+				blending_mode,
 			);
 		}
 	}
