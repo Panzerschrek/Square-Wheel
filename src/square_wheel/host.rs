@@ -17,6 +17,7 @@ pub struct Host
 	commands_processor: commands_processor::CommandsProcessorPtr,
 	console: console::ConsoleSharedPtr,
 	window: Rc<RefCell<system_window::SystemWindow>>,
+	postprocessor: Postprocessor,
 	active_map: Option<ActiveMap>,
 	prev_time: std::time::Instant,
 	fps_counter: TicksCounter,
@@ -27,7 +28,6 @@ struct ActiveMap
 {
 	game: test_game::Game,
 	renderer: renderer::Renderer,
-	postprocessor: Postprocessor,
 	inline_models_index: inline_models_index::InlineModelsIndex,
 	debug_stats_printer: DebugStatsPrinter,
 }
@@ -90,13 +90,14 @@ impl Host
 
 		let mut host = Host {
 			config_file_path,
-			app_config: app_config,
+			app_config: app_config.clone(),
 			config: host_config,
 			config_is_durty: false,
 			commands_queue,
 			commands_processor,
 			console,
 			window: Rc::new(RefCell::new(system_window::SystemWindow::new())),
+			postprocessor: Postprocessor::new(app_config),
 			active_map: None,
 			prev_time: cur_time,
 			fps_counter: TicksCounter::new(),
@@ -154,8 +155,6 @@ impl Host
 					.process_input(&self.window.borrow_mut().get_keyboard_state(), time_delta_s);
 			}
 			active_map.game.update(time_delta_s);
-
-			active_map.postprocessor.synchronize_config();
 		}
 
 		let witndow_ptr_clone = self.window.clone();
@@ -241,6 +240,8 @@ impl Host
 
 	fn synchronize_config(&mut self)
 	{
+		self.postprocessor.synchronize_config();
+
 		if self.config_is_durty
 		{
 			self.config_is_durty = false;
@@ -265,10 +266,10 @@ impl Host
 		{
 			let camera_matrices = active_map.game.get_camera_matrices(surface_info);
 
-			if active_map.postprocessor.use_hdr_rendering()
+			if self.postprocessor.use_hdr_rendering()
 			{
 				let hdr_buffer_size = [surface_info.width, surface_info.height];
-				let hdr_buffer = active_map.postprocessor.get_hdr_buffer(hdr_buffer_size);
+				let hdr_buffer = self.postprocessor.get_hdr_buffer(hdr_buffer_size);
 
 				active_map.renderer.draw_frame(
 					hdr_buffer,
@@ -284,11 +285,8 @@ impl Host
 					&mut active_map.debug_stats_printer,
 				);
 
-				active_map.postprocessor.perform_postprocessing(
-					pixels,
-					surface_info,
-					&mut active_map.debug_stats_printer,
-				);
+				self.postprocessor
+					.perform_postprocessing(pixels, surface_info, &mut active_map.debug_stats_printer);
 			}
 			else
 			{
@@ -346,7 +344,6 @@ impl Host
 				self.active_map = Some(ActiveMap {
 					game: test_game::Game::new(self.commands_processor.clone(), self.console.clone()),
 					renderer: renderer::Renderer::new(self.app_config.clone(), map_rc.clone()),
-					postprocessor: Postprocessor::new(self.app_config.clone()),
 					inline_models_index: inline_models_index::InlineModelsIndex::new(map_rc),
 					debug_stats_printer: DebugStatsPrinter::new(self.config.show_debug_stats),
 				});
