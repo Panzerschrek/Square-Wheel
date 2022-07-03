@@ -870,8 +870,18 @@ impl Postprocessor
 
 	pub fn synchronize_config(&mut self)
 	{
-		// TODO - fix wrong config params and update app config.
 		self.config = PostprocessorConfig::from_app_config(&self.app_config);
+
+		self.config.exposure = self.config.exposure.max(1.0 / 128.0).min(128.0);
+		self.config.bloom_sigma = self.config.bloom_sigma.max(0.0).min(40.0);
+		self.config.bloom_buffer_scale_log2 = self
+			.config
+			.bloom_buffer_scale_log2
+			.max(MIN_BLOOM_BUFFER_SCALE_LOG2 as f32)
+			.min(MAX_BLOOM_BUFFER_SCALE_LOG2 as f32);
+		self.config.bloom_scale = self.config.bloom_scale.max(1.0 / 16.0).min(1.0 / 2.0);
+
+		self.config.update_app_config(&self.app_config);
 	}
 
 	pub fn use_hdr_rendering(&self) -> bool
