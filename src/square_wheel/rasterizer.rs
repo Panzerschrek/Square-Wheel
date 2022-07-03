@@ -1,11 +1,5 @@
 use common::{fixed_math::*, system_window};
 
-// Use trait object with constants as replacement for C++ value template parameters.
-pub trait RasterizerSettings
-{
-	const TEXTURE_COORDINATES_INTERPOLATION_MODE: TetureCoordinatesInterpolationMode;
-}
-
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum TetureCoordinatesInterpolationMode
 {
@@ -13,6 +7,10 @@ pub enum TetureCoordinatesInterpolationMode
 	LineZCorrection,
 	Affine,
 }
+
+const TEXTURE_COORDINATES_INTERPOLATION_MODE_FULL_PERSPECTIVE: usize = 0;
+const TEXTURE_COORDINATES_INTERPOLATION_MODE_LINE_Z_CORRECTION: usize = 1;
+const TEXTURE_COORDINATES_INTERPOLATION_MODE_FULL_AFFINE: usize = 2;
 
 pub struct Rasterizer<'a, ColorT: Copy>
 {
@@ -33,7 +31,50 @@ impl<'a, ColorT: Copy> Rasterizer<'a, ColorT>
 	}
 
 	// Fill convex clockwise polygon.
-	pub fn fill_polygon<Settings: RasterizerSettings>(
+	pub fn fill_polygon(
+		&mut self,
+		vertices: &[PolygonPointProjected],
+		depth_equation: &DepthEquation,
+		tex_coord_equation: &TexCoordEquation,
+		texture_info: &TextureInfo,
+		texture_data: &[ColorT],
+		texture_coordinates_interpolation_mode: TetureCoordinatesInterpolationMode,
+	)
+	{
+		match texture_coordinates_interpolation_mode
+		{
+			TetureCoordinatesInterpolationMode::FullPerspective =>
+			{
+				self.fill_polygon_impl::<TEXTURE_COORDINATES_INTERPOLATION_MODE_FULL_PERSPECTIVE>(
+					vertices,
+					depth_equation,
+					tex_coord_equation,
+					texture_info,
+					texture_data,
+				)
+			},
+			TetureCoordinatesInterpolationMode::LineZCorrection =>
+			{
+				self.fill_polygon_impl::<TEXTURE_COORDINATES_INTERPOLATION_MODE_LINE_Z_CORRECTION>(
+					vertices,
+					depth_equation,
+					tex_coord_equation,
+					texture_info,
+					texture_data,
+				)
+			},
+			TetureCoordinatesInterpolationMode::Affine => self
+				.fill_polygon_impl::<TEXTURE_COORDINATES_INTERPOLATION_MODE_FULL_AFFINE>(
+					vertices,
+					depth_equation,
+					tex_coord_equation,
+					texture_info,
+					texture_data,
+				),
+		}
+	}
+
+	fn fill_polygon_impl<const TEXTURE_COORDINATES_INTERPOLATION_MODE: usize>(
 		&mut self,
 		vertices: &[PolygonPointProjected],
 		depth_equation: &DepthEquation,
@@ -42,11 +83,12 @@ impl<'a, ColorT: Copy> Rasterizer<'a, ColorT>
 		texture_data: &[ColorT],
 	)
 	{
-		let draw_func = match Settings::TEXTURE_COORDINATES_INTERPOLATION_MODE
+		let draw_func = match TEXTURE_COORDINATES_INTERPOLATION_MODE
 		{
-			TetureCoordinatesInterpolationMode::FullPerspective => Self::fill_polygon_part,
-			TetureCoordinatesInterpolationMode::LineZCorrection => Self::fill_polygon_part_line_z_corrected,
-			TetureCoordinatesInterpolationMode::Affine => Self::fill_polygon_part_affine,
+			TEXTURE_COORDINATES_INTERPOLATION_MODE_FULL_PERSPECTIVE => Self::fill_polygon_part,
+			TEXTURE_COORDINATES_INTERPOLATION_MODE_LINE_Z_CORRECTION => Self::fill_polygon_part_line_z_corrected,
+			TEXTURE_COORDINATES_INTERPOLATION_MODE_FULL_AFFINE => Self::fill_polygon_part_affine,
+			_ => Self::fill_polygon_part,
 		};
 
 		// Search for start vertex (with min y).
