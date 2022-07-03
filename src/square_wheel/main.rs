@@ -17,6 +17,7 @@ mod map_materials_processor;
 mod map_visibility_calculator;
 mod performance_counter;
 mod postprocessor;
+mod postprocessor_config;
 mod rasterizer;
 mod rect_splitting;
 mod renderer;

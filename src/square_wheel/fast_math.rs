@@ -60,6 +60,7 @@ mod fast_math_impl
 	}
 
 	#[repr(C, align(32))]
+	#[derive(Copy, Clone)]
 	pub struct ColorVec(__m128);
 
 	impl ColorVec
@@ -127,6 +128,11 @@ mod fast_math_impl
 			unsafe { Self(_mm_set_ps(0.0, c[0], c[1], c[2])) }
 		}
 
+		pub fn add(&self, other: &Self) -> Self
+		{
+			unsafe { Self(_mm_add_ps(self.0, other.0)) }
+		}
+
 		pub fn mul(&self, other: &Self) -> Self
 		{
 			unsafe { Self(_mm_mul_ps(self.0, other.0)) }
@@ -152,6 +158,59 @@ mod fast_math_impl
 			unsafe { Self(_mm_div_ps(self.0, other.0)) }
 		}
 	} // impl ColorVec
+
+	#[repr(C, align(32))]
+	#[derive(Copy, Clone)]
+	pub struct ColorVecI(__m128i);
+
+	impl ColorVecI
+	{
+		pub fn zero() -> Self
+		{
+			unsafe { Self(_mm_setzero_si128()) }
+		}
+
+		pub fn from_color64(c: Color64) -> Self
+		{
+			unsafe {
+				let color_64bit = c.get_raw() as i64;
+				let values_16bit = _mm_cvtsi64_si128(color_64bit);
+				let values_32bit = _mm_cvtepu16_epi32(values_16bit);
+				Self(values_32bit)
+			}
+		}
+
+		pub fn into_color64(&self) -> Color64
+		{
+			unsafe {
+				let zero = _mm_setzero_si128();
+				let values_16bit = _mm_packus_epi32(self.0, zero);
+				let color_64bit = _mm_cvtsi128_si64(values_16bit);
+				Color64::from_raw(color_64bit as u64)
+			}
+		}
+
+		pub fn add(&self, other: &Self) -> Self
+		{
+			unsafe { Self(_mm_add_epi32(self.0, other.0)) }
+		}
+
+		pub fn mul_scalar(&self, scalar: u32) -> Self
+		{
+			let scalar_i32 = scalar as i32;
+			unsafe {
+				Self(_mm_mullo_epi32(
+					self.0,
+					_mm_set_epi32(scalar_i32, scalar_i32, scalar_i32, scalar_i32),
+				))
+			}
+		}
+
+		pub fn shift_right<const COUNT: i32>(&self) -> Self
+		{
+			unsafe { Self(_mm_srai_epi32(self.0, COUNT)) }
+		}
+	} // impl ColorVecI
 }
 
 #[cfg(not(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse4.1")))]
@@ -193,6 +252,7 @@ mod fast_math_impl
 
 	// TODO - maybe use here array of 3 floats?
 	#[repr(C, align(32))]
+	#[derive(Copy, Clone)]
 	pub struct ColorVec([f32; 4]);
 
 	impl ColorVec
@@ -255,6 +315,16 @@ mod fast_math_impl
 			Self([c[0], c[1], c[2], 0.0])
 		}
 
+		pub fn add(&self, other: &Self) -> Self
+		{
+			Self([
+				self.0[0] + other.0[0],
+				self.0[1] + other.0[1],
+				self.0[2] + other.0[2],
+				self.0[3] + other.0[3],
+			])
+		}
+
 		pub fn mul(&self, other: &Self) -> Self
 		{
 			Self([
@@ -305,6 +375,68 @@ mod fast_math_impl
 			])
 		}
 	} // impl ColorVec
+
+	#[repr(C, align(32))]
+	#[derive(Copy, Clone)]
+	pub struct ColorVecI([u32; 4]);
+
+	impl ColorVecI
+	{
+		pub fn zero() -> Self
+		{
+			Self([0; 4])
+		}
+
+		pub fn from_color64(c: Color64) -> Self
+		{
+			let mut res = [0; 4];
+			for i in 0 .. 4
+			{
+				res[i] = ((c.get_raw() >> (i * 16)) & 0xFFFF) as u32;
+			}
+			Self(res)
+		}
+
+		pub fn into_color64(&self) -> Color64
+		{
+			let mut res = 0;
+			for i in 0 .. 4
+			{
+				res |= (self.0[i] as u64) << (i * 16);
+			}
+			Color64::from_raw(res)
+		}
+
+		pub fn add(&self, other: &Self) -> Self
+		{
+			let mut res = [0; 4];
+			for i in 0 .. 4
+			{
+				res[i] = self.0[i] + other.0[i]
+			}
+			Self(res)
+		}
+
+		pub fn mul_scalar(&self, scalar: u32) -> Self
+		{
+			let mut res = [0; 4];
+			for i in 0 .. 4
+			{
+				res[i] = self.0[i] * scalar
+			}
+			Self(res)
+		}
+
+		pub fn shift_right<const COUNT: i32>(&self) -> Self
+		{
+			let mut res = [0; 4];
+			for i in 0 .. 4
+			{
+				res[i] = self.0[i] >> COUNT
+			}
+			Self(res)
+		}
+	} // impl ColorVecI
 }
 
 use common::color::*;
