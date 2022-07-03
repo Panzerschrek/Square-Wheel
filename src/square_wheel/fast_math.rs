@@ -438,21 +438,3 @@ mod fast_math_impl
 		}
 	} // impl ColorVecI
 }
-
-use common::color::*;
-
-impl Into<Color32> for ColorVec
-{
-	fn into(self) -> Color32
-	{
-		self.into_color32()
-	}
-}
-
-impl Into<Color64> for ColorVec
-{
-	fn into(self) -> Color64
-	{
-		self.into_color64()
-	}
-}

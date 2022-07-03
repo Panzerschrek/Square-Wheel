@@ -1,5 +1,6 @@
 #![cfg_attr(feature = "rasterizer_unchecked_div", feature(core_intrinsics))]
 
+mod abstract_color;
 mod commands_processor;
 mod commands_queue;
 mod config;

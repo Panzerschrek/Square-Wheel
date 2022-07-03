@@ -1,3 +1,4 @@
+use super::abstract_color::*;
 use common::{fixed_math::*, system_window};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -12,14 +13,14 @@ const TEXTURE_COORDINATES_INTERPOLATION_MODE_FULL_PERSPECTIVE: usize = 0;
 const TEXTURE_COORDINATES_INTERPOLATION_MODE_LINE_Z_CORRECTION: usize = 1;
 const TEXTURE_COORDINATES_INTERPOLATION_MODE_FULL_AFFINE: usize = 2;
 
-pub struct Rasterizer<'a, ColorT: Copy>
+pub struct Rasterizer<'a, ColorT: AbstractColor>
 {
 	color_buffer: &'a mut [ColorT],
 	row_size: i32,
 	clip_rect: ClipRect,
 }
 
-impl<'a, ColorT: Copy> Rasterizer<'a, ColorT>
+impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 {
 	pub fn new(color_buffer: &'a mut [ColorT], surface_info: &system_window::SurfaceInfo, clip_rect: ClipRect) -> Self
 	{

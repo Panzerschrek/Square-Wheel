@@ -1,9 +1,9 @@
-use super::{fast_math::*, light::*, shadow_map::*, textures};
+use super::{abstract_color::*, fast_math::*, light::*, shadow_map::*, textures};
 use common::{bsp_map_compact, lightmap, math_types::*, plane::*};
 
 pub type LightWithShadowMap<'a, 'b> = (&'a PointLight, &'b CubeShadowMap);
 
-pub fn build_surface_simple_lightmap<ColorT>(
+pub fn build_surface_simple_lightmap<ColorT: AbstractColor>(
 	plane: &Plane,
 	tex_coord_equation: &[Plane; 2],
 	surface_size: [u32; 2],
@@ -16,8 +16,7 @@ pub fn build_surface_simple_lightmap<ColorT>(
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [ColorT],
-) where
-	ColorVec: Into<ColorT>,
+)
 {
 	build_surface_impl_2_static_params::<ColorT, LightmapElementOpsSimple>(
 		plane,
@@ -35,7 +34,7 @@ pub fn build_surface_simple_lightmap<ColorT>(
 	);
 }
 
-pub fn build_surface_directional_lightmap<ColorT>(
+pub fn build_surface_directional_lightmap<ColorT: AbstractColor>(
 	plane: &Plane,
 	tex_coord_equation: &[Plane; 2],
 	surface_size: [u32; 2],
@@ -48,8 +47,7 @@ pub fn build_surface_directional_lightmap<ColorT>(
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [ColorT],
-) where
-	ColorVec: Into<ColorT>,
+)
 {
 	build_surface_impl_2_static_params::<ColorT, LightmapElementOpsDirectional>(
 		plane,
@@ -67,7 +65,7 @@ pub fn build_surface_directional_lightmap<ColorT>(
 	);
 }
 
-fn build_surface_impl_2_static_params<ColorT, LightmapElementOpsT: LightmapElementOps>(
+fn build_surface_impl_2_static_params<ColorT: AbstractColor, LightmapElementOpsT: LightmapElementOps>(
 	plane: &Plane,
 	tex_coord_equation: &[Plane; 2],
 	surface_size: [u32; 2],
@@ -80,8 +78,7 @@ fn build_surface_impl_2_static_params<ColorT, LightmapElementOpsT: LightmapEleme
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [ColorT],
-) where
-	ColorVec: Into<ColorT>,
+)
 {
 	// Perform call in each branch instead of assigning function to function pointer and calling it later because LLVM compiler can't inline call via pointer.
 	// Proper inlining is very important here - it can reduce call overhead and merge identical code.
@@ -187,7 +184,11 @@ fn build_surface_impl_2_static_params<ColorT, LightmapElementOpsT: LightmapEleme
 	}
 }
 
-fn build_surface_impl_3_static_params<ColorT, LightmapElementOpsT: LightmapElementOps, const LIGHTAP_SCALE_LOG2: u32>(
+fn build_surface_impl_3_static_params<
+	ColorT: AbstractColor,
+	LightmapElementOpsT: LightmapElementOps,
+	const LIGHTAP_SCALE_LOG2: u32,
+>(
 	plane: &Plane,
 	tex_coord_equation: &[Plane; 2],
 	surface_size: [u32; 2],
@@ -199,8 +200,7 @@ fn build_surface_impl_3_static_params<ColorT, LightmapElementOpsT: LightmapEleme
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [ColorT],
-) where
-	ColorVec: Into<ColorT>,
+)
 {
 	if dynamic_lights.is_empty()
 	{
@@ -237,7 +237,7 @@ fn build_surface_impl_3_static_params<ColorT, LightmapElementOpsT: LightmapEleme
 }
 
 fn build_surface_impl_4_static_params<
-	ColorT,
+	ColorT: AbstractColor,
 	LightmapElementOpsT: LightmapElementOps,
 	const LIGHTAP_SCALE_LOG2: u32,
 	const USE_DYNAMIC_LIGHTS: bool,
@@ -253,8 +253,7 @@ fn build_surface_impl_4_static_params<
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [ColorT],
-) where
-	ColorVec: Into<ColorT>,
+)
 {
 	if texture.has_normal_map
 	{
@@ -291,7 +290,7 @@ fn build_surface_impl_4_static_params<
 }
 
 fn build_surface_impl_5_static_params<
-	ColorT,
+	ColorT: AbstractColor,
 	LightmapElementOpsT: LightmapElementOps,
 	const LIGHTAP_SCALE_LOG2: u32,
 	const USE_DYNAMIC_LIGHTS: bool,
@@ -308,8 +307,7 @@ fn build_surface_impl_5_static_params<
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [ColorT],
-) where
-	ColorVec: Into<ColorT>,
+)
 {
 	if texture.has_non_one_roughness
 	{
@@ -394,7 +392,7 @@ pub const NO_LIGHTMAP_SCALE: u32 = 31;
 // Specify various settings as template params in order to get most efficient code for current combination of params.
 // Use chained dispatch in order to convert dynamic params into static.
 fn build_surface_impl_6_static_params<
-	ColorT,
+	ColorT: AbstractColor,
 	LightmapElementOpsT: LightmapElementOps,
 	const LIGHTAP_SCALE_LOG2: u32,
 	const USE_DYNAMIC_LIGHTS: bool,
@@ -412,8 +410,7 @@ fn build_surface_impl_6_static_params<
 	dynamic_lights: &[LightWithShadowMap],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [ColorT],
-) where
-	ColorVec: Into<ColorT>,
+)
 {
 	// Calculate inverse matrix for tex_coord equation and plane equation in order to calculate world position for UV.
 	// TODO - project tc equation to surface plane?
