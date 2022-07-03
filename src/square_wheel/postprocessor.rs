@@ -690,14 +690,44 @@ impl Postprocessor
 			}
 		}
 
-		match bloom_buffer_scale
+		let num_threads = rayon::current_num_threads();
+		if num_threads == 1 || !self.config.use_multithreadig
 		{
-			0 => self.downscale_hdr_buffer::<MIN_BLOOM_BUFFER_SCALE>(),
-			1 => self.downscale_hdr_buffer::<MIN_BLOOM_BUFFER_SCALE>(),
-			2 => self.downscale_hdr_buffer::<2>(),
-			4 => self.downscale_hdr_buffer::<4>(),
-			8 => self.downscale_hdr_buffer::<8>(),
-			_ => self.downscale_hdr_buffer::<MAX_BLOOM_BUFFER_SCALE>(),
+			downscale_hdr_buffer(
+				&self.hdr_buffer,
+				self.hdr_buffer_size,
+				&mut self.bloom_buffers[0],
+				self.bloom_buffer_size,
+				0,
+				self.bloom_buffer_size[1],
+				bloom_buffer_scale,
+			);
+		}
+		else
+		{
+			// It is safe to share destination buffer since each thead writes into its own regon.
+			let dst_shared = SharedMutSlice::new(&mut self.bloom_buffers[0]);
+
+			let mut ranges = [[0, 0]; MAX_THREADS];
+			for i in 0 .. num_threads
+			{
+				ranges[i] = [
+					self.bloom_buffer_size[1] * i / num_threads,
+					self.bloom_buffer_size[1] * (i + 1) / num_threads,
+				];
+			}
+			ranges[.. num_threads].par_iter().for_each(|range| {
+				let dst = unsafe { dst_shared.get() };
+				downscale_hdr_buffer(
+					&self.hdr_buffer,
+					self.hdr_buffer_size,
+					dst,
+					self.bloom_buffer_size,
+					range[0],
+					range[1],
+					bloom_buffer_scale,
+				);
+			});
 		}
 
 		let bloom_sigma_corrected = self.config.bloom_sigma / (bloom_buffer_scale as f32);
@@ -730,43 +760,6 @@ impl Postprocessor
 		}
 
 		bloom_buffer_scale
-	}
-
-	fn downscale_hdr_buffer<const BLOOM_BUFFER_SCALE: usize>(&mut self)
-	{
-		const COLOR_SHIFT: i32 = 8;
-		let average_scaler = (1 << COLOR_SHIFT) / ((BLOOM_BUFFER_SCALE * BLOOM_BUFFER_SCALE) as u32);
-
-		for dst_y in 0 .. self.bloom_buffer_size[1]
-		{
-			let src_y_base = dst_y * BLOOM_BUFFER_SCALE;
-			let dst_line_offset = dst_y * self.bloom_buffer_size[0];
-			for dst_x in 0 .. self.bloom_buffer_size[0]
-			{
-				let src_x_base = dst_x * BLOOM_BUFFER_SCALE;
-				let mut sum = ColorVecI::zero();
-				for dy in 0 .. BLOOM_BUFFER_SCALE
-				{
-					let src_line_offset = (src_y_base + dy) * self.hdr_buffer_size[0];
-					let src_offset = src_x_base + src_line_offset;
-					for dx in 0 .. BLOOM_BUFFER_SCALE
-					{
-						let src = debug_checked_fetch(&self.hdr_buffer, dx + src_offset);
-						let c = ColorVecI::from_color64(src);
-						sum = ColorVecI::add(&sum, &c);
-					}
-				}
-
-				let average = ColorVecI::shift_right::<COLOR_SHIFT>(&ColorVecI::mul_scalar(&sum, average_scaler));
-				debug_checked_store(
-					&mut self.bloom_buffers[0],
-					dst_x + dst_line_offset,
-					average.into_color64(),
-				);
-			}
-		}
-
-		// TODO - handle leftover pixels in borders.
 	}
 
 	fn perform_blur_impl<const RADIUS: usize>(&mut self, blur_kernel: &[f32; MAX_GAUSSIAN_KERNEL_SIZE])
@@ -926,6 +919,67 @@ impl TonemappingFunction
 		// Use Reinhard formula for tonemapping.
 		ColorVec::div(c, &ColorVec::mul_add(c, &self.inv_255_vec, &self.inv_scale_vec))
 	}
+}
+
+fn downscale_hdr_buffer(
+	src: &[Color64],
+	src_size: [usize; 2],
+	dst: &mut [Color64],
+	dst_size: [usize; 2],
+	dst_y_start: usize,
+	dst_y_end: usize,
+	bloom_buffer_scale: usize,
+)
+{
+	match bloom_buffer_scale
+	{
+		0 => downscale_hdr_buffer_impl::<MIN_BLOOM_BUFFER_SCALE>(src, src_size, dst, dst_size, dst_y_start, dst_y_end),
+		1 => downscale_hdr_buffer_impl::<MIN_BLOOM_BUFFER_SCALE>(src, src_size, dst, dst_size, dst_y_start, dst_y_end),
+		2 => downscale_hdr_buffer_impl::<2>(src, src_size, dst, dst_size, dst_y_start, dst_y_end),
+		4 => downscale_hdr_buffer_impl::<4>(src, src_size, dst, dst_size, dst_y_start, dst_y_end),
+		8 => downscale_hdr_buffer_impl::<8>(src, src_size, dst, dst_size, dst_y_start, dst_y_end),
+		_ => downscale_hdr_buffer_impl::<MAX_BLOOM_BUFFER_SCALE>(src, src_size, dst, dst_size, dst_y_start, dst_y_end),
+	}
+}
+
+fn downscale_hdr_buffer_impl<const BLOOM_BUFFER_SCALE: usize>(
+	src: &[Color64],
+	src_size: [usize; 2],
+	dst: &mut [Color64],
+	dst_size: [usize; 2],
+	dst_y_start: usize,
+	dst_y_end: usize,
+)
+{
+	const COLOR_SHIFT: i32 = 8;
+	let average_scaler = (1 << COLOR_SHIFT) / ((BLOOM_BUFFER_SCALE * BLOOM_BUFFER_SCALE) as u32);
+
+	for dst_y in dst_y_start + 1 .. dst_y_end - 1
+	{
+		let src_y_base = dst_y * BLOOM_BUFFER_SCALE;
+		let dst_line_offset = dst_y * dst_size[0];
+		for dst_x in 0 .. dst_size[0]
+		{
+			let src_x_base = dst_x * BLOOM_BUFFER_SCALE;
+			let mut sum = ColorVecI::zero();
+			for dy in 0 .. BLOOM_BUFFER_SCALE
+			{
+				let src_line_offset = (src_y_base + dy) * src_size[0];
+				let src_offset = src_x_base + src_line_offset;
+				for dx in 0 .. BLOOM_BUFFER_SCALE
+				{
+					let src = debug_checked_fetch(src, dx + src_offset);
+					let c = ColorVecI::from_color64(src);
+					sum = ColorVecI::add(&sum, &c);
+				}
+			}
+
+			let average = ColorVecI::shift_right::<COLOR_SHIFT>(&ColorVecI::mul_scalar(&sum, average_scaler));
+			debug_checked_store(dst, dst_x + dst_line_offset, average.into_color64());
+		}
+	}
+
+	// TODO - handle leftover pixels in borders.
 }
 
 fn compute_gaussian_kernel(sigma: f32, radius: usize) -> [f32; MAX_GAUSSIAN_KERNEL_SIZE]
