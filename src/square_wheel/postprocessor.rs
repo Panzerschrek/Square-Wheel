@@ -145,7 +145,7 @@ impl Postprocessor
 		}
 		else
 		{
-			let average_line_colors_sum = if num_threads == 1 || !self.config.use_multithreadig
+			let colors_sum = if num_threads == 1 || !self.config.use_multithreadig
 			{
 				self.perform_tonemapping(pixels, surface_info, 0, surface_size[1], tonemapping_function)
 			}
@@ -171,7 +171,10 @@ impl Postprocessor
 					.reduce(|| ColorVec::zero(), |a, b| ColorVec::add(&a, &b))
 			};
 
-			average_color = ColorVec::scalar_mul(&average_line_colors_sum, 1.0 / (self.hdr_buffer_size[1] as f32));
+			average_color = ColorVec::scalar_mul(
+				&colors_sum,
+				1.0 / ((self.hdr_buffer_size[0] * self.hdr_buffer_size[1]) as f32),
+			);
 		}
 
 		let tonemapping_end_time = Clock::now();
@@ -180,7 +183,7 @@ impl Postprocessor
 			.tonemapping_duration
 			.add_value(tonemapping_duration_s);
 
-		// Calculate exposure fr next frame based on brightness of current frame.
+		// Calculate exposure for next frame based on brightness of current frame.
 		// TODO - perform smooth exposure change.
 		self.current_exposure = 255.0 / get_color_brightness(&average_color);
 
@@ -199,7 +202,7 @@ impl Postprocessor
 		}
 	}
 
-	// Returns sum of average line colors.
+	// Returns sum of colors.
 	fn perform_tonemapping(
 		&self,
 		pixels: &mut [Color32],
@@ -210,7 +213,7 @@ impl Postprocessor
 	) -> ColorVec
 	{
 		// In case if bloom is disabled calculate average color during tonemapping process.
-		let mut lines_average_colors_sum = ColorVec::zero();
+		let mut colors_sum = ColorVec::zero();
 		for y in y_start .. y_end
 		{
 			let mut line_colors_sum = ColorVec::zero();
@@ -224,11 +227,12 @@ impl Postprocessor
 				*dst = c_mapped.into();
 			}
 
-			let line_average_color = ColorVec::scalar_mul(&line_colors_sum, 1.0 / (self.hdr_buffer_size[0] as f32));
-			lines_average_colors_sum = ColorVec::add(&lines_average_colors_sum, &line_average_color);
+			// Perfom summation of line colors, than summation of sums.
+			// Do this in order to avoid precision losses due to sum of values with large magnitude.
+			colors_sum = ColorVec::add(&colors_sum, &line_colors_sum);
 		}
 
-		lines_average_colors_sum
+		colors_sum
 	}
 
 	fn perform_tonemapping_with_bloom(
@@ -758,7 +762,7 @@ impl Postprocessor
 		(bloom_buffer_scale, average_color)
 	}
 
-	// Returns average color
+	// Returns average color.
 	fn downscale_hdr_buffer<const BLOOM_BUFFER_SCALE: usize>(&mut self) -> ColorVec
 	{
 		// Calcuate average color (for auto_exposure) during generation of bloom buffer.
