@@ -128,6 +128,18 @@ mod fast_math_impl
 			unsafe { Self(_mm_set_ps(0.0, c[0], c[1], c[2])) }
 		}
 
+		pub fn into_color_f32x3(&self) -> [f32; 3]
+		{
+			// TODO - check this.
+			unsafe {
+				[
+					f32::from_bits(_mm_extract_ps(self.0, 2) as u32),
+					f32::from_bits(_mm_extract_ps(self.0, 1) as u32),
+					f32::from_bits(_mm_extract_ps(self.0, 0) as u32),
+				]
+			}
+		}
+
 		pub fn add(&self, other: &Self) -> Self
 		{
 			unsafe { Self(_mm_add_ps(self.0, other.0)) }
@@ -313,6 +325,11 @@ mod fast_math_impl
 		pub fn from_color_f32x3(c: &[f32; 3]) -> Self
 		{
 			Self([c[0], c[1], c[2], 0.0])
+		}
+
+		pub fn into_color_f32x3(&self) -> [f32; 3]
+		{
+			[self.0[0], self.0[1], self.0[2]]
 		}
 
 		pub fn add(&self, other: &Self) -> Self

@@ -12,6 +12,7 @@ pub struct Postprocessor
 	performance_counters: PostprocessorPerformanceCounters,
 	bloom_buffer_size: [usize; 2],
 	bloom_buffers: [Vec<Color64>; 2],
+	current_exposure: f32,
 }
 
 struct PostprocessorPerformanceCounters
@@ -48,6 +49,7 @@ impl Postprocessor
 			performance_counters: PostprocessorPerformanceCounters::new(),
 			bloom_buffer_size: [0, 0],
 			bloom_buffers: [Vec::new(), Vec::new()],
+			current_exposure: 1.0,
 		}
 	}
 
@@ -95,7 +97,7 @@ impl Postprocessor
 
 		let tonemapping_start_time = Clock::now();
 
-		let tonemapping_function = TonemappingFunction::new(self.config.exposure);
+		let tonemapping_function = TonemappingFunction::new(self.current_exposure);
 
 		let num_threads = rayon::current_num_threads();
 
@@ -140,9 +142,9 @@ impl Postprocessor
 		}
 		else
 		{
-			if num_threads == 1 || !self.config.use_multithreadig
+			let average_line_colors_sum = if num_threads == 1 || !self.config.use_multithreadig
 			{
-				self.perform_tonemapping(pixels, surface_info, 0, surface_size[1], tonemapping_function);
+				self.perform_tonemapping(pixels, surface_info, 0, surface_size[1], tonemapping_function)
 			}
 			else
 			{
@@ -157,11 +159,19 @@ impl Postprocessor
 						surface_size[1] * (i + 1) / num_threads,
 					];
 				}
-				ranges[.. num_threads].par_iter().for_each(|range| {
-					let pixels = unsafe { pixels_shared.get() };
-					self.perform_tonemapping(pixels, surface_info, range[0], range[1], tonemapping_function);
-				});
-			}
+				ranges[.. num_threads]
+					.par_iter()
+					.map(|range| {
+						let pixels = unsafe { pixels_shared.get() };
+						self.perform_tonemapping(pixels, surface_info, range[0], range[1], tonemapping_function)
+					})
+					.reduce(|| ColorVec::zero(), |a, b| ColorVec::add(&a, &b))
+			};
+
+			let average_color = ColorVec::scalar_mul(&average_line_colors_sum, 1.0 / (self.hdr_buffer_size[1] as f32));
+
+			// TODO - perform smooth exposure change.
+			self.current_exposure = 255.0 / get_color_brightness(&average_color);
 		}
 
 		let tonemapping_end_time = Clock::now();
@@ -178,12 +188,14 @@ impl Postprocessor
 				bloom_buffer_scale,
 			));
 			debug_stats_printer.add_line(format!(
-				"tonemapping time: {:04.2}ms",
-				self.performance_counters.tonemapping_duration.get_average_value() * 1000.0
+				"tonemapping time: {:04.2}ms, exposure: {}",
+				self.performance_counters.tonemapping_duration.get_average_value() * 1000.0,
+				self.current_exposure,
 			));
 		}
 	}
 
+	// Returns sum of average line colors.
 	fn perform_tonemapping(
 		&self,
 		pixels: &mut [Color32],
@@ -191,19 +203,28 @@ impl Postprocessor
 		y_start: usize,
 		y_end: usize,
 		tonemapping_function: TonemappingFunction,
-	)
+	) -> ColorVec
 	{
+		// In case if bloom is disabled calculate average color during tonemapping process.
+		let mut lines_average_colors_sum = ColorVec::zero();
 		for y in y_start .. y_end
 		{
+			let mut line_colors_sum = ColorVec::zero();
 			let src_line = &self.hdr_buffer[y * self.hdr_buffer_size[0] .. (y + 1) * self.hdr_buffer_size[0]];
 			let dst_line = &mut pixels[y * surface_info.pitch .. (y + 1) * surface_info.pitch];
 			for (dst, &src) in dst_line.iter_mut().zip(src_line.iter())
 			{
 				let c = ColorVec::from_color64(src);
+				line_colors_sum = ColorVec::add(&line_colors_sum, &c);
 				let c_mapped = tonemapping_function.do_it(&c);
 				*dst = c_mapped.into();
 			}
+
+			let line_average_color = ColorVec::scalar_mul(&line_colors_sum, 1.0 / (self.hdr_buffer_size[0] as f32));
+			lines_average_colors_sum = ColorVec::add(&lines_average_colors_sum, &line_average_color);
 		}
+
+		lines_average_colors_sum
 	}
 
 	fn perform_tonemapping_with_bloom(
@@ -971,4 +992,10 @@ fn debug_checked_store<T: Copy>(data: &mut [T], index: usize, value: T)
 	unsafe {
 		*data.get_unchecked_mut(index) = value
 	}
+}
+
+fn get_color_brightness(c: &ColorVec) -> f32
+{
+	let components = c.into_color_f32x3();
+	(components[0] + components[1] + components[2]) * 0.33
 }
