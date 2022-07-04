@@ -204,14 +204,13 @@ impl Postprocessor
 
 	fn update_exposure(&mut self, average_color: &ColorVec, frame_duration_s: f32)
 	{
-		let brightness = get_color_brightness(average_color).max(1.0 / 1024.0).min(1024.0);
+		let brightness = get_color_brightness(average_color).max(1.0 / 1024.0).min(65536.0);
 
 		// TODO - tune this formula. We need to make dark scenes relatively darker compared to bright scene.
 		let base_exposure_scale = 0.5; // TODO - read from config.
 		let target_exposure = 255.0 * base_exposure_scale / brightness;
 
-		let change_speed = 2.0; // TODO - read from config.
-		let mix_factor = (-change_speed * frame_duration_s).exp();
+		let mix_factor = (-self.config.exposure_update_speed * frame_duration_s).exp();
 
 		// Mix inverse values.
 		self.current_exposure = 1.0 / (mix_factor / self.current_exposure + (1.0 - mix_factor) / target_exposure);
@@ -933,7 +932,7 @@ impl Postprocessor
 	{
 		self.config = PostprocessorConfig::from_app_config(&self.app_config);
 
-		self.config.exposure = self.config.exposure.max(1.0 / 128.0).min(128.0);
+		self.config.exposure_update_speed = self.config.exposure_update_speed.max(0.5).min(16.0);
 		self.config.bloom_sigma = self.config.bloom_sigma.max(0.0).min(40.0);
 		self.config.bloom_buffer_scale_log2 = self
 			.config

@@ -11,7 +11,7 @@ pub struct PostprocessorConfig
 	pub use_multithreadig: bool,
 
 	#[serde(default = "default_one")]
-	pub exposure: f32,
+	pub exposure_update_speed: f32,
 
 	#[serde(default = "default_one")]
 	pub bloom_sigma: f32,
