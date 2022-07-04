@@ -64,12 +64,12 @@ fn default_one() -> f32
 
 fn default_zero_level_brightness() -> f32
 {
-	4.0
+	1.0
 }
 
 fn default_brightness_scale_power() -> f32
 {
-	1.0 / 3.0
+	1.0 / 4.0
 }
 
 fn default_min_exposure() -> f32

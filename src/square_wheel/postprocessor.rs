@@ -204,11 +204,11 @@ impl Postprocessor
 
 	fn update_exposure(&mut self, average_color: &ColorVec, frame_duration_s: f32)
 	{
-		let brightness = get_color_brightness(average_color).max(1.0 / 1024.0).min(65536.0);
+		let brightness = get_color_brightness(average_color).max(1.0 / 1024.0).min(65536.0) / 255.0;
 
 		// Use power factor in order to add some dependency of result image brightness from original brightness.
 		let target_exposure = (brightness / self.config.zero_level_brightness).powf(self.config.brightness_scale_power) *
-			255.0 * 0.25 * self.config.base_brightness /
+			0.5 * self.config.base_brightness /
 			brightness;
 		let taget_exposure_clamped = target_exposure
 			.max(self.config.min_exposure)
