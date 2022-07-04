@@ -25,6 +25,26 @@ mod fast_math_impl
 		unsafe { _mm_cvtss_f32(_mm_rcp_ss(_mm_set1_ps(x))) }
 	}
 
+	pub fn color32_saturated_sum(a: Color32, b: Color32) -> Color32
+	{
+		unsafe {
+			let a_in_register = _mm_cvtsi32_si128(a.get_raw() as i32);
+			let b_in_register = _mm_cvtsi32_si128(b.get_raw() as i32);
+			let sum = _mm_adds_epu8(a_in_register, b_in_register);
+			Color32::from_raw(_mm_cvtsi128_si32(sum) as u32)
+		}
+	}
+
+	pub fn color64_saturated_sum(a: Color64, b: Color64) -> Color64
+	{
+		unsafe {
+			let a_in_register = _mm_cvtsi64_si128(a.get_raw() as i64);
+			let b_in_register = _mm_cvtsi64_si128(b.get_raw() as i64);
+			let sum = _mm_adds_epu16(a_in_register, b_in_register);
+			Color64::from_raw(_mm_cvtsi128_si64(sum) as u64)
+		}
+	}
+
 	// Pack 4 floats into 4 signed bytes.
 	pub fn pack_f32x4_into_bytes(v: &[f32; 4], pack_scale: &[f32; 4]) -> i32
 	{
@@ -226,6 +246,28 @@ mod fast_math_impl
 	pub fn inv_fast(x: f32) -> f32
 	{
 		1.0 / x
+	}
+
+	pub fn color32_saturated_sum(a: Color32, b: Color32) -> Color32
+	{
+		let mut r = 0;
+		for i in 0 .. 4
+		{
+			let shift = i * 8;
+			r |= (((a.get_raw() >> shift) & 0xFF) + ((b.get_raw() >> shift) & 0xFF)).min(0xFF) << shift;
+		}
+		Color32::from_raw(r)
+	}
+
+	pub fn color64_saturated_sum(a: Color64, b: Color64) -> Color64
+	{
+		let mut r = 0;
+		for i in 0 .. 4
+		{
+			let shift = i * 16;
+			r |= (((a.get_raw() >> shift) & 0xFFFF) + ((b.get_raw() >> shift) & 0xFFFF)).min(0xFFFF) << shift;
+		}
+		Color64::from_raw(r)
 	}
 
 	// Pack 4 floats into 4 signed bytes.

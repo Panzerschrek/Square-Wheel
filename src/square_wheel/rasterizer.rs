@@ -430,7 +430,10 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					{
 						*dst_pixel = ColorT::average(*dst_pixel, texel);
 					}
-					// TODO - process addirive blending.
+					else if BLENDING_MODE == BLENDING_MODE_ADDITIVE
+					{
+						*dst_pixel = ColorT::saturated_sum(*dst_pixel, texel);
+					}
 
 					span_inv_z += span_d_inv_z;
 					span_tc[0] += span_d_tc[0];
@@ -563,7 +566,10 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					{
 						*dst_pixel = ColorT::average(*dst_pixel, texel);
 					}
-					// TODO - process addirive blending.
+					else if BLENDING_MODE == BLENDING_MODE_ADDITIVE
+					{
+						*dst_pixel = ColorT::saturated_sum(*dst_pixel, texel);
+					}
 
 					span_tc[0] += span_d_tc[0];
 					span_tc[1] += span_d_tc[1];
@@ -715,7 +721,10 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					{
 						*dst_pixel = ColorT::average(*dst_pixel, texel);
 					}
-					// TODO - process addirive blending.
+					else if BLENDING_MODE == BLENDING_MODE_ADDITIVE
+					{
+						*dst_pixel = ColorT::saturated_sum(*dst_pixel, texel);
+					}
 
 					tc[0] += d_tc[0];
 					tc[1] += d_tc[1];
