@@ -171,6 +171,14 @@ mod fast_math_impl
 		}
 	} // impl ColorVec
 
+	impl From<ColorVecI> for ColorVec
+	{
+		fn from(v: ColorVecI) -> ColorVec
+		{
+			unsafe { ColorVec(_mm_cvtepi32_ps(v.0)) }
+		}
+	}
+
 	#[repr(C, align(32))]
 	#[derive(Copy, Clone)]
 	pub struct ColorVecI(__m128i);
@@ -392,6 +400,14 @@ mod fast_math_impl
 			])
 		}
 	} // impl ColorVec
+
+	impl From<ColorVecI> for ColorVec
+	{
+		fn from(v: ColorVecI) -> ColorVec
+		{
+			ColorVec([v.0[0] as f32, v.0[1] as f32, v.0[2] as f32, v.0[3] as f32])
+		}
+	}
 
 	#[repr(C, align(32))]
 	#[derive(Copy, Clone)]

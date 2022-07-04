@@ -84,11 +84,14 @@ impl Postprocessor
 		let use_bloom = self.config.bloom_sigma > 0.0;
 
 		let mut bloom_buffer_scale = 1;
+		let mut average_color = ColorVec::zero();
 		if use_bloom
 		{
 			let bloom_calculation_start_time = Clock::now();
 
-			bloom_buffer_scale = self.perform_bloom();
+			let (s, c) = self.perform_bloom();
+			bloom_buffer_scale = s;
+			average_color = c;
 
 			let bloom_calculation_end_time = Clock::now();
 			let bloom_duration_s = (bloom_calculation_end_time - bloom_calculation_start_time).as_secs_f32();
@@ -168,10 +171,7 @@ impl Postprocessor
 					.reduce(|| ColorVec::zero(), |a, b| ColorVec::add(&a, &b))
 			};
 
-			let average_color = ColorVec::scalar_mul(&average_line_colors_sum, 1.0 / (self.hdr_buffer_size[1] as f32));
-
-			// TODO - perform smooth exposure change.
-			self.current_exposure = 255.0 / get_color_brightness(&average_color);
+			average_color = ColorVec::scalar_mul(&average_line_colors_sum, 1.0 / (self.hdr_buffer_size[1] as f32));
 		}
 
 		let tonemapping_end_time = Clock::now();
@@ -179,6 +179,10 @@ impl Postprocessor
 		self.performance_counters
 			.tonemapping_duration
 			.add_value(tonemapping_duration_s);
+
+		// Calculate exposure fr next frame based on brightness of current frame.
+		// TODO - perform smooth exposure change.
+		self.current_exposure = 255.0 / get_color_brightness(&average_color);
 
 		if debug_stats_printer.show_debug_stats()
 		{
@@ -688,7 +692,8 @@ impl Postprocessor
 		}
 	}
 
-	fn perform_bloom(&mut self) -> usize
+	// Returns bloom buffer scale and average color.
+	fn perform_bloom(&mut self) -> (usize, ColorVec)
 	{
 		let bloom_buffer_scale = self
 			.config
@@ -711,7 +716,7 @@ impl Postprocessor
 			}
 		}
 
-		match bloom_buffer_scale
+		let average_color = match bloom_buffer_scale
 		{
 			0 => self.downscale_hdr_buffer::<MIN_BLOOM_BUFFER_SCALE>(),
 			1 => self.downscale_hdr_buffer::<MIN_BLOOM_BUFFER_SCALE>(),
@@ -719,7 +724,7 @@ impl Postprocessor
 			4 => self.downscale_hdr_buffer::<4>(),
 			8 => self.downscale_hdr_buffer::<8>(),
 			_ => self.downscale_hdr_buffer::<MAX_BLOOM_BUFFER_SCALE>(),
-		}
+		};
 
 		let bloom_sigma_corrected = self.config.bloom_sigma / (bloom_buffer_scale as f32);
 
@@ -750,18 +755,25 @@ impl Postprocessor
 			_ => self.perform_blur_impl::<MAX_GAUSSIAN_KERNEL_RADIUS>(&blur_kernel),
 		}
 
-		bloom_buffer_scale
+		(bloom_buffer_scale, average_color)
 	}
 
-	fn downscale_hdr_buffer<const BLOOM_BUFFER_SCALE: usize>(&mut self)
+	// Returns average color
+	fn downscale_hdr_buffer<const BLOOM_BUFFER_SCALE: usize>(&mut self) -> ColorVec
 	{
+		// Calcuate average color (for auto_exposure) during generation of bloom buffer.
+		// Do this becase this is faster than calculating average color during TonemappingFunction
+		// since bloom buffer size is smaller.
+
 		const COLOR_SHIFT: i32 = 8;
 		let average_scaler = (1 << COLOR_SHIFT) / ((BLOOM_BUFFER_SCALE * BLOOM_BUFFER_SCALE) as u32);
 
+		let mut colors_sum = ColorVec::zero();
 		for dst_y in 0 .. self.bloom_buffer_size[1]
 		{
 			let src_y_base = dst_y * BLOOM_BUFFER_SCALE;
 			let dst_line_offset = dst_y * self.bloom_buffer_size[0];
+			let mut line_colors_sum = ColorVecI::zero();
 			for dst_x in 0 .. self.bloom_buffer_size[0]
 			{
 				let src_x_base = dst_x * BLOOM_BUFFER_SCALE;
@@ -784,10 +796,19 @@ impl Postprocessor
 					dst_x + dst_line_offset,
 					average.into_color64(),
 				);
+
+				line_colors_sum = ColorVecI::add(&line_colors_sum, &average);
 			}
+
+			colors_sum = ColorVec::add(&colors_sum, &ColorVec::from(line_colors_sum));
 		}
 
 		// TODO - handle leftover pixels in borders.
+
+		ColorVec::scalar_mul(
+			&colors_sum,
+			1.0 / ((self.bloom_buffer_size[0] * self.bloom_buffer_size[1]) as f32),
+		)
 	}
 
 	fn perform_blur_impl<const RADIUS: usize>(&mut self, blur_kernel: &[f32; MAX_GAUSSIAN_KERNEL_SIZE])
