@@ -14,6 +14,21 @@ pub struct PostprocessorConfig
 	pub exposure_update_speed: f32,
 
 	#[serde(default = "default_one")]
+	pub base_brightness: f32,
+
+	#[serde(default = "default_zero_level_brightness")]
+	pub zero_level_brightness: f32,
+
+	#[serde(default = "default_brightness_scale_power")]
+	pub brightness_scale_power: f32,
+
+	#[serde(default = "default_min_exposure")]
+	pub min_exposure: f32,
+
+	#[serde(default = "default_max_exposure")]
+	pub max_exposure: f32,
+
+	#[serde(default = "default_one")]
 	pub bloom_sigma: f32,
 
 	#[serde(default = "default_one")]
@@ -45,6 +60,26 @@ impl PostprocessorConfig
 fn default_one() -> f32
 {
 	1.0
+}
+
+fn default_zero_level_brightness() -> f32
+{
+	4.0
+}
+
+fn default_brightness_scale_power() -> f32
+{
+	1.0 / 3.0
+}
+
+fn default_min_exposure() -> f32
+{
+	1.0 / 65536.0
+}
+
+fn default_max_exposure() -> f32
+{
+	128.0
 }
 
 fn default_bloom_scale() -> f32

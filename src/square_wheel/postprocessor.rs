@@ -206,14 +206,19 @@ impl Postprocessor
 	{
 		let brightness = get_color_brightness(average_color).max(1.0 / 1024.0).min(65536.0);
 
-		// TODO - tune this formula. We need to make dark scenes relatively darker compared to bright scene.
-		let base_exposure_scale = 0.5; // TODO - read from config.
-		let target_exposure = 255.0 * base_exposure_scale / brightness;
+		// Use power factor in order to add some dependency of result image brightness from original brightness.
+		let target_exposure = (brightness / self.config.zero_level_brightness).powf(self.config.brightness_scale_power) *
+			255.0 * 0.25 * self.config.base_brightness /
+			brightness;
+		let taget_exposure_clamped = target_exposure
+			.max(self.config.min_exposure)
+			.min(self.config.max_exposure);
 
 		let mix_factor = (-self.config.exposure_update_speed * frame_duration_s).exp();
 
 		// Mix inverse values.
-		self.current_exposure = 1.0 / (mix_factor / self.current_exposure + (1.0 - mix_factor) / target_exposure);
+		self.current_exposure =
+			1.0 / (mix_factor / self.current_exposure + (1.0 - mix_factor) / taget_exposure_clamped);
 	}
 
 	// Returns sum of colors.
@@ -932,7 +937,12 @@ impl Postprocessor
 	{
 		self.config = PostprocessorConfig::from_app_config(&self.app_config);
 
+		self.config.min_exposure = self.config.min_exposure.max(1.0 / 65536.0).min(16.0);
+		self.config.max_exposure = self.config.max_exposure.max(1.0).min(65536.0);
 		self.config.exposure_update_speed = self.config.exposure_update_speed.max(0.5).min(16.0);
+		self.config.base_brightness = self.config.base_brightness.max(0.5).min(2.0);
+		self.config.zero_level_brightness = self.config.zero_level_brightness.max(1.0 / 16.0).min(16.0);
+		self.config.brightness_scale_power = self.config.brightness_scale_power.max(0.01).min(0.5);
 		self.config.bloom_sigma = self.config.bloom_sigma.max(0.0).min(40.0);
 		self.config.bloom_buffer_scale_log2 = self
 			.config
