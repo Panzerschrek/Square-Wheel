@@ -69,6 +69,7 @@ impl Postprocessor
 		&mut self,
 		pixels: &mut [Color32],
 		surface_info: &system_window::SurfaceInfo,
+		frame_duration_s: f32,
 		debug_stats_printer: &mut DebugStatsPrinter,
 	)
 	{
@@ -184,8 +185,7 @@ impl Postprocessor
 			.add_value(tonemapping_duration_s);
 
 		// Calculate exposure for next frame based on brightness of current frame.
-		// TODO - perform smooth exposure change.
-		self.current_exposure = 255.0 / get_color_brightness(&average_color);
+		self.update_exposure(&average_color, frame_duration_s);
 
 		if debug_stats_printer.show_debug_stats()
 		{
@@ -200,6 +200,21 @@ impl Postprocessor
 				self.current_exposure,
 			));
 		}
+	}
+
+	fn update_exposure(&mut self, average_color: &ColorVec, frame_duration_s: f32)
+	{
+		let brightness = get_color_brightness(average_color).max(1.0 / 1024.0).min(1024.0);
+
+		// TODO - tune this formula. We need to make dark scenes relatively darker compared to bright scene.
+		let base_exposure_scale = 0.5; // TODO - read from config.
+		let target_exposure = 255.0 * base_exposure_scale / brightness;
+
+		let change_speed = 2.0; // TODO - read from config.
+		let mix_factor = (-change_speed * frame_duration_s).exp();
+
+		// Mix inverse values.
+		self.current_exposure = 1.0 / (mix_factor / self.current_exposure + (1.0 - mix_factor) / target_exposure);
 	}
 
 	// Returns sum of colors.

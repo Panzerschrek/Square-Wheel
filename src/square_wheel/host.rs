@@ -160,7 +160,7 @@ impl Host
 		let witndow_ptr_clone = self.window.clone();
 
 		witndow_ptr_clone.borrow_mut().end_frame(|pixels, surface_info| {
-			self.draw_frame(pixels, surface_info);
+			self.draw_frame(pixels, surface_info, time_delta_s);
 		});
 
 		if self.config.max_fps > 0.0
@@ -260,7 +260,7 @@ impl Host
 		}
 	}
 
-	fn draw_frame(&mut self, pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo)
+	fn draw_frame(&mut self, pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo, time_delta_s: f32)
 	{
 		if let Some(active_map) = &mut self.active_map
 		{
@@ -285,8 +285,12 @@ impl Host
 					&mut active_map.debug_stats_printer,
 				);
 
-				self.postprocessor
-					.perform_postprocessing(pixels, surface_info, &mut active_map.debug_stats_printer);
+				self.postprocessor.perform_postprocessing(
+					pixels,
+					surface_info,
+					time_delta_s,
+					&mut active_map.debug_stats_printer,
+				);
 			}
 			else
 			{
