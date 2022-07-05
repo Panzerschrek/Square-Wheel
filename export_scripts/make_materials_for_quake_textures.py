@@ -10,6 +10,8 @@ def generate_material_json(texture_file_name):
 		res["turb"] = { "amplitude" : 4.0, "wave_length" : 64.0, "frequency" : 0.1875 }
 		if texture_file_name.find("WATER") != -1:
 			res["roughness"] = 1.0 / 128.0
+			res["blending_mode"] = "Average"
+			res["blocks_view"] = False
 	return res
 
 

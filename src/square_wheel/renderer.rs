@@ -1,11 +1,11 @@
 use super::{
-	config, debug_stats_printer::*, depth_renderer::*, draw_ordering, fast_math::*, frame_number::*,
+	abstract_color::*, config, debug_stats_printer::*, depth_renderer::*, draw_ordering, fast_math::*, frame_number::*,
 	inline_models_index::*, light::*, map_materials_processor::*, map_visibility_calculator::*, performance_counter::*,
 	rasterizer::*, rect_splitting, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
 };
 use common::{
-	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, math_types::*, matrix::*,
-	plane::*, shared_mut_slice::*, system_window,
+	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, material, math_types::*,
+	matrix::*, plane::*, shared_mut_slice::*, system_window,
 };
 use rayon::prelude::*;
 use std::sync::Arc;
@@ -102,7 +102,7 @@ impl Renderer
 		}
 	}
 
-	pub fn draw_frame<ColorT>(
+	pub fn draw_frame<ColorT: AbstractColor>(
 		&mut self,
 		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
@@ -111,9 +111,7 @@ impl Renderer
 		test_lights: &[PointLight],
 		frame_time_s: f32,
 		debug_stats_printer: &mut DebugStatsPrinter,
-	) where
-		ColorVec: Into<ColorT>,
-		ColorT: Copy + Send + Sync,
+	)
 	{
 		self.synchronize_config();
 		self.update_mip_bias();
@@ -186,16 +184,14 @@ impl Renderer
 
 	// TODO - reduce amount of code, dependent on ColorT. Extract more ColorT-independent code into separate functions.
 	// We need to do this in order to minimize result executable size.
-	fn draw_map<ColorT>(
+	fn draw_map<ColorT: AbstractColor>(
 		&mut self,
 		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
 		inline_models_index: &InlineModelsIndex,
 		test_lights: &[PointLight],
-	) where
-		ColorVec: Into<ColorT>,
-		ColorT: Copy + Send + Sync,
+	)
 	{
 		let depth_map_size = 256;
 		let mut test_lights_shadow_maps = Vec::with_capacity(test_lights.len());
@@ -295,16 +291,14 @@ impl Renderer
 		}
 	}
 
-	fn perform_rasterization<ColorT>(
+	fn perform_rasterization<ColorT: AbstractColor>(
 		&self,
 		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
 		inline_models_index: &InlineModelsIndex,
 		root_node: u32,
-	) where
-		ColorVec: Into<ColorT>,
-		ColorT: Copy,
+	)
 	{
 		let screen_rect = rect_splitting::Rect {
 			min: Vec2f::new(0.0, 0.0),
@@ -663,9 +657,11 @@ impl Renderer
 		self.current_frame_visible_polygons.push(polygon_index as u32);
 	}
 
-	fn build_polygons_surfaces<ColorT>(&mut self, camera_matrices: &CameraMatrices, lights: &[LightWithShadowMap])
-	where
-		ColorVec: Into<ColorT>,
+	fn build_polygons_surfaces<ColorT: AbstractColor>(
+		&mut self,
+		camera_matrices: &CameraMatrices,
+		lights: &[LightWithShadowMap],
+	)
 	{
 		// Perform parallel surfaces building.
 		// Use "unsafe" to write into surfaces data concurrently.
@@ -784,16 +780,14 @@ impl Renderer
 		}
 	}
 
-	fn draw_tree_r<'a, ColorT>(
+	fn draw_tree_r<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		camera_matrices: &CameraMatrices,
 		viewport_clippung_polygon: &ClippingPolygon,
 		inline_models_index: &InlineModelsIndex,
 		current_index: u32,
-	) where
-		ColorVec: Into<ColorT>,
-		ColorT: Copy,
+	)
 	{
 		if current_index >= bsp_map_compact::FIRST_LEAF_INDEX
 		{
@@ -829,16 +823,14 @@ impl Renderer
 		}
 	}
 
-	fn draw_leaf<'a, ColorT>(
+	fn draw_leaf<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		camera_matrices: &CameraMatrices,
 		bounds: &ClippingPolygon,
 		inline_models_index: &InlineModelsIndex,
 		leaf_index: u32,
-	) where
-		ColorVec: Into<ColorT>,
-		ColorT: Copy,
+	)
 	{
 		let leaf = &self.map.leafs[leaf_index as usize];
 
@@ -863,6 +855,7 @@ impl Renderer
 				&polygon_data.tex_coord_equation,
 				&polygon_data.surface_size,
 				self.get_polygon_surface_data(polygon_data),
+				self.materials_processor.get_material(polygon.texture).blending_mode,
 			);
 		}
 
@@ -912,7 +905,7 @@ impl Renderer
 		}
 	}
 
-	fn draw_model_polygon<'a, ColorT>(
+	fn draw_model_polygon<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		model_transform_matrix: &Mat4f,
@@ -920,9 +913,7 @@ impl Renderer
 		clip_planes: &ClippingPolygonPlanes,
 		leaf_index: u32,
 		polygon_index: u32,
-	) where
-		ColorVec: Into<ColorT>,
-		ColorT: Copy,
+	)
 	{
 		let leaf = &self.map.leafs[leaf_index as usize];
 
@@ -1008,6 +999,7 @@ impl Renderer
 			&polygon_data.tex_coord_equation,
 			&polygon_data.surface_size,
 			self.get_polygon_surface_data(polygon_data),
+			self.materials_processor.get_material(polygon.texture).blending_mode,
 		);
 	}
 
@@ -1089,14 +1081,15 @@ fn draw_background_impl<ColorT: Copy>(pixels: &mut [ColorT], color: ColorT)
 	}
 }
 
-fn draw_polygon<'a, T: Copy>(
-	rasterizer: &mut Rasterizer<'a, T>,
+fn draw_polygon<'a, ColorT: AbstractColor>(
+	rasterizer: &mut Rasterizer<'a, ColorT>,
 	clip_planes: &ClippingPolygonPlanes,
 	vertices_transformed: &[Vec3f],
 	depth_equation: &DepthEquation,
 	tex_coord_equation: &TexCoordEquation,
 	texture_size: &[u32; 2],
-	texture_data: &[T],
+	texture_data: &[ColorT],
+	blending_mode: material::BlendingMode,
 )
 {
 	if vertices_transformed.len() < 3
@@ -1168,12 +1161,14 @@ fn draw_polygon<'a, T: Copy>(
 		max_inv_z_point,
 	)
 	{
-		rasterizer.fill_polygon::<RasterizerSettingsAffine>(
+		rasterizer.fill_polygon(
 			&vertices_for_rasterizer[0 .. vertex_count],
 			&depth_equation,
 			&tex_coord_equation,
 			&texture_info,
 			texture_data,
+			TetureCoordinatesInterpolationMode::Affine,
+			blending_mode,
 		);
 	}
 	else
@@ -1208,22 +1203,26 @@ fn draw_polygon<'a, T: Copy>(
 			max_x,
 		)
 		{
-			rasterizer.fill_polygon::<RasterizerSettingsLineZCorrection>(
+			rasterizer.fill_polygon(
 				&vertices_for_rasterizer[0 .. vertex_count],
 				&depth_equation_scaled,
 				&tex_coord_equation_scaled,
 				&texture_info,
 				texture_data,
+				TetureCoordinatesInterpolationMode::LineZCorrection,
+				blending_mode,
 			);
 		}
 		else
 		{
-			rasterizer.fill_polygon::<RasterizerSettingsFullPerspective>(
+			rasterizer.fill_polygon(
 				&vertices_for_rasterizer[0 .. vertex_count],
 				&depth_equation_scaled,
 				&tex_coord_equation_scaled,
 				&texture_info,
 				texture_data,
+				TetureCoordinatesInterpolationMode::FullPerspective,
+				blending_mode,
 			);
 		}
 	}
@@ -1475,25 +1474,4 @@ fn calculate_mip(points: &[Vec2f], depth_equation: &DepthEquation, tc_equation: 
 	let mip = std::cmp::max(0, std::cmp::min(mip_f.ceil() as i32, MAX_MIP as i32));
 
 	mip as u32
-}
-
-struct RasterizerSettingsFullPerspective;
-impl RasterizerSettings for RasterizerSettingsFullPerspective
-{
-	const TEXTURE_COORDINATES_INTERPOLATION_MODE: TetureCoordinatesInterpolationMode =
-		TetureCoordinatesInterpolationMode::FullPerspective;
-}
-
-struct RasterizerSettingsLineZCorrection;
-impl RasterizerSettings for RasterizerSettingsLineZCorrection
-{
-	const TEXTURE_COORDINATES_INTERPOLATION_MODE: TetureCoordinatesInterpolationMode =
-		TetureCoordinatesInterpolationMode::LineZCorrection;
-}
-
-struct RasterizerSettingsAffine;
-impl RasterizerSettings for RasterizerSettingsAffine
-{
-	const TEXTURE_COORDINATES_INTERPOLATION_MODE: TetureCoordinatesInterpolationMode =
-		TetureCoordinatesInterpolationMode::Affine;
 }

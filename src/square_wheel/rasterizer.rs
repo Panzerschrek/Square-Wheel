@@ -1,10 +1,5 @@
+use super::abstract_color::*;
 use common::{fixed_math::*, system_window};
-
-// Use trait object with constants as replacement for C++ value template parameters.
-pub trait RasterizerSettings
-{
-	const TEXTURE_COORDINATES_INTERPOLATION_MODE: TetureCoordinatesInterpolationMode;
-}
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum TetureCoordinatesInterpolationMode
@@ -14,14 +9,24 @@ pub enum TetureCoordinatesInterpolationMode
 	Affine,
 }
 
-pub struct Rasterizer<'a, ColorT: Copy>
+const TEXTURE_COORDINATES_INTERPOLATION_MODE_FULL_PERSPECTIVE: usize = 0;
+const TEXTURE_COORDINATES_INTERPOLATION_MODE_LINE_Z_CORRECTION: usize = 1;
+const TEXTURE_COORDINATES_INTERPOLATION_MODE_FULL_AFFINE: usize = 2;
+
+pub use common::material::BlendingMode;
+
+const BLENDING_MODE_NONE: usize = 0;
+const BLENDING_MODE_AVERAGE: usize = 1;
+const BLENDING_MODE_ADDITIVE: usize = 2;
+
+pub struct Rasterizer<'a, ColorT: AbstractColor>
 {
 	color_buffer: &'a mut [ColorT],
 	row_size: i32,
 	clip_rect: ClipRect,
 }
 
-impl<'a, ColorT: Copy> Rasterizer<'a, ColorT>
+impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 {
 	pub fn new(color_buffer: &'a mut [ColorT], surface_info: &system_window::SurfaceInfo, clip_rect: ClipRect) -> Self
 	{
@@ -33,7 +38,96 @@ impl<'a, ColorT: Copy> Rasterizer<'a, ColorT>
 	}
 
 	// Fill convex clockwise polygon.
-	pub fn fill_polygon<Settings: RasterizerSettings>(
+	pub fn fill_polygon(
+		&mut self,
+		vertices: &[PolygonPointProjected],
+		depth_equation: &DepthEquation,
+		tex_coord_equation: &TexCoordEquation,
+		texture_info: &TextureInfo,
+		texture_data: &[ColorT],
+		texture_coordinates_interpolation_mode: TetureCoordinatesInterpolationMode,
+		blending_mode: BlendingMode,
+	)
+	{
+		match texture_coordinates_interpolation_mode
+		{
+			TetureCoordinatesInterpolationMode::FullPerspective =>
+			{
+				self.fill_polygon_impl_1_static_params::<TEXTURE_COORDINATES_INTERPOLATION_MODE_FULL_PERSPECTIVE>(
+					vertices,
+					depth_equation,
+					tex_coord_equation,
+					texture_info,
+					texture_data,
+					blending_mode,
+				)
+			},
+			TetureCoordinatesInterpolationMode::LineZCorrection =>
+			{
+				self.fill_polygon_impl_1_static_params::<TEXTURE_COORDINATES_INTERPOLATION_MODE_LINE_Z_CORRECTION>(
+					vertices,
+					depth_equation,
+					tex_coord_equation,
+					texture_info,
+					texture_data,
+					blending_mode,
+				)
+			},
+			TetureCoordinatesInterpolationMode::Affine => self
+				.fill_polygon_impl_1_static_params::<TEXTURE_COORDINATES_INTERPOLATION_MODE_FULL_AFFINE>(
+					vertices,
+					depth_equation,
+					tex_coord_equation,
+					texture_info,
+					texture_data,
+					blending_mode,
+				),
+		}
+	}
+
+	fn fill_polygon_impl_1_static_params<const TEXTURE_COORDINATES_INTERPOLATION_MODE: usize>(
+		&mut self,
+		vertices: &[PolygonPointProjected],
+		depth_equation: &DepthEquation,
+		tex_coord_equation: &TexCoordEquation,
+		texture_info: &TextureInfo,
+		texture_data: &[ColorT],
+		blending_mode: BlendingMode,
+	)
+	{
+		match blending_mode
+		{
+			BlendingMode::None => self
+				.fill_polygon_impl_2_static_params::<TEXTURE_COORDINATES_INTERPOLATION_MODE, BLENDING_MODE_NONE>(
+					vertices,
+					depth_equation,
+					tex_coord_equation,
+					texture_info,
+					texture_data,
+				),
+			BlendingMode::Average => self
+				.fill_polygon_impl_2_static_params::<TEXTURE_COORDINATES_INTERPOLATION_MODE, BLENDING_MODE_AVERAGE>(
+					vertices,
+					depth_equation,
+					tex_coord_equation,
+					texture_info,
+					texture_data,
+				),
+			BlendingMode::Additive => self
+				.fill_polygon_impl_2_static_params::<TEXTURE_COORDINATES_INTERPOLATION_MODE, BLENDING_MODE_ADDITIVE>(
+					vertices,
+					depth_equation,
+					tex_coord_equation,
+					texture_info,
+					texture_data,
+				),
+		}
+	}
+
+	fn fill_polygon_impl_2_static_params<
+		const TEXTURE_COORDINATES_INTERPOLATION_MODE: usize,
+		const BLENDING_MODE: usize,
+	>(
 		&mut self,
 		vertices: &[PolygonPointProjected],
 		depth_equation: &DepthEquation,
@@ -42,11 +136,15 @@ impl<'a, ColorT: Copy> Rasterizer<'a, ColorT>
 		texture_data: &[ColorT],
 	)
 	{
-		let draw_func = match Settings::TEXTURE_COORDINATES_INTERPOLATION_MODE
+		let draw_func = match TEXTURE_COORDINATES_INTERPOLATION_MODE
 		{
-			TetureCoordinatesInterpolationMode::FullPerspective => Self::fill_polygon_part,
-			TetureCoordinatesInterpolationMode::LineZCorrection => Self::fill_polygon_part_line_z_corrected,
-			TetureCoordinatesInterpolationMode::Affine => Self::fill_polygon_part_affine,
+			TEXTURE_COORDINATES_INTERPOLATION_MODE_FULL_PERSPECTIVE => Self::fill_polygon_part::<BLENDING_MODE>,
+			TEXTURE_COORDINATES_INTERPOLATION_MODE_LINE_Z_CORRECTION =>
+			{
+				Self::fill_polygon_part_line_z_corrected::<BLENDING_MODE>
+			},
+			TEXTURE_COORDINATES_INTERPOLATION_MODE_FULL_AFFINE => Self::fill_polygon_part_affine::<BLENDING_MODE>,
+			_ => Self::fill_polygon_part::<BLENDING_MODE>,
 		};
 
 		// Search for start vertex (with min y).
@@ -160,7 +258,7 @@ impl<'a, ColorT: Copy> Rasterizer<'a, ColorT>
 		}
 	}
 
-	fn fill_polygon_part(
+	fn fill_polygon_part<const BLENDING_MODE: usize>(
 		&mut self,
 		y_start: Fixed16,
 		y_end: Fixed16,
@@ -323,7 +421,19 @@ impl<'a, ColorT: Copy> Rasterizer<'a, ColorT>
 					debug_assert!(pix_tc[0] <= texture_size_minus_one[0] as u32);
 					debug_assert!(pix_tc[1] <= texture_size_minus_one[1] as u32);
 					let texel_address = (pix_tc[0] + pix_tc[1] * texture_width) as usize;
-					*dst_pixel = unchecked_texture_fetch(texture_data, texel_address);
+					let texel = unchecked_texture_fetch(texture_data, texel_address);
+					if BLENDING_MODE == BLENDING_MODE_NONE
+					{
+						*dst_pixel = texel;
+					}
+					else if BLENDING_MODE == BLENDING_MODE_AVERAGE
+					{
+						*dst_pixel = ColorT::average(*dst_pixel, texel);
+					}
+					else if BLENDING_MODE == BLENDING_MODE_ADDITIVE
+					{
+						*dst_pixel = ColorT::saturated_sum(*dst_pixel, texel);
+					}
 
 					span_inv_z += span_d_inv_z;
 					span_tc[0] += span_d_tc[0];
@@ -339,7 +449,7 @@ impl<'a, ColorT: Copy> Rasterizer<'a, ColorT>
 		} // for lines
 	}
 
-	fn fill_polygon_part_line_z_corrected(
+	fn fill_polygon_part_line_z_corrected<const BLENDING_MODE: usize>(
 		&mut self,
 		y_start: Fixed16,
 		y_end: Fixed16,
@@ -447,7 +557,19 @@ impl<'a, ColorT: Copy> Rasterizer<'a, ColorT>
 					debug_assert!(tc_int[1] < texture_info.size[1] as i32);
 
 					let texel_address = ((tc_int[0] as u32) + (tc_int[1] as u32) * texture_width) as usize;
-					*dst_pixel = unchecked_texture_fetch(texture_data, texel_address);
+					let texel = unchecked_texture_fetch(texture_data, texel_address);
+					if BLENDING_MODE == BLENDING_MODE_NONE
+					{
+						*dst_pixel = texel;
+					}
+					else if BLENDING_MODE == BLENDING_MODE_AVERAGE
+					{
+						*dst_pixel = ColorT::average(*dst_pixel, texel);
+					}
+					else if BLENDING_MODE == BLENDING_MODE_ADDITIVE
+					{
+						*dst_pixel = ColorT::saturated_sum(*dst_pixel, texel);
+					}
 
 					span_tc[0] += span_d_tc[0];
 					span_tc[1] += span_d_tc[1];
@@ -462,7 +584,7 @@ impl<'a, ColorT: Copy> Rasterizer<'a, ColorT>
 		} // for lines
 	}
 
-	fn fill_polygon_part_affine(
+	fn fill_polygon_part_affine<const BLENDING_MODE: usize>(
 		&mut self,
 		y_start: Fixed16,
 		y_end: Fixed16,
@@ -590,7 +712,19 @@ impl<'a, ColorT: Copy> Rasterizer<'a, ColorT>
 					debug_assert!(tc_int[0] < texture_info.size[0] as i32);
 					debug_assert!(tc_int[1] < texture_info.size[1] as i32);
 					let texel_address = (tc_int[0] + tc_int[1] * texture_info.size[0]) as usize;
-					*dst_pixel = unchecked_texture_fetch(texture_data, texel_address);
+					let texel = unchecked_texture_fetch(texture_data, texel_address);
+					if BLENDING_MODE == BLENDING_MODE_NONE
+					{
+						*dst_pixel = texel;
+					}
+					else if BLENDING_MODE == BLENDING_MODE_AVERAGE
+					{
+						*dst_pixel = ColorT::average(*dst_pixel, texel);
+					}
+					else if BLENDING_MODE == BLENDING_MODE_ADDITIVE
+					{
+						*dst_pixel = ColorT::saturated_sum(*dst_pixel, texel);
+					}
 
 					tc[0] += d_tc[0];
 					tc[1] += d_tc[1];

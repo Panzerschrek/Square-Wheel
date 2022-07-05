@@ -43,6 +43,11 @@ impl Color32
 		Color32((self.0 & 0xFEFEFEFE) >> 1)
 	}
 
+	pub fn get_average(a: Color32, b: Color32) -> Self
+	{
+		Self((((a.0 ^ b.0) & 0xFEFEFEFE) >> 1) + (a.0 & b.0))
+	}
+
 	pub fn get_average_4(colors: [Color32; 4]) -> Self
 	{
 		let mut components_sum = [0u32; 4];
@@ -140,5 +145,10 @@ impl Color64
 	pub fn get_half_dark(self) -> Self
 	{
 		Color64((self.0 & 0xFFFEFFFEFFFEFFFE) >> 1)
+	}
+
+	pub fn get_average(a: Color64, b: Color64) -> Self
+	{
+		Self((((a.0 ^ b.0) & 0xFFFEFFFEFFFEFFFE) >> 1) + (a.0 & b.0))
 	}
 }

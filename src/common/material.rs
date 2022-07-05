@@ -47,12 +47,32 @@ pub struct Material
 	#[serde(default)]
 	pub emissive_light: [f32; 3],
 
+	/// If some - polygons with such materials are semitransparent.
+	#[serde(default)]
+	pub blending_mode: BlendingMode,
+
 	/// If some - use texture turbulence effect.
 	#[serde(default)]
 	pub turb: Option<TurbParams>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
+pub enum BlendingMode
+{
+	None,
+	Average,
+	Additive,
+}
+
+impl Default for BlendingMode
+{
+	fn default() -> Self
+	{
+		BlendingMode::None
+	}
+}
+
+#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 pub struct TurbParams
 {
 	/// In pixels.
@@ -84,6 +104,7 @@ impl Default for Material
 			blocks_view: true,
 			light: true,
 			emissive_light: [0.0, 0.0, 0.0],
+			blending_mode: BlendingMode::None,
 			turb: None,
 		}
 	}

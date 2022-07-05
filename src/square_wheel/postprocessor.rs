@@ -12,6 +12,7 @@ pub struct Postprocessor
 	performance_counters: PostprocessorPerformanceCounters,
 	bloom_buffer_size: [usize; 2],
 	bloom_buffers: [Vec<Color64>; 2],
+	current_exposure: f32,
 }
 
 struct PostprocessorPerformanceCounters
@@ -48,6 +49,7 @@ impl Postprocessor
 			performance_counters: PostprocessorPerformanceCounters::new(),
 			bloom_buffer_size: [0, 0],
 			bloom_buffers: [Vec::new(), Vec::new()],
+			current_exposure: 1.0,
 		}
 	}
 
@@ -67,6 +69,7 @@ impl Postprocessor
 		&mut self,
 		pixels: &mut [Color32],
 		surface_info: &system_window::SurfaceInfo,
+		frame_duration_s: f32,
 		debug_stats_printer: &mut DebugStatsPrinter,
 	)
 	{
@@ -82,11 +85,14 @@ impl Postprocessor
 		let use_bloom = self.config.bloom_sigma > 0.0;
 
 		let mut bloom_buffer_scale = 1;
+		let mut average_color = ColorVec::zero();
 		if use_bloom
 		{
 			let bloom_calculation_start_time = Clock::now();
 
-			bloom_buffer_scale = self.perform_bloom();
+			let (s, c) = self.perform_bloom();
+			bloom_buffer_scale = s;
+			average_color = c;
 
 			let bloom_calculation_end_time = Clock::now();
 			let bloom_duration_s = (bloom_calculation_end_time - bloom_calculation_start_time).as_secs_f32();
@@ -95,7 +101,7 @@ impl Postprocessor
 
 		let tonemapping_start_time = Clock::now();
 
-		let tonemapping_function = TonemappingFunction::new(self.config.exposure);
+		let tonemapping_function = TonemappingFunction::new(self.current_exposure);
 
 		let num_threads = rayon::current_num_threads();
 
@@ -140,9 +146,9 @@ impl Postprocessor
 		}
 		else
 		{
-			if num_threads == 1 || !self.config.use_multithreadig
+			let colors_sum = if num_threads == 1 || !self.config.use_multithreadig
 			{
-				self.perform_tonemapping(pixels, surface_info, 0, surface_size[1], tonemapping_function);
+				self.perform_tonemapping(pixels, surface_info, 0, surface_size[1], tonemapping_function)
 			}
 			else
 			{
@@ -157,11 +163,19 @@ impl Postprocessor
 						surface_size[1] * (i + 1) / num_threads,
 					];
 				}
-				ranges[.. num_threads].par_iter().for_each(|range| {
-					let pixels = unsafe { pixels_shared.get() };
-					self.perform_tonemapping(pixels, surface_info, range[0], range[1], tonemapping_function);
-				});
-			}
+				ranges[.. num_threads]
+					.par_iter()
+					.map(|range| {
+						let pixels = unsafe { pixels_shared.get() };
+						self.perform_tonemapping(pixels, surface_info, range[0], range[1], tonemapping_function)
+					})
+					.reduce(|| ColorVec::zero(), |a, b| ColorVec::add(&a, &b))
+			};
+
+			average_color = ColorVec::scalar_mul(
+				&colors_sum,
+				1.0 / ((self.hdr_buffer_size[0] * self.hdr_buffer_size[1]) as f32),
+			);
 		}
 
 		let tonemapping_end_time = Clock::now();
@@ -169,6 +183,9 @@ impl Postprocessor
 		self.performance_counters
 			.tonemapping_duration
 			.add_value(tonemapping_duration_s);
+
+		// Calculate exposure for next frame based on brightness of current frame.
+		self.update_exposure(&average_color, frame_duration_s);
 
 		if debug_stats_printer.show_debug_stats()
 		{
@@ -178,12 +195,33 @@ impl Postprocessor
 				bloom_buffer_scale,
 			));
 			debug_stats_printer.add_line(format!(
-				"tonemapping time: {:04.2}ms",
-				self.performance_counters.tonemapping_duration.get_average_value() * 1000.0
+				"tonemapping time: {:04.2}ms, exposure: {}",
+				self.performance_counters.tonemapping_duration.get_average_value() * 1000.0,
+				self.current_exposure,
 			));
 		}
 	}
 
+	fn update_exposure(&mut self, average_color: &ColorVec, frame_duration_s: f32)
+	{
+		let brightness = get_color_brightness(average_color).max(1.0 / 1024.0).min(65536.0) / 255.0;
+
+		// Use power factor in order to add some dependency of result image brightness from original brightness.
+		let target_exposure = (brightness / self.config.zero_level_brightness).powf(self.config.brightness_scale_power) *
+			0.5 * self.config.base_brightness /
+			brightness;
+		let taget_exposure_clamped = target_exposure
+			.max(self.config.min_exposure)
+			.min(self.config.max_exposure);
+
+		let mix_factor = (-self.config.exposure_update_speed * frame_duration_s).exp();
+
+		// Mix inverse values.
+		self.current_exposure =
+			1.0 / (mix_factor / self.current_exposure + (1.0 - mix_factor) / taget_exposure_clamped);
+	}
+
+	// Returns sum of colors.
 	fn perform_tonemapping(
 		&self,
 		pixels: &mut [Color32],
@@ -191,19 +229,29 @@ impl Postprocessor
 		y_start: usize,
 		y_end: usize,
 		tonemapping_function: TonemappingFunction,
-	)
+	) -> ColorVec
 	{
+		// In case if bloom is disabled calculate average color during tonemapping process.
+		let mut colors_sum = ColorVec::zero();
 		for y in y_start .. y_end
 		{
+			let mut line_colors_sum = ColorVec::zero();
 			let src_line = &self.hdr_buffer[y * self.hdr_buffer_size[0] .. (y + 1) * self.hdr_buffer_size[0]];
 			let dst_line = &mut pixels[y * surface_info.pitch .. (y + 1) * surface_info.pitch];
 			for (dst, &src) in dst_line.iter_mut().zip(src_line.iter())
 			{
 				let c = ColorVec::from_color64(src);
+				line_colors_sum = ColorVec::add(&line_colors_sum, &c);
 				let c_mapped = tonemapping_function.do_it(&c);
 				*dst = c_mapped.into();
 			}
+
+			// Perfom summation of line colors, than summation of sums.
+			// Do this in order to avoid precision losses due to sum of values with large magnitude.
+			colors_sum = ColorVec::add(&colors_sum, &line_colors_sum);
 		}
+
+		colors_sum
 	}
 
 	fn perform_tonemapping_with_bloom(
@@ -667,7 +715,8 @@ impl Postprocessor
 		}
 	}
 
-	fn perform_bloom(&mut self) -> usize
+	// Returns bloom buffer scale and average color.
+	fn perform_bloom(&mut self) -> (usize, ColorVec)
 	{
 		let bloom_buffer_scale = self
 			.config
@@ -690,7 +739,7 @@ impl Postprocessor
 			}
 		}
 
-		match bloom_buffer_scale
+		let average_color = match bloom_buffer_scale
 		{
 			0 => self.downscale_hdr_buffer::<MIN_BLOOM_BUFFER_SCALE>(),
 			1 => self.downscale_hdr_buffer::<MIN_BLOOM_BUFFER_SCALE>(),
@@ -698,7 +747,7 @@ impl Postprocessor
 			4 => self.downscale_hdr_buffer::<4>(),
 			8 => self.downscale_hdr_buffer::<8>(),
 			_ => self.downscale_hdr_buffer::<MAX_BLOOM_BUFFER_SCALE>(),
-		}
+		};
 
 		let bloom_sigma_corrected = self.config.bloom_sigma / (bloom_buffer_scale as f32);
 
@@ -729,18 +778,25 @@ impl Postprocessor
 			_ => self.perform_blur_impl::<MAX_GAUSSIAN_KERNEL_RADIUS>(&blur_kernel),
 		}
 
-		bloom_buffer_scale
+		(bloom_buffer_scale, average_color)
 	}
 
-	fn downscale_hdr_buffer<const BLOOM_BUFFER_SCALE: usize>(&mut self)
+	// Returns average color.
+	fn downscale_hdr_buffer<const BLOOM_BUFFER_SCALE: usize>(&mut self) -> ColorVec
 	{
+		// Calcuate average color (for auto_exposure) during generation of bloom buffer.
+		// Do this becase this is faster than calculating average color during TonemappingFunction
+		// since bloom buffer size is smaller.
+
 		const COLOR_SHIFT: i32 = 8;
 		let average_scaler = (1 << COLOR_SHIFT) / ((BLOOM_BUFFER_SCALE * BLOOM_BUFFER_SCALE) as u32);
 
+		let mut colors_sum = ColorVec::zero();
 		for dst_y in 0 .. self.bloom_buffer_size[1]
 		{
 			let src_y_base = dst_y * BLOOM_BUFFER_SCALE;
 			let dst_line_offset = dst_y * self.bloom_buffer_size[0];
+			let mut line_colors_sum = ColorVecI::zero();
 			for dst_x in 0 .. self.bloom_buffer_size[0]
 			{
 				let src_x_base = dst_x * BLOOM_BUFFER_SCALE;
@@ -763,10 +819,19 @@ impl Postprocessor
 					dst_x + dst_line_offset,
 					average.into_color64(),
 				);
+
+				line_colors_sum = ColorVecI::add(&line_colors_sum, &average);
 			}
+
+			colors_sum = ColorVec::add(&colors_sum, &ColorVec::from(line_colors_sum));
 		}
 
 		// TODO - handle leftover pixels in borders.
+
+		ColorVec::scalar_mul(
+			&colors_sum,
+			1.0 / ((self.bloom_buffer_size[0] * self.bloom_buffer_size[1]) as f32),
+		)
 	}
 
 	fn perform_blur_impl<const RADIUS: usize>(&mut self, blur_kernel: &[f32; MAX_GAUSSIAN_KERNEL_SIZE])
@@ -872,7 +937,12 @@ impl Postprocessor
 	{
 		self.config = PostprocessorConfig::from_app_config(&self.app_config);
 
-		self.config.exposure = self.config.exposure.max(1.0 / 128.0).min(128.0);
+		self.config.min_exposure = self.config.min_exposure.max(1.0 / 65536.0).min(16.0);
+		self.config.max_exposure = self.config.max_exposure.max(1.0).min(65536.0);
+		self.config.exposure_update_speed = self.config.exposure_update_speed.max(0.5).min(16.0);
+		self.config.base_brightness = self.config.base_brightness.max(0.5).min(2.0);
+		self.config.zero_level_brightness = self.config.zero_level_brightness.max(1.0 / 16.0).min(16.0);
+		self.config.brightness_scale_power = self.config.brightness_scale_power.max(0.01).min(0.5);
 		self.config.bloom_sigma = self.config.bloom_sigma.max(0.0).min(40.0);
 		self.config.bloom_buffer_scale_log2 = self
 			.config
@@ -971,4 +1041,10 @@ fn debug_checked_store<T: Copy>(data: &mut [T], index: usize, value: T)
 	unsafe {
 		*data.get_unchecked_mut(index) = value
 	}
+}
+
+fn get_color_brightness(c: &ColorVec) -> f32
+{
+	let components = c.into_color_f32x3();
+	(components[0] + components[1] + components[2]) * 0.33
 }
