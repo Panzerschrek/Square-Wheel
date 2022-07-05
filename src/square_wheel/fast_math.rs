@@ -45,6 +45,26 @@ mod fast_math_impl
 		}
 	}
 
+	pub fn color32_average(a: Color32, b: Color32) -> Color32
+	{
+		unsafe {
+			let a_in_register = _mm_cvtsi32_si128(a.get_raw() as i32);
+			let b_in_register = _mm_cvtsi32_si128(b.get_raw() as i32);
+			let sum = _mm_avg_epu8(a_in_register, b_in_register);
+			Color32::from_raw(_mm_cvtsi128_si32(sum) as u32)
+		}
+	}
+
+	pub fn color64_average(a: Color64, b: Color64) -> Color64
+	{
+		unsafe {
+			let a_in_register = _mm_cvtsi64_si128(a.get_raw() as i64);
+			let b_in_register = _mm_cvtsi64_si128(b.get_raw() as i64);
+			let sum = _mm_avg_epu16(a_in_register, b_in_register);
+			Color64::from_raw(_mm_cvtsi128_si64(sum) as u64)
+		}
+	}
+
 	// Pack 4 floats into 4 signed bytes.
 	pub fn pack_f32x4_into_bytes(v: &[f32; 4], pack_scale: &[f32; 4]) -> i32
 	{
@@ -268,6 +288,16 @@ mod fast_math_impl
 			r |= (((a.get_raw() >> shift) & 0xFFFF) + ((b.get_raw() >> shift) & 0xFFFF)).min(0xFFFF) << shift;
 		}
 		Color64::from_raw(r)
+	}
+
+	pub fn color32_average(a: Color32, b: Color32) -> Color32
+	{
+		Color32::get_average(a, b)
+	}
+
+	pub fn color64_average(a: Color64, b: Color64) -> Color64
+	{
+		Color64::get_average(a, b)
 	}
 
 	// Pack 4 floats into 4 signed bytes.
