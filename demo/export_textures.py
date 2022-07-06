@@ -65,7 +65,7 @@ def main():
 		albedo_file_name = base_texture_name + "_albedo.png"
 		albedo_file_path = os.path.join(intermediate_dir, albedo_file_name)
 		if os.path.exists(albedo_file_path):
-			downsample_image(albedo_file_path, os.path.join(output_dir, base_texture_name + ".png"))
+			finalize_image(albedo_file_path, os.path.join(output_dir, base_texture_name + ".png"))
 
 		normal_file_name = base_texture_name + "_normal.png"
 		normal_file_path = os.path.join(intermediate_dir, normal_file_name)

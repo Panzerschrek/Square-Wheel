@@ -4,6 +4,16 @@
 		"diffuse": "large_pawment.png",
 		"normal_map": "large_pawment_normal.png"
 	},
+	"large_pawment_45":
+	{
+		"diffuse": "large_pawment_45.png",
+		"normal_map": "large_pawment_45_normal.png"
+	},
+	"limestone_bricks":
+	{
+		"diffuse": "limestone_bricks.png",
+		"normal_map": "limestone_bricks_normal.png"
+	},
 	"marble_column":
 	{
 		"diffuse": "marble_column.png",
