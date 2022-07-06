@@ -7,7 +7,7 @@ import sys
 material_maker_executable = "material_maker"
 gimp_executable = "gimp"
 
-def generate_texture(in_files_list, out_dir):
+def generate_textures(in_files_list, out_dir):
 	args = [material_maker_executable, "--export", "-t", "godot", "-o", out_dir, "-i"]
 	args.extend(in_files_list)
 	subprocess.run(args)
@@ -52,7 +52,7 @@ def main():
 
 	print("Generate textures", flush = True)
 	os.makedirs(intermediate_dir, exist_ok= True)
-	generate_texture(in_files_list, intermediate_dir)
+	generate_textures(in_files_list, intermediate_dir)
 
 	print("Finalize textures", flush = True)
 	os.makedirs(output_dir, exist_ok= True)

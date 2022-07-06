@@ -27,7 +27,8 @@
 	"marble_tiles":
 	{
 		"diffuse": "marble_tiles.png",
-		"normal_map": "marble_tiles_normal.png"
+		"normal_map": "marble_tiles_normal.png",
+		"roughness": 0.02
 	},
 	"marble_tiles_large":
 	{
@@ -46,7 +47,7 @@
 	"sky":
 	{
 		"diffuse": "sky.png",
-		"emissive_light" : [2.75, 2.89, 4.0]
+		"emissive_light" : [0.34, 0.36, 0.5]
 	},
 	"water":
 	{
