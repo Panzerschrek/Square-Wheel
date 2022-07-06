@@ -1,0 +1,22 @@
+{
+	"large_pawment":
+	{
+		"diffuse": "large_pawment.png",
+		"normal_map": "large_pawment_normal.png"
+	},
+	"marble_column":
+	{
+		"diffuse": "marble_column.png",
+		"normal_map": "marble_column_normal.png"
+	},
+	"marble_tiles":
+	{
+		"diffuse": "marble_tiles.png",
+		"normal_map": "marble_tiles_normal.png"
+	},
+	"roof_tiles":
+	{
+		"diffuse": "roof_tiles.png",
+		"normal_map": "roof_tiles_normal.png"
+	}
+}
