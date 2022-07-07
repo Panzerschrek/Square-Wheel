@@ -1,0 +1,92 @@
+{
+	"bolted_metal_plate":
+	{
+		"diffuse": "bolted_metal_plate.png",
+		"normal_map": "bolted_metal_plate_normal.png",
+		"roughness" : 0.05,
+		"is_metal": true
+	},
+	"large_pawment":
+	{
+		"diffuse": "large_pawment.png",
+		"normal_map": "large_pawment_normal.png"
+	},
+	"large_pawment_45":
+	{
+		"diffuse": "large_pawment_45.png",
+		"normal_map": "large_pawment_45_normal.png"
+	},
+	"limestone_bricks":
+	{
+		"diffuse": "limestone_bricks.png",
+		"normal_map": "limestone_bricks_normal.png"
+	},
+	"limestone_fire_holder":
+	{
+		"diffuse": "limestone_fire_holder.png",
+		"normal_map": "limestone_fire_holder_normal.png"
+	},
+	"marble_column":
+	{
+		"diffuse": "marble_column.png",
+		"normal_map": "marble_column_normal.png"
+	},
+	"marble_tiles":
+	{
+		"diffuse": "marble_tiles.png",
+		"normal_map": "marble_tiles_normal.png",
+		"roughness": 0.02
+	},
+	"marble_tiles_large":
+	{
+		"diffuse": "marble_tiles_large.png",
+		"normal_map": "marble_tiles_large_normal.png"
+	},
+	"marble_trim":
+	{
+		"diffuse": "marble_trim.png"
+	},
+	"metals_example":
+	{
+		"diffuse": "metals_example.png",
+		"normal_map": "metals_example_normal.png",
+		"roughness" : 0.0,
+		"is_metal": true
+	},
+	"roof_tiles":
+	{
+		"diffuse": "roof_tiles.png",
+		"normal_map": "roof_tiles_normal.png"
+	},
+	"sky":
+	{
+		"diffuse": "sky.png",
+		"emissive_light" : [0.34, 0.36, 0.5]
+	},
+	"stained_glass":
+	{
+		"diffuse": "stained_glass.png",
+		"blending_mode": "Average",
+		"roughness": 0.0,
+		"blocks_view": false
+	},
+	"water":
+	{
+		"diffuse": "water.png",
+		"normal_map": "water_normal.png",
+		"roughness": 0.0,
+		"blending_mode": "Average",
+		"blocks_view": false,
+		"turb":
+		{
+			"amplitude": 16.0,
+			"wave_length": 128.0,
+			"frequency": 0.25
+		}
+	},
+	"wooden_planks":
+	{
+		"diffuse": "wooden_planks.png",
+		"normal_map": "wooden_planks_normal.png"
+	}
+}
