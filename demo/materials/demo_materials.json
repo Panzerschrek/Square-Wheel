@@ -1,4 +1,11 @@
 {
+	"bolted_metal_plate":
+	{
+		"diffuse": "bolted_metal_plate.png",
+		"normal_map": "bolted_metal_plate_normal.png",
+		"roughness" : 0.05,
+		"is_metal": true
+	},
 	"large_pawment":
 	{
 		"diffuse": "large_pawment.png",
@@ -39,6 +46,13 @@
 	{
 		"diffuse": "marble_trim.png"
 	},
+	"metals_example":
+	{
+		"diffuse": "metals_example.png",
+		"normal_map": "metals_example_normal.png",
+		"roughness" : 0.0,
+		"is_metal": true
+	},
 	"roof_tiles":
 	{
 		"diffuse": "roof_tiles.png",
@@ -49,12 +63,20 @@
 		"diffuse": "sky.png",
 		"emissive_light" : [0.34, 0.36, 0.5]
 	},
+	"stained_glass":
+	{
+		"diffuse": "stained_glass.png",
+		"blending_mode": "Average",
+		"roughness": 0.0,
+		"blocks_view": false
+	},
 	"water":
 	{
 		"diffuse": "water.png",
 		"normal_map": "water_normal.png",
 		"roughness": 0.0,
 		"blending_mode": "Average",
+		"blocks_view": false,
 		"turb":
 		{
 			"amplitude": 16.0,
