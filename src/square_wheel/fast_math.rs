@@ -2,15 +2,10 @@
 
 pub use fast_math_impl::*;
 
-#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse4.1"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse4.1"))]
 mod fast_math_impl
 {
 	use common::color::*;
-
-	#[cfg(target_arch = "x86")]
-	use core::arch::x86::*;
-
-	#[cfg(target_arch = "x86_64")]
 	use core::arch::x86_64::*;
 
 	// Relative erorr <= 1.5 * 2^(-12)
@@ -273,7 +268,7 @@ mod fast_math_impl
 	} // impl ColorVecI
 }
 
-#[cfg(not(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse4.1")))]
+#[cfg(not(all(target_arch = "x86_64", target_feature = "sse4.1")))]
 mod fast_math_impl
 {
 	use common::color::*;
