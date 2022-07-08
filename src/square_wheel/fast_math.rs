@@ -326,7 +326,7 @@ mod fast_math_impl
 		let mut res = 0;
 		for i in 0 .. 4
 		{
-			res |= ((v[i] * pack_scale[i]) as i32) << (i * 8);
+			res |= (((v[i] * pack_scale[i]).max(-127.0).min(127.0) as i32) & 0xFF) << (i * 8);
 		}
 		res
 	}
@@ -337,7 +337,7 @@ mod fast_math_impl
 		let mut res = [0.0; 4];
 		for i in 0 .. 4
 		{
-			res[i] = ((((b as u32) >> (i * 8)) & 0xFF) as f32) * unpack_scale[i];
+			res[i] = (((b << (24 - i * 8)) >> 24) as f32) * unpack_scale[i];
 		}
 		res
 	}
@@ -404,7 +404,7 @@ mod fast_math_impl
 
 		pub fn from_color_f32x3(c: &[f32; 3]) -> Self
 		{
-			Self([c[0], c[1], c[2], 0.0])
+			Self([c[2], c[1], c[0], 0.0])
 		}
 
 		pub fn into_color_f32x3(&self) -> [f32; 3]

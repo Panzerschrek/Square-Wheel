@@ -271,7 +271,7 @@ impl Renderer
 		let background_fill_start_time = Clock::now();
 		if self.config.clear_background && !self.visibility_calculator.is_current_camera_inside_leaf_volume()
 		{
-			draw_background(pixels, ColorVec::from_color_f32x3(&[8.0, 16.0, 32.0]).into());
+			draw_background(pixels, ColorVec::from_color_f32x3(&[32.0, 16.0, 8.0]).into());
 		}
 
 		let background_fill_end_time = Clock::now();
