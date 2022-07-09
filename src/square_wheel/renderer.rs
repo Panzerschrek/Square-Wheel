@@ -1076,18 +1076,14 @@ impl Renderer
 		draw_ordering::order_models(&mut models_for_sorting[.. num_models], &camera_matrices.position);
 
 		// Draw models, located in this leaf, after leaf polygons.
-		// TODO - sort leaf models.
 		for (model_index, _bbox) in &models_for_sorting[.. num_models]
 		{
-			let model_matrix = inline_models_index.get_model_matrix(*model_index);
-
 			let submodel = &self.map.submodels[*model_index as usize];
 			for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
 			{
 				self.draw_model_polygon(
 					rasterizer,
-					&model_matrix,
-					&camera_matrices.view_matrix,
+					&camera_matrices.planes_matrix,
 					&clip_planes,
 					leaf_index,
 					polygon_index,
@@ -1099,8 +1095,7 @@ impl Renderer
 	fn draw_model_polygon<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
-		model_transform_matrix: &Mat4f,
-		view_matrix: &Mat4f,
+		planes_matrix: &Mat4f,
 		clip_planes: &ClippingPolygonPlanes,
 		leaf_index: u32,
 		polygon_index: u32,
@@ -1118,20 +1113,18 @@ impl Renderer
 		let mut vertices_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
 		let mut vertex_count = std::cmp::min(polygon.num_vertices as usize, MAX_VERTICES);
 
-		// Apply model transfomration in order to move polygons to world space, before performing clipping.
-		// TODO - reduce number of transformations. Perform clipping by fully-transformed clip planes.
-		for (in_vertex, out_vertex) in self.map.vertices
+		for (in_vertex, out_vertex) in self.vertices_transformed
 			[(polygon.first_vertex as usize) .. (polygon.first_vertex as usize) + vertex_count]
 			.iter()
 			.zip(vertices_clipped[.. vertex_count].iter_mut())
 		{
-			let vertex_transformed = model_transform_matrix * in_vertex.extend(1.0);
-			*out_vertex = vertex_transformed.truncate();
+			*out_vertex = *in_vertex;
 		}
 
 		let mut vertices_temp = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
 
 		// Clip model polygon by portal planes of current leaf.
+		// Do this in camera space (transform clip planes for this).
 		for &portal_index in &self.map.leafs_portals
 			[(leaf.first_leaf_portal as usize) .. ((leaf.first_leaf_portal + leaf.num_leaf_portals) as usize)]
 		{
@@ -1148,8 +1141,17 @@ impl Renderer
 				}
 			};
 
-			vertex_count =
-				clip_3d_polygon_by_plane(&vertices_clipped[.. vertex_count], &clip_plane, &mut vertices_temp[..]);
+			let clip_plane_transformed_vec4 = planes_matrix * clip_plane.vec.extend(-clip_plane.dist);
+			let clip_plane_transformed = Plane {
+				vec: clip_plane_transformed_vec4.truncate(),
+				dist: -clip_plane_transformed_vec4.w,
+			};
+
+			vertex_count = clip_3d_polygon_by_plane(
+				&vertices_clipped[.. vertex_count],
+				&clip_plane_transformed,
+				&mut vertices_temp[..],
+			);
 			if vertex_count < 3
 			{
 				return;
@@ -1162,9 +1164,15 @@ impl Renderer
 		{
 			let clip_polygon = &self.map.polygons[clip_polygon_index as usize];
 
+			let clip_plane_transformed_vec4 = planes_matrix * clip_polygon.plane.vec.extend(-clip_polygon.plane.dist);
+			let clip_plane_transformed = Plane {
+				vec: clip_plane_transformed_vec4.truncate(),
+				dist: -clip_plane_transformed_vec4.w,
+			};
+
 			vertex_count = clip_3d_polygon_by_plane(
 				&vertices_clipped[.. vertex_count],
-				&clip_polygon.plane,
+				&clip_plane_transformed,
 				&mut vertices_temp[..],
 			);
 			if vertex_count < 3
@@ -1172,14 +1180,6 @@ impl Renderer
 				return;
 			}
 			vertices_clipped[.. vertex_count].copy_from_slice(&vertices_temp[.. vertex_count]);
-		}
-
-		// Transform vetices after clipping.
-		// TODO - perform clipping using transformed planes instead.
-		for v in &mut vertices_clipped[.. vertex_count]
-		{
-			let vertex_transformed = view_matrix * v.extend(1.0);
-			*v = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
 		}
 
 		draw_polygon(
