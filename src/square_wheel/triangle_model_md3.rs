@@ -1,4 +1,5 @@
 use super::triangle_model::*;
+use common::math_types::*;
 use std::io::{Read, Seek};
 
 pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleModel>, std::io::Error>
@@ -34,9 +35,22 @@ pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleMode
 		return Ok(None);
 	}
 
+	let mut frames_src = vec![Md3Frame::default(); header.num_frames as usize];
+	read_chunk(&mut file, header.lump_frameinfo as u64, &mut frames_src)?;
+
+	let mut tags_src = vec![
+		Md3Tag {
+			name: [0; MAX_QPATH],
+			origin: [0.0; 3],
+			rotation_matrix: [0.0; 9]
+		};
+		header.num_tags as usize
+	];
+	read_chunk(&mut file, header.lump_tags as u64, &mut tags_src)?;
+
 	file.seek(std::io::SeekFrom::Start(header.lump_meshes as u64))?;
 	let mut meshes = Vec::with_capacity(header.num_meshes as usize);
-	for i in 0 .. header.num_meshes
+	for _i in 0 .. header.num_meshes
 	{
 		let mesh_header_size = std::mem::size_of::<Md3Mesh>();
 		let mut mesh_header = unsafe { std::mem::zeroed::<Md3Mesh>() };
@@ -53,6 +67,8 @@ pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleMode
 		{
 			meshes.push(mesh);
 		}
+
+		file.seek(std::io::SeekFrom::Start(mesh_header.lump_end as u64))?;
 	}
 
 	Ok(Some(TriangleModel { meshes }))
@@ -66,7 +82,78 @@ fn load_md3_mesh(src_mesh: &Md3Mesh, file: &mut std::fs::File) -> Result<Option<
 		return Ok(None);
 	}
 
-	Ok(None)
+	let mut triangles_src = vec![Md3Triangle::default(); src_mesh.num_triangles as usize];
+	read_chunk(file, src_mesh.lump_triangles as u64, &mut triangles_src)?;
+
+	let mut tex_coords_src = vec![Md3TexCoord::default(); src_mesh.num_vertices as usize];
+	read_chunk(file, src_mesh.lump_texcoords as u64, &mut tex_coords_src)?;
+
+	let mut frames_src = vec![Md3Vertex::default(); (src_mesh.num_vertices * src_mesh.num_frames) as usize];
+	read_chunk(file, src_mesh.lump_framevertices as u64, &mut frames_src)?;
+
+	let mut shaders_src = vec![
+		Md3Shader {
+			name: [0; MAX_QPATH],
+			index: 0
+		};
+		src_mesh.num_shaders as usize
+	];
+	read_chunk(file, src_mesh.lump_shaders as u64, &mut shaders_src)?;
+
+	let triangles = triangles_src
+		.iter()
+		.map(|x| [x[0] as VertexIndex, x[1] as VertexIndex, x[2] as VertexIndex])
+		.collect();
+
+	let vertex_data_constant = tex_coords_src
+		.iter()
+		.map(|&tex_coord| VertexAnimatedVertexConstant { tex_coord })
+		.collect();
+
+	// TODO - transform coordinates properly.
+	let vertex_data_variable = frames_src
+		.iter()
+		.map(|v| VertexAnimatedVertexVariable {
+			position: Vec3f::new(v.origin[0] as f32, v.origin[1] as f32, v.origin[2] as f32),
+			normal: decompress_normal(v.normal_pitch_yaw),
+		})
+		.collect();
+
+	Ok(Some(TriangleModelMesh {
+		material_name: String::new(/*TODO*/),
+		triangles,
+		num_frames: src_mesh.num_frames,
+		vertex_data_constant,
+		vertex_data_variable,
+	}))
+}
+
+fn read_chunk<T: Copy>(file: &mut std::fs::File, offset: u64, dst: &mut [T]) -> Result<(), std::io::Error>
+{
+	file.seek(std::io::SeekFrom::Start(offset as u64))?;
+
+	if dst.is_empty()
+	{
+		return Ok(());
+	}
+
+	let bytes = unsafe {
+		std::slice::from_raw_parts_mut((&mut dst[0]) as *mut T as *mut u8, std::mem::size_of::<T>() * dst.len())
+	};
+
+	file.read_exact(bytes)?;
+
+	Ok(())
+}
+
+fn decompress_normal(normal_pitch_yaw: i16) -> Vec3f
+{
+	let scale = std::f32::consts::TAU / 256.0;
+	let pitch = (normal_pitch_yaw & 255) as f32 * scale;
+	let yaw = ((normal_pitch_yaw >> 8) & 255) as f32 * scale;
+
+	let pitch_sin = pitch.sin();
+	Vec3f::new(pitch_sin * yaw.cos(), pitch_sin * yaw.sin(), pitch.cos())
 }
 
 #[repr(C)]
@@ -100,7 +187,7 @@ struct Md3Mesh
 	num_vertices: u32,
 	num_triangles: u32,
 
-	lump_elements: u32,
+	lump_triangles: u32,
 	lump_shaders: u32,
 	lump_texcoords: u32,
 	lump_framevertices: u32,
@@ -108,6 +195,7 @@ struct Md3Mesh
 }
 
 #[repr(C)]
+#[derive(Copy, Clone)]
 struct Md3Shader
 {
 	name: [u8; MAX_QPATH],
@@ -115,6 +203,7 @@ struct Md3Shader
 }
 
 #[repr(C)]
+#[derive(Copy, Clone)]
 struct Md3Tag
 {
 	name: [u8; MAX_QPATH],
@@ -123,6 +212,7 @@ struct Md3Tag
 }
 
 #[repr(C)]
+#[derive(Default, Copy, Clone)]
 struct Md3Frame
 {
 	mins: [f32; 3],
@@ -133,11 +223,15 @@ struct Md3Frame
 }
 
 #[repr(C)]
+#[derive(Default, Copy, Clone)]
 struct Md3Vertex
 {
 	origin: [i16; 3],
 	normal_pitch_yaw: i16,
 }
+
+type Md3Triangle = [u32; 3];
+type Md3TexCoord = [f32; 2];
 
 const MAX_QPATH: usize = 64;
 const MD3_ID: [u8; 4] = ['I' as u8, 'D' as u8, 'P' as u8, '3' as u8];
