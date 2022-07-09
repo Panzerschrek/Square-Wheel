@@ -29,6 +29,8 @@ mod test_game;
 mod text_printer;
 mod textures;
 mod ticks_counter;
+mod triangle_model;
+mod triangle_model_md3;
 
 use std::path::PathBuf;
 use structopt::StructOpt;
