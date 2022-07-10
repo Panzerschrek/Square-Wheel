@@ -888,7 +888,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		for y_int in y_start_int .. y_end_int
 		{
 			let x_start_int = fixed16_floor_to_int(x_left).max(self.clip_rect.min_x);
-			let x_end_int = fixed16_floor_to_int(x_right).min(self.clip_rect.min_y);
+			let x_end_int = fixed16_floor_to_int(x_right).min(self.clip_rect.max_x);
 			if x_start_int < x_end_int
 			{
 				let line_buffer_offset = y_int * self.row_size;

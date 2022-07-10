@@ -50,6 +50,7 @@ pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleMode
 
 	file.seek(std::io::SeekFrom::Start(header.lump_meshes as u64))?;
 	let mut meshes = Vec::with_capacity(header.num_meshes as usize);
+	let mut offset = header.lump_meshes as u64;
 	for _i in 0 .. header.num_meshes
 	{
 		let mesh_header_size = std::mem::size_of::<Md3Mesh>();
@@ -63,18 +64,23 @@ pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleMode
 			break;
 		}
 
-		if let Some(mesh) = load_md3_mesh(&mesh_header, &mut file)?
+		if let Some(mesh) = load_md3_mesh(&mesh_header, offset, &mut file)?
 		{
 			meshes.push(mesh);
 		}
 
-		file.seek(std::io::SeekFrom::Start(mesh_header.lump_end as u64))?;
+		offset += mesh_header.lump_end as u64;
+		file.seek(std::io::SeekFrom::Start(offset as u64))?;
 	}
 
 	Ok(Some(TriangleModel { meshes }))
 }
 
-fn load_md3_mesh(src_mesh: &Md3Mesh, file: &mut std::fs::File) -> Result<Option<TriangleModelMesh>, std::io::Error>
+fn load_md3_mesh(
+	src_mesh: &Md3Mesh,
+	mesh_offset: u64,
+	file: &mut std::fs::File,
+) -> Result<Option<TriangleModelMesh>, std::io::Error>
 {
 	if src_mesh.ident != MD3_ID
 	{
@@ -83,13 +89,13 @@ fn load_md3_mesh(src_mesh: &Md3Mesh, file: &mut std::fs::File) -> Result<Option<
 	}
 
 	let mut triangles_src = vec![Md3Triangle::default(); src_mesh.num_triangles as usize];
-	read_chunk(file, src_mesh.lump_triangles as u64, &mut triangles_src)?;
+	read_chunk(file, src_mesh.lump_triangles as u64 + mesh_offset, &mut triangles_src)?;
 
 	let mut tex_coords_src = vec![Md3TexCoord::default(); src_mesh.num_vertices as usize];
-	read_chunk(file, src_mesh.lump_texcoords as u64, &mut tex_coords_src)?;
+	read_chunk(file, src_mesh.lump_texcoords as u64 + mesh_offset, &mut tex_coords_src)?;
 
 	let mut frames_src = vec![Md3Vertex::default(); (src_mesh.num_vertices * src_mesh.num_frames) as usize];
-	read_chunk(file, src_mesh.lump_framevertices as u64, &mut frames_src)?;
+	read_chunk(file, src_mesh.lump_framevertices as u64 + mesh_offset, &mut frames_src)?;
 
 	let mut shaders_src = vec![
 		Md3Shader {
@@ -98,7 +104,7 @@ fn load_md3_mesh(src_mesh: &Md3Mesh, file: &mut std::fs::File) -> Result<Option<
 		};
 		src_mesh.num_shaders as usize
 	];
-	read_chunk(file, src_mesh.lump_shaders as u64, &mut shaders_src)?;
+	read_chunk(file, src_mesh.lump_shaders as u64 + mesh_offset, &mut shaders_src)?;
 
 	let triangles = triangles_src
 		.iter()
@@ -114,7 +120,7 @@ fn load_md3_mesh(src_mesh: &Md3Mesh, file: &mut std::fs::File) -> Result<Option<
 	let vertex_data_variable = frames_src
 		.iter()
 		.map(|v| VertexAnimatedVertexVariable {
-			position: Vec3f::new(v.origin[0] as f32, v.origin[1] as f32, v.origin[2] as f32),
+			position: Vec3f::new(v.origin[0] as f32, v.origin[1] as f32, v.origin[2] as f32) * MD3_COORD_SCALE,
 			normal: decompress_normal(v.normal_pitch_yaw),
 		})
 		.collect();
@@ -236,3 +242,4 @@ type Md3TexCoord = [f32; 2];
 const MAX_QPATH: usize = 64;
 const MD3_ID: [u8; 4] = ['I' as u8, 'D' as u8, 'P' as u8, '3' as u8];
 const MD3_VERSION: u32 = 15;
+const MD3_COORD_SCALE: f32 = 1.0 / 64.0;

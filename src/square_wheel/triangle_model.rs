@@ -23,11 +23,13 @@ pub type Triangle = [VertexIndex; 3];
 
 pub type VertexIndex = u16;
 
+#[derive(Copy, Clone)]
 pub struct VertexAnimatedVertexConstant
 {
 	pub tex_coord: [f32; 2],
 }
 
+#[derive(Copy, Clone)]
 pub struct VertexAnimatedVertexVariable
 {
 	pub position: Vec3f,

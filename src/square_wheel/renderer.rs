@@ -1,7 +1,8 @@
 use super::{
 	abstract_color::*, config, debug_stats_printer::*, depth_renderer::*, draw_ordering, fast_math::*, frame_number::*,
 	inline_models_index::*, light::*, map_materials_processor::*, map_visibility_calculator::*, performance_counter::*,
-	rasterizer::*, rect_splitting, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
+	rasterizer::*, rect_splitting, renderer_config::*, shadow_map::*, surfaces::*, textures::*, triangle_model::*,
+	triangle_model_md3::*,
 };
 use common::{
 	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, material, math_types::*,
@@ -33,6 +34,7 @@ pub struct Renderer
 	mip_bias: f32,
 	materials_processor: MapMaterialsProcessor,
 	performance_counters: RendererPerformanceCounters,
+	test_model: TriangleModel,
 }
 
 struct RendererPerformanceCounters
@@ -79,6 +81,10 @@ impl Renderer
 {
 	pub fn new(app_config: config::ConfigSharedPtr, map: Arc<bsp_map_compact::BSPMap>) -> Self
 	{
+		let test_model = load_model_md3(&std::path::Path::new("other/baseq3/models/mapobjects/gargoyle1.md3"))
+			.unwrap()
+			.unwrap();
+
 		let config_parsed = RendererConfig::from_app_config(&app_config);
 		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
 
@@ -101,6 +107,7 @@ impl Renderer
 			map,
 			materials_processor,
 			performance_counters: RendererPerformanceCounters::new(),
+			test_model,
 		}
 	}
 
@@ -348,6 +355,8 @@ impl Renderer
 				inline_models_index,
 				root_node,
 			);
+
+			self.draw_test_model(&mut rasterizer, &camera_matrices.view_matrix);
 		}
 		else
 		{
@@ -395,6 +404,8 @@ impl Renderer
 					inline_models_index,
 					root_node,
 				);
+
+				self.draw_test_model(&mut rasterizer, &camera_matrices.view_matrix);
 			});
 		}
 	}
@@ -1026,6 +1037,66 @@ impl Renderer
 				((polygon_data.surface_size[0] * polygon_data.surface_size[1]) as usize)]
 	}
 
+	fn draw_test_model<'a, ColorT: AbstractColor>(&self, rasterizer: &mut Rasterizer<'a, ColorT>, view_matrix: &Mat4f)
+	{
+		let frame_number = 0;
+		for mesh in &self.test_model.meshes
+		{
+			let frame_vertex_data = &mesh.vertex_data_variable[frame_number * mesh.vertex_data_constant.len() ..
+				(frame_number + 1) * mesh.vertex_data_constant.len()];
+
+			for triangle in &mesh.triangles
+			{
+				// TODO - use unchecked fetch?
+				let v0 = frame_vertex_data[triangle[0] as usize];
+				let v1 = frame_vertex_data[triangle[1] as usize];
+				let v2 = frame_vertex_data[triangle[2] as usize];
+
+				let v0_transformed = view_matrix * v0.position.extend(1.0);
+				let v1_transformed = view_matrix * v1.position.extend(1.0);
+				let v2_transformed = view_matrix * v2.position.extend(1.0);
+
+				// TODO - perform proper clipping
+				if v0_transformed.w < Z_NEAR || v1_transformed.w < Z_NEAR || v2_transformed.w < Z_NEAR
+				{
+					continue;
+				}
+				let v0_projected = v0_transformed.truncate().truncate() / v0_transformed.w;
+				let v1_projected = v1_transformed.truncate().truncate() / v1_transformed.w;
+				let v2_projected = v2_transformed.truncate().truncate() / v2_transformed.w;
+
+				if v0_projected.x < 0.0 ||
+					v0_projected.x > 2048.0 ||
+					v0_projected.y < 0.0 || v0_projected.y > 2048.0 ||
+					v1_projected.x < 0.0 || v1_projected.x > 2048.0 ||
+					v1_projected.y < 0.0 || v1_projected.y > 2048.0 ||
+					v2_projected.x < 0.0 || v2_projected.x > 2048.0 ||
+					v2_projected.y < 0.0 || v2_projected.y > 2048.0
+				{
+					continue;
+				}
+
+				rasterizer.fill_triangle(
+					&[
+						PolygonPointProjected {
+							x: f32_to_fixed16(v0_projected.x),
+							y: f32_to_fixed16(v0_projected.y),
+						},
+						PolygonPointProjected {
+							x: f32_to_fixed16(v1_projected.x),
+							y: f32_to_fixed16(v1_projected.y),
+						},
+						PolygonPointProjected {
+							x: f32_to_fixed16(v2_projected.x),
+							y: f32_to_fixed16(v2_projected.y),
+						},
+					],
+					ColorT::from(ColorVec::zero()),
+				);
+			}
+		}
+	}
+
 	fn update_mip_bias(&mut self)
 	{
 		if self.config.dynamic_mip_bias
@@ -1392,6 +1463,8 @@ const TC_ERROR_THRESHOLD: f32 = 0.75;
 
 pub const MAX_VERTICES: usize = 24;
 
+const Z_NEAR: f32 = 1.0;
+
 // Returns number of result vertices. < 3 if polygon is clipped.
 pub fn project_and_clip_polygon(
 	clip_planes: &ClippingPolygonPlanes,
@@ -1403,7 +1476,6 @@ pub fn project_and_clip_polygon(
 
 	// Perform z_near clipping.
 	let mut vertices_transformed_z_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-	const Z_NEAR: f32 = 1.0;
 	vertex_count = clip_3d_polygon_by_z_plane(
 		&vertices_transformed[.. vertex_count],
 		Z_NEAR,
