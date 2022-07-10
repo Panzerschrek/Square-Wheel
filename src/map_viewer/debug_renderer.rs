@@ -137,14 +137,12 @@ fn draw_map(
 	{
 		if draw_options.draw_bsp_map_compact
 		{
-			let mut index = 0;
 			draw_map_bsp_compact_r(
 				&mut rasterizer,
 				camera_matrices,
 				draw_options.draw_polygon_normals,
 				bsp_map_compact_non_opt.nodes.last().unwrap(),
 				&bsp_map_compact_non_opt,
-				&mut index,
 			);
 		}
 		if draw_options.draw_map_sectors_graph_compact
@@ -331,7 +329,6 @@ fn draw_map_bsp_compact_r(
 	draw_polygon_normals: bool,
 	bsp_node: &bsp_map_compact::BSPNode,
 	bsp_map: &bsp_map_compact::BSPMap,
-	index: &mut usize,
 )
 {
 	for i in 0 .. 2
@@ -344,23 +341,15 @@ fn draw_map_bsp_compact_r(
 		{
 			let leaf_index = child - bsp_map_compact::FIRST_LEAF_INDEX;
 
-			let mut color = get_pseudo_random_color(leaf_index as usize);
-			if *index == 0
-			{
-				color = Color32::from_rgb(8, 8, 8);
-			}
-
 			draw_map_bsp_compact_leaf(
 				rasterizer,
 				camera_matrices,
 				draw_polygon_normals,
 				&bsp_map.leafs[leaf_index as usize],
 				bsp_map,
-				color,
 			);
 
-			// TODO - draw portals for index 0
-			*index += 1;
+		// TODO - draw portals for index 0
 		}
 		else
 		{
@@ -370,7 +359,6 @@ fn draw_map_bsp_compact_r(
 				draw_polygon_normals,
 				&bsp_map.nodes[child as usize],
 				bsp_map,
-				index,
 			);
 		}
 	}
@@ -391,21 +379,14 @@ fn draw_map_sectors_graph_compact(
 	let mut reachable_sectors = ReachablebleSectorsCompactMap::new();
 	find_reachable_sectors_compact_r(current_sector, bsp_map, 0, &mut reachable_sectors);
 
-	for (sector, depth) in reachable_sectors
+	for (sector, _depth) in reachable_sectors
 	{
-		let color = Color32::from_rgb(
-			((depth * 28).min(255)) as u8,
-			((depth * 24).min(255)) as u8,
-			((depth * 20).min(255)) as u8,
-		);
-
 		draw_map_bsp_compact_leaf(
 			rasterizer,
 			camera_matrices,
 			draw_polygon_normals,
 			&bsp_map.leafs[sector as usize],
 			bsp_map,
-			color,
 		);
 	}
 }
@@ -482,12 +463,13 @@ fn draw_map_bsp_compact_leaf(
 	draw_polygon_normals: bool,
 	bsp_leaf: &bsp_map_compact::BSPLeaf,
 	bsp_map: &bsp_map_compact::BSPMap,
-	color: Color32,
 )
 {
-	for polygon in &bsp_map.polygons
-		[(bsp_leaf.first_polygon as usize) .. ((bsp_leaf.first_polygon + bsp_leaf.num_polygons) as usize)]
+	for polygon_index in bsp_leaf.first_polygon as usize .. (bsp_leaf.first_polygon + bsp_leaf.num_polygons) as usize
 	{
+		let polygon = &bsp_map.polygons[polygon_index];
+		let color = get_pseudo_random_color(polygon_index);
+
 		draw_polygon_decomposed(
 			rasterizer,
 			camera_matrices,
