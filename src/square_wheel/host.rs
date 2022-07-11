@@ -161,9 +161,13 @@ impl Host
 
 		let witndow_ptr_clone = self.window.clone();
 
-		witndow_ptr_clone.borrow_mut().end_frame(|pixels, surface_info| {
-			self.draw_frame(pixels, surface_info, time_delta_s);
-		});
+		witndow_ptr_clone
+			.borrow_mut()
+			.update_window_surface(|pixels, surface_info| {
+				self.draw_frame(pixels, surface_info, time_delta_s);
+			});
+
+		witndow_ptr_clone.borrow_mut().swap_buffers();
 
 		if self.config.max_fps > 0.0
 		{

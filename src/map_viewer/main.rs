@@ -144,7 +144,7 @@ pub fn main()
 
 		camera_controller.update(&window.get_keyboard_state(), time_delta_s);
 
-		window.end_frame(|pixels, surface_info| {
+		window.update_window_surface(|pixels, surface_info| {
 			debug_renderer::draw_frame(
 				pixels,
 				surface_info,
@@ -176,6 +176,8 @@ pub fn main()
 				secondary_ligt_sources.as_ref(),
 			)
 		});
+
+		window.swap_buffers();
 
 		let frame_end_time = std::time::Instant::now();
 		let frame_time_s = (frame_end_time - prev_time).as_secs_f32();
