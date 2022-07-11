@@ -1,10 +1,10 @@
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, Mutex};
 
 pub type CommandArgs = Vec<String>;
 pub type CommandHandler<HandlerClass> = fn(&mut HandlerClass, CommandArgs);
 pub type NamedCommandHandler<HandlerClass> = (&'static str, CommandHandler<HandlerClass>);
 
-pub trait CommandsQueueInterface
+pub trait CommandsQueueInterface: Send + Sync
 {
 	fn has_handler(&self, command: &str) -> bool;
 	fn add_invocation(&mut self, command: &str, args: CommandArgs);
@@ -19,15 +19,15 @@ pub struct CommandsQueue<HandlerClass>
 	invocations: Vec<Vec<CommandArgs>>,
 }
 
-pub type CommandsQueuePtr<HandlerClass> = Rc<RefCell<CommandsQueue<HandlerClass>>>;
-pub type CommandsQueueDynPtr = Rc<RefCell<dyn CommandsQueueInterface>>;
+pub type CommandsQueuePtr<HandlerClass> = Arc<Mutex<CommandsQueue<HandlerClass>>>;
+pub type CommandsQueueDynPtr = Arc<Mutex<dyn CommandsQueueInterface>>;
 
 impl<HandlerClass> CommandsQueue<HandlerClass>
 {
 	pub fn new(handlers: Vec<NamedCommandHandler<HandlerClass>>) -> CommandsQueuePtr<HandlerClass>
 	{
 		let invocations = vec![Vec::new(); handlers.len()];
-		Rc::new(RefCell::new(Self { handlers, invocations }))
+		Arc::new(Mutex::new(Self { handlers, invocations }))
 	}
 
 	pub fn process_commands(&mut self, handler: &mut HandlerClass)

@@ -4,7 +4,7 @@ use super::{
 };
 use common::{bsp_map_save_load, color::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
-use std::{cell::RefCell, rc::Rc, time::Duration};
+use std::{time::Duration, sync::{Arc, Mutex}};
 
 pub struct Host
 {
@@ -16,7 +16,7 @@ pub struct Host
 	commands_queue: commands_queue::CommandsQueuePtr<Host>,
 	commands_processor: commands_processor::CommandsProcessorPtr,
 	console: console::ConsoleSharedPtr,
-	window: Rc<RefCell<system_window::SystemWindow>>,
+	window: Arc<Mutex<system_window::SystemWindow>>,
 	postprocessor: Postprocessor,
 	active_map: Option<ActiveMap>,
 	prev_time: std::time::Instant,
@@ -72,7 +72,7 @@ impl Host
 
 		let commands_processor = commands_processor::CommandsProcessor::new(app_config.clone());
 		let console = console::Console::new(commands_processor.clone());
-		console.borrow_mut().add_text("Innitializing host".to_string());
+		console.lock().unwrap().add_text("Innitializing host".to_string());
 
 		let commands_queue = commands_queue::CommandsQueue::new(vec![
 			("map", Host::command_map),
@@ -81,7 +81,8 @@ impl Host
 		]);
 
 		commands_processor
-			.borrow_mut()
+			.lock()
+			.unwrap()
 			.register_command_queue(commands_queue.clone() as commands_queue::CommandsQueueDynPtr);
 
 		let cur_time = std::time::Instant::now();
@@ -96,7 +97,7 @@ impl Host
 			commands_queue,
 			commands_processor,
 			console,
-			window: Rc::new(RefCell::new(system_window::SystemWindow::new())),
+			window: Arc::new(Mutex::new(system_window::SystemWindow::new())),
 			postprocessor: Postprocessor::new(app_config),
 			active_map: None,
 			prev_time: cur_time,
@@ -109,9 +110,10 @@ impl Host
 		for command_line in &startup_commands
 		{
 			host.console
-				.borrow_mut()
+				.lock()
+				.unwrap()
 				.add_text(format!("Executing \"{}\"", command_line));
-			host.commands_processor.borrow_mut().process_command(&command_line);
+			host.commands_processor.lock().unwrap().process_command(&command_line);
 			host.process_commands();
 		}
 
@@ -127,15 +129,15 @@ impl Host
 
 		if self.config.fullscreen_mode == 0.0
 		{
-			self.window.borrow_mut().set_windowed();
+			self.window.lock().unwrap().set_windowed();
 		}
 		else if self.config.fullscreen_mode == 1.0
 		{
-			self.window.borrow_mut().set_fullscreen_desktop();
+			self.window.lock().unwrap().set_fullscreen_desktop();
 		}
 		else if self.config.fullscreen_mode == 2.0
 		{
-			self.window.borrow_mut().set_fullscreen();
+			self.window.lock().unwrap().set_fullscreen();
 		}
 		else
 		{
@@ -148,11 +150,11 @@ impl Host
 
 		if let Some(active_map) = &mut self.active_map
 		{
-			if !self.console.borrow().is_active()
+			if !self.console.lock().unwrap().is_active()
 			{
 				active_map
 					.game
-					.process_input(&self.window.borrow_mut().get_keyboard_state(), time_delta_s);
+					.process_input(&self.window.lock().unwrap().get_keyboard_state(), time_delta_s);
 			}
 			active_map.game.update(time_delta_s);
 		}
@@ -181,7 +183,7 @@ impl Host
 	{
 		// Remember if ` was pressed to avoid using it as input for console.
 		let mut has_backquote = false;
-		for event in self.window.borrow_mut().get_events()
+		for event in self.window.lock().unwrap().get_events()
 		{
 			match event
 			{
@@ -193,9 +195,9 @@ impl Host
 				{
 					if keycode == Some(Keycode::Escape)
 					{
-						if self.console.borrow().is_active()
+						if self.console.lock().unwrap().is_active()
 						{
-							self.console.borrow_mut().toggle();
+							self.console.lock().unwrap().toggle();
 						}
 						else
 						{
@@ -205,21 +207,21 @@ impl Host
 					if keycode == Some(Keycode::Backquote)
 					{
 						has_backquote = true;
-						self.console.borrow_mut().toggle();
+						self.console.lock().unwrap().toggle();
 					}
-					if self.console.borrow().is_active()
+					if self.console.lock().unwrap().is_active()
 					{
 						if let Some(k) = keycode
 						{
-							self.console.borrow_mut().process_key_press(k);
+							self.console.lock().unwrap().process_key_press(k);
 						}
 					}
 				},
 				Event::TextInput { text, .. } =>
 				{
-					if self.console.borrow().is_active() && !has_backquote
+					if self.console.lock().unwrap().is_active() && !has_backquote
 					{
-						self.console.borrow_mut().process_text_input(&text);
+						self.console.lock().unwrap().process_text_input(&text);
 					}
 				},
 				_ =>
@@ -231,7 +233,7 @@ impl Host
 	fn process_commands(&mut self)
 	{
 		let queue_ptr_copy = self.commands_queue.clone();
-		queue_ptr_copy.borrow_mut().process_commands(self);
+		queue_ptr_copy.lock().unwrap().process_commands(self);
 	}
 
 	fn synchronize_config(&mut self)
@@ -258,120 +260,144 @@ impl Host
 
 	fn draw_frame(&mut self, time_delta_s: f32)
 	{
-		let witndow_ptr_clone = self.window.clone();
+		let parallel_swap_buffers = false;
+
+		let window_ptr_clone = self.window.clone();
+
+		let postprocessor = &mut self.postprocessor;
+		let active_map = &mut self.active_map;
+		let console = self.console.clone();
+		let fps_counter = &self.fps_counter;
 
 		// First, only prepare frame without accessing surface pixels.
-		let surface_info_initial = witndow_ptr_clone.borrow_mut().get_window_surface_info();
-		if let Some(active_map) = &mut self.active_map
-		{
-			let camera_matrices = active_map.game.get_camera_matrices(&surface_info_initial);
-
-			if self.postprocessor.use_hdr_rendering()
+		let surface_info_initial = window_ptr_clone.lock().unwrap().get_window_surface_info();
+		let mut prepare_frame_func = || {
+			if let Some(active_map) = active_map
 			{
-				let hdr_buffer_size = [surface_info_initial.width, surface_info_initial.height];
-				let hdr_buffer = self.postprocessor.get_hdr_buffer(hdr_buffer_size);
+				let camera_matrices = active_map.game.get_camera_matrices(&surface_info_initial);
 
-				active_map.renderer.prepare_frame::<Color64>(
-					&system_window::SurfaceInfo {
-						width: hdr_buffer_size[0],
-						height: hdr_buffer_size[1],
-						pitch: hdr_buffer_size[0],
-					},
-					&camera_matrices,
-					&active_map.inline_models_index,
-					active_map.game.get_test_lights(),
-					active_map.game.get_game_time_s(),
-				);
-
-				active_map.renderer.draw_frame(
-					hdr_buffer,
-					&system_window::SurfaceInfo {
-						width: hdr_buffer_size[0],
-						height: hdr_buffer_size[1],
-						pitch: hdr_buffer_size[0],
-					},
-					&camera_matrices,
-					&active_map.inline_models_index,
-					&mut active_map.debug_stats_printer,
-				);
-			}
-			else
-			{
-				active_map.renderer.prepare_frame::<Color32>(
-					&surface_info_initial,
-					&camera_matrices,
-					&active_map.inline_models_index,
-					active_map.game.get_test_lights(),
-					active_map.game.get_game_time_s(),
-				);
-			}
-		}
-
-		// Than update surface pixels.
-		witndow_ptr_clone
-			.borrow_mut()
-			.update_window_surface(|pixels, surface_info| {
-				if *surface_info != surface_info_initial
+				if postprocessor.use_hdr_rendering()
 				{
-					// Skip this frame because surface size was changed.
-					return;
-				}
+					let hdr_buffer_size = [surface_info_initial.width, surface_info_initial.height];
+					let hdr_buffer = postprocessor.get_hdr_buffer(hdr_buffer_size);
 
-				if let Some(active_map) = &mut self.active_map
-				{
-					if self.postprocessor.use_hdr_rendering()
-					{
-						self.postprocessor.perform_postprocessing(
-							pixels,
-							surface_info,
-							time_delta_s,
-							&mut active_map.debug_stats_printer,
-						);
-					}
-					else
-					{
-						let camera_matrices = active_map.game.get_camera_matrices(&surface_info_initial);
-						active_map.renderer.draw_frame(
-							pixels,
-							surface_info,
-							&camera_matrices,
-							&active_map.inline_models_index,
-							&mut active_map.debug_stats_printer,
-						);
-					}
+					active_map.renderer.prepare_frame::<Color64>(
+						&system_window::SurfaceInfo {
+							width: hdr_buffer_size[0],
+							height: hdr_buffer_size[1],
+							pitch: hdr_buffer_size[0],
+						},
+						&camera_matrices,
+						&active_map.inline_models_index,
+						active_map.game.get_test_lights(),
+						active_map.game.get_game_time_s(),
+					);
 
-					active_map.debug_stats_printer.flush(pixels, surface_info);
+					active_map.renderer.draw_frame(
+						hdr_buffer,
+						&system_window::SurfaceInfo {
+							width: hdr_buffer_size[0],
+							height: hdr_buffer_size[1],
+							pitch: hdr_buffer_size[0],
+						},
+						&camera_matrices,
+						&active_map.inline_models_index,
+						&mut active_map.debug_stats_printer,
+					);
 				}
 				else
 				{
-					// Just clear background. TODO - maybe draw some background pattern or image?
-					for pixel in pixels.iter_mut()
-					{
-						*pixel = Color32::black();
-					}
+					active_map.renderer.prepare_frame::<Color32>(
+						&surface_info_initial,
+						&camera_matrices,
+						&active_map.inline_models_index,
+						active_map.game.get_test_lights(),
+						active_map.game.get_game_time_s(),
+					);
+				}
+			}
+		};
+
+		if parallel_swap_buffers
+		{
+			// TODO - fix tgis.
+			// rayon::join(prepare_frame_func, swap_buffers_func);
+			rayon::join(prepare_frame_func, move ||{window_ptr_clone.lock().unwrap().swap_buffers()});
+		}
+		else
+		{
+			prepare_frame_func();
+		}
+
+		// Than update surface pixels.
+		window_ptr_clone.lock().unwrap().update_window_surface(|pixels, surface_info| {
+			if *surface_info != surface_info_initial
+			{
+				// Skip this frame because surface size was changed.
+				return;
+			}
+
+			if let Some(active_map) = active_map
+			{
+				if postprocessor.use_hdr_rendering()
+				{
+					postprocessor.perform_postprocessing(
+						pixels,
+						surface_info,
+						time_delta_s,
+						&mut active_map.debug_stats_printer,
+					);
+				}
+				else
+				{
+					let camera_matrices = active_map.game.get_camera_matrices(&surface_info_initial);
+					active_map.renderer.draw_frame(
+						pixels,
+						surface_info,
+						&camera_matrices,
+						&active_map.inline_models_index,
+						&mut active_map.debug_stats_printer,
+					);
 				}
 
-				self.console.borrow().draw(pixels, surface_info);
+				active_map.debug_stats_printer.flush(pixels, surface_info);
+			}
+			else
+			{
+				// Just clear background. TODO - maybe draw some background pattern or image?
+				for pixel in pixels.iter_mut()
+				{
+					*pixel = Color32::black();
+				}
+			}
 
-				text_printer::print(
-					pixels,
-					surface_info,
-					&format!("fps {:04.2}", self.fps_counter.get_frequency()),
-					(surface_info.width - 96) as i32,
-					1,
-					Color32::from_rgb(255, 255, 255),
-				);
-			});
+			console.lock().unwrap().draw(pixels, surface_info);
 
-		// Finally, swap buffers.
-		witndow_ptr_clone.borrow_mut().swap_buffers();
+			text_printer::print(
+				pixels,
+				surface_info,
+				&format!("fps {:04.2}", fps_counter.get_frequency()),
+				(surface_info.width - 96) as i32,
+				1,
+				Color32::from_rgb(255, 255, 255),
+			);
+		});
+
+		if !parallel_swap_buffers
+		{
+			// Finally, swap buffers.
+			window_ptr_clone.lock().unwrap().swap_buffers();
+		}
 	}
 
 	fn command_map(&mut self, args: commands_queue::CommandArgs)
 	{
 		if args.is_empty()
 		{
-			self.console.borrow_mut().add_text("Expected map file name".to_string());
+			self.console
+				.lock()
+				.unwrap()
+				.add_text("Expected map file name".to_string());
 			return;
 		}
 		self.active_map = None;
@@ -395,13 +421,15 @@ impl Host
 			Ok(None) =>
 			{
 				self.console
-					.borrow_mut()
+					.lock()
+					.unwrap()
 					.add_text(format!("Failed to load map {:?}", map_path));
 			},
 			Err(e) =>
 			{
 				self.console
-					.borrow_mut()
+					.lock()
+					.unwrap()
 					.add_text(format!("Failed to load map {:?}: {}", map_path, e));
 			},
 		}
@@ -416,17 +444,20 @@ impl Host
 	{
 		if args.len() < 2
 		{
-			self.console.borrow_mut().add_text("Expected two args".to_string());
+			self.console.lock().unwrap().add_text("Expected two args".to_string());
 			return;
 		}
 
 		if let (Ok(width), Ok(height)) = (args[0].parse::<u32>(), args[1].parse::<u32>())
 		{
-			self.window.borrow_mut().resize(width, height);
+			self.window.lock().unwrap().resize(width, height);
 		}
 		else
 		{
-			self.console.borrow_mut().add_text("Failed to parse args".to_string());
+			self.console
+				.lock()
+				.unwrap()
+				.add_text("Failed to parse args".to_string());
 		}
 	}
 }

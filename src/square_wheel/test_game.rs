@@ -26,7 +26,8 @@ impl Game
 		]);
 
 		commands_processor
-			.borrow_mut()
+			.lock()
+			.unwrap()
 			.register_command_queue(commands_queue.clone() as commands_queue::CommandsQueueDynPtr);
 
 		Self {
@@ -76,14 +77,15 @@ impl Game
 	fn process_commands(&mut self)
 	{
 		let queue_ptr_copy = self.commands_queue.clone();
-		queue_ptr_copy.borrow_mut().process_commands(self);
+		queue_ptr_copy.lock().unwrap().process_commands(self);
 	}
 
 	fn command_get_pos(&mut self, _args: commands_queue::CommandArgs)
 	{
 		let pos = self.camera.get_pos();
 		self.console
-			.borrow_mut()
+			.lock()
+			.unwrap()
 			.add_text(format!("{} {} {}", pos.x, pos.y, pos.z));
 	}
 
@@ -91,7 +93,7 @@ impl Game
 	{
 		if args.len() < 3
 		{
-			self.console.borrow_mut().add_text("Expected 3 args".to_string());
+			self.console.lock().unwrap().add_text("Expected 3 args".to_string());
 			return;
 		}
 
@@ -101,21 +103,27 @@ impl Game
 		}
 		else
 		{
-			self.console.borrow_mut().add_text("Failed to parse args".to_string());
+			self.console
+				.lock()
+				.unwrap()
+				.add_text("Failed to parse args".to_string());
 		}
 	}
 
 	fn command_get_angles(&mut self, _args: commands_queue::CommandArgs)
 	{
 		let angles = self.camera.get_angles();
-		self.console.borrow_mut().add_text(format!("{} {}", angles.0, angles.1));
+		self.console
+			.lock()
+			.unwrap()
+			.add_text(format!("{} {}", angles.0, angles.1));
 	}
 
 	fn command_set_angles(&mut self, args: commands_queue::CommandArgs)
 	{
 		if args.len() < 2
 		{
-			self.console.borrow_mut().add_text("Expected 2 args".to_string());
+			self.console.lock().unwrap().add_text("Expected 2 args".to_string());
 			return;
 		}
 
@@ -125,7 +133,10 @@ impl Game
 		}
 		else
 		{
-			self.console.borrow_mut().add_text("Failed to parse args".to_string());
+			self.console
+				.lock()
+				.unwrap()
+				.add_text("Failed to parse args".to_string());
 		}
 	}
 
@@ -133,7 +144,7 @@ impl Game
 	{
 		if args.len() < 3
 		{
-			self.console.borrow_mut().add_text("Expected 3 args".to_string());
+			self.console.lock().unwrap().add_text("Expected 3 args".to_string());
 			return;
 		}
 
@@ -146,7 +157,10 @@ impl Game
 		}
 		else
 		{
-			self.console.borrow_mut().add_text("Failed to parse args".to_string());
+			self.console
+				.lock()
+				.unwrap()
+				.add_text("Failed to parse args".to_string());
 		}
 	}
 
@@ -162,7 +176,8 @@ impl Drop for Game
 	{
 		let commands_processor = self.commands_processor.clone();
 		commands_processor
-			.borrow_mut()
+			.lock()
+			.unwrap()
 			.remove_command_queue(&(self.commands_queue.clone() as commands_queue::CommandsQueueDynPtr));
 	}
 }

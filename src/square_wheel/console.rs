@@ -1,7 +1,10 @@
 use super::{commands_processor, text_printer};
 use common::{color::*, system_window};
 use sdl2::keyboard::Keycode;
-use std::{cell::RefCell, collections::VecDeque, rc::Rc};
+use std::{
+	collections::VecDeque,
+	sync::{Arc, Mutex},
+};
 
 pub struct Console
 {
@@ -14,13 +17,13 @@ pub struct Console
 	input_line: String,
 }
 
-pub type ConsoleSharedPtr = Rc<RefCell<Console>>;
+pub type ConsoleSharedPtr = Arc<Mutex<Console>>;
 
 impl Console
 {
 	pub fn new(commands_processor: commands_processor::CommandsProcessorPtr) -> ConsoleSharedPtr
 	{
-		Rc::new(RefCell::new(Console {
+		Arc::new(Mutex::new(Console {
 			commands_processor,
 			is_active: false,
 			start_time: std::time::Instant::now(),
@@ -88,7 +91,11 @@ impl Console
 		}
 		if key_code == Keycode::Tab
 		{
-			let mut completion_result = self.commands_processor.borrow().complete_command(&self.input_line);
+			let mut completion_result = self
+				.commands_processor
+				.lock()
+				.unwrap()
+				.complete_command(&self.input_line);
 			if completion_result.len() == 1
 			{
 				self.input_line = completion_result.pop().unwrap();
@@ -163,7 +170,11 @@ impl Console
 		self.input_history.push_back(self.input_line.clone());
 		self.current_history_index = self.input_history.len();
 
-		let command_process_text = self.commands_processor.borrow_mut().process_command(&self.input_line);
+		let command_process_text = self
+			.commands_processor
+			.lock()
+			.unwrap()
+			.process_command(&self.input_line);
 		self.add_text(self.input_line.clone());
 		self.input_line.clear();
 

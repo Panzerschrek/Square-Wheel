@@ -1,5 +1,5 @@
 use super::{commands_queue, config};
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, Mutex};
 
 pub struct CommandsProcessor
 {
@@ -7,13 +7,13 @@ pub struct CommandsProcessor
 	config: config::ConfigSharedPtr,
 }
 
-pub type CommandsProcessorPtr = Rc<RefCell<CommandsProcessor>>;
+pub type CommandsProcessorPtr = Arc<Mutex<CommandsProcessor>>;
 
 impl CommandsProcessor
 {
 	pub fn new(config: config::ConfigSharedPtr) -> CommandsProcessorPtr
 	{
-		Rc::new(RefCell::new(Self {
+		Arc::new(Mutex::new(Self {
 			commands_queues: Vec::new(),
 			config,
 		}))
@@ -26,7 +26,7 @@ impl CommandsProcessor
 
 	pub fn remove_command_queue(&mut self, queue: &commands_queue::CommandsQueueDynPtr)
 	{
-		self.commands_queues.retain(|q| q.as_ptr() != queue.as_ptr());
+		self.commands_queues.retain(|q| Arc::as_ptr(q) != Arc::as_ptr(queue));
 	}
 
 	// Returns single string if successfully completed or list of variants.
@@ -36,7 +36,7 @@ impl CommandsProcessor
 		let mut matched_commands = Vec::new();
 		for queue in &self.commands_queues
 		{
-			matched_commands.append(&mut queue.borrow().get_commands_started_with(command_start));
+			matched_commands.append(&mut queue.lock().unwrap().get_commands_started_with(command_start));
 		}
 
 		// Extract matched paths in config.
@@ -132,9 +132,10 @@ impl CommandsProcessor
 		// First, process commands.
 		for queue in &self.commands_queues
 		{
-			if queue.borrow().has_handler(&c)
+			let mut queue_lock = queue.lock().unwrap();
+			if queue_lock.has_handler(&c)
 			{
-				queue.borrow_mut().add_invocation(&c, args);
+				queue_lock.add_invocation(&c, args);
 				return String::new();
 			}
 		}
