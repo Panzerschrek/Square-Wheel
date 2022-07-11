@@ -225,6 +225,16 @@ mod fast_math_impl
 			unsafe { Self(_mm_setzero_si128()) }
 		}
 
+		pub fn from_color32(c: Color32) -> Self
+		{
+			unsafe {
+				let color_32bit = c.get_raw() as i32;
+				let values_16bit = _mm_cvtsi32_si128(color_32bit);
+				let values_32bit = _mm_cvtepu8_epi32(values_16bit);
+				Self(values_32bit)
+			}
+		}
+
 		pub fn from_color64(c: Color64) -> Self
 		{
 			unsafe {
@@ -232,6 +242,17 @@ mod fast_math_impl
 				let values_16bit = _mm_cvtsi64_si128(color_64bit);
 				let values_32bit = _mm_cvtepu16_epi32(values_16bit);
 				Self(values_32bit)
+			}
+		}
+
+		pub fn into_color32(&self) -> Color32
+		{
+			unsafe {
+				let zero = _mm_setzero_si128();
+				let values_16bit = _mm_packus_epi32(self.0, zero);
+				let values_8bit = _mm_packus_epi16(values_16bit, zero);
+				let color_32bit = _mm_cvtsi128_si32(values_8bit);
+				Color32::from_raw(color_32bit as u32)
 			}
 		}
 
@@ -487,6 +508,16 @@ mod fast_math_impl
 			Self([0; 4])
 		}
 
+		pub fn from_color32(c: Color32) -> Self
+		{
+			let mut res = [0; 4];
+			for i in 0 .. 4
+			{
+				res[i] = ((c.get_raw() >> (i * 8)) & 0xFF) as u32;
+			}
+			Self(res)
+		}
+
 		pub fn from_color64(c: Color64) -> Self
 		{
 			let mut res = [0; 4];
@@ -495,6 +526,16 @@ mod fast_math_impl
 				res[i] = ((c.get_raw() >> (i * 16)) & 0xFFFF) as u32;
 			}
 			Self(res)
+		}
+
+		pub fn into_color32(&self) -> Color32
+		{
+			let mut res = 0;
+			for i in 0 .. 4
+			{
+				res |= (self.0[i] as u32) << (i * 8);
+			}
+			Color32::from_raw(res)
 		}
 
 		pub fn into_color64(&self) -> Color64

@@ -740,7 +740,12 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		} // for lines
 	}
 
-	pub fn fill_triangle(&mut self, vertices: &[TrianglePointProjected; 3], color: ColorT)
+	pub fn fill_triangle<TextureColorT: AbstractColor>(
+		&mut self,
+		vertices: &[TrianglePointProjected; 3],
+		texture_info: &TextureInfo,
+		texture_data: &[TextureColorT],
+	)
 	{
 		// TODO - process thin triangles specially.
 
@@ -836,7 +841,8 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 						d_tc_dy: long_edge_d_tc_dy,
 					},
 					d_tc_dx,
-					color,
+					texture_info,
+					texture_data,
 				);
 			}
 			if upper_part_dy >= FIXED16_HALF
@@ -857,7 +863,8 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 						d_tc_dy: long_edge_d_tc_dy,
 					},
 					d_tc_dx,
-					color,
+					texture_info,
+					texture_data,
 				);
 			}
 		}
@@ -900,7 +907,8 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 						d_tc_dy: d_tc_dy_lower,
 					},
 					d_tc_dx,
-					color,
+					texture_info,
+					texture_data,
 				);
 			}
 			if upper_part_dy >= FIXED16_HALF
@@ -921,20 +929,22 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 						d_tc_dy: d_tc_dy_upper,
 					},
 					d_tc_dx,
-					color,
+					texture_info,
+					texture_data,
 				);
 			}
 		}
 	}
 
-	fn fill_triangle_part(
+	fn fill_triangle_part<TextureColorT: AbstractColor>(
 		&mut self,
 		y_start: Fixed16,
 		y_end: Fixed16,
 		left_side: TriangleSide,
 		right_side: TriangleSide,
 		d_tc_dx: [Fixed16; 2],
-		color: ColorT,
+		texture_info: &TextureInfo,
+		texture_data: &[TextureColorT],
 	)
 	{
 		// TODO - avoid adding "0.5" for some calculations.
@@ -969,14 +979,12 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 
 				for dst_pixel in line_dst
 				{
-					if (((line_tc[0] >> 16) ^ (line_tc[1] >> 16)) & 1) != 0
-					{
-						*dst_pixel = ColorT::saturated_sum(color, color);
-					}
-					else
-					{
-						*dst_pixel = color;
-					}
+					let u = fixed16_floor_to_int(line_tc[0]).max(0).min(texture_info.size[0]);
+					let v = fixed16_floor_to_int(line_tc[1]).max(0).min(texture_info.size[1]);
+					let texel_address = (u + v * texture_info.size[0]) as usize;
+					let texel = unchecked_texture_fetch(texture_data, texel_address);
+
+					*dst_pixel = texel.into().into();
 					for i in 0 .. 2
 					{
 						line_tc[i] += d_tc_dx[i];

@@ -35,6 +35,7 @@ pub struct Renderer
 	materials_processor: MapMaterialsProcessor,
 	performance_counters: RendererPerformanceCounters,
 	test_model: TriangleModel,
+	test_image: common::image::Image,
 }
 
 struct RendererPerformanceCounters
@@ -81,15 +82,19 @@ impl Renderer
 {
 	pub fn new(app_config: config::ConfigSharedPtr, map: Arc<bsp_map_compact::BSPMap>) -> Self
 	{
+		let config_parsed = RendererConfig::from_app_config(&app_config);
+		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
+
+		// TODO - cache materials globally.
+		let all_materials = material::load_materials(&std::path::PathBuf::from(&config_parsed.materials_path));
+
 		let test_model = load_model_md3(&std::path::Path::new("other/baseq3/models/mapobjects/gargoyle1.md3"))
 			.unwrap()
 			.unwrap();
 
-		let config_parsed = RendererConfig::from_app_config(&app_config);
-		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
+		let test_image = load_image("gargoyle.jpg", &std::path::PathBuf::from(&config_parsed.textures_path)).unwrap();
 
-		let materials_processor =
-			MapMaterialsProcessor::new(&*map, &config_parsed.materials_path, &config_parsed.textures_path);
+		let materials_processor = MapMaterialsProcessor::new(&*map, &all_materials, &config_parsed.textures_path);
 
 		Renderer {
 			app_config,
@@ -108,6 +113,7 @@ impl Renderer
 			materials_processor,
 			performance_counters: RendererPerformanceCounters::new(),
 			test_model,
+			test_image,
 		}
 	}
 
@@ -1039,12 +1045,19 @@ impl Renderer
 
 	fn draw_test_model<'a, ColorT: AbstractColor>(&self, rasterizer: &mut Rasterizer<'a, ColorT>, view_matrix: &Mat4f)
 	{
-		// TODO - primultiply texture coordinates while loading model instead.
-		let tc_scale = [64.0, 64.0];
-
 		let frame_number = 0;
 		for mesh in &self.test_model.meshes
 		{
+			// TODO - use proper texture.
+			let texture_info = TextureInfo {
+				size: [self.test_image.size[0] as i32, self.test_image.size[1] as i32],
+			};
+
+			let texture_data = &self.test_image.pixels;
+
+			// TODO - primultiply texture coordinates while loading model instead.
+			let tc_scale = [self.test_image.size[0] as f32, self.test_image.size[1] as f32];
+
 			let frame_vertex_data = &mesh.vertex_data_variable[frame_number * mesh.vertex_data_constant.len() ..
 				(frame_number + 1) * mesh.vertex_data_constant.len()];
 
@@ -1115,7 +1128,8 @@ impl Renderer
 							],
 						},
 					],
-					ColorT::from(ColorVec::from_color_f32x3(&[255.0, 128.0, 255.0])),
+					&texture_info,
+					texture_data,
 				);
 			}
 		}

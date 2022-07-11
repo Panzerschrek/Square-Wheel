@@ -12,12 +12,8 @@ pub struct MapMaterialsProcessor
 
 impl MapMaterialsProcessor
 {
-	pub fn new(map: &bsp_map_compact::BSPMap, materials_path: &str, textures_path: &str) -> Self
+	pub fn new(map: &bsp_map_compact::BSPMap, all_materials: &MaterialsMap, textures_path: &str) -> Self
 	{
-		// TODO - cache materials globally.
-
-		let all_materials = load_materials(&std::path::PathBuf::from(materials_path));
-
 		let mut materials = Vec::with_capacity(map.textures.len());
 		for texture_name in &map.textures
 		{
