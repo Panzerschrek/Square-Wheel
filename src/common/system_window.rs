@@ -71,7 +71,7 @@ impl SystemWindow
 		self.sdl2_event_pump.keyboard_state()
 	}
 
-	pub fn end_frame<F: FnOnce(&mut [Color32], &SurfaceInfo)>(&mut self, draw_fn: F)
+	pub fn update_window_surface<F: FnOnce(&mut [Color32], &SurfaceInfo)>(&mut self, draw_fn: F)
 	{
 		let mut surface = self.sdl2_window.surface(&self.sdl2_event_pump).unwrap();
 
@@ -86,7 +86,11 @@ impl SystemWindow
 			let pixels_32 = unsafe { pixels.align_to_mut::<Color32>().1 };
 			draw_fn(pixels_32, &surface_info)
 		});
+	}
 
+	pub fn swap_buffers(&mut self)
+	{
+		let surface = self.sdl2_window.surface(&self.sdl2_event_pump).unwrap();
 		let _ = surface.update_window();
 	}
 }
