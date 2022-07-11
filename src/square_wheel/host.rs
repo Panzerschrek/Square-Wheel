@@ -275,8 +275,7 @@ impl Host
 				let hdr_buffer_size = [surface_info.width, surface_info.height];
 				let hdr_buffer = self.postprocessor.get_hdr_buffer(hdr_buffer_size);
 
-				active_map.renderer.draw_frame(
-					hdr_buffer,
+				active_map.renderer.prepare_frame::<Color64>(
 					&system_window::SurfaceInfo {
 						width: hdr_buffer_size[0],
 						height: hdr_buffer_size[1],
@@ -286,6 +285,17 @@ impl Host
 					&active_map.inline_models_index,
 					active_map.game.get_test_lights(),
 					active_map.game.get_game_time_s(),
+				);
+
+				active_map.renderer.draw_frame(
+					hdr_buffer,
+					&system_window::SurfaceInfo {
+						width: hdr_buffer_size[0],
+						height: hdr_buffer_size[1],
+						pitch: hdr_buffer_size[0],
+					},
+					&camera_matrices,
+					&active_map.inline_models_index,
 					&mut active_map.debug_stats_printer,
 				);
 
@@ -298,13 +308,19 @@ impl Host
 			}
 			else
 			{
-				active_map.renderer.draw_frame(
-					pixels,
+				active_map.renderer.prepare_frame::<Color32>(
 					surface_info,
 					&camera_matrices,
 					&active_map.inline_models_index,
 					active_map.game.get_test_lights(),
 					active_map.game.get_game_time_s(),
+				);
+
+				active_map.renderer.draw_frame(
+					pixels,
+					surface_info,
+					&camera_matrices,
+					&active_map.inline_models_index,
 					&mut active_map.debug_stats_printer,
 				);
 			}

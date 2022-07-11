@@ -104,19 +104,18 @@ impl Renderer
 		}
 	}
 
-	pub fn draw_frame<ColorT: AbstractColor>(
+	pub fn prepare_frame<ColorT: AbstractColor>(
 		&mut self,
-		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
 		inline_models_index: &InlineModelsIndex,
 		test_lights: &[PointLight],
 		frame_time_s: f32,
-		debug_stats_printer: &mut DebugStatsPrinter,
 	)
 	{
 		self.synchronize_config();
 		self.update_mip_bias();
+		self.current_frame.next();
 
 		let materials_update_start_time = Clock::now();
 
@@ -128,14 +127,103 @@ impl Renderer
 			.materials_update
 			.add_value(materials_update_duration_s);
 
-		let frame_start_time = Clock::now();
-		self.current_frame.next();
+		let depth_map_size = 256;
+		let mut test_lights_shadow_maps = Vec::with_capacity(test_lights.len());
+		// TODO - perform parallel shadowmaps build.
+		for light in test_lights
+		{
+			let mut cube_shadow_map = CubeShadowMap {
+				size: depth_map_size,
+				sides: [Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()],
+			};
+			for side in 0 .. 6
+			{
+				let depth_matrices = calculate_cube_shadow_map_side_matrices(
+					light.pos,
+					depth_map_size as f32,
+					int_to_cubemap_side(side).unwrap(),
+				);
 
-		self.draw_map(pixels, surface_info, camera_matrices, inline_models_index, test_lights);
+				let mut depth_data = vec![0.0; (depth_map_size * depth_map_size) as usize];
+				self.shadows_maps_renderer
+					.draw_map(&mut depth_data, depth_map_size, depth_map_size, &depth_matrices);
 
-		let frame_end_time = Clock::now();
-		let frame_duration_s = (frame_end_time - frame_start_time).as_secs_f32();
-		self.performance_counters.frame_duration.add_value(frame_duration_s);
+				cube_shadow_map.sides[side as usize] = depth_data;
+			}
+			test_lights_shadow_maps.push(cube_shadow_map);
+		}
+
+		// TODO - before preparing frame try to shift camera a little bit away from all planes of BSP nodes before current leaf.
+		// This is needed to fix possible z_near clipping of current leaf portals.
+
+		let visibile_leafs_search_start_time = Clock::now();
+
+		let frame_bounds = ClippingPolygon::from_box(0.0, 0.0, surface_info.width as f32, surface_info.height as f32);
+		self.visibility_calculator
+			.update_visibility(camera_matrices, &frame_bounds);
+
+		let visibile_leafs_search_end_time = Clock::now();
+		let visibile_leafs_search_duration_s =
+			(visibile_leafs_search_end_time - visibile_leafs_search_start_time).as_secs_f32();
+		self.performance_counters
+			.visible_leafs_search
+			.add_value(visibile_leafs_search_duration_s);
+
+		let surfaces_preparation_start_time = Clock::now();
+
+		self.prepare_polygons_surfaces(camera_matrices, inline_models_index);
+		self.allocate_surfaces_pixels::<ColorT>();
+
+		{
+			// TODO - avoid allocation.
+			let mut lights_with_shadow_maps = Vec::new();
+			for (light, shadow_map) in test_lights.iter().zip(test_lights_shadow_maps.iter())
+			{
+				lights_with_shadow_maps.push((light, shadow_map));
+			}
+			self.build_polygons_surfaces::<ColorT>(camera_matrices, &lights_with_shadow_maps);
+		}
+
+		let surfaces_preparation_end_time = Clock::now();
+		let surfaces_preparation_duration_s =
+			(surfaces_preparation_end_time - surfaces_preparation_start_time).as_secs_f32();
+		self.performance_counters
+			.surfaces_preparation
+			.add_value(surfaces_preparation_duration_s);
+	}
+
+	pub fn draw_frame<ColorT: AbstractColor>(
+		&mut self,
+		pixels: &mut [ColorT],
+		surface_info: &system_window::SurfaceInfo,
+		camera_matrices: &CameraMatrices,
+		inline_models_index: &InlineModelsIndex,
+		debug_stats_printer: &mut DebugStatsPrinter,
+	)
+	{
+		// Clear background (if needed) only before performing rasterization.
+		// Clear bacgrkound only if camera is located outside of volume of current leaf, defined as space at front of all leaf polygons.
+		// If camera is inside volume space, we do not need to fill background because (normally) no gaps between map geometry should be visible.
+		let background_fill_start_time = Clock::now();
+		if self.config.clear_background && !self.visibility_calculator.is_current_camera_inside_leaf_volume()
+		{
+			draw_background(pixels, ColorVec::from_color_f32x3(&[32.0, 16.0, 8.0]).into());
+		}
+
+		let background_fill_end_time = Clock::now();
+		let background_fill_duration_s = (background_fill_end_time - background_fill_start_time).as_secs_f32();
+		self.performance_counters
+			.background_fill
+			.add_value(background_fill_duration_s);
+
+		let rasterization_start_time = Clock::now();
+		let root_node = (self.map.nodes.len() - 1) as u32;
+		self.perform_rasterization(pixels, surface_info, camera_matrices, inline_models_index, root_node);
+		let rasterization_end_time = Clock::now();
+		let rasterization_duration_s = (rasterization_end_time - rasterization_start_time).as_secs_f32();
+		self.performance_counters
+			.rasterization
+			.add_value(rasterization_duration_s);
 
 		if debug_stats_printer.show_debug_stats()
 		{
@@ -185,124 +273,6 @@ impl Renderer
 				(self.num_visible_surfaces_pixels + 1023) / 1024
 			));
 			debug_stats_printer.add_line(format!("mip bias: {}", self.mip_bias));
-		}
-	}
-
-	// TODO - reduce amount of code, dependent on ColorT. Extract more ColorT-independent code into separate functions.
-	// We need to do this in order to minimize result executable size.
-	fn draw_map<ColorT: AbstractColor>(
-		&mut self,
-		pixels: &mut [ColorT],
-		surface_info: &system_window::SurfaceInfo,
-		camera_matrices: &CameraMatrices,
-		inline_models_index: &InlineModelsIndex,
-		test_lights: &[PointLight],
-	)
-	{
-		let depth_map_size = 256;
-		let mut test_lights_shadow_maps = Vec::with_capacity(test_lights.len());
-		// TODO - perform parallel shadowmaps build.
-		for light in test_lights
-		{
-			let mut cube_shadow_map = CubeShadowMap {
-				size: depth_map_size,
-				sides: [Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()],
-			};
-			for side in 0 .. 6
-			{
-				let depth_matrices = calculate_cube_shadow_map_side_matrices(
-					light.pos,
-					depth_map_size as f32,
-					int_to_cubemap_side(side).unwrap(),
-				);
-
-				let mut depth_data = vec![0.0; (depth_map_size * depth_map_size) as usize];
-				self.shadows_maps_renderer
-					.draw_map(&mut depth_data, depth_map_size, depth_map_size, &depth_matrices);
-
-				cube_shadow_map.sides[side as usize] = depth_data;
-			}
-			test_lights_shadow_maps.push(cube_shadow_map);
-		}
-
-		let root_node = (self.map.nodes.len() - 1) as u32;
-
-		// TODO - before preparing frame try to shift camera a little bit away from all planes of BSP nodes before current leaf.
-		// This is needed to fix possible z_near clipping of current leaf portals.
-
-		let visibile_leafs_search_start_time = Clock::now();
-
-		let frame_bounds = ClippingPolygon::from_box(0.0, 0.0, surface_info.width as f32, surface_info.height as f32);
-		self.visibility_calculator
-			.update_visibility(camera_matrices, &frame_bounds);
-
-		let visibile_leafs_search_end_time = Clock::now();
-		let visibile_leafs_search_duration_s =
-			(visibile_leafs_search_end_time - visibile_leafs_search_start_time).as_secs_f32();
-		self.performance_counters
-			.visible_leafs_search
-			.add_value(visibile_leafs_search_duration_s);
-
-		let surfaces_preparation_start_time = Clock::now();
-
-		self.prepare_polygons_surfaces(camera_matrices, inline_models_index);
-		self.allocate_surfaces_pixels::<ColorT>();
-
-		{
-			// TODO - avoid allocation.
-			let mut lights_with_shadow_maps = Vec::new();
-			for (light, shadow_map) in test_lights.iter().zip(test_lights_shadow_maps.iter())
-			{
-				lights_with_shadow_maps.push((light, shadow_map));
-			}
-			self.build_polygons_surfaces::<ColorT>(camera_matrices, &lights_with_shadow_maps);
-		}
-
-		let surfaces_preparation_end_time = Clock::now();
-		let surfaces_preparation_duration_s =
-			(surfaces_preparation_end_time - surfaces_preparation_start_time).as_secs_f32();
-		self.performance_counters
-			.surfaces_preparation
-			.add_value(surfaces_preparation_duration_s);
-
-		// Clear background (if needed) only before performing rasterization.
-		// Clear bacgrkound only if camera is located outside of volume of current leaf, defined as space at front of all leaf polygons.
-		// If camera is inside volume space, we do not need to fill background because (normally) no gaps between map geometry should be visible.
-		let background_fill_start_time = Clock::now();
-		if self.config.clear_background && !self.visibility_calculator.is_current_camera_inside_leaf_volume()
-		{
-			draw_background(pixels, ColorVec::from_color_f32x3(&[32.0, 16.0, 8.0]).into());
-		}
-
-		let background_fill_end_time = Clock::now();
-		let background_fill_duration_s = (background_fill_end_time - background_fill_start_time).as_secs_f32();
-		self.performance_counters
-			.background_fill
-			.add_value(background_fill_duration_s);
-
-		let rasterization_start_time = Clock::now();
-		self.perform_rasterization(pixels, surface_info, camera_matrices, inline_models_index, root_node);
-		let rasterization_end_time = Clock::now();
-		let rasterization_duration_s = (rasterization_end_time - rasterization_start_time).as_secs_f32();
-		self.performance_counters
-			.rasterization
-			.add_value(rasterization_duration_s);
-
-		if self.config.debug_draw_depth
-		{
-			if let Some(shadow_map) = test_lights_shadow_maps.last()
-			{
-				for y in 0 .. depth_map_size
-				{
-					for x in 0 .. depth_map_size
-					{
-						let depth = shadow_map.sides[5][(x + y * depth_map_size) as usize];
-						let z = 0.5 / depth;
-						pixels[(x as usize) + (y as usize) * surface_info.pitch] =
-							ColorVec::from_color_f32x3(&[z, z, z]).into();
-					}
-				}
-			}
 		}
 	}
 
