@@ -157,15 +157,7 @@ impl Host
 			active_map.game.update(time_delta_s);
 		}
 
-		let witndow_ptr_clone = self.window.clone();
-
-		witndow_ptr_clone
-			.borrow_mut()
-			.update_window_surface(|pixels, surface_info| {
-				self.draw_frame(pixels, surface_info, time_delta_s);
-			});
-
-		witndow_ptr_clone.borrow_mut().swap_buffers();
+		self.draw_frame(time_delta_s);
 
 		if self.config.max_fps > 0.0
 		{
@@ -264,15 +256,19 @@ impl Host
 		}
 	}
 
-	fn draw_frame(&mut self, pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo, time_delta_s: f32)
+	fn draw_frame(&mut self, time_delta_s: f32)
 	{
+		let witndow_ptr_clone = self.window.clone();
+
+		// First, only prepare frame without accessing surface pixels.
+		let surface_info_initial = witndow_ptr_clone.borrow_mut().get_window_surface_info();
 		if let Some(active_map) = &mut self.active_map
 		{
-			let camera_matrices = active_map.game.get_camera_matrices(surface_info);
+			let camera_matrices = active_map.game.get_camera_matrices(&surface_info_initial);
 
 			if self.postprocessor.use_hdr_rendering()
 			{
-				let hdr_buffer_size = [surface_info.width, surface_info.height];
+				let hdr_buffer_size = [surface_info_initial.width, surface_info_initial.height];
 				let hdr_buffer = self.postprocessor.get_hdr_buffer(hdr_buffer_size);
 
 				active_map.renderer.prepare_frame::<Color64>(
@@ -298,53 +294,77 @@ impl Host
 					&active_map.inline_models_index,
 					&mut active_map.debug_stats_printer,
 				);
-
-				self.postprocessor.perform_postprocessing(
-					pixels,
-					surface_info,
-					time_delta_s,
-					&mut active_map.debug_stats_printer,
-				);
 			}
 			else
 			{
 				active_map.renderer.prepare_frame::<Color32>(
-					surface_info,
+					&surface_info_initial,
 					&camera_matrices,
 					&active_map.inline_models_index,
 					active_map.game.get_test_lights(),
 					active_map.game.get_game_time_s(),
 				);
+			}
+		}
 
-				active_map.renderer.draw_frame(
+		// Than update surface pixels.
+		witndow_ptr_clone
+			.borrow_mut()
+			.update_window_surface(|pixels, surface_info| {
+				if *surface_info != surface_info_initial
+				{
+					// Skip this frame because surface size was changed.
+					return;
+				}
+
+				if let Some(active_map) = &mut self.active_map
+				{
+					if self.postprocessor.use_hdr_rendering()
+					{
+						self.postprocessor.perform_postprocessing(
+							pixels,
+							surface_info,
+							time_delta_s,
+							&mut active_map.debug_stats_printer,
+						);
+					}
+					else
+					{
+						let camera_matrices = active_map.game.get_camera_matrices(&surface_info_initial);
+						active_map.renderer.draw_frame(
+							pixels,
+							surface_info,
+							&camera_matrices,
+							&active_map.inline_models_index,
+							&mut active_map.debug_stats_printer,
+						);
+					}
+
+					active_map.debug_stats_printer.flush(pixels, surface_info);
+				}
+				else
+				{
+					// Just clear background. TODO - maybe draw some background pattern or image?
+					for pixel in pixels.iter_mut()
+					{
+						*pixel = Color32::black();
+					}
+				}
+
+				self.console.borrow().draw(pixels, surface_info);
+
+				text_printer::print(
 					pixels,
 					surface_info,
-					&camera_matrices,
-					&active_map.inline_models_index,
-					&mut active_map.debug_stats_printer,
+					&format!("fps {:04.2}", self.fps_counter.get_frequency()),
+					(surface_info.width - 96) as i32,
+					1,
+					Color32::from_rgb(255, 255, 255),
 				);
-			}
+			});
 
-			active_map.debug_stats_printer.flush(pixels, surface_info);
-		}
-		else
-		{
-			// Just clear background. TODO - maybe draw some background pattern or image?
-			for pixel in pixels.iter_mut()
-			{
-				*pixel = Color32::black();
-			}
-		}
-		self.console.borrow().draw(pixels, surface_info);
-
-		text_printer::print(
-			pixels,
-			surface_info,
-			&format!("fps {:04.2}", self.fps_counter.get_frequency()),
-			(surface_info.width - 96) as i32,
-			1,
-			Color32::from_rgb(255, 255, 255),
-		);
+		// Finally, swap buffers.
+		witndow_ptr_clone.borrow_mut().swap_buffers();
 	}
 
 	fn command_map(&mut self, args: commands_queue::CommandArgs)
