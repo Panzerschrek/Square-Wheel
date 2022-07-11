@@ -740,7 +740,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		} // for lines
 	}
 
-	pub fn fill_triangle(&mut self, vertices: &[PolygonPointProjected; 3], color: ColorT)
+	pub fn fill_triangle(&mut self, vertices: &[TrianglePointProjected; 3], color: ColorT)
 	{
 		// TODO - process thin triangles specially.
 
@@ -778,6 +778,25 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		let lower_part_dy = vertices[middle_index].y - vertices[lower_index].y;
 		let upper_part_dy = vertices[upper_index].y - vertices[middle_index].y;
 
+		let mut long_edge_d_tc_dy = [0, 0];
+		let mut long_edge_tc_in_middle = [0, 0];
+		let mut d_tc_dy_lower = [0, 0];
+		let mut d_tc_dy_upper = [0, 0];
+		for i in 0 .. 2
+		{
+			long_edge_d_tc_dy[i] = fixed16_div(vertices[upper_index].tc[i] - vertices[lower_index].tc[i], long_edge_dy);
+			long_edge_tc_in_middle[i] = vertices[lower_index].tc[i] + fixed16_mul(long_edge_d_tc_dy[i], lower_part_dy);
+
+			d_tc_dy_lower[i] = fixed16_div(
+				vertices[middle_index].tc[i] - vertices[lower_index].tc[i],
+				lower_part_dy.max(FIXED16_HALF),
+			);
+			d_tc_dy_upper[i] = fixed16_div(
+				vertices[upper_index].tc[i] - vertices[middle_index].tc[i],
+				upper_part_dy.max(FIXED16_HALF),
+			);
+		}
+
 		if long_edge_x_in_middle >= vertices[middle_index].x
 		{
 			//    /\
@@ -790,19 +809,33 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			//          _ \
 			//            _\
 
+			let mut d_tc_dx = [0, 0];
+			for i in 0 .. 2
+			{
+				d_tc_dx[i] = fixed16_div(
+					long_edge_tc_in_middle[i] - vertices[middle_index].tc[i],
+					(long_edge_x_in_middle - vertices[middle_index].x).max(FIXED16_HALF),
+				);
+			}
+
 			if lower_part_dy >= FIXED16_HALF
 			{
 				self.fill_triangle_part(
 					vertices[lower_index].y,
 					vertices[middle_index].y,
-					PolygonSide {
+					TriangleSide {
 						x_start: vertices[lower_index].x,
 						dx_dy: fixed16_div(vertices[middle_index].x - vertices[lower_index].x, lower_part_dy),
+						tc_start: vertices[lower_index].tc,
+						d_tc_dy: d_tc_dy_lower,
 					},
-					PolygonSide {
+					TriangleSide {
 						x_start: vertices[lower_index].x,
 						dx_dy: long_edge_dx_dy,
+						tc_start: vertices[lower_index].tc,
+						d_tc_dy: long_edge_d_tc_dy,
 					},
+					d_tc_dx,
 					color,
 				);
 			}
@@ -811,14 +844,19 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				self.fill_triangle_part(
 					vertices[middle_index].y,
 					vertices[upper_index].y,
-					PolygonSide {
+					TriangleSide {
 						x_start: vertices[middle_index].x,
 						dx_dy: fixed16_div(vertices[upper_index].x - vertices[middle_index].x, upper_part_dy),
+						tc_start: vertices[middle_index].tc,
+						d_tc_dy: d_tc_dy_upper,
 					},
-					PolygonSide {
+					TriangleSide {
 						x_start: long_edge_x_in_middle,
 						dx_dy: long_edge_dx_dy,
+						tc_start: long_edge_tc_in_middle,
+						d_tc_dy: long_edge_d_tc_dy,
 					},
+					d_tc_dx,
 					color,
 				);
 			}
@@ -835,19 +873,33 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			//  / _
 			// /_
 
+			let mut d_tc_dx = [0, 0];
+			for i in 0 .. 2
+			{
+				d_tc_dx[i] = fixed16_div(
+					vertices[middle_index].tc[i] - long_edge_tc_in_middle[i],
+					(vertices[middle_index].x - long_edge_x_in_middle).max(FIXED16_HALF),
+				);
+			}
+
 			if lower_part_dy >= FIXED16_HALF
 			{
 				self.fill_triangle_part(
 					vertices[lower_index].y,
 					vertices[middle_index].y,
-					PolygonSide {
+					TriangleSide {
 						x_start: vertices[lower_index].x,
 						dx_dy: long_edge_dx_dy,
+						tc_start: vertices[lower_index].tc,
+						d_tc_dy: long_edge_d_tc_dy,
 					},
-					PolygonSide {
+					TriangleSide {
 						x_start: vertices[lower_index].x,
 						dx_dy: fixed16_div(vertices[middle_index].x - vertices[lower_index].x, lower_part_dy),
+						tc_start: vertices[lower_index].tc,
+						d_tc_dy: d_tc_dy_lower,
 					},
+					d_tc_dx,
 					color,
 				);
 			}
@@ -856,14 +908,19 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				self.fill_triangle_part(
 					vertices[middle_index].y,
 					vertices[upper_index].y,
-					PolygonSide {
+					TriangleSide {
 						x_start: long_edge_x_in_middle,
 						dx_dy: long_edge_dx_dy,
+						tc_start: long_edge_tc_in_middle,
+						d_tc_dy: long_edge_d_tc_dy,
 					},
-					PolygonSide {
+					TriangleSide {
 						x_start: vertices[middle_index].x,
 						dx_dy: fixed16_div(vertices[upper_index].x - vertices[middle_index].x, upper_part_dy),
+						tc_start: vertices[middle_index].tc,
+						d_tc_dy: d_tc_dy_upper,
 					},
+					d_tc_dx,
 					color,
 				);
 			}
@@ -874,8 +931,9 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		&mut self,
 		y_start: Fixed16,
 		y_end: Fixed16,
-		left_side: PolygonSide,
-		right_side: PolygonSide,
+		left_side: TriangleSide,
+		right_side: TriangleSide,
+		d_tc_dx: [Fixed16; 2],
 		color: ColorT,
 	)
 	{
@@ -885,23 +943,52 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		let y_start_delta = int_to_fixed16(y_start_int) + FIXED16_HALF - y_start;
 		let mut x_left = left_side.x_start + fixed16_mul(y_start_delta, left_side.dx_dy) + FIXED16_HALF;
 		let mut x_right = right_side.x_start + fixed16_mul(y_start_delta, right_side.dx_dy) + FIXED16_HALF;
+
+		let mut tc_left = [0, 0];
+		for i in 0 .. 2
+		{
+			// TODO - add 0.5?
+			tc_left[i] = left_side.tc_start[i] + fixed16_mul(y_start_delta, left_side.d_tc_dy[i]);
+		}
 		for y_int in y_start_int .. y_end_int
 		{
 			let x_start_int = fixed16_floor_to_int(x_left).max(self.clip_rect.min_x);
 			let x_end_int = fixed16_floor_to_int(x_right).min(self.clip_rect.max_x);
 			if x_start_int < x_end_int
 			{
+				let x_start_delta = int_to_fixed16(x_start_int) + FIXED16_HALF - x_left;
+				let mut line_tc = [0, 0];
+				for i in 0 .. 2
+				{
+					line_tc[i] = tc_left[i] + fixed16_mul(x_start_delta, d_tc_dx[i]);
+				}
+
 				let line_buffer_offset = y_int * self.row_size;
 				let line_dst = &mut self.color_buffer
 					[(x_start_int + line_buffer_offset) as usize .. (x_end_int + line_buffer_offset) as usize];
 
 				for dst_pixel in line_dst
 				{
-					*dst_pixel = color;
+					if (((line_tc[0] >> 16) ^ (line_tc[1] >> 16)) & 1) != 0
+					{
+						*dst_pixel = ColorT::saturated_sum(color, color);
+					}
+					else
+					{
+						*dst_pixel = color;
+					}
+					for i in 0 .. 2
+					{
+						line_tc[i] += d_tc_dx[i];
+					}
 				}
 			}
 			x_left += left_side.dx_dy;
 			x_right += right_side.dx_dy;
+			for i in 0 .. 2
+			{
+				tc_left[i] += left_side.d_tc_dy[i];
+			}
 		}
 	}
 }
@@ -1089,6 +1176,14 @@ pub struct PolygonPointProjected
 	pub y: Fixed16,
 }
 
+#[derive(Copy, Clone)]
+pub struct TrianglePointProjected
+{
+	pub x: Fixed16,
+	pub y: Fixed16,
+	pub tc: [Fixed16; 2],
+}
+
 #[derive(Copy, Clone, Default)]
 pub struct DepthEquation
 {
@@ -1114,6 +1209,14 @@ struct PolygonSide
 {
 	x_start: Fixed16,
 	dx_dy: Fixed16,
+}
+
+struct TriangleSide
+{
+	x_start: Fixed16,
+	dx_dy: Fixed16,
+	tc_start: [Fixed16; 2],
+	d_tc_dy: [Fixed16; 2],
 }
 
 // We do not care if "y" is zero, because there is no difference between "panic!" and hardware exceptions.

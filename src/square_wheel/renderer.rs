@@ -1039,6 +1039,9 @@ impl Renderer
 
 	fn draw_test_model<'a, ColorT: AbstractColor>(&self, rasterizer: &mut Rasterizer<'a, ColorT>, view_matrix: &Mat4f)
 	{
+		// TODO - primultiply texture coordinates while loading model instead.
+		let tc_scale = [64.0, 64.0];
+
 		let frame_number = 0;
 		for mesh in &self.test_model.meshes
 		{
@@ -1051,6 +1054,10 @@ impl Renderer
 				let v0 = frame_vertex_data[triangle[0] as usize];
 				let v1 = frame_vertex_data[triangle[1] as usize];
 				let v2 = frame_vertex_data[triangle[2] as usize];
+
+				let v_const0 = mesh.vertex_data_constant[triangle[0] as usize];
+				let v_const1 = mesh.vertex_data_constant[triangle[1] as usize];
+				let v_const2 = mesh.vertex_data_constant[triangle[2] as usize];
 
 				let v0_transformed = view_matrix * v0.position.extend(1.0);
 				let v1_transformed = view_matrix * v1.position.extend(1.0);
@@ -1065,6 +1072,11 @@ impl Renderer
 				let v1_projected = v1_transformed.truncate().truncate() / v1_transformed.w;
 				let v2_projected = v2_transformed.truncate().truncate() / v2_transformed.w;
 
+				if (v0_projected - v1_projected).perp_dot(v1_projected - v2_projected) <= 0.0
+				{
+					continue;
+				}
+
 				if v0_projected.x < 0.0 ||
 					v0_projected.x > 2048.0 ||
 					v0_projected.y < 0.0 || v0_projected.y > 2048.0 ||
@@ -1078,20 +1090,32 @@ impl Renderer
 
 				rasterizer.fill_triangle(
 					&[
-						PolygonPointProjected {
+						TrianglePointProjected {
 							x: f32_to_fixed16(v0_projected.x),
 							y: f32_to_fixed16(v0_projected.y),
+							tc: [
+								f32_to_fixed16(v_const0.tex_coord[0] * tc_scale[0]),
+								f32_to_fixed16(v_const0.tex_coord[1] * tc_scale[1]),
+							],
 						},
-						PolygonPointProjected {
+						TrianglePointProjected {
 							x: f32_to_fixed16(v1_projected.x),
 							y: f32_to_fixed16(v1_projected.y),
+							tc: [
+								f32_to_fixed16(v_const1.tex_coord[0] * tc_scale[0]),
+								f32_to_fixed16(v_const1.tex_coord[1] * tc_scale[1]),
+							],
 						},
-						PolygonPointProjected {
+						TrianglePointProjected {
 							x: f32_to_fixed16(v2_projected.x),
 							y: f32_to_fixed16(v2_projected.y),
+							tc: [
+								f32_to_fixed16(v_const2.tex_coord[0] * tc_scale[0]),
+								f32_to_fixed16(v_const2.tex_coord[1] * tc_scale[1]),
+							],
 						},
 					],
-					ColorT::from(ColorVec::zero()),
+					ColorT::from(ColorVec::from_color_f32x3(&[255.0, 128.0, 255.0])),
 				);
 			}
 		}
