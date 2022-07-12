@@ -957,7 +957,6 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		let mut tc_left = [0, 0];
 		for i in 0 .. 2
 		{
-			// TODO - add 0.5?
 			tc_left[i] = left_side.tc_start[i] + fixed16_mul(y_start_delta, left_side.d_tc_dy[i]);
 		}
 		for y_int in y_start_int .. y_end_int
@@ -979,8 +978,9 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 
 				for dst_pixel in line_dst
 				{
-					let u = fixed16_floor_to_int(line_tc[0]).max(0).min(texture_info.size[0]);
-					let v = fixed16_floor_to_int(line_tc[1]).max(0).min(texture_info.size[1]);
+					// TODO - avoid clamping texture coordinates. Correct equations instead.
+					let u = fixed16_floor_to_int(line_tc[0]).max(0).min(texture_info.size[0] - 1);
+					let v = fixed16_floor_to_int(line_tc[1]).max(0).min(texture_info.size[1] - 1);
 					let texel_address = (u + v * texture_info.size[0]) as usize;
 					let texel = unchecked_texture_fetch(texture_data, texel_address);
 
