@@ -1082,16 +1082,26 @@ impl Renderer
 			let frame_vertex_data = &mesh.vertex_data_variable[frame_number * mesh.vertex_data_constant.len() ..
 				(frame_number + 1) * mesh.vertex_data_constant.len()];
 
+			// Transform all vertices of model to avoid multiple transformations for vertices shared across several triangles.
+			// TODO - avoid allocation
+			let vertices_combined = frame_vertex_data
+				.iter()
+				.zip(mesh.vertex_data_constant.iter())
+				.map(|(v_v, v_c)| {
+					let pos_transformed = view_matrix * v_v.position.extend(1.0);
+					ModelVertex3d {
+						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
+						tc: Vec2f::from(v_c.tex_coord).mul_element_wise(tc_scale),
+					}
+				})
+				.collect::<Vec<ModelVertex3d>>();
+
 			for triangle in &mesh.triangles
 			{
 				for (&index, dst_vertex) in triangle.iter().zip(vertices_transformed.iter_mut())
 				{
 					// TODO - use unchecked fetch?
-					let pos_transformed = view_matrix * frame_vertex_data[index as usize].position.extend(1.0);
-					*dst_vertex = ModelVertex3d {
-						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
-						tc: Vec2f::from(mesh.vertex_data_constant[index as usize].tex_coord).mul_element_wise(tc_scale),
-					};
+					*dst_vertex = vertices_combined[index as usize];
 				}
 
 				{
