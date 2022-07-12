@@ -1,11 +1,17 @@
-use common::math_types::*;
+use common::{bbox::*, math_types::*};
 
 pub struct TriangleModel
 {
+	pub frames_info: Vec<TriangleModelFrameInfo>,
 	pub meshes: Vec<TriangleModelMesh>,
 }
 
 // TODO -  support also skeleton-based animation.
+
+pub struct TriangleModelFrameInfo
+{
+	pub bbox: BBox,
+}
 
 pub struct TriangleModelMesh
 {

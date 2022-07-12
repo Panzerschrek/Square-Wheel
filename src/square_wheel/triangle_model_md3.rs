@@ -1,5 +1,5 @@
 use super::triangle_model::*;
-use common::math_types::*;
+use common::{bbox::*, math_types::*};
 use std::io::{Read, Seek};
 
 pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleModel>, std::io::Error>
@@ -48,6 +48,17 @@ pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleMode
 	];
 	read_chunk(&mut file, header.lump_tags as u64, &mut tags_src)?;
 
+	// TODO - shouldn't we use "origin" here?
+	let frames_info = frames_src
+		.iter()
+		.map(|f| TriangleModelFrameInfo {
+			bbox: BBox::from_min_max(
+				Vec3f::from(f.mins) * MD3_COORD_SCALE,
+				Vec3f::from(f.maxs) * MD3_COORD_SCALE,
+			),
+		})
+		.collect();
+
 	file.seek(std::io::SeekFrom::Start(header.lump_meshes as u64))?;
 	let mut meshes = Vec::with_capacity(header.num_meshes as usize);
 	let mut offset = header.lump_meshes as u64;
@@ -73,7 +84,7 @@ pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleMode
 		file.seek(std::io::SeekFrom::Start(offset as u64))?;
 	}
 
-	Ok(Some(TriangleModel { meshes }))
+	Ok(Some(TriangleModel { frames_info, meshes }))
 }
 
 fn load_md3_mesh(

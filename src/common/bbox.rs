@@ -9,6 +9,11 @@ pub struct BBox
 
 impl BBox
 {
+	pub fn from_min_max(min: Vec3f, max: Vec3f) -> Self
+	{
+		Self { min, max }
+	}
+
 	pub fn from_point(point: &Vec3f) -> Self
 	{
 		Self {

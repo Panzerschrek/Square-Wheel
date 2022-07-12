@@ -1046,6 +1046,8 @@ impl Renderer
 	fn draw_test_model<'a, ColorT: AbstractColor>(&self, rasterizer: &mut Rasterizer<'a, ColorT>, view_matrix: &Mat4f)
 	{
 		let frame_number = 0;
+		let frame_info = &self.test_model.frames_info[frame_number];
+
 		for mesh in &self.test_model.meshes
 		{
 			// TODO - use proper texture.
