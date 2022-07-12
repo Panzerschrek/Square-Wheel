@@ -1230,6 +1230,40 @@ impl Renderer
 
 fn sort_model_triangles(transformed_vertices: &[ModelVertex3d], triangles: &mut [Triangle])
 {
+	if true
+	{
+		sort_model_triangles_z(transformed_vertices, triangles)
+	}
+	else
+	{
+		sort_model_triangles_tricky(transformed_vertices, triangles)
+	}
+}
+
+fn sort_model_triangles_z(transformed_vertices: &[ModelVertex3d], triangles: &mut [Triangle])
+{
+	// Dumb triangles sorting, using Z coordinate.
+
+	triangles.sort_by(|a, b| {
+		// TODO - maybe use "min" function?
+		// TODO - use unchecked fetch.
+		let a_z = transformed_vertices[a[0] as usize]
+			.pos
+			.z
+			.max(transformed_vertices[a[1] as usize].pos.z)
+			.max(transformed_vertices[a[2] as usize].pos.z);
+		let b_z = transformed_vertices[b[0] as usize]
+			.pos
+			.z
+			.max(transformed_vertices[b[1] as usize].pos.z)
+			.max(transformed_vertices[b[2] as usize].pos.z);
+		// TODO - avoid unwrap.
+		b_z.partial_cmp(&a_z).unwrap()
+	});
+}
+
+fn sort_model_triangles_tricky(transformed_vertices: &[ModelVertex3d], triangles: &mut [Triangle])
+{
 	// This is an ugly hand-written variant of quick-sort-like algorithm.
 	// Use it because we can't use standart sorting functions with non-transitive comparator.
 
