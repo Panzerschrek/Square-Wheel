@@ -1,8 +1,8 @@
 use super::{
-	abstract_color::*, config, debug_stats_printer::*, depth_renderer::*, draw_ordering, fast_math::*, frame_number::*,
-	inline_models_index::*, light::*, map_materials_processor::*, map_visibility_calculator::*, performance_counter::*,
-	rasterizer::*, rect_splitting, renderer_config::*, shadow_map::*, surfaces::*, textures::*, triangle_model::*,
-	triangle_model_md3::*,
+	abstract_color::*, config, debug_stats_printer::*, depth_renderer::*, draw_ordering, fast_math::*, frame_info::*,
+	frame_number::*, inline_models_index::*, map_materials_processor::*, map_visibility_calculator::*,
+	performance_counter::*, rasterizer::*, rect_splitting, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
+	triangle_model::*, triangle_model_md3::*,
 };
 use common::{
 	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, material, math_types::*,
@@ -121,10 +121,8 @@ impl Renderer
 		&mut self,
 		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
-		camera_matrices: &CameraMatrices,
+		frame_info: &FrameInfo,
 		inline_models_index: &InlineModelsIndex,
-		test_lights: &[PointLight],
-		frame_time_s: f32,
 		debug_stats_printer: &mut DebugStatsPrinter,
 	)
 	{
@@ -133,7 +131,7 @@ impl Renderer
 
 		let materials_update_start_time = Clock::now();
 
-		self.materials_processor.update(frame_time_s);
+		self.materials_processor.update(frame_info.game_time_s);
 
 		let materials_update_end_time = Clock::now();
 		let materials_update_duration_s = (materials_update_end_time - materials_update_start_time).as_secs_f32();
@@ -144,7 +142,7 @@ impl Renderer
 		let frame_start_time = Clock::now();
 		self.current_frame.next();
 
-		self.draw_map(pixels, surface_info, camera_matrices, inline_models_index, test_lights);
+		self.draw_map(pixels, surface_info, frame_info, inline_models_index);
 
 		let frame_end_time = Clock::now();
 		let frame_duration_s = (frame_end_time - frame_start_time).as_secs_f32();
@@ -207,15 +205,14 @@ impl Renderer
 		&mut self,
 		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
-		camera_matrices: &CameraMatrices,
+		frame_info: &FrameInfo,
 		inline_models_index: &InlineModelsIndex,
-		test_lights: &[PointLight],
 	)
 	{
 		let depth_map_size = 256;
-		let mut test_lights_shadow_maps = Vec::with_capacity(test_lights.len());
+		let mut test_lights_shadow_maps = Vec::with_capacity(frame_info.lights.len());
 		// TODO - perform parallel shadowmaps build.
-		for light in test_lights
+		for light in &frame_info.lights
 		{
 			let mut cube_shadow_map = CubeShadowMap {
 				size: depth_map_size,
@@ -247,7 +244,7 @@ impl Renderer
 
 		let frame_bounds = ClippingPolygon::from_box(0.0, 0.0, surface_info.width as f32, surface_info.height as f32);
 		self.visibility_calculator
-			.update_visibility(camera_matrices, &frame_bounds);
+			.update_visibility(&frame_info.camera_matrices, &frame_bounds);
 
 		let visibile_leafs_search_end_time = Clock::now();
 		let visibile_leafs_search_duration_s =
@@ -258,17 +255,17 @@ impl Renderer
 
 		let surfaces_preparation_start_time = Clock::now();
 
-		self.prepare_polygons_surfaces(camera_matrices, inline_models_index);
+		self.prepare_polygons_surfaces(&frame_info.camera_matrices, inline_models_index);
 		self.allocate_surfaces_pixels::<ColorT>();
 
 		{
 			// TODO - avoid allocation.
 			let mut lights_with_shadow_maps = Vec::new();
-			for (light, shadow_map) in test_lights.iter().zip(test_lights_shadow_maps.iter())
+			for (light, shadow_map) in frame_info.lights.iter().zip(test_lights_shadow_maps.iter())
 			{
 				lights_with_shadow_maps.push((light, shadow_map));
 			}
-			self.build_polygons_surfaces::<ColorT>(camera_matrices, &lights_with_shadow_maps);
+			self.build_polygons_surfaces::<ColorT>(&frame_info.camera_matrices, &lights_with_shadow_maps);
 		}
 
 		let surfaces_preparation_end_time = Clock::now();
@@ -294,7 +291,14 @@ impl Renderer
 			.add_value(background_fill_duration_s);
 
 		let rasterization_start_time = Clock::now();
-		self.perform_rasterization(pixels, surface_info, camera_matrices, inline_models_index, root_node);
+		self.perform_rasterization(
+			pixels,
+			surface_info,
+			&frame_info.camera_matrices,
+			inline_models_index,
+			&frame_info.model_entities,
+			root_node,
+		);
 		let rasterization_end_time = Clock::now();
 		let rasterization_duration_s = (rasterization_end_time - rasterization_start_time).as_secs_f32();
 		self.performance_counters
@@ -325,6 +329,7 @@ impl Renderer
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
 		inline_models_index: &InlineModelsIndex,
+		models: &[ModelEntity],
 		root_node: u32,
 	)
 	{
@@ -362,9 +367,10 @@ impl Renderer
 				root_node,
 			);
 
-			self.draw_test_model(
+			self.draw_test_models(
 				&mut rasterizer,
 				&camera_matrices.view_matrix,
+				models,
 				&viewport_clippung_polygon.get_clip_planes(),
 			);
 		}
@@ -415,9 +421,10 @@ impl Renderer
 					root_node,
 				);
 
-				self.draw_test_model(
+				self.draw_test_models(
 					&mut rasterizer,
 					&camera_matrices.view_matrix,
+					models,
 					&viewport_clippung_polygon.get_clip_planes(),
 				);
 			});
@@ -1051,10 +1058,28 @@ impl Renderer
 				((polygon_data.surface_size[0] * polygon_data.surface_size[1]) as usize)]
 	}
 
-	fn draw_test_model<'a, ColorT: AbstractColor>(
+	fn draw_test_models<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		view_matrix: &Mat4f,
+		models: &[ModelEntity],
+		clip_planes: &ClippingPolygonPlanes,
+	)
+	{
+		for model in models
+		{
+			let rotate = Mat4f::from_angle_z(model.angle_z);
+			let translate = Mat4f::from_translation(model.position);
+			let world_space_matrix = translate * rotate;
+
+			self.draw_test_model(rasterizer, &(view_matrix * world_space_matrix), clip_planes);
+		}
+	}
+
+	fn draw_test_model<'a, ColorT: AbstractColor>(
+		&self,
+		rasterizer: &mut Rasterizer<'a, ColorT>,
+		model_matrix: &Mat4f,
 		clip_planes: &ClippingPolygonPlanes,
 	)
 	{
@@ -1088,7 +1113,7 @@ impl Renderer
 				.iter()
 				.zip(mesh.vertex_data_constant.iter())
 				.map(|(v_v, v_c)| {
-					let pos_transformed = view_matrix * v_v.position.extend(1.0);
+					let pos_transformed = model_matrix * v_v.position.extend(1.0);
 					ModelVertex3d {
 						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
 						tc: Vec2f::from(v_c.tex_coord).mul_element_wise(tc_scale),

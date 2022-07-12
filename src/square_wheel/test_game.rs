@@ -1,4 +1,4 @@
-use super::{commands_processor, commands_queue, console, light::*};
+use super::{commands_processor, commands_queue, console, frame_info::*, light::*};
 use common::{camera_controller, math_types::*, matrix::*, system_window};
 
 pub struct Game
@@ -8,6 +8,7 @@ pub struct Game
 	commands_queue: commands_queue::CommandsQueuePtr<Game>,
 	camera: camera_controller::CameraController,
 	test_lights: Vec<PointLight>,
+	test_models: Vec<ModelEntity>,
 	game_time: f32,
 }
 
@@ -23,6 +24,8 @@ impl Game
 			("set_angles", Game::command_set_angles),
 			("add_test_light", Game::command_add_test_light),
 			("reset_test_lights", Game::command_reset_test_lights),
+			("add_test_model", Game::command_add_test_model),
+			("reset_test_models", Game::command_reset_test_models),
 		]);
 
 		commands_processor
@@ -35,6 +38,7 @@ impl Game
 			commands_queue,
 			camera: camera_controller::CameraController::new(),
 			test_lights: Vec::new(),
+			test_models: Vec::new(),
 			game_time: 0.0,
 		}
 	}
@@ -50,27 +54,24 @@ impl Game
 		self.game_time += time_delta_s;
 	}
 
-	pub fn get_camera_matrices(&self, surface_info: &system_window::SurfaceInfo) -> CameraMatrices
+	pub fn get_frame_info(&self, surface_info: &system_window::SurfaceInfo) -> FrameInfo
 	{
 		let fov = std::f32::consts::PI * 0.375;
-		build_view_matrix(
+		let camera_matrices = build_view_matrix(
 			self.camera.get_pos(),
 			self.camera.get_azimuth(),
 			self.camera.get_elevation(),
 			fov,
 			surface_info.width as f32,
 			surface_info.height as f32,
-		)
-	}
+		);
 
-	pub fn get_test_lights(&self) -> &[PointLight]
-	{
-		&self.test_lights
-	}
-
-	pub fn get_game_time_s(&self) -> f32
-	{
-		self.game_time
+		FrameInfo {
+			camera_matrices,
+			game_time_s: self.game_time,
+			lights: self.test_lights.clone(),
+			model_entities: self.test_models.clone(),
+		}
 	}
 
 	fn process_commands(&mut self)
@@ -153,6 +154,19 @@ impl Game
 	fn command_reset_test_lights(&mut self, _args: commands_queue::CommandArgs)
 	{
 		self.test_lights.clear();
+	}
+
+	fn command_add_test_model(&mut self, _args: commands_queue::CommandArgs)
+	{
+		self.test_models.push(ModelEntity {
+			position: self.camera.get_pos(),
+			angle_z: self.camera.get_azimuth(),
+		});
+	}
+
+	fn command_reset_test_models(&mut self, _args: commands_queue::CommandArgs)
+	{
+		self.test_models.clear();
 	}
 }
 

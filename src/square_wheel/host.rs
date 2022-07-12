@@ -264,7 +264,7 @@ impl Host
 	{
 		if let Some(active_map) = &mut self.active_map
 		{
-			let camera_matrices = active_map.game.get_camera_matrices(surface_info);
+			let frame_info = active_map.game.get_frame_info(surface_info);
 
 			if self.postprocessor.use_hdr_rendering()
 			{
@@ -278,10 +278,8 @@ impl Host
 						height: hdr_buffer_size[1],
 						pitch: hdr_buffer_size[0],
 					},
-					&camera_matrices,
+					&frame_info,
 					&active_map.inline_models_index,
-					active_map.game.get_test_lights(),
-					active_map.game.get_game_time_s(),
 					&mut active_map.debug_stats_printer,
 				);
 
@@ -297,10 +295,8 @@ impl Host
 				active_map.renderer.draw_frame(
 					pixels,
 					surface_info,
-					&camera_matrices,
+					&frame_info,
 					&active_map.inline_models_index,
-					active_map.game.get_test_lights(),
-					active_map.game.get_game_time_s(),
 					&mut active_map.debug_stats_printer,
 				);
 			}

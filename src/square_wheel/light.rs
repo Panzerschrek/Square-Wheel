@@ -1,5 +1,6 @@
 use common::math_types::*;
 
+#[derive(Copy, Clone)]
 pub struct PointLight
 {
 	pub pos: Vec3f,
