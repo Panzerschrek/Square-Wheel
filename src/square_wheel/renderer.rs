@@ -362,7 +362,11 @@ impl Renderer
 				root_node,
 			);
 
-			self.draw_test_model(&mut rasterizer, &camera_matrices.view_matrix);
+			self.draw_test_model(
+				&mut rasterizer,
+				&camera_matrices.view_matrix,
+				&viewport_clippung_polygon.get_clip_planes(),
+			);
 		}
 		else
 		{
@@ -411,7 +415,11 @@ impl Renderer
 					root_node,
 				);
 
-				self.draw_test_model(&mut rasterizer, &camera_matrices.view_matrix);
+				self.draw_test_model(
+					&mut rasterizer,
+					&camera_matrices.view_matrix,
+					&viewport_clippung_polygon.get_clip_planes(),
+				);
 			});
 		}
 	}
@@ -1043,10 +1051,21 @@ impl Renderer
 				((polygon_data.surface_size[0] * polygon_data.surface_size[1]) as usize)]
 	}
 
-	fn draw_test_model<'a, ColorT: AbstractColor>(&self, rasterizer: &mut Rasterizer<'a, ColorT>, view_matrix: &Mat4f)
+	fn draw_test_model<'a, ColorT: AbstractColor>(
+		&self,
+		rasterizer: &mut Rasterizer<'a, ColorT>,
+		view_matrix: &Mat4f,
+		clip_planes: &ClippingPolygonPlanes,
+	)
 	{
 		let frame_number = 0;
 		let frame_info = &self.test_model.frames_info[frame_number];
+
+		let mut vertices_transformed = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
+		let mut vertices_clipped = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
+		let mut vertices_projected = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
+		let mut vertices_projected_temp = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
+		let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
 
 		for mesh in &self.test_model.meshes
 		{
@@ -1058,83 +1077,92 @@ impl Renderer
 			let texture_data = &self.test_image.pixels;
 
 			// TODO - primultiply texture coordinates while loading model instead.
-			let tc_scale = [self.test_image.size[0] as f32, self.test_image.size[1] as f32];
+			let tc_scale = Vec2f::new(self.test_image.size[0] as f32, self.test_image.size[1] as f32);
 
 			let frame_vertex_data = &mesh.vertex_data_variable[frame_number * mesh.vertex_data_constant.len() ..
 				(frame_number + 1) * mesh.vertex_data_constant.len()];
 
 			for triangle in &mesh.triangles
 			{
-				// TODO - use unchecked fetch?
-				let v0 = frame_vertex_data[triangle[0] as usize];
-				let v1 = frame_vertex_data[triangle[1] as usize];
-				let v2 = frame_vertex_data[triangle[2] as usize];
-
-				let v_const0 = mesh.vertex_data_constant[triangle[0] as usize];
-				let v_const1 = mesh.vertex_data_constant[triangle[1] as usize];
-				let v_const2 = mesh.vertex_data_constant[triangle[2] as usize];
-
-				let v0_transformed = view_matrix * v0.position.extend(1.0);
-				let v1_transformed = view_matrix * v1.position.extend(1.0);
-				let v2_transformed = view_matrix * v2.position.extend(1.0);
-
-				// TODO - perform proper clipping
-				if v0_transformed.w < Z_NEAR || v1_transformed.w < Z_NEAR || v2_transformed.w < Z_NEAR
+				for (&index, dst_vertex) in triangle.iter().zip(vertices_transformed.iter_mut())
 				{
-					continue;
-				}
-				let v0_projected = v0_transformed.truncate().truncate() / v0_transformed.w;
-				let v1_projected = v1_transformed.truncate().truncate() / v1_transformed.w;
-				let v2_projected = v2_transformed.truncate().truncate() / v2_transformed.w;
-
-				if (v0_projected - v1_projected).perp_dot(v1_projected - v2_projected) <= 0.0
-				{
-					continue;
+					// TODO - use unchecked fetch?
+					let pos_transformed = view_matrix * frame_vertex_data[index as usize].position.extend(1.0);
+					*dst_vertex = ModelVertex3d {
+						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
+						tc: Vec2f::from(mesh.vertex_data_constant[index as usize].tex_coord).mul_element_wise(tc_scale),
+					};
 				}
 
-				if v0_projected.x < 0.0 ||
-					v0_projected.x > 2048.0 ||
-					v0_projected.y < 0.0 || v0_projected.y > 2048.0 ||
-					v1_projected.x < 0.0 || v1_projected.x > 2048.0 ||
-					v1_projected.y < 0.0 || v1_projected.y > 2048.0 ||
-					v2_projected.x < 0.0 || v2_projected.x > 2048.0 ||
-					v2_projected.y < 0.0 || v2_projected.y > 2048.0
-				{
-					continue;
-				}
-
-				rasterizer.fill_triangle(
-					&[
-						TrianglePointProjected {
-							x: f32_to_fixed16(v0_projected.x),
-							y: f32_to_fixed16(v0_projected.y),
-							tc: [
-								f32_to_fixed16(v_const0.tex_coord[0] * tc_scale[0]),
-								f32_to_fixed16(v_const0.tex_coord[1] * tc_scale[1]),
-							],
-						},
-						TrianglePointProjected {
-							x: f32_to_fixed16(v1_projected.x),
-							y: f32_to_fixed16(v1_projected.y),
-							tc: [
-								f32_to_fixed16(v_const1.tex_coord[0] * tc_scale[0]),
-								f32_to_fixed16(v_const1.tex_coord[1] * tc_scale[1]),
-							],
-						},
-						TrianglePointProjected {
-							x: f32_to_fixed16(v2_projected.x),
-							y: f32_to_fixed16(v2_projected.y),
-							tc: [
-								f32_to_fixed16(v_const2.tex_coord[0] * tc_scale[0]),
-								f32_to_fixed16(v_const2.tex_coord[1] * tc_scale[1]),
-							],
-						},
-					],
-					&texture_info,
-					texture_data,
+				// TODO - avoid z-near clipping if bbox is behind z_near.
+				let mut num_vertices = clip_3d_model_polygon_by_plane(
+					&vertices_transformed[0 .. 3],
+					&Plane {
+						vec: Vec3f::unit_z(),
+						dist: Z_NEAR,
+					},
+					&mut vertices_clipped,
 				);
-			}
-		}
+				if num_vertices < 3
+				{
+					continue;
+				}
+
+				for (src, dst) in vertices_clipped[0 .. num_vertices]
+					.iter()
+					.zip(vertices_projected.iter_mut())
+				{
+					*dst = ModelVertex2d {
+						pos: src.pos.truncate() / src.pos.z,
+						tc: src.tc,
+					};
+				}
+
+				// TODO - use only required clip planes.
+				for clip_plane in clip_planes
+				{
+					num_vertices = clip_2d_model_polygon(
+						&vertices_projected[0 .. num_vertices],
+						clip_plane,
+						&mut vertices_projected_temp,
+					);
+					if num_vertices < 3
+					{
+						break;
+					}
+					vertices_projected[.. num_vertices].copy_from_slice(&vertices_projected_temp[.. num_vertices]);
+				}
+				if num_vertices < 3
+				{
+					continue;
+				}
+
+				for (src, dst) in vertices_projected[0 .. num_vertices]
+					.iter()
+					.zip(vertices_fixed.iter_mut())
+				{
+					*dst = TrianglePointProjected {
+						x: f32_to_fixed16(src.pos.x),
+						y: f32_to_fixed16(src.pos.y),
+						tc: [f32_to_fixed16(src.tc.x), f32_to_fixed16(src.tc.y)],
+					};
+				}
+
+				for t in 0 .. num_vertices - 2
+				{
+					let v0 = &vertices_fixed[0];
+					let v1 = &vertices_fixed[t + 1];
+					let v2 = &vertices_fixed[t + 2];
+					if ((v1.x - v0.x) as i64) * ((v2.y - v1.y) as i64) - ((v1.y - v0.y) as i64) * ((v2.x - v1.x) as i64) <=
+						0
+					{
+						continue;
+					}
+
+					rasterizer.fill_triangle(&[*v0, *v1, *v2], &texture_info, texture_data);
+				} // for subtriangles
+			} // For triangles
+		} // For meshes
 	}
 
 	fn update_mip_bias(&mut self)
