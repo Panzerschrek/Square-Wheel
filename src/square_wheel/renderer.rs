@@ -1096,23 +1096,24 @@ impl Renderer
 				})
 				.collect::<Vec<ModelVertex3d>>();
 
-			for triangle in &mesh.triangles
+			// // Reject back faces.
+			// TODO - avoid allocation
+			let mut triangles = mesh
+				.triangles
+				.iter()
+				.copied()
+				.filter(|t| get_triangle_plane(&vertices_combined, t).dist > 0.0)
+				.collect::<Vec<Triangle>>();
+
+			// Sort triangles.
+			sort_model_triangles(&vertices_combined, &mut triangles);
+
+			for triangle in &triangles
 			{
 				for (&index, dst_vertex) in triangle.iter().zip(vertices_transformed.iter_mut())
 				{
 					// TODO - use unchecked fetch?
 					*dst_vertex = vertices_combined[index as usize];
-				}
-
-				{
-					// Reject back faces.
-					let transformed_triangle_normal = (vertices_transformed[1].pos - vertices_transformed[0].pos)
-						.cross(vertices_transformed[2].pos - vertices_transformed[1].pos);
-					let transformed_triangle_plane_dist = transformed_triangle_normal.dot(vertices_transformed[0].pos);
-					if transformed_triangle_plane_dist <= 0.0
-					{
-						continue;
-					}
 				}
 
 				// TODO - avoid z-near clipping if bbox is behind z_near.
@@ -1225,6 +1226,109 @@ impl Renderer
 			self.config_is_durty = true;
 		}
 	}
+}
+
+fn sort_model_triangles(transformed_vertices: &[ModelVertex3d], triangles: &mut [Triangle])
+{
+	// This is an ugly hand-written variant of quick-sort-like algorithm.
+	// Use it because we can't use standart sorting functions with non-transitive comparator.
+
+	// TODO - speed-up this, use unchecked indexing function.
+
+	if triangles.len() <= 1
+	{
+		return;
+	}
+
+	let s = triangles.len();
+	let last = s - 1;
+	let mut lo = 0;
+	let mut hi = last;
+
+	let last_triangle = triangles[last];
+	let last_plane = get_triangle_plane(transformed_vertices, &last_triangle);
+
+	while lo < hi
+	{
+		// Comparison function is a little bit strange.
+		// First we check if test triangle is at one side of last triangle plane.
+		// If this triangle is on both sides - check last triangle against test triangle plane.
+
+		let test_triangle = triangles[lo];
+
+		let mut vertices_front = 0;
+		for index in test_triangle
+		{
+			if last_plane.vec.dot(transformed_vertices[index as usize].pos) > last_plane.dist
+			{
+				vertices_front += 1;
+			}
+		}
+
+		let c;
+		if vertices_front == 3
+		{
+			c = true;
+		}
+		else if vertices_front == 0
+		{
+			c = false;
+		}
+		else
+		{
+			let test_plane = get_triangle_plane(transformed_vertices, &test_triangle);
+			let mut vertices_front = 0;
+			for index in last_triangle
+			{
+				if test_plane.vec.dot(transformed_vertices[index as usize].pos) > test_plane.dist
+				{
+					vertices_front += 1;
+				}
+			}
+
+			if vertices_front == 3
+			{
+				c = false;
+			}
+			else if vertices_front == 0
+			{
+				c = true;
+			}
+			else
+			{
+				// Intersecting triangles - impossible to order.
+				c = true;
+			}
+		}
+
+		if c
+		{
+			lo += 1;
+		}
+		else
+		{
+			hi -= 1;
+			triangles.swap(lo, hi);
+		}
+	}
+
+	if hi < last
+	{
+		triangles.swap(hi, last);
+	}
+
+	sort_model_triangles(transformed_vertices, &mut triangles[.. hi]);
+	sort_model_triangles(transformed_vertices, &mut triangles[hi + 1 ..]);
+}
+
+fn get_triangle_plane(transformed_vertices: &[ModelVertex3d], triangle: &Triangle) -> Plane
+{
+	let v0 = transformed_vertices[triangle[0] as usize];
+	let v1 = transformed_vertices[triangle[1] as usize];
+	let v2 = transformed_vertices[triangle[2] as usize];
+	let vec = (v1.pos - v0.pos).cross(v2.pos - v1.pos);
+	let dist = vec.dot(v0.pos);
+	Plane { vec, dist }
 }
 
 fn draw_background<ColorT: Copy + Send + Sync>(pixels: &mut [ColorT], color: ColorT)
