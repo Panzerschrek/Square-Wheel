@@ -9,4 +9,9 @@ impl FrameNumber
 	{
 		self.0 += 1;
 	}
+
+	pub fn get_raw(&self) -> u32
+	{
+		self.0
+	}
 }

@@ -88,11 +88,11 @@ impl Renderer
 		// TODO - cache materials globally.
 		let all_materials = material::load_materials(&std::path::PathBuf::from(&config_parsed.materials_path));
 
-		let test_model = load_model_md3(&std::path::Path::new("other/baseq3/models/mapobjects/gargoyle1.md3"))
+		let test_model = load_model_md3(&std::path::Path::new("other/ogre.md3"))
 			.unwrap()
 			.unwrap();
 
-		let test_image = load_image("gargoyle.jpg", &std::path::PathBuf::from(&config_parsed.textures_path)).unwrap();
+		let test_image = load_image("ogre.tga", &std::path::PathBuf::from(&config_parsed.textures_path)).unwrap();
 
 		let materials_processor = MapMaterialsProcessor::new(&*map, &all_materials, &config_parsed.textures_path);
 
@@ -1058,7 +1058,7 @@ impl Renderer
 		clip_planes: &ClippingPolygonPlanes,
 	)
 	{
-		let frame_number = 0;
+		let frame_number = (self.current_frame.get_raw() / 8) as usize % self.test_model.frames_info.len();
 		let frame_info = &self.test_model.frames_info[frame_number];
 
 		let mut vertices_transformed = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
@@ -1076,7 +1076,7 @@ impl Renderer
 
 			let texture_data = &self.test_image.pixels;
 
-			// TODO - primultiply texture coordinates while loading model instead.
+			// TODO - premultiply texture coordinates while loading model instead.
 			let tc_scale = Vec2f::new(self.test_image.size[0] as f32, self.test_image.size[1] as f32);
 
 			let frame_vertex_data = &mesh.vertex_data_variable[frame_number * mesh.vertex_data_constant.len() ..
