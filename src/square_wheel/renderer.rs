@@ -1094,6 +1094,17 @@ impl Renderer
 					};
 				}
 
+				{
+					// Reject back faces.
+					let transformed_triangle_normal = (vertices_transformed[1].pos - vertices_transformed[0].pos)
+						.cross(vertices_transformed[2].pos - vertices_transformed[1].pos);
+					let transformed_triangle_plane_dist = transformed_triangle_normal.dot(vertices_transformed[0].pos);
+					if transformed_triangle_plane_dist <= 0.0
+					{
+						continue;
+					}
+				}
+
 				// TODO - avoid z-near clipping if bbox is behind z_near.
 				let mut num_vertices = clip_3d_model_polygon_by_plane(
 					&vertices_transformed[0 .. 3],
@@ -1150,16 +1161,11 @@ impl Renderer
 
 				for t in 0 .. num_vertices - 2
 				{
-					let v0 = &vertices_fixed[0];
-					let v1 = &vertices_fixed[t + 1];
-					let v2 = &vertices_fixed[t + 2];
-					if ((v1.x - v0.x) as i64) * ((v2.y - v1.y) as i64) - ((v1.y - v0.y) as i64) * ((v2.x - v1.x) as i64) <=
-						0
-					{
-						continue;
-					}
-
-					rasterizer.fill_triangle(&[*v0, *v1, *v2], &texture_info, texture_data);
+					rasterizer.fill_triangle(
+						&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
+						&texture_info,
+						texture_data,
+					);
 				} // for subtriangles
 			} // For triangles
 		} // For meshes
