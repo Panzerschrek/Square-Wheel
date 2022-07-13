@@ -57,6 +57,11 @@ impl Game
 	{
 		self.process_commands();
 		self.game_time += time_delta_s;
+
+		for model in &mut self.test_models
+		{
+			model.frame = (self.game_time * 10.0) as u32 % (model.model.frames_info.len() as u32);
+		}
 	}
 
 	pub fn get_frame_info(&self, surface_info: &system_window::SurfaceInfo) -> FrameInfo
@@ -175,6 +180,7 @@ impl Game
 		self.test_models.push(ModelEntity {
 			position: self.camera.get_pos(),
 			angle_z: self.camera.get_azimuth(),
+			frame: 0,
 			model,
 			texture,
 		});

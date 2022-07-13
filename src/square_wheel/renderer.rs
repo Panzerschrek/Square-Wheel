@@ -1067,6 +1067,7 @@ impl Renderer
 				&(view_matrix * world_space_matrix),
 				clip_planes,
 				&*model.model,
+				model.frame as usize,
 				&*model.texture,
 			);
 		}
@@ -1078,11 +1079,11 @@ impl Renderer
 		model_matrix: &Mat4f,
 		clip_planes: &ClippingPolygonPlanes,
 		model: &TriangleModel,
+		frame: usize,
 		texture: &image::Image,
 	)
 	{
-		let frame_number = (self.current_frame.get_raw() / 8) as usize % model.frames_info.len();
-		let frame_info = &model.frames_info[frame_number];
+		let frame_info = &model.frames_info[frame];
 
 		// TODO - use individual texture for each mesh.
 		let texture_info = TextureInfo {
@@ -1102,8 +1103,8 @@ impl Renderer
 
 		for mesh in &model.meshes
 		{
-			let frame_vertex_data = &mesh.vertex_data_variable[frame_number * mesh.vertex_data_constant.len() ..
-				(frame_number + 1) * mesh.vertex_data_constant.len()];
+			let frame_vertex_data = &mesh.vertex_data_variable
+				[frame * mesh.vertex_data_constant.len() .. (frame + 1) * mesh.vertex_data_constant.len()];
 
 			// Transform all vertices of model to avoid multiple transformations for vertices shared across several triangles.
 			// TODO - avoid allocation

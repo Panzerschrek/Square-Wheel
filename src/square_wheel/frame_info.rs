@@ -14,6 +14,7 @@ pub struct ModelEntity
 {
 	pub position: Vec3f,
 	pub angle_z: RadiansF,
+	pub frame: u32,
 	pub model: SharedResourcePtr<TriangleModel>,
 	pub texture: SharedResourcePtr<Image>,
 }
