@@ -1,5 +1,5 @@
-use super::light::*;
-use common::{math_types::*, matrix::*};
+use super::{light::*, resources_manager::*, triangle_model::*};
+use common::{image::*, math_types::*, matrix::*};
 
 pub struct FrameInfo
 {
@@ -14,4 +14,6 @@ pub struct ModelEntity
 {
 	pub position: Vec3f,
 	pub angle_z: RadiansF,
+	pub model: SharedResourcePtr<TriangleModel>,
+	pub texture: SharedResourcePtr<Image>,
 }

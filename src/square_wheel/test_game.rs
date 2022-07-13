@@ -1,10 +1,11 @@
-use super::{commands_processor, commands_queue, console, frame_info::*, light::*};
+use super::{commands_processor, commands_queue, console, frame_info::*, light::*, resources_manager::*};
 use common::{camera_controller, math_types::*, matrix::*, system_window};
 
 pub struct Game
 {
 	commands_processor: commands_processor::CommandsProcessorPtr,
 	console: console::ConsoleSharedPtr,
+	resources_manager: ResourcesManagerSharedPtr,
 	commands_queue: commands_queue::CommandsQueuePtr<Game>,
 	camera: camera_controller::CameraController,
 	test_lights: Vec<PointLight>,
@@ -14,8 +15,11 @@ pub struct Game
 
 impl Game
 {
-	pub fn new(commands_processor: commands_processor::CommandsProcessorPtr, console: console::ConsoleSharedPtr)
-		-> Self
+	pub fn new(
+		commands_processor: commands_processor::CommandsProcessorPtr,
+		console: console::ConsoleSharedPtr,
+		resources_manager: ResourcesManagerSharedPtr,
+	) -> Self
 	{
 		let commands_queue = commands_queue::CommandsQueue::new(vec![
 			("get_pos", Game::command_get_pos),
@@ -35,6 +39,7 @@ impl Game
 		Self {
 			commands_processor,
 			console,
+			resources_manager,
 			commands_queue,
 			camera: camera_controller::CameraController::new(),
 			test_lights: Vec::new(),
@@ -156,11 +161,22 @@ impl Game
 		self.test_lights.clear();
 	}
 
-	fn command_add_test_model(&mut self, _args: commands_queue::CommandArgs)
+	fn command_add_test_model(&mut self, args: commands_queue::CommandArgs)
 	{
+		if args.len() < 2
+		{
+			self.console.borrow_mut().add_text("Expected 2 args".to_string());
+			return;
+		}
+
+		let model = self.resources_manager.lock().unwrap().get_model(&args[0]);
+		let texture = self.resources_manager.lock().unwrap().get_image(&args[1]);
+
 		self.test_models.push(ModelEntity {
 			position: self.camera.get_pos(),
 			angle_z: self.camera.get_azimuth(),
+			model,
+			texture,
 		});
 	}
 

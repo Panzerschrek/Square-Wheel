@@ -2,11 +2,11 @@ use super::{
 	abstract_color::*, config, debug_stats_printer::*, depth_renderer::*, draw_ordering, fast_math::*, frame_info::*,
 	frame_number::*, inline_models_index::*, map_materials_processor::*, map_visibility_calculator::*,
 	performance_counter::*, rasterizer::*, rect_splitting, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
-	triangle_model::*, triangle_model_md3::*,
+	triangle_model::*,
 };
 use common::{
-	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, material, math_types::*,
-	matrix::*, plane::*, shared_mut_slice::*, system_window,
+	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, image, lightmap, material,
+	math_types::*, matrix::*, plane::*, shared_mut_slice::*, system_window,
 };
 use rayon::prelude::*;
 use std::sync::Arc;
@@ -34,8 +34,6 @@ pub struct Renderer
 	mip_bias: f32,
 	materials_processor: MapMaterialsProcessor,
 	performance_counters: RendererPerformanceCounters,
-	test_model: TriangleModel,
-	test_image: common::image::Image,
 }
 
 struct RendererPerformanceCounters
@@ -88,12 +86,6 @@ impl Renderer
 		// TODO - cache materials globally.
 		let all_materials = material::load_materials(&std::path::PathBuf::from(&config_parsed.materials_path));
 
-		let test_model = load_model_md3(&std::path::Path::new("other/ogre.md3"))
-			.unwrap()
-			.unwrap();
-
-		let test_image = load_image("ogre.tga", &std::path::PathBuf::from(&config_parsed.textures_path)).unwrap();
-
 		let materials_processor = MapMaterialsProcessor::new(&*map, &all_materials, &config_parsed.textures_path);
 
 		Renderer {
@@ -112,8 +104,6 @@ impl Renderer
 			map,
 			materials_processor,
 			performance_counters: RendererPerformanceCounters::new(),
-			test_model,
-			test_image,
 		}
 	}
 
@@ -1072,7 +1062,13 @@ impl Renderer
 			let translate = Mat4f::from_translation(model.position);
 			let world_space_matrix = translate * rotate;
 
-			self.draw_test_model(rasterizer, &(view_matrix * world_space_matrix), clip_planes);
+			self.draw_test_model(
+				rasterizer,
+				&(view_matrix * world_space_matrix),
+				clip_planes,
+				&*model.model,
+				&*model.texture,
+			);
 		}
 	}
 
@@ -1081,10 +1077,22 @@ impl Renderer
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		model_matrix: &Mat4f,
 		clip_planes: &ClippingPolygonPlanes,
+		model: &TriangleModel,
+		texture: &image::Image,
 	)
 	{
-		let frame_number = (self.current_frame.get_raw() / 8) as usize % self.test_model.frames_info.len();
-		let frame_info = &self.test_model.frames_info[frame_number];
+		let frame_number = (self.current_frame.get_raw() / 8) as usize % model.frames_info.len();
+		let frame_info = &model.frames_info[frame_number];
+
+		// TODO - use individual texture for each mesh.
+		let texture_info = TextureInfo {
+			size: [texture.size[0] as i32, texture.size[1] as i32],
+		};
+
+		// TODO - premultiply texture coordinates while loading model instead.
+		let tc_scale = Vec2f::new(texture.size[0] as f32, texture.size[1] as f32);
+
+		let texture_data = &texture.pixels;
 
 		let mut vertices_transformed = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
 		let mut vertices_clipped = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
@@ -1092,18 +1100,8 @@ impl Renderer
 		let mut vertices_projected_temp = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
 		let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
 
-		for mesh in &self.test_model.meshes
+		for mesh in &model.meshes
 		{
-			// TODO - use proper texture.
-			let texture_info = TextureInfo {
-				size: [self.test_image.size[0] as i32, self.test_image.size[1] as i32],
-			};
-
-			let texture_data = &self.test_image.pixels;
-
-			// TODO - premultiply texture coordinates while loading model instead.
-			let tc_scale = Vec2f::new(self.test_image.size[0] as f32, self.test_image.size[1] as f32);
-
 			let frame_vertex_data = &mesh.vertex_data_variable[frame_number * mesh.vertex_data_constant.len() ..
 				(frame_number + 1) * mesh.vertex_data_constant.len()];
 

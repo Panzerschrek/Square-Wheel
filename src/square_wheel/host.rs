@@ -1,6 +1,6 @@
 use super::{
 	commands_processor, commands_queue, config, console, debug_stats_printer::*, host_config::*, inline_models_index,
-	postprocessor::*, renderer, test_game, text_printer, ticks_counter::*,
+	postprocessor::*, renderer, resources_manager::*, test_game, text_printer, ticks_counter::*,
 };
 use common::{bsp_map_save_load, color::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
@@ -18,6 +18,7 @@ pub struct Host
 	console: console::ConsoleSharedPtr,
 	window: Rc<RefCell<system_window::SystemWindow>>,
 	postprocessor: Postprocessor,
+	resources_manager: ResourcesManagerSharedPtr,
 	active_map: Option<ActiveMap>,
 	prev_time: std::time::Instant,
 	fps_counter: TicksCounter,
@@ -98,6 +99,7 @@ impl Host
 			console,
 			window: Rc::new(RefCell::new(system_window::SystemWindow::new())),
 			postprocessor: Postprocessor::new(app_config),
+			resources_manager: ResourcesManager::new(),
 			active_map: None,
 			prev_time: cur_time,
 			fps_counter: TicksCounter::new(),
@@ -342,11 +344,18 @@ impl Host
 			{
 				let map_rc = std::sync::Arc::new(map);
 				self.active_map = Some(ActiveMap {
-					game: test_game::Game::new(self.commands_processor.clone(), self.console.clone()),
+					game: test_game::Game::new(
+						self.commands_processor.clone(),
+						self.console.clone(),
+						self.resources_manager.clone(),
+					),
 					renderer: renderer::Renderer::new(self.app_config.clone(), map_rc.clone()),
 					inline_models_index: inline_models_index::InlineModelsIndex::new(map_rc),
 					debug_stats_printer: DebugStatsPrinter::new(self.config.show_debug_stats),
 				});
+
+				// Clear unused resources from previous map.
+				self.resources_manager.lock().unwrap().clear_cache();
 			},
 			Ok(None) =>
 			{
