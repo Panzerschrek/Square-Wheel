@@ -38,9 +38,9 @@ pub struct Renderer
 	dynamic_models_index: DynamicModelsIndex,
 	// Store transformed models vertices and triangles in separate buffer.
 	// This is needed to avoid transforming/sorting model's vertices/triangles in each BSP leaf where this model is located.
-	visible_dynamic_models_list: Vec<VisibleDynamicModelInfo>,
-	dynamic_models_vertices: Vec<ModelVertex3d>,
-	dynamic_models_triangles: Vec<Triangle>,
+	visible_dynamic_meshes_list: Vec<VisibleDynamicMeshInfo>,
+	dynamic_meshes_vertices: Vec<ModelVertex3d>,
+	dynamic_meshes_triangles: Vec<Triangle>,
 }
 
 struct RendererPerformanceCounters
@@ -83,10 +83,10 @@ struct DrawPolygonData
 	surface_tc_min: [i32; 2],
 }
 
-// TODO - use per-mesh struct instead.
-struct VisibleDynamicModelInfo
+struct VisibleDynamicMeshInfo
 {
-	index: u32,
+	entity_index: u32,
+	mesh_index: u32,
 	vertices_offset: usize,
 	triangles_offset: usize,
 	num_visible_triangles: usize,
@@ -121,9 +121,9 @@ impl Renderer
 			materials_processor,
 			performance_counters: RendererPerformanceCounters::new(),
 			dynamic_models_index: DynamicModelsIndex::new(map),
-			visible_dynamic_models_list: Vec::new(),
-			dynamic_models_vertices: Vec::new(),
-			dynamic_models_triangles: Vec::new(),
+			visible_dynamic_meshes_list: Vec::new(),
+			dynamic_meshes_vertices: Vec::new(),
+			dynamic_meshes_triangles: Vec::new(),
 		}
 	}
 
@@ -204,9 +204,8 @@ impl Renderer
 			debug_stats_printer.add_line(format!("models parts: {}", num_visible_models_parts));
 			debug_stats_printer.add_line(format!("polygons: {}", self.current_frame_visible_polygons.len()));
 			debug_stats_printer.add_line(format!(
-				"dynamic models : {}/{}",
-				self.visible_dynamic_models_list.len(),
-				frame_info.model_entities.len()
+				"dynamic meshes : {}",
+				self.visible_dynamic_meshes_list.len(),
 			));
 			debug_stats_printer.add_line(format!(
 				"surfaces pixels: {}k",
@@ -346,15 +345,15 @@ impl Renderer
 	// Call this after visible leafs search.
 	fn prepare_dynamic_models(&mut self, models: &[ModelEntity])
 	{
-		self.visible_dynamic_models_list.clear();
+		self.visible_dynamic_meshes_list.clear();
 
-		// Reserve place in vertex/triangle buffers for each visible model.
+		// Reserve place in vertex/triangle buffers for each visible mesh.
 		let mut vertices_offset = 0;
 		let mut triangles_offset = 0;
-		for (index, model) in models.iter().enumerate()
+		for (entity_index, model) in models.iter().enumerate()
 		{
 			let mut visible = false;
-			for leaf_index in self.dynamic_models_index.get_model_leafs(index)
+			for leaf_index in self.dynamic_models_index.get_model_leafs(entity_index)
 			{
 				if self
 					.visibility_calculator
@@ -371,23 +370,24 @@ impl Renderer
 				continue;
 			}
 
-			self.visible_dynamic_models_list.push(VisibleDynamicModelInfo {
-				index: index as u32,
-				vertices_offset,
-				triangles_offset,
-				num_visible_triangles: 0, // set later
-			});
-
-			for mesh in &model.model.meshes
+			for (mesh_index, mesh) in model.model.meshes.iter().enumerate()
 			{
+				self.visible_dynamic_meshes_list.push(VisibleDynamicMeshInfo {
+					entity_index: entity_index as u32,
+					mesh_index: mesh_index as u32,
+					vertices_offset,
+					triangles_offset,
+					num_visible_triangles: 0, // set later
+				});
+
 				vertices_offset += mesh.vertex_data_constant.len();
 				triangles_offset += mesh.triangles.len();
 			}
 		}
 
-		if vertices_offset > self.dynamic_models_vertices.len()
+		if vertices_offset > self.dynamic_meshes_vertices.len()
 		{
-			self.dynamic_models_vertices.resize(
+			self.dynamic_meshes_vertices.resize(
 				vertices_offset,
 				ModelVertex3d {
 					pos: Vec3f::zero(),
@@ -395,18 +395,18 @@ impl Renderer
 				},
 			);
 		}
-		if triangles_offset > self.dynamic_models_triangles.len()
+		if triangles_offset > self.dynamic_meshes_triangles.len()
 		{
-			self.dynamic_models_triangles.resize(triangles_offset, [0, 0, 0]);
+			self.dynamic_meshes_triangles.resize(triangles_offset, [0, 0, 0]);
 		}
 	}
 
 	fn build_dynamic_models_buffers(&mut self, camera_matrices: &CameraMatrices, models: &[ModelEntity])
 	{
 		// TODO - use multithreading.
-		for visible_dynamic_model in &mut self.visible_dynamic_models_list
+		for visible_dynamic_mesh in &mut self.visible_dynamic_meshes_list
 		{
-			let model = &models[visible_dynamic_model.index as usize];
+			let model = &models[visible_dynamic_mesh.entity_index as usize];
 
 			let rotate = Mat4f::from_angle_z(model.angle_z);
 			let translate = Mat4f::from_translation(model.position);
@@ -414,53 +414,48 @@ impl Renderer
 
 			let final_matrix = camera_matrices.view_matrix * world_space_matrix;
 
-			let frame = model.frame as usize;
-
 			// TODO - premultiply texture coordinates while loading model instead?
 			let texture = &model.texture;
 			let tc_scale = Vec2f::new(texture.size[0] as f32, texture.size[1] as f32);
 
-			let mut vertices_offset = visible_dynamic_model.vertices_offset;
-			for mesh in &model.model.meshes
+			let mesh = &model.model.meshes[visible_dynamic_mesh.mesh_index as usize];
+
+			// Perform vertices transformation.
+			let frame = model.frame as usize;
+			let frame_vertex_data = &mesh.vertex_data_variable
+				[frame * mesh.vertex_data_constant.len() .. (frame + 1) * mesh.vertex_data_constant.len()];
+
+			let dst_mesh_vertices = &mut self.dynamic_meshes_vertices[visible_dynamic_mesh.vertices_offset ..];
+
+			for ((v_v, v_c), dst_v) in frame_vertex_data
+				.iter()
+				.zip(mesh.vertex_data_constant.iter())
+				.zip(dst_mesh_vertices.iter_mut())
 			{
-				// Perform vertices transformation.
-				let frame_vertex_data = &mesh.vertex_data_variable
-					[frame * mesh.vertex_data_constant.len() .. (frame + 1) * mesh.vertex_data_constant.len()];
-
-				let dst_mesh_vertices = &mut self.dynamic_models_vertices[vertices_offset ..];
-
-				for ((v_v, v_c), dst_v) in frame_vertex_data
-					.iter()
-					.zip(mesh.vertex_data_constant.iter())
-					.zip(dst_mesh_vertices.iter_mut())
-				{
-					let pos_transformed = final_matrix * v_v.position.extend(1.0);
-					*dst_v = ModelVertex3d {
-						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
-						tc: Vec2f::from(v_c.tex_coord).mul_element_wise(tc_scale),
-					};
-				}
-				vertices_offset += frame_vertex_data.len();
-
-				// Copy, filter and sort triangles.
-				let dst_triangles = &mut self.dynamic_models_triangles[visible_dynamic_model.triangles_offset ..];
-				let mut num_visible_triangles = 0;
-				for triangle in &mesh.triangles
-				{
-					// Reject back faces.
-					// TODO - maybe also reject triangles outside screen borders?
-					if get_triangle_plane(&dst_mesh_vertices, triangle).dist > 0.0
-					{
-						dst_triangles[num_visible_triangles] = *triangle;
-						num_visible_triangles += 1;
-					}
-				}
-
-				sort_model_triangles(&dst_mesh_vertices, &mut dst_triangles[.. num_visible_triangles]);
-
-				// TODO - fix case with multiple meshes within one model. We should (somehow) store several lists of models.
-				visible_dynamic_model.num_visible_triangles = num_visible_triangles;
+				let pos_transformed = final_matrix * v_v.position.extend(1.0);
+				*dst_v = ModelVertex3d {
+					pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
+					tc: Vec2f::from(v_c.tex_coord).mul_element_wise(tc_scale),
+				};
 			}
+
+			// Copy, filter and sort triangles.
+			let dst_triangles = &mut self.dynamic_meshes_triangles[visible_dynamic_mesh.triangles_offset ..];
+			let mut num_visible_triangles = 0;
+			for triangle in &mesh.triangles
+			{
+				// Reject back faces.
+				// TODO - maybe also reject triangles outside screen borders?
+				if get_triangle_plane(&dst_mesh_vertices, triangle).dist > 0.0
+				{
+					dst_triangles[num_visible_triangles] = *triangle;
+					num_visible_triangles += 1;
+				}
+			}
+
+			sort_model_triangles(&dst_mesh_vertices, &mut dst_triangles[.. num_visible_triangles]);
+
+			visible_dynamic_mesh.num_visible_triangles = num_visible_triangles;
 		}
 	}
 
@@ -1196,22 +1191,21 @@ impl Renderer
 		clip_planes: &ClippingPolygonPlanes,
 	)
 	{
-		for visible_dynamic_model in &self.visible_dynamic_models_list
+		for visible_dynamic_mesh in &self.visible_dynamic_meshes_list
 		{
-			self.draw_test_model(rasterizer, clip_planes, models, visible_dynamic_model);
+			self.draw_test_mesh(rasterizer, clip_planes, models, visible_dynamic_mesh);
 		}
 	}
 
-	fn draw_test_model<'a, ColorT: AbstractColor>(
+	fn draw_test_mesh<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		clip_planes: &ClippingPolygonPlanes,
 		models: &[ModelEntity],
-		visible_dynamic_model: &VisibleDynamicModelInfo,
+		visible_dynamic_mesh: &VisibleDynamicMeshInfo,
 	)
 	{
-		let model = &models[visible_dynamic_model.index as usize];
-
+		let model = &models[visible_dynamic_mesh.entity_index as usize];
 		let texture = &model.texture;
 
 		// TODO - use individual texture for each mesh.
@@ -1227,88 +1221,81 @@ impl Renderer
 		let mut vertices_projected_temp = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
 		let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
 
-		let mut vertices_offset = visible_dynamic_model.vertices_offset;
-		for mesh in &model.model.meshes
+		let vertices_combined = &self.dynamic_meshes_vertices[visible_dynamic_mesh.vertices_offset ..];
+
+		let triangles = &self.dynamic_meshes_triangles[visible_dynamic_mesh.triangles_offset ..
+			visible_dynamic_mesh.triangles_offset + visible_dynamic_mesh.num_visible_triangles];
+		for triangle in triangles
 		{
-			let vertices_combined = &self.dynamic_models_vertices[vertices_offset ..];
-
-			// TODO - fix case with multiple meshes within single model.
-			let triangles = &self.dynamic_models_triangles[visible_dynamic_model.triangles_offset ..
-				visible_dynamic_model.triangles_offset + visible_dynamic_model.num_visible_triangles];
-			for triangle in triangles
+			for (&index, dst_vertex) in triangle.iter().zip(vertices_transformed.iter_mut())
 			{
-				for (&index, dst_vertex) in triangle.iter().zip(vertices_transformed.iter_mut())
-				{
-					// TODO - use unchecked fetch?
-					*dst_vertex = vertices_combined[index as usize];
-				}
+				// TODO - use unchecked fetch?
+				*dst_vertex = vertices_combined[index as usize];
+			}
 
-				// TODO - avoid z-near clipping if bbox is behind z_near.
-				let mut num_vertices = clip_3d_model_polygon_by_plane(
-					&vertices_transformed[0 .. 3],
-					&Plane {
-						vec: Vec3f::unit_z(),
-						dist: Z_NEAR,
-					},
-					&mut vertices_clipped,
+			// TODO - avoid z-near clipping if bbox is behind z_near.
+			let mut num_vertices = clip_3d_model_polygon_by_plane(
+				&vertices_transformed[0 .. 3],
+				&Plane {
+					vec: Vec3f::unit_z(),
+					dist: Z_NEAR,
+				},
+				&mut vertices_clipped,
+			);
+			if num_vertices < 3
+			{
+				continue;
+			}
+
+			for (src, dst) in vertices_clipped[0 .. num_vertices]
+				.iter()
+				.zip(vertices_projected.iter_mut())
+			{
+				*dst = ModelVertex2d {
+					pos: src.pos.truncate() / src.pos.z,
+					tc: src.tc,
+				};
+			}
+
+			// TODO - use only required clip planes.
+			for clip_plane in clip_planes
+			{
+				num_vertices = clip_2d_model_polygon(
+					&vertices_projected[0 .. num_vertices],
+					clip_plane,
+					&mut vertices_projected_temp,
 				);
 				if num_vertices < 3
 				{
-					continue;
+					break;
 				}
+				vertices_projected[.. num_vertices].copy_from_slice(&vertices_projected_temp[.. num_vertices]);
+			}
+			if num_vertices < 3
+			{
+				continue;
+			}
 
-				for (src, dst) in vertices_clipped[0 .. num_vertices]
-					.iter()
-					.zip(vertices_projected.iter_mut())
-				{
-					*dst = ModelVertex2d {
-						pos: src.pos.truncate() / src.pos.z,
-						tc: src.tc,
-					};
-				}
+			for (src, dst) in vertices_projected[0 .. num_vertices]
+				.iter()
+				.zip(vertices_fixed.iter_mut())
+			{
+				*dst = TrianglePointProjected {
+					x: f32_to_fixed16(src.pos.x),
+					y: f32_to_fixed16(src.pos.y),
+					tc: [f32_to_fixed16(src.tc.x), f32_to_fixed16(src.tc.y)],
+				};
+			}
 
-				// TODO - use only required clip planes.
-				for clip_plane in clip_planes
-				{
-					num_vertices = clip_2d_model_polygon(
-						&vertices_projected[0 .. num_vertices],
-						clip_plane,
-						&mut vertices_projected_temp,
-					);
-					if num_vertices < 3
-					{
-						break;
-					}
-					vertices_projected[.. num_vertices].copy_from_slice(&vertices_projected_temp[.. num_vertices]);
-				}
-				if num_vertices < 3
-				{
-					continue;
-				}
-
-				for (src, dst) in vertices_projected[0 .. num_vertices]
-					.iter()
-					.zip(vertices_fixed.iter_mut())
-				{
-					*dst = TrianglePointProjected {
-						x: f32_to_fixed16(src.pos.x),
-						y: f32_to_fixed16(src.pos.y),
-						tc: [f32_to_fixed16(src.tc.x), f32_to_fixed16(src.tc.y)],
-					};
-				}
-
-				for t in 0 .. num_vertices - 2
-				{
-					rasterizer.fill_triangle(
-						&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
-						&texture_info,
-						texture_data,
-					);
-				} // for subtriangles
-			} // For triangles
-
-			vertices_offset += mesh.vertex_data_constant.len();
-		} // For meshes
+			for t in 0 .. num_vertices - 2
+			{
+				rasterizer.fill_triangle(
+					&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
+					&texture_info,
+					texture_data,
+				);
+			} // for subtriangles
+		} // For triangles
 	}
 
 	fn update_mip_bias(&mut self)
