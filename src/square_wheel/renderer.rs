@@ -1,8 +1,8 @@
 use super::{
-	abstract_color::*, config, debug_stats_printer::*, depth_renderer::*, draw_ordering, fast_math::*, frame_info::*,
-	frame_number::*, inline_models_index::*, map_materials_processor::*, map_visibility_calculator::*,
-	performance_counter::*, rasterizer::*, rect_splitting, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
-	triangle_model::*,
+	abstract_color::*, config, debug_stats_printer::*, depth_renderer::*, draw_ordering, dynamic_models_index::*,
+	fast_math::*, frame_info::*, frame_number::*, inline_models_index::*, map_materials_processor::*,
+	map_visibility_calculator::*, performance_counter::*, rasterizer::*, rect_splitting, renderer_config::*,
+	shadow_map::*, surfaces::*, textures::*, triangle_model::*,
 };
 use common::{
 	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, image, lightmap, material,
@@ -34,6 +34,7 @@ pub struct Renderer
 	mip_bias: f32,
 	materials_processor: MapMaterialsProcessor,
 	performance_counters: RendererPerformanceCounters,
+	dynamic_models_index: DynamicModelsIndex,
 }
 
 struct RendererPerformanceCounters
@@ -101,9 +102,10 @@ impl Renderer
 			mip_bias: 0.0,
 			visibility_calculator: MapVisibilityCalculator::new(map.clone()),
 			shadows_maps_renderer: DepthRenderer::new(map.clone()),
-			map,
+			map: map.clone(),
 			materials_processor,
 			performance_counters: RendererPerformanceCounters::new(),
+			dynamic_models_index: DynamicModelsIndex::new(map),
 		}
 	}
 
@@ -118,6 +120,8 @@ impl Renderer
 	{
 		self.synchronize_config();
 		self.update_mip_bias();
+
+		self.dynamic_models_index.position_models(&frame_info.model_entities);
 
 		let materials_update_start_time = Clock::now();
 
@@ -1056,8 +1060,21 @@ impl Renderer
 		clip_planes: &ClippingPolygonPlanes,
 	)
 	{
-		for model in models
+		for (index, model) in models.iter().enumerate()
 		{
+			let mut visible = false;
+			for leaf_index in self.dynamic_models_index.get_model_leafs(index)
+			{
+				if self
+					.visibility_calculator
+					.get_current_frame_leaf_bounds(*leaf_index)
+					.is_some()
+				{
+					visible = true;
+					break;
+				}
+			}
+
 			let rotate = Mat4f::from_angle_z(model.angle_z);
 			let translate = Mat4f::from_translation(model.position);
 			let world_space_matrix = translate * rotate;

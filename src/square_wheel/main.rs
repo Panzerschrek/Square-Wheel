@@ -8,6 +8,7 @@ mod console;
 mod debug_stats_printer;
 mod depth_renderer;
 mod draw_ordering;
+mod dynamic_models_index;
 mod fast_math;
 mod frame_info;
 mod frame_number;
