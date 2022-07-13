@@ -35,6 +35,7 @@ pub struct Renderer
 	materials_processor: MapMaterialsProcessor,
 	performance_counters: RendererPerformanceCounters,
 	dynamic_models_index: DynamicModelsIndex,
+	visible_dynamic_models_list: Vec<u32>,
 }
 
 struct RendererPerformanceCounters
@@ -106,6 +107,7 @@ impl Renderer
 			materials_processor,
 			performance_counters: RendererPerformanceCounters::new(),
 			dynamic_models_index: DynamicModelsIndex::new(map),
+			visible_dynamic_models_list: Vec::new(),
 		}
 	}
 
@@ -186,6 +188,11 @@ impl Renderer
 			debug_stats_printer.add_line(format!("models parts: {}", num_visible_models_parts));
 			debug_stats_printer.add_line(format!("polygons: {}", self.current_frame_visible_polygons.len()));
 			debug_stats_printer.add_line(format!(
+				"dynamic models : {}/{}",
+				self.visible_dynamic_models_list.len(),
+				frame_info.model_entities.len()
+			));
+			debug_stats_printer.add_line(format!(
 				"surfaces pixels: {}k",
 				(self.num_visible_surfaces_pixels + 1023) / 1024
 			));
@@ -246,6 +253,8 @@ impl Renderer
 		self.performance_counters
 			.visible_leafs_search
 			.add_value(visibile_leafs_search_duration_s);
+
+		self.find_visible_dynamic_models(&frame_info.model_entities);
 
 		let surfaces_preparation_start_time = Clock::now();
 
@@ -313,6 +322,33 @@ impl Renderer
 							ColorVec::from_color_f32x3(&[z, z, z]).into();
 					}
 				}
+			}
+		}
+	}
+
+	// Call this after visible leafs search.
+	fn find_visible_dynamic_models(&mut self, models: &[ModelEntity])
+	{
+		self.visible_dynamic_models_list.clear();
+
+		for i in 0 .. models.len()
+		{
+			let mut visible = false;
+			for leaf_index in self.dynamic_models_index.get_model_leafs(i as usize)
+			{
+				if self
+					.visibility_calculator
+					.get_current_frame_leaf_bounds(*leaf_index)
+					.is_some()
+				{
+					visible = true;
+					break;
+				}
+			}
+
+			if visible
+			{
+				self.visible_dynamic_models_list.push(i as u32);
 			}
 		}
 	}
@@ -1060,20 +1096,9 @@ impl Renderer
 		clip_planes: &ClippingPolygonPlanes,
 	)
 	{
-		for (index, model) in models.iter().enumerate()
+		for index in &self.visible_dynamic_models_list
 		{
-			let mut visible = false;
-			for leaf_index in self.dynamic_models_index.get_model_leafs(index)
-			{
-				if self
-					.visibility_calculator
-					.get_current_frame_leaf_bounds(*leaf_index)
-					.is_some()
-				{
-					visible = true;
-					break;
-				}
-			}
+			let model = &models[*index as usize];
 
 			let rotate = Mat4f::from_angle_z(model.angle_z);
 			let translate = Mat4f::from_translation(model.position);
