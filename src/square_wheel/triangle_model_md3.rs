@@ -52,10 +52,7 @@ pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleMode
 	let frames_info = frames_src
 		.iter()
 		.map(|f| TriangleModelFrameInfo {
-			bbox: BBox::from_min_max(
-				Vec3f::from(f.mins) * MD3_COORD_SCALE,
-				Vec3f::from(f.maxs) * MD3_COORD_SCALE,
-			),
+			bbox: BBox::from_min_max(Vec3f::from(f.mins), Vec3f::from(f.maxs)),
 		})
 		.collect();
 

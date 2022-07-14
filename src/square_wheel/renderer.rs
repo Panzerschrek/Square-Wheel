@@ -91,6 +91,7 @@ struct VisibleDynamicMeshInfo
 	vertices_offset: usize,
 	triangles_offset: usize,
 	num_visible_triangles: usize,
+	bbox_vertices_transformed: [Vec3f; 8],
 }
 
 #[derive(Default, Copy, Clone)]
@@ -172,7 +173,8 @@ impl Renderer
 		if debug_stats_printer.show_debug_stats()
 		{
 			let mut num_visible_leafs = 0;
-			let mut num_visible_models_parts = 0;
+			let mut num_visible_submodels_parts = 0;
+			let mut num_visible_meshes_parts = 0;
 			for leaf_index in 0 .. self.map.leafs.len() as u32
 			{
 				if self
@@ -181,7 +183,8 @@ impl Renderer
 					.is_some()
 				{
 					num_visible_leafs += 1;
-					num_visible_models_parts += inline_models_index.get_leaf_models(leaf_index as u32).len();
+					num_visible_submodels_parts += inline_models_index.get_leaf_models(leaf_index as u32).len();
+					num_visible_meshes_parts += self.dynamic_models_index.get_leaf_models(leaf_index as u32).len();
 				}
 			}
 
@@ -210,9 +213,13 @@ impl Renderer
 				self.performance_counters.rasterization.get_average_value() * 1000.0
 			));
 			debug_stats_printer.add_line(format!("leafs: {}/{}", num_visible_leafs, self.map.leafs.len()));
-			debug_stats_printer.add_line(format!("models parts: {}", num_visible_models_parts));
+			debug_stats_printer.add_line(format!("submodels parts: {}", num_visible_submodels_parts));
 			debug_stats_printer.add_line(format!("polygons: {}", self.current_frame_visible_polygons.len()));
-			debug_stats_printer.add_line(format!("dynamic meshes : {}", self.visible_dynamic_meshes_list.len(),));
+			debug_stats_printer.add_line(format!(
+				"dynamic meshes : {}, parts: {}",
+				self.visible_dynamic_meshes_list.len(),
+				num_visible_meshes_parts
+			));
 			debug_stats_printer.add_line(format!(
 				"surfaces pixels: {}k",
 				(self.num_visible_surfaces_pixels + 1023) / 1024
@@ -393,7 +400,8 @@ impl Renderer
 					mesh_index: mesh_index as u32,
 					vertices_offset,
 					triangles_offset,
-					num_visible_triangles: 0, // set later
+					num_visible_triangles: 0,                      // set later
+					bbox_vertices_transformed: [Vec3f::zero(); 8], // set later
 				});
 
 				vertices_offset += mesh.vertex_data_constant.len();
@@ -425,12 +433,30 @@ impl Renderer
 		for visible_dynamic_mesh in &mut self.visible_dynamic_meshes_list
 		{
 			let model = &models[visible_dynamic_mesh.entity_index as usize];
+			let frame = model.frame as usize;
 
 			let rotate = Mat4f::from_angle_z(model.angle_z);
 			let translate = Mat4f::from_translation(model.position);
 			let world_space_matrix = translate * rotate;
 
 			let final_matrix = camera_matrices.view_matrix * world_space_matrix;
+
+			// Transform bbox.
+			let bbox = &model.model.frames_info[frame].bbox;
+			visible_dynamic_mesh.bbox_vertices_transformed = [
+				Vec3f::new(bbox.min.x, bbox.min.y, bbox.min.z),
+				Vec3f::new(bbox.min.x, bbox.min.y, bbox.max.z),
+				Vec3f::new(bbox.min.x, bbox.max.y, bbox.min.z),
+				Vec3f::new(bbox.min.x, bbox.max.y, bbox.max.z),
+				Vec3f::new(bbox.max.x, bbox.min.y, bbox.min.z),
+				Vec3f::new(bbox.max.x, bbox.min.y, bbox.max.z),
+				Vec3f::new(bbox.max.x, bbox.max.y, bbox.min.z),
+				Vec3f::new(bbox.max.x, bbox.max.y, bbox.max.z),
+			]
+			.map(|pos| {
+				let pos_transformed = final_matrix * pos.extend(1.0);
+				Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w)
+			});
 
 			// TODO - premultiply texture coordinates while loading model instead?
 			let texture = &model.texture;
@@ -439,7 +465,6 @@ impl Renderer
 			let mesh = &model.model.meshes[visible_dynamic_mesh.mesh_index as usize];
 
 			// Perform vertices transformation.
-			let frame = model.frame as usize;
 			let frame_vertex_data = &mesh.vertex_data_variable
 				[frame * mesh.vertex_data_constant.len() .. (frame + 1) * mesh.vertex_data_constant.len()];
 
@@ -1271,6 +1296,17 @@ impl Renderer
 		visible_dynamic_mesh: &VisibleDynamicMeshInfo,
 	)
 	{
+		// let bbox_vertices = visible_dynamic_mesh.bbox_vertices_transformed.map(|v| ModelVertex3d{ pos: v, tc: Vec2f::zero()} );
+		// let bbox_triangles =
+		// [
+		// [0, 3, 1 ], [ 0, 1, 2 ],
+		// [ 4, 6, 7 ], [ 4, 7, 5 ],
+		// [ 0, 1, 5 ], [ 0, 5, 4 ],
+		// [ 2, 3, 7 ], [2, 7, 6 ],
+		// [ 1, 3, 7 ], [ 1, 7, 5] ,
+		// [ 0, 2, 6], [ 0, 6, 4],
+		// ];
+
 		let model = &models[visible_dynamic_mesh.entity_index as usize];
 		let texture = &model.texture;
 
