@@ -1036,6 +1036,7 @@ impl Renderer
 		// TODO - maybe just a little bit extend clipping polygon?
 		let clip_planes = bounds.get_clip_planes();
 
+		// Draw polygons of leaf itself.
 		for polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
 		{
 			let polygon = &self.map.polygons[polygon_index as usize];
@@ -1058,11 +1059,76 @@ impl Renderer
 			);
 		}
 
+		// Draw contents of leaf - submodels and triangle models.
+
 		let leaf_submodels = inline_models_index.get_leaf_models(leaf_index);
 		let leaf_dynamic_models = self.dynamic_models_index.get_leaf_models(leaf_index);
 		if leaf_submodels.is_empty() && leaf_dynamic_models.is_empty()
 		{
 			return;
+		}
+
+		// Collect clip planes, that will be used for models clipping.
+		// TODO - use uninitialized memory.
+		// TODO - perform deduplication of clip planes - remove identical/parallel planes.
+		const MAX_LEAF_CLIP_PLANES: usize = 32;
+		let mut leaf_clip_planes = [Plane {
+			vec: Vec3f::zero(),
+			dist: 0.0,
+		}; MAX_LEAF_CLIP_PLANES];
+		let mut num_clip_planes = 0;
+
+		// Clip models polygons by portal planes of current leaf.
+		// Do this in camera space (transform clip planes for this).
+		for &portal_index in &self.map.leafs_portals
+			[(leaf.first_leaf_portal as usize) .. ((leaf.first_leaf_portal + leaf.num_leaf_portals) as usize)]
+		{
+			let portal = &self.map.portals[portal_index as usize];
+			let clip_plane = if portal.leafs[0] == leaf_index
+			{
+				portal.plane
+			}
+			else
+			{
+				Plane {
+					vec: -portal.plane.vec,
+					dist: -portal.plane.dist,
+				}
+			};
+
+			let clip_plane_transformed_vec4 = camera_matrices.planes_matrix * clip_plane.vec.extend(-clip_plane.dist);
+			let clip_plane_transformed = Plane {
+				vec: clip_plane_transformed_vec4.truncate(),
+				dist: -clip_plane_transformed_vec4.w,
+			};
+
+			leaf_clip_planes[num_clip_planes] = clip_plane_transformed;
+			num_clip_planes += 1;
+			if num_clip_planes == MAX_LEAF_CLIP_PLANES
+			{
+				break;
+			}
+		}
+
+		// Clip models also by polygons of current leaf.
+		for polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
+		{
+			if num_clip_planes == MAX_LEAF_CLIP_PLANES
+			{
+				break;
+			}
+
+			let clip_polygon = &self.map.polygons[polygon_index as usize];
+
+			let clip_plane_transformed_vec4 =
+				camera_matrices.planes_matrix * clip_polygon.plane.vec.extend(-clip_polygon.plane.dist);
+			let clip_plane_transformed = Plane {
+				vec: clip_plane_transformed_vec4.truncate(),
+				dist: -clip_plane_transformed_vec4.w,
+			};
+
+			leaf_clip_planes[num_clip_planes] = clip_plane_transformed;
+			num_clip_planes += 1;
 		}
 
 		// TODO - use uninitialized memory and increase this value.
@@ -1088,9 +1154,8 @@ impl Renderer
 		{
 			self.draw_submodel_in_leaf(
 				rasterizer,
-				&camera_matrices.planes_matrix,
 				&clip_planes,
-				leaf_index,
+				&leaf_clip_planes[.. num_clip_planes],
 				*submodel_index,
 			);
 		}
@@ -1115,30 +1180,26 @@ impl Renderer
 	fn draw_submodel_in_leaf<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
-		planes_matrix: &Mat4f,
 		clip_planes: &ClippingPolygonPlanes,
-		leaf_index: u32,
+		leaf_clip_planes: &[Plane],
 		submodel_index: u32,
 	)
 	{
 		let submodel = &self.map.submodels[submodel_index as usize];
 		for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
 		{
-			self.draw_submodel_polygon(rasterizer, planes_matrix, &clip_planes, leaf_index, polygon_index);
+			self.draw_submodel_polygon(rasterizer, &clip_planes, leaf_clip_planes, polygon_index);
 		}
 	}
 
 	fn draw_submodel_polygon<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
-		planes_matrix: &Mat4f,
 		clip_planes: &ClippingPolygonPlanes,
-		leaf_index: u32,
+		leaf_clip_planes: &[Plane],
 		polygon_index: u32,
 	)
 	{
-		let leaf = &self.map.leafs[leaf_index as usize];
-
 		let polygon = &self.map.polygons[polygon_index as usize];
 		let polygon_data = &self.polygons_data[polygon_index as usize];
 		if polygon_data.visible_frame != self.current_frame
@@ -1159,58 +1220,10 @@ impl Renderer
 
 		let mut vertices_temp = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
 
-		// Clip model polygon by portal planes of current leaf.
-		// Do this in camera space (transform clip planes for this).
-		for &portal_index in &self.map.leafs_portals
-			[(leaf.first_leaf_portal as usize) .. ((leaf.first_leaf_portal + leaf.num_leaf_portals) as usize)]
+		for clip_plane in leaf_clip_planes
 		{
-			let portal = &self.map.portals[portal_index as usize];
-			let clip_plane = if portal.leafs[0] == leaf_index
-			{
-				portal.plane
-			}
-			else
-			{
-				Plane {
-					vec: -portal.plane.vec,
-					dist: -portal.plane.dist,
-				}
-			};
-
-			let clip_plane_transformed_vec4 = planes_matrix * clip_plane.vec.extend(-clip_plane.dist);
-			let clip_plane_transformed = Plane {
-				vec: clip_plane_transformed_vec4.truncate(),
-				dist: -clip_plane_transformed_vec4.w,
-			};
-
-			vertex_count = clip_3d_polygon_by_plane(
-				&vertices_clipped[.. vertex_count],
-				&clip_plane_transformed,
-				&mut vertices_temp[..],
-			);
-			if vertex_count < 3
-			{
-				return;
-			}
-			vertices_clipped[.. vertex_count].copy_from_slice(&vertices_temp[.. vertex_count]);
-		}
-
-		// Clip model also by polygons of current leaf.
-		for clip_polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
-		{
-			let clip_polygon = &self.map.polygons[clip_polygon_index as usize];
-
-			let clip_plane_transformed_vec4 = planes_matrix * clip_polygon.plane.vec.extend(-clip_polygon.plane.dist);
-			let clip_plane_transformed = Plane {
-				vec: clip_plane_transformed_vec4.truncate(),
-				dist: -clip_plane_transformed_vec4.w,
-			};
-
-			vertex_count = clip_3d_polygon_by_plane(
-				&vertices_clipped[.. vertex_count],
-				&clip_plane_transformed,
-				&mut vertices_temp[..],
-			);
+			vertex_count =
+				clip_3d_polygon_by_plane(&vertices_clipped[.. vertex_count], clip_plane, &mut vertices_temp[..]);
 			if vertex_count < 3
 			{
 				return;
