@@ -39,6 +39,7 @@ pub struct Renderer
 	// Store transformed models vertices and triangles in separate buffer.
 	// This is needed to avoid transforming/sorting model's vertices/triangles in each BSP leaf where this model is located.
 	visible_dynamic_meshes_list: Vec<VisibleDynamicMeshInfo>,
+	dynamic_model_to_dynamic_meshes_index: Vec<DynamicModelInfo>,
 	dynamic_meshes_vertices: Vec<ModelVertex3d>,
 	dynamic_meshes_triangles: Vec<Triangle>,
 }
@@ -92,6 +93,13 @@ struct VisibleDynamicMeshInfo
 	num_visible_triangles: usize,
 }
 
+#[derive(Default, Copy, Clone)]
+struct DynamicModelInfo
+{
+	first_visible_mesh: u32,
+	num_visible_meshes: u32,
+}
+
 impl Renderer
 {
 	pub fn new(app_config: config::ConfigSharedPtr, map: Arc<bsp_map_compact::BSPMap>) -> Self
@@ -122,6 +130,7 @@ impl Renderer
 			performance_counters: RendererPerformanceCounters::new(),
 			dynamic_models_index: DynamicModelsIndex::new(map),
 			visible_dynamic_meshes_list: Vec::new(),
+			dynamic_model_to_dynamic_meshes_index: Vec::new(),
 			dynamic_meshes_vertices: Vec::new(),
 			dynamic_meshes_triangles: Vec::new(),
 		}
@@ -203,10 +212,7 @@ impl Renderer
 			debug_stats_printer.add_line(format!("leafs: {}/{}", num_visible_leafs, self.map.leafs.len()));
 			debug_stats_printer.add_line(format!("models parts: {}", num_visible_models_parts));
 			debug_stats_printer.add_line(format!("polygons: {}", self.current_frame_visible_polygons.len()));
-			debug_stats_printer.add_line(format!(
-				"dynamic meshes : {}",
-				self.visible_dynamic_meshes_list.len(),
-			));
+			debug_stats_printer.add_line(format!("dynamic meshes : {}", self.visible_dynamic_meshes_list.len(),));
 			debug_stats_printer.add_line(format!(
 				"surfaces pixels: {}k",
 				(self.num_visible_surfaces_pixels + 1023) / 1024
@@ -347,10 +353,16 @@ impl Renderer
 	{
 		self.visible_dynamic_meshes_list.clear();
 
+		self.dynamic_model_to_dynamic_meshes_index
+			.resize(models.len(), DynamicModelInfo::default());
+
 		// Reserve place in vertex/triangle buffers for each visible mesh.
 		let mut vertices_offset = 0;
 		let mut triangles_offset = 0;
-		for (entity_index, model) in models.iter().enumerate()
+		for (entity_index, (model, dynamic_model_info)) in models
+			.iter()
+			.zip(self.dynamic_model_to_dynamic_meshes_index.iter_mut())
+			.enumerate()
 		{
 			let mut visible = false;
 			for leaf_index in self.dynamic_models_index.get_model_leafs(entity_index)
@@ -367,8 +379,12 @@ impl Renderer
 
 			if !visible
 			{
+				dynamic_model_info.first_visible_mesh = 0;
+				dynamic_model_info.num_visible_meshes = 0;
 				continue;
 			}
+
+			dynamic_model_info.first_visible_mesh = self.visible_dynamic_meshes_list.len() as u32;
 
 			for (mesh_index, mesh) in model.model.meshes.iter().enumerate()
 			{
@@ -383,6 +399,8 @@ impl Renderer
 				vertices_offset += mesh.vertex_data_constant.len();
 				triangles_offset += mesh.triangles.len();
 			}
+
+			dynamic_model_info.num_visible_meshes = model.model.meshes.len() as u32;
 		}
 
 		if vertices_offset > self.dynamic_meshes_vertices.len()
