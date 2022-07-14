@@ -1070,7 +1070,7 @@ impl Renderer
 
 		// Collect clip planes, that will be used for models clipping.
 		// TODO - use uninitialized memory.
-		const MAX_LEAF_CLIP_PLANES: usize = 32;
+		const MAX_LEAF_CLIP_PLANES: usize = 20;
 		let mut leaf_clip_planes = [Plane {
 			vec: Vec3f::zero(),
 			dist: 0.0,
@@ -1078,20 +1078,38 @@ impl Renderer
 		let mut num_clip_planes = 0;
 
 		let mut add_clip_plane = |plane: Plane| {
+			// We need to use planes with normalized vector in order to compare distances properly.
+			let normal_length = plane.vec.magnitude();
+			if normal_length < 0.00000000001
+			{
+				return;
+			}
+			let plane_normalized = Plane {
+				vec: plane.vec / normal_length,
+				dist: plane.dist / normal_length,
+			};
+
+			// Perform dedupliction - iterate over previous planes.
+			// We have quadratic complexity here, but it is not a problem since number of planes are usually small (6 for cube-shaped leaf).
+			for prev_plane in &mut leaf_clip_planes[.. num_clip_planes]
+			{
+				// Dot product is angle cos since vectors are normalized.
+				let dot = plane_normalized.vec.dot(prev_plane.vec);
+				if dot >= 1.0 - 1.0 / 256.0
+				{
+					// Planes are (almost) parallel.
+					// Select plane with greater distance to clip more.
+					prev_plane.dist = prev_plane.dist.max(plane_normalized.dist);
+					return;
+				}
+			}
+
 			if num_clip_planes == MAX_LEAF_CLIP_PLANES
 			{
 				return;
 			}
 
-			let plane_transformed_vec4 = camera_matrices.planes_matrix * plane.vec.extend(-plane.dist);
-			let plane_transformed = Plane {
-				vec: plane_transformed_vec4.truncate(),
-				dist: -plane_transformed_vec4.w,
-			};
-
-			// TODO - perform deduplication of clip planes - remove identical/parallel planes.
-
-			leaf_clip_planes[num_clip_planes] = plane_transformed;
+			leaf_clip_planes[num_clip_planes] = plane_normalized;
 			num_clip_planes += 1;
 		};
 
@@ -1116,9 +1134,19 @@ impl Renderer
 		// Clip models also by polygons of current leaf.
 		for polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
 		{
-			let clip_polygon = &self.map.polygons[polygon_index as usize];
+			add_clip_plane(self.map.polygons[polygon_index as usize].plane);
+		}
 
-			add_clip_plane(clip_polygon.plane);
+		// Perform planes transformation after deduplication.
+		// This is needed because deduplication works badly in stretched camera space.
+		// Also it's faster to transform only unique planes.
+		for plane in &mut leaf_clip_planes[.. num_clip_planes]
+		{
+			let plane_transformed_vec4 = camera_matrices.planes_matrix * plane.vec.extend(-plane.dist);
+			*plane = Plane {
+				vec: plane_transformed_vec4.truncate(),
+				dist: -plane_transformed_vec4.w,
+			};
 		}
 
 		// TODO - use uninitialized memory and increase this value.
