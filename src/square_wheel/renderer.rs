@@ -49,6 +49,7 @@ struct RendererPerformanceCounters
 	frame_duration: PerformanceCounter,
 	materials_update: PerformanceCounter,
 	visible_leafs_search: PerformanceCounter,
+	triangle_models_preparation: PerformanceCounter,
 	surfaces_preparation: PerformanceCounter,
 	background_fill: PerformanceCounter,
 	rasterization: PerformanceCounter,
@@ -63,6 +64,7 @@ impl RendererPerformanceCounters
 			frame_duration: PerformanceCounter::new(window_size),
 			materials_update: PerformanceCounter::new(window_size),
 			visible_leafs_search: PerformanceCounter::new(window_size),
+			triangle_models_preparation: PerformanceCounter::new(window_size),
 			surfaces_preparation: PerformanceCounter::new(window_size),
 			background_fill: PerformanceCounter::new(window_size),
 			rasterization: PerformanceCounter::new(window_size),
@@ -201,7 +203,13 @@ impl Renderer
 				self.performance_counters.visible_leafs_search.get_average_value() * 1000.0
 			));
 			debug_stats_printer.add_line(format!(
-				"surfaces  preparation: {:04.2}ms",
+				"triangle models preparation: {:04.2}ms",
+				self.performance_counters
+					.triangle_models_preparation
+					.get_average_value() * 1000.0
+			));
+			debug_stats_printer.add_line(format!(
+				"surfaces preparation: {:04.2}ms",
 				self.performance_counters.surfaces_preparation.get_average_value() * 1000.0
 			));
 			debug_stats_printer.add_line(format!(
@@ -282,8 +290,17 @@ impl Renderer
 			.visible_leafs_search
 			.add_value(visibile_leafs_search_duration_s);
 
+		let triangle_models_preparation_start_time = Clock::now();
+
 		self.prepare_dynamic_models(&frame_info.model_entities);
 		self.build_dynamic_models_buffers(&frame_info.camera_matrices, &frame_info.model_entities);
+
+		let triangle_models_preparation_end_time = Clock::now();
+		let triangle_models_preparation_duration_s =
+			(triangle_models_preparation_end_time - triangle_models_preparation_start_time).as_secs_f32();
+		self.performance_counters
+			.triangle_models_preparation
+			.add_value(triangle_models_preparation_duration_s);
 
 		let surfaces_preparation_start_time = Clock::now();
 
