@@ -1188,6 +1188,7 @@ impl Renderer
 				self.draw_mesh_in_leaf(
 					rasterizer,
 					&clip_planes,
+					&leaf_clip_planes[.. num_clip_planes],
 					models,
 					&self.visible_dynamic_meshes_list[visible_mesh_index as usize],
 				);
@@ -1265,6 +1266,7 @@ impl Renderer
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		clip_planes: &ClippingPolygonPlanes,
+		leaf_clip_planes: &[Plane],
 		models: &[ModelEntity],
 		visible_dynamic_mesh: &VisibleDynamicMeshInfo,
 	)
@@ -1279,8 +1281,8 @@ impl Renderer
 
 		let texture_data = &texture.pixels;
 
-		let mut vertices_transformed = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
 		let mut vertices_clipped = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
+		let mut vertices_clipped_temp = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
 		let mut vertices_projected = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
 		let mut vertices_projected_temp = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
 		let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
@@ -1291,21 +1293,33 @@ impl Renderer
 			visible_dynamic_mesh.triangles_offset + visible_dynamic_mesh.num_visible_triangles];
 		for triangle in triangles
 		{
-			for (&index, dst_vertex) in triangle.iter().zip(vertices_transformed.iter_mut())
+			for (&index, dst_vertex) in triangle.iter().zip(vertices_clipped.iter_mut())
 			{
 				// TODO - use unchecked fetch?
 				*dst_vertex = vertices_combined[index as usize];
 			}
 
+			let mut num_vertices = 3;
+
 			// TODO - avoid z-near clipping if bbox is behind z_near.
-			let mut num_vertices = clip_3d_model_polygon_by_plane(
-				&vertices_transformed[0 .. 3],
-				&Plane {
-					vec: Vec3f::unit_z(),
-					dist: Z_NEAR,
-				},
-				&mut vertices_clipped,
-			);
+			// TODO - prepare list of planes that actually clips this model (perform bbox-check).
+			let near_z_plane = Plane {
+				vec: Vec3f::unit_z(),
+				dist: Z_NEAR,
+			};
+			for clip_plane in [near_z_plane].iter().chain(leaf_clip_planes.iter())
+			{
+				num_vertices = clip_3d_model_polygon_by_plane(
+					&vertices_clipped[0 .. num_vertices],
+					clip_plane,
+					&mut vertices_clipped_temp,
+				);
+				if num_vertices < 3
+				{
+					break;
+				}
+				vertices_clipped[.. num_vertices].copy_from_slice(&vertices_clipped_temp[.. num_vertices]);
+			}
 			if num_vertices < 3
 			{
 				continue;
