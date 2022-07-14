@@ -518,10 +518,9 @@ impl Renderer
 				camera_matrices,
 				&viewport_clippung_polygon,
 				inline_models_index,
+				models,
 				root_node,
 			);
-
-			self.draw_test_models(&mut rasterizer, models, &viewport_clippung_polygon.get_clip_planes());
 		}
 		else
 		{
@@ -567,10 +566,9 @@ impl Renderer
 					camera_matrices,
 					&viewport_clippung_polygon,
 					inline_models_index,
+					models,
 					root_node,
 				);
-
-				self.draw_test_models(&mut rasterizer, models, &viewport_clippung_polygon.get_clip_planes());
 			});
 		}
 	}
@@ -977,6 +975,7 @@ impl Renderer
 		camera_matrices: &CameraMatrices,
 		viewport_clippung_polygon: &ClippingPolygon,
 		inline_models_index: &InlineModelsIndex,
+		models: &[ModelEntity],
 		current_index: u32,
 	)
 	{
@@ -988,7 +987,14 @@ impl Renderer
 				leaf_bounds.intersect(viewport_clippung_polygon);
 				if leaf_bounds.is_valid_and_non_empty()
 				{
-					self.draw_leaf(rasterizer, camera_matrices, &leaf_bounds, inline_models_index, leaf);
+					self.draw_leaf(
+						rasterizer,
+						camera_matrices,
+						&leaf_bounds,
+						inline_models_index,
+						models,
+						leaf,
+					);
 				}
 			}
 		}
@@ -1008,6 +1014,7 @@ impl Renderer
 					camera_matrices,
 					viewport_clippung_polygon,
 					inline_models_index,
+					models,
 					node.children[(i ^ mask) as usize],
 				);
 			}
@@ -1020,6 +1027,7 @@ impl Renderer
 		camera_matrices: &CameraMatrices,
 		bounds: &ClippingPolygon,
 		inline_models_index: &InlineModelsIndex,
+		models: &[ModelEntity],
 		leaf_index: u32,
 	)
 	{
@@ -1051,7 +1059,8 @@ impl Renderer
 		}
 
 		let leaf_submodels = inline_models_index.get_leaf_models(leaf_index);
-		if leaf_submodels.is_empty()
+		let leaf_dynamic_models = self.dynamic_models_index.get_leaf_models(leaf_index);
+		if leaf_submodels.is_empty() && leaf_dynamic_models.is_empty()
 		{
 			return;
 		}
@@ -1084,6 +1093,22 @@ impl Renderer
 				leaf_index,
 				*submodel_index,
 			);
+		}
+
+		// TODO - order submodels and dynamic (triangle) models together.
+		// TODO - clip meshes by portals/polygons planes of this leaf.
+		for dynamic_model_index in leaf_dynamic_models
+		{
+			let entry = self.dynamic_model_to_dynamic_meshes_index[*dynamic_model_index as usize];
+			for visible_mesh_index in entry.first_visible_mesh .. entry.first_visible_mesh + entry.num_visible_meshes
+			{
+				self.draw_mesh_in_leaf(
+					rasterizer,
+					&clip_planes,
+					models,
+					&self.visible_dynamic_meshes_list[visible_mesh_index as usize],
+				);
+			}
 		}
 	}
 
@@ -1205,28 +1230,7 @@ impl Renderer
 		);
 	}
 
-	fn get_polygon_surface_data<ColorT>(&self, polygon_data: &DrawPolygonData) -> &[ColorT]
-	{
-		let pixels_casted = unsafe { self.surfaces_pixels.align_to::<ColorT>().1 };
-		&pixels_casted[polygon_data.surface_pixels_offset ..
-			polygon_data.surface_pixels_offset +
-				((polygon_data.surface_size[0] * polygon_data.surface_size[1]) as usize)]
-	}
-
-	fn draw_test_models<'a, ColorT: AbstractColor>(
-		&self,
-		rasterizer: &mut Rasterizer<'a, ColorT>,
-		models: &[ModelEntity],
-		clip_planes: &ClippingPolygonPlanes,
-	)
-	{
-		for visible_dynamic_mesh in &self.visible_dynamic_meshes_list
-		{
-			self.draw_test_mesh(rasterizer, clip_planes, models, visible_dynamic_mesh);
-		}
-	}
-
-	fn draw_test_mesh<'a, ColorT: AbstractColor>(
+	fn draw_mesh_in_leaf<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		clip_planes: &ClippingPolygonPlanes,
@@ -1325,6 +1329,14 @@ impl Renderer
 				);
 			} // for subtriangles
 		} // For triangles
+	}
+
+	fn get_polygon_surface_data<ColorT>(&self, polygon_data: &DrawPolygonData) -> &[ColorT]
+	{
+		let pixels_casted = unsafe { self.surfaces_pixels.align_to::<ColorT>().1 };
+		&pixels_casted[polygon_data.surface_pixels_offset ..
+			polygon_data.surface_pixels_offset +
+				((polygon_data.surface_size[0] * polygon_data.surface_size[1]) as usize)]
 	}
 
 	fn update_mip_bias(&mut self)
