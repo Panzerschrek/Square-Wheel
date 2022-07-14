@@ -1070,13 +1070,30 @@ impl Renderer
 
 		// Collect clip planes, that will be used for models clipping.
 		// TODO - use uninitialized memory.
-		// TODO - perform deduplication of clip planes - remove identical/parallel planes.
 		const MAX_LEAF_CLIP_PLANES: usize = 32;
 		let mut leaf_clip_planes = [Plane {
 			vec: Vec3f::zero(),
 			dist: 0.0,
 		}; MAX_LEAF_CLIP_PLANES];
 		let mut num_clip_planes = 0;
+
+		let mut add_clip_plane = |plane: Plane| {
+			if num_clip_planes == MAX_LEAF_CLIP_PLANES
+			{
+				return;
+			}
+
+			let plane_transformed_vec4 = camera_matrices.planes_matrix * plane.vec.extend(-plane.dist);
+			let plane_transformed = Plane {
+				vec: plane_transformed_vec4.truncate(),
+				dist: -plane_transformed_vec4.w,
+			};
+
+			// TODO - perform deduplication of clip planes - remove identical/parallel planes.
+
+			leaf_clip_planes[num_clip_planes] = plane_transformed;
+			num_clip_planes += 1;
+		};
 
 		// Clip models polygons by portal planes of current leaf.
 		// Do this in camera space (transform clip planes for this).
@@ -1090,45 +1107,18 @@ impl Renderer
 			}
 			else
 			{
-				Plane {
-					vec: -portal.plane.vec,
-					dist: -portal.plane.dist,
-				}
+				portal.plane.get_inverted()
 			};
 
-			let clip_plane_transformed_vec4 = camera_matrices.planes_matrix * clip_plane.vec.extend(-clip_plane.dist);
-			let clip_plane_transformed = Plane {
-				vec: clip_plane_transformed_vec4.truncate(),
-				dist: -clip_plane_transformed_vec4.w,
-			};
-
-			leaf_clip_planes[num_clip_planes] = clip_plane_transformed;
-			num_clip_planes += 1;
-			if num_clip_planes == MAX_LEAF_CLIP_PLANES
-			{
-				break;
-			}
+			add_clip_plane(clip_plane);
 		}
 
 		// Clip models also by polygons of current leaf.
 		for polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
 		{
-			if num_clip_planes == MAX_LEAF_CLIP_PLANES
-			{
-				break;
-			}
-
 			let clip_polygon = &self.map.polygons[polygon_index as usize];
 
-			let clip_plane_transformed_vec4 =
-				camera_matrices.planes_matrix * clip_polygon.plane.vec.extend(-clip_polygon.plane.dist);
-			let clip_plane_transformed = Plane {
-				vec: clip_plane_transformed_vec4.truncate(),
-				dist: -clip_plane_transformed_vec4.w,
-			};
-
-			leaf_clip_planes[num_clip_planes] = clip_plane_transformed;
-			num_clip_planes += 1;
+			add_clip_plane(clip_polygon.plane);
 		}
 
 		// TODO - use uninitialized memory and increase this value.
