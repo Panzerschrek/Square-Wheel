@@ -1050,49 +1050,60 @@ impl Renderer
 			);
 		}
 
-		let leaf_models = inline_models_index.get_leaf_models(leaf_index);
-		if leaf_models.is_empty()
+		let leaf_submodels = inline_models_index.get_leaf_models(leaf_index);
+		if leaf_submodels.is_empty()
 		{
 			return;
 		}
 
 		// TODO - use uninitialized memory and increase this value.
-		const MAX_MODELS_IN_LEAF: usize = 12;
+		const MAX_SUBMODELS_IN_LEAF: usize = 12;
 		let mut models_for_sorting = [(
 			0,
 			BBox {
 				min: Vec3f::zero(),
 				max: Vec3f::zero(),
 			},
-		); MAX_MODELS_IN_LEAF];
+		); MAX_SUBMODELS_IN_LEAF];
 
-		for (&model_index, model_for_sorting) in leaf_models.iter().zip(models_for_sorting.iter_mut())
+		for (&model_index, model_for_sorting) in leaf_submodels.iter().zip(models_for_sorting.iter_mut())
 		{
-			model_for_sorting.0 = model_index;
-			model_for_sorting.1 = inline_models_index.get_model_bbox(model_index);
+			*model_for_sorting = (model_index, inline_models_index.get_model_bbox(model_index));
 		}
-		let num_models = std::cmp::min(leaf_models.len(), MAX_MODELS_IN_LEAF);
+		let num_models = std::cmp::min(leaf_submodels.len(), MAX_SUBMODELS_IN_LEAF);
 
 		draw_ordering::order_models(&mut models_for_sorting[.. num_models], &camera_matrices.position);
 
-		// Draw models, located in this leaf, after leaf polygons.
-		for (model_index, _bbox) in &models_for_sorting[.. num_models]
+		// Draw submodels, located in this leaf, after leaf polygons.
+		for (submodel_index, _bbox) in &models_for_sorting[.. num_models]
 		{
-			let submodel = &self.map.submodels[*model_index as usize];
-			for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
-			{
-				self.draw_model_polygon(
-					rasterizer,
-					&camera_matrices.planes_matrix,
-					&clip_planes,
-					leaf_index,
-					polygon_index,
-				);
-			}
+			self.draw_submodel_in_leaf(
+				rasterizer,
+				&camera_matrices.planes_matrix,
+				&clip_planes,
+				leaf_index,
+				*submodel_index,
+			);
 		}
 	}
 
-	fn draw_model_polygon<'a, ColorT: AbstractColor>(
+	fn draw_submodel_in_leaf<'a, ColorT: AbstractColor>(
+		&self,
+		rasterizer: &mut Rasterizer<'a, ColorT>,
+		planes_matrix: &Mat4f,
+		clip_planes: &ClippingPolygonPlanes,
+		leaf_index: u32,
+		submodel_index: u32,
+	)
+	{
+		let submodel = &self.map.submodels[submodel_index as usize];
+		for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
+		{
+			self.draw_submodel_polygon(rasterizer, planes_matrix, &clip_planes, leaf_index, polygon_index);
+		}
+	}
+
+	fn draw_submodel_polygon<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		planes_matrix: &Mat4f,
