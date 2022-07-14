@@ -1095,7 +1095,6 @@ impl Renderer
 
 		// Collect clip planes, that will be used for models clipping.
 		// TODO - use uninitialized memory.
-		const MAX_LEAF_CLIP_PLANES: usize = 20;
 		let mut leaf_clip_planes = [Plane {
 			vec: Vec3f::zero(),
 			dist: 0.0,
@@ -1308,6 +1307,46 @@ impl Renderer
 		// ];
 
 		let model = &models[visible_dynamic_mesh.entity_index as usize];
+
+		// Find clip planes that affect this model.
+		// TODO - use uninitialized memory.
+		let mut clip_planes_3d = [Plane {
+			vec: Vec3f::zero(),
+			dist: 0.0,
+		}; MAX_LEAF_CLIP_PLANES];
+		let mut num_clip_planes_3d = 0;
+
+		let near_z_plane = Plane {
+			vec: Vec3f::unit_z(),
+			dist: Z_NEAR,
+		};
+		for clip_plane in [near_z_plane].iter().chain(leaf_clip_planes.iter())
+		{
+			let mut vertices_front = 0;
+			for v in visible_dynamic_mesh.bbox_vertices_transformed
+			{
+				if clip_plane.vec.dot(v) >= clip_plane.dist
+				{
+					vertices_front += 1;
+				}
+			}
+
+			if vertices_front == visible_dynamic_mesh.bbox_vertices_transformed.len()
+			{
+				// This clip plane is useless.
+			}
+			else if vertices_front == 0
+			{
+				// Model is fully clipped.
+				return;
+			}
+			else
+			{
+				clip_planes_3d[num_clip_planes_3d] = *clip_plane;
+				num_clip_planes_3d += 1;
+			}
+		}
+
 		let texture = &model.texture;
 
 		// TODO - use individual texture for each mesh.
@@ -1336,14 +1375,7 @@ impl Renderer
 			}
 
 			let mut num_vertices = 3;
-
-			// TODO - avoid z-near clipping if bbox is behind z_near.
-			// TODO - prepare list of planes that actually clips this model (perform bbox-check).
-			let near_z_plane = Plane {
-				vec: Vec3f::unit_z(),
-				dist: Z_NEAR,
-			};
-			for clip_plane in [near_z_plane].iter().chain(leaf_clip_planes.iter())
+			for clip_plane in &clip_planes_3d[.. num_clip_planes_3d]
 			{
 				num_vertices = clip_3d_model_polygon_by_plane(
 					&vertices_clipped[0 .. num_vertices],
@@ -1922,6 +1954,7 @@ fn line_z_corrected_texture_coordinates_interpolation_may_be_used(
 const TC_ERROR_THRESHOLD: f32 = 0.75;
 
 pub const MAX_VERTICES: usize = 24;
+const MAX_LEAF_CLIP_PLANES: usize = 20;
 
 const Z_NEAR: f32 = 1.0;
 
