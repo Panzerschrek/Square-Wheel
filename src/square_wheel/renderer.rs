@@ -1387,8 +1387,7 @@ impl Renderer
 		{
 			for (&index, dst_vertex) in triangle.iter().zip(vertices_clipped.iter_mut())
 			{
-				// TODO - use unchecked fetch?
-				*dst_vertex = vertices_combined[index as usize];
+				*dst_vertex = triangle_vertex_debug_checked_fetch(vertices_combined, index);
 			}
 
 			let mut num_vertices = 3;
@@ -1452,6 +1451,7 @@ impl Renderer
 
 			for t in 0 .. num_vertices - 2
 			{
+				// TODO - use unchecked vertex fetch?
 				rasterizer.fill_triangle(
 					&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
 					&texture_info,
@@ -1521,17 +1521,16 @@ fn sort_model_triangles(transformed_vertices: &[ModelVertex3d], triangles: &mut 
 	// TODO - try to use other criterias - min_z, center_z, min_z + max_z ...
 
 	triangles.sort_by(|a, b| {
-		// TODO - use unchecked fetch.
-		let a_z = transformed_vertices[a[0] as usize]
+		let a_z = triangle_vertex_debug_checked_fetch(transformed_vertices, a[0])
 			.pos
 			.z
-			.max(transformed_vertices[a[1] as usize].pos.z)
-			.max(transformed_vertices[a[2] as usize].pos.z);
-		let b_z = transformed_vertices[b[0] as usize]
+			.max(triangle_vertex_debug_checked_fetch(transformed_vertices, a[1]).pos.z)
+			.max(triangle_vertex_debug_checked_fetch(transformed_vertices, a[2]).pos.z);
+		let b_z = triangle_vertex_debug_checked_fetch(transformed_vertices, b[0])
 			.pos
 			.z
-			.max(transformed_vertices[b[1] as usize].pos.z)
-			.max(transformed_vertices[b[2] as usize].pos.z);
+			.max(triangle_vertex_debug_checked_fetch(transformed_vertices, b[1]).pos.z)
+			.max(triangle_vertex_debug_checked_fetch(transformed_vertices, b[2]).pos.z);
 		// TODO - avoid unwrap.
 		b_z.partial_cmp(&a_z).unwrap()
 	});
@@ -1539,12 +1538,25 @@ fn sort_model_triangles(transformed_vertices: &[ModelVertex3d], triangles: &mut 
 
 fn get_triangle_plane(transformed_vertices: &[ModelVertex3d], triangle: &Triangle) -> Plane
 {
-	let v0 = transformed_vertices[triangle[0] as usize];
-	let v1 = transformed_vertices[triangle[1] as usize];
-	let v2 = transformed_vertices[triangle[2] as usize];
+	let v0 = triangle_vertex_debug_checked_fetch(transformed_vertices, triangle[0]);
+	let v1 = triangle_vertex_debug_checked_fetch(transformed_vertices, triangle[1]);
+	let v2 = triangle_vertex_debug_checked_fetch(transformed_vertices, triangle[2]);
 	let vec = (v1.pos - v0.pos).cross(v2.pos - v1.pos);
 	let dist = vec.dot(v0.pos);
 	Plane { vec, dist }
+}
+
+fn triangle_vertex_debug_checked_fetch<VertexT: Copy>(vertices: &[VertexT], index: VertexIndex) -> VertexT
+{
+	let index_s = index as usize;
+	#[cfg(debug_assertions)]
+	{
+		vertices[index_s]
+	}
+	#[cfg(not(debug_assertions))]
+	unsafe {
+		*vertices.get_unchecked(index_s)
+	}
 }
 
 fn draw_background<ColorT: Copy + Send + Sync>(pixels: &mut [ColorT], color: ColorT)
