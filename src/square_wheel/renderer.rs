@@ -446,9 +446,11 @@ impl Renderer
 
 	fn build_dynamic_models_buffers(&mut self, camera_matrices: &CameraMatrices, models: &[ModelEntity])
 	{
-		// TODO - use multithreading.
-		for visible_dynamic_mesh in &mut self.visible_dynamic_meshes_list
-		{
+		// It is safe to share vertices and triangle buffers since each mesh uses its own region.
+		let dst_vertices_shared = SharedMutSlice::new(&mut self.dynamic_meshes_vertices);
+		let dst_triangles_shared = SharedMutSlice::new(&mut self.dynamic_meshes_triangles);
+
+		let func = |visible_dynamic_mesh: &mut VisibleDynamicMeshInfo| {
 			let model = &models[visible_dynamic_mesh.entity_index as usize];
 			let frame = model.frame as usize;
 
@@ -485,7 +487,7 @@ impl Renderer
 			let frame_vertex_data = &mesh.vertex_data_variable
 				[frame * mesh.vertex_data_constant.len() .. (frame + 1) * mesh.vertex_data_constant.len()];
 
-			let dst_mesh_vertices = &mut self.dynamic_meshes_vertices[visible_dynamic_mesh.vertices_offset ..];
+			let dst_mesh_vertices = unsafe { &mut dst_vertices_shared.get()[visible_dynamic_mesh.vertices_offset ..] };
 
 			for ((v_v, v_c), dst_v) in frame_vertex_data
 				.iter()
@@ -500,7 +502,7 @@ impl Renderer
 			}
 
 			// Copy, filter and sort triangles.
-			let dst_triangles = &mut self.dynamic_meshes_triangles[visible_dynamic_mesh.triangles_offset ..];
+			let dst_triangles = unsafe { &mut dst_triangles_shared.get()[visible_dynamic_mesh.triangles_offset ..] };
 			visible_dynamic_mesh.num_visible_triangles =
 				reject_triangle_model_back_faces(&dst_mesh_vertices, &mesh.triangles, dst_triangles);
 
@@ -508,6 +510,16 @@ impl Renderer
 				&dst_mesh_vertices,
 				&mut dst_triangles[.. visible_dynamic_mesh.num_visible_triangles],
 			);
+		};
+
+		let num_threads = rayon::current_num_threads();
+		if num_threads == 1
+		{
+			self.visible_dynamic_meshes_list.iter_mut().for_each(func);
+		}
+		else
+		{
+			self.visible_dynamic_meshes_list.par_iter_mut().for_each(func);
 		}
 	}
 
