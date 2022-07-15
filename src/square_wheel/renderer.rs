@@ -1221,7 +1221,6 @@ impl Renderer
 		}
 
 		// TODO - order submodels and dynamic (triangle) models together.
-		// TODO - clip meshes by portals/polygons planes of this leaf.
 		for dynamic_model_index in leaf_dynamic_models
 		{
 			let entry = self.dynamic_model_to_dynamic_meshes_index[*dynamic_model_index as usize];

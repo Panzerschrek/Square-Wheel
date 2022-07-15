@@ -93,7 +93,6 @@ impl Color32
 
 	// Pack back shifted components.
 	// Truncate extra bits in case of overflow.
-	// TODO - add same method but with unsafe f32 to u32 cast.
 	pub fn from_rgb_f32(rgb: &[f32; 3]) -> Self
 	{
 		Color32(((rgb[0] as u32) & 0x00FF0000) | ((rgb[1] as u32) & 0x0000FF00) | ((rgb[2] as u32) & 0x000000FF))
