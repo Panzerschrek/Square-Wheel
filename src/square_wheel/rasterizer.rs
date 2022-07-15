@@ -747,8 +747,6 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		texture_data: &[TextureColorT],
 	)
 	{
-		// TODO - process thin triangles specially.
-
 		// Sort triangle vertices.
 		let upper_index;
 		let middle_index;
@@ -770,18 +768,14 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		}
 		middle_index = 3 - upper_index - lower_index;
 
-		let long_edge_dy = vertices[upper_index].y - vertices[lower_index].y;
-		if long_edge_dy < FIXED16_HALF
-		{
-			return;
-		}
+		// Use hack with miminun dy to avoid division by zero and overflows.
+		let long_edge_dy = (vertices[upper_index].y - vertices[lower_index].y).max(FIXED16_HALF);
+		let lower_part_dy = (vertices[middle_index].y - vertices[lower_index].y).max(FIXED16_HALF);
+		let upper_part_dy = (vertices[upper_index].y - vertices[middle_index].y).max(FIXED16_HALF);
 
 		let long_edge_dx_dy = fixed16_div(vertices[upper_index].x - vertices[lower_index].x, long_edge_dy);
 		let long_edge_x_in_middle =
 			vertices[lower_index].x + fixed16_mul(long_edge_dx_dy, vertices[middle_index].y - vertices[lower_index].y);
-
-		let lower_part_dy = vertices[middle_index].y - vertices[lower_index].y;
-		let upper_part_dy = vertices[upper_index].y - vertices[middle_index].y;
 
 		let mut long_edge_d_tc_dy = [0, 0];
 		let mut long_edge_tc_in_middle = [0, 0];
@@ -823,50 +817,44 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				);
 			}
 
-			if lower_part_dy >= FIXED16_HALF
-			{
-				self.fill_triangle_part(
-					vertices[lower_index].y,
-					vertices[middle_index].y,
-					TriangleSide {
-						x_start: vertices[lower_index].x,
-						dx_dy: fixed16_div(vertices[middle_index].x - vertices[lower_index].x, lower_part_dy),
-						tc_start: vertices[lower_index].tc,
-						d_tc_dy: d_tc_dy_lower,
-					},
-					TriangleSide {
-						x_start: vertices[lower_index].x,
-						dx_dy: long_edge_dx_dy,
-						tc_start: vertices[lower_index].tc,
-						d_tc_dy: long_edge_d_tc_dy,
-					},
-					d_tc_dx,
-					texture_info,
-					texture_data,
-				);
-			}
-			if upper_part_dy >= FIXED16_HALF
-			{
-				self.fill_triangle_part(
-					vertices[middle_index].y,
-					vertices[upper_index].y,
-					TriangleSide {
-						x_start: vertices[middle_index].x,
-						dx_dy: fixed16_div(vertices[upper_index].x - vertices[middle_index].x, upper_part_dy),
-						tc_start: vertices[middle_index].tc,
-						d_tc_dy: d_tc_dy_upper,
-					},
-					TriangleSide {
-						x_start: long_edge_x_in_middle,
-						dx_dy: long_edge_dx_dy,
-						tc_start: long_edge_tc_in_middle,
-						d_tc_dy: long_edge_d_tc_dy,
-					},
-					d_tc_dx,
-					texture_info,
-					texture_data,
-				);
-			}
+			self.fill_triangle_part(
+				vertices[lower_index].y,
+				vertices[middle_index].y,
+				TriangleSide {
+					x_start: vertices[lower_index].x,
+					dx_dy: fixed16_div(vertices[middle_index].x - vertices[lower_index].x, lower_part_dy),
+					tc_start: vertices[lower_index].tc,
+					d_tc_dy: d_tc_dy_lower,
+				},
+				TriangleSide {
+					x_start: vertices[lower_index].x,
+					dx_dy: long_edge_dx_dy,
+					tc_start: vertices[lower_index].tc,
+					d_tc_dy: long_edge_d_tc_dy,
+				},
+				d_tc_dx,
+				texture_info,
+				texture_data,
+			);
+			self.fill_triangle_part(
+				vertices[middle_index].y,
+				vertices[upper_index].y,
+				TriangleSide {
+					x_start: vertices[middle_index].x,
+					dx_dy: fixed16_div(vertices[upper_index].x - vertices[middle_index].x, upper_part_dy),
+					tc_start: vertices[middle_index].tc,
+					d_tc_dy: d_tc_dy_upper,
+				},
+				TriangleSide {
+					x_start: long_edge_x_in_middle,
+					dx_dy: long_edge_dx_dy,
+					tc_start: long_edge_tc_in_middle,
+					d_tc_dy: long_edge_d_tc_dy,
+				},
+				d_tc_dx,
+				texture_info,
+				texture_data,
+			);
 		}
 		else
 		{
@@ -889,50 +877,44 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				);
 			}
 
-			if lower_part_dy >= FIXED16_HALF
-			{
-				self.fill_triangle_part(
-					vertices[lower_index].y,
-					vertices[middle_index].y,
-					TriangleSide {
-						x_start: vertices[lower_index].x,
-						dx_dy: long_edge_dx_dy,
-						tc_start: vertices[lower_index].tc,
-						d_tc_dy: long_edge_d_tc_dy,
-					},
-					TriangleSide {
-						x_start: vertices[lower_index].x,
-						dx_dy: fixed16_div(vertices[middle_index].x - vertices[lower_index].x, lower_part_dy),
-						tc_start: vertices[lower_index].tc,
-						d_tc_dy: d_tc_dy_lower,
-					},
-					d_tc_dx,
-					texture_info,
-					texture_data,
-				);
-			}
-			if upper_part_dy >= FIXED16_HALF
-			{
-				self.fill_triangle_part(
-					vertices[middle_index].y,
-					vertices[upper_index].y,
-					TriangleSide {
-						x_start: long_edge_x_in_middle,
-						dx_dy: long_edge_dx_dy,
-						tc_start: long_edge_tc_in_middle,
-						d_tc_dy: long_edge_d_tc_dy,
-					},
-					TriangleSide {
-						x_start: vertices[middle_index].x,
-						dx_dy: fixed16_div(vertices[upper_index].x - vertices[middle_index].x, upper_part_dy),
-						tc_start: vertices[middle_index].tc,
-						d_tc_dy: d_tc_dy_upper,
-					},
-					d_tc_dx,
-					texture_info,
-					texture_data,
-				);
-			}
+			self.fill_triangle_part(
+				vertices[lower_index].y,
+				vertices[middle_index].y,
+				TriangleSide {
+					x_start: vertices[lower_index].x,
+					dx_dy: long_edge_dx_dy,
+					tc_start: vertices[lower_index].tc,
+					d_tc_dy: long_edge_d_tc_dy,
+				},
+				TriangleSide {
+					x_start: vertices[lower_index].x,
+					dx_dy: fixed16_div(vertices[middle_index].x - vertices[lower_index].x, lower_part_dy),
+					tc_start: vertices[lower_index].tc,
+					d_tc_dy: d_tc_dy_lower,
+				},
+				d_tc_dx,
+				texture_info,
+				texture_data,
+			);
+			self.fill_triangle_part(
+				vertices[middle_index].y,
+				vertices[upper_index].y,
+				TriangleSide {
+					x_start: long_edge_x_in_middle,
+					dx_dy: long_edge_dx_dy,
+					tc_start: long_edge_tc_in_middle,
+					d_tc_dy: long_edge_d_tc_dy,
+				},
+				TriangleSide {
+					x_start: vertices[middle_index].x,
+					dx_dy: fixed16_div(vertices[upper_index].x - vertices[middle_index].x, upper_part_dy),
+					tc_start: vertices[middle_index].tc,
+					d_tc_dy: d_tc_dy_upper,
+				},
+				d_tc_dx,
+				texture_info,
+				texture_data,
+			);
 		}
 	}
 
