@@ -75,3 +75,10 @@ pub fn complete_view_matrix(
 		planes_matrix: planes_shift_to_viewport_center * planes_matrix,
 	}
 }
+
+pub fn get_object_matrix(position: Vec3f, angle_z: RadiansF) -> Mat4f
+{
+	let rotate = Mat4f::from_angle_z(angle_z);
+	let translate = Mat4f::from_translation(position);
+	translate * rotate
+}

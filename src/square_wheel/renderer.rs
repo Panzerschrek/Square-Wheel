@@ -1,7 +1,8 @@
 use super::{
-	abstract_color::*, config, debug_stats_printer::*, depth_renderer::*, draw_ordering, fast_math::*, frame_number::*,
-	inline_models_index::*, light::*, map_materials_processor::*, map_visibility_calculator::*, performance_counter::*,
-	rasterizer::*, rect_splitting, renderer_config::*, shadow_map::*, surfaces::*, textures::*,
+	abstract_color::*, config, debug_stats_printer::*, depth_renderer::*, draw_ordering, dynamic_models_index::*,
+	fast_math::*, frame_info::*, frame_number::*, inline_models_index::*, map_materials_processor::*,
+	map_visibility_calculator::*, performance_counter::*, rasterizer::*, rect_splitting, renderer_config::*,
+	shadow_map::*, surfaces::*, textures::*, triangle_model::*, triangle_models_rendering::*,
 };
 use common::{
 	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, material, math_types::*,
@@ -33,6 +34,14 @@ pub struct Renderer
 	mip_bias: f32,
 	materials_processor: MapMaterialsProcessor,
 	performance_counters: RendererPerformanceCounters,
+	// TODO - maybe extract dynamic models-related stuff into separate class?
+	dynamic_models_index: DynamicModelsIndex,
+	// Store transformed models vertices and triangles in separate buffer.
+	// This is needed to avoid transforming/sorting model's vertices/triangles in each BSP leaf where this model is located.
+	visible_dynamic_meshes_list: Vec<VisibleDynamicMeshInfo>,
+	dynamic_model_to_dynamic_meshes_index: Vec<DynamicModelInfo>,
+	dynamic_meshes_vertices: Vec<ModelVertex3d>,
+	dynamic_meshes_triangles: Vec<Triangle>,
 }
 
 struct RendererPerformanceCounters
@@ -40,6 +49,7 @@ struct RendererPerformanceCounters
 	frame_duration: PerformanceCounter,
 	materials_update: PerformanceCounter,
 	visible_leafs_search: PerformanceCounter,
+	triangle_models_preparation: PerformanceCounter,
 	surfaces_preparation: PerformanceCounter,
 	background_fill: PerformanceCounter,
 	rasterization: PerformanceCounter,
@@ -54,6 +64,7 @@ impl RendererPerformanceCounters
 			frame_duration: PerformanceCounter::new(window_size),
 			materials_update: PerformanceCounter::new(window_size),
 			visible_leafs_search: PerformanceCounter::new(window_size),
+			triangle_models_preparation: PerformanceCounter::new(window_size),
 			surfaces_preparation: PerformanceCounter::new(window_size),
 			background_fill: PerformanceCounter::new(window_size),
 			rasterization: PerformanceCounter::new(window_size),
@@ -75,6 +86,23 @@ struct DrawPolygonData
 	surface_tc_min: [i32; 2],
 }
 
+struct VisibleDynamicMeshInfo
+{
+	entity_index: u32,
+	mesh_index: u32,
+	vertices_offset: usize,
+	triangles_offset: usize,
+	num_visible_triangles: usize,
+	bbox_vertices_transformed: [Vec3f; 8],
+}
+
+#[derive(Default, Copy, Clone)]
+struct DynamicModelInfo
+{
+	first_visible_mesh: u32,
+	num_visible_meshes: u32,
+}
+
 impl Renderer
 {
 	pub fn new(app_config: config::ConfigSharedPtr, map: Arc<bsp_map_compact::BSPMap>) -> Self
@@ -82,8 +110,10 @@ impl Renderer
 		let config_parsed = RendererConfig::from_app_config(&app_config);
 		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
 
-		let materials_processor =
-			MapMaterialsProcessor::new(&*map, &config_parsed.materials_path, &config_parsed.textures_path);
+		// TODO - cache materials globally.
+		let all_materials = material::load_materials(&std::path::PathBuf::from(&config_parsed.materials_path));
+
+		let materials_processor = MapMaterialsProcessor::new(&*map, &all_materials, &config_parsed.textures_path);
 
 		Renderer {
 			app_config,
@@ -98,9 +128,14 @@ impl Renderer
 			mip_bias: 0.0,
 			visibility_calculator: MapVisibilityCalculator::new(map.clone()),
 			shadows_maps_renderer: DepthRenderer::new(map.clone()),
-			map,
+			map: map.clone(),
 			materials_processor,
 			performance_counters: RendererPerformanceCounters::new(),
+			dynamic_models_index: DynamicModelsIndex::new(map),
+			visible_dynamic_meshes_list: Vec::new(),
+			dynamic_model_to_dynamic_meshes_index: Vec::new(),
+			dynamic_meshes_vertices: Vec::new(),
+			dynamic_meshes_triangles: Vec::new(),
 		}
 	}
 
@@ -108,19 +143,19 @@ impl Renderer
 		&mut self,
 		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
-		camera_matrices: &CameraMatrices,
+		frame_info: &FrameInfo,
 		inline_models_index: &InlineModelsIndex,
-		test_lights: &[PointLight],
-		frame_time_s: f32,
 		debug_stats_printer: &mut DebugStatsPrinter,
 	)
 	{
 		self.synchronize_config();
 		self.update_mip_bias();
 
+		self.dynamic_models_index.position_models(&frame_info.model_entities);
+
 		let materials_update_start_time = Clock::now();
 
-		self.materials_processor.update(frame_time_s);
+		self.materials_processor.update(frame_info.game_time_s);
 
 		let materials_update_end_time = Clock::now();
 		let materials_update_duration_s = (materials_update_end_time - materials_update_start_time).as_secs_f32();
@@ -131,7 +166,7 @@ impl Renderer
 		let frame_start_time = Clock::now();
 		self.current_frame.next();
 
-		self.draw_map(pixels, surface_info, camera_matrices, inline_models_index, test_lights);
+		self.draw_map(pixels, surface_info, frame_info, inline_models_index);
 
 		let frame_end_time = Clock::now();
 		let frame_duration_s = (frame_end_time - frame_start_time).as_secs_f32();
@@ -140,7 +175,8 @@ impl Renderer
 		if debug_stats_printer.show_debug_stats()
 		{
 			let mut num_visible_leafs = 0;
-			let mut num_visible_models_parts = 0;
+			let mut num_visible_submodels_parts = 0;
+			let mut num_visible_meshes_parts = 0;
 			for leaf_index in 0 .. self.map.leafs.len() as u32
 			{
 				if self
@@ -149,7 +185,8 @@ impl Renderer
 					.is_some()
 				{
 					num_visible_leafs += 1;
-					num_visible_models_parts += inline_models_index.get_leaf_models(leaf_index as u32).len();
+					num_visible_submodels_parts += inline_models_index.get_leaf_models(leaf_index as u32).len();
+					num_visible_meshes_parts += self.dynamic_models_index.get_leaf_models(leaf_index as u32).len();
 				}
 			}
 
@@ -166,7 +203,13 @@ impl Renderer
 				self.performance_counters.visible_leafs_search.get_average_value() * 1000.0
 			));
 			debug_stats_printer.add_line(format!(
-				"surfaces  preparation: {:04.2}ms",
+				"triangle models preparation: {:04.2}ms",
+				self.performance_counters
+					.triangle_models_preparation
+					.get_average_value() * 1000.0
+			));
+			debug_stats_printer.add_line(format!(
+				"surfaces preparation: {:04.2}ms",
 				self.performance_counters.surfaces_preparation.get_average_value() * 1000.0
 			));
 			debug_stats_printer.add_line(format!(
@@ -178,8 +221,13 @@ impl Renderer
 				self.performance_counters.rasterization.get_average_value() * 1000.0
 			));
 			debug_stats_printer.add_line(format!("leafs: {}/{}", num_visible_leafs, self.map.leafs.len()));
-			debug_stats_printer.add_line(format!("models parts: {}", num_visible_models_parts));
+			debug_stats_printer.add_line(format!("submodels parts: {}", num_visible_submodels_parts));
 			debug_stats_printer.add_line(format!("polygons: {}", self.current_frame_visible_polygons.len()));
+			debug_stats_printer.add_line(format!(
+				"dynamic meshes : {}, parts: {}",
+				self.visible_dynamic_meshes_list.len(),
+				num_visible_meshes_parts
+			));
 			debug_stats_printer.add_line(format!(
 				"surfaces pixels: {}k",
 				(self.num_visible_surfaces_pixels + 1023) / 1024
@@ -194,15 +242,14 @@ impl Renderer
 		&mut self,
 		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
-		camera_matrices: &CameraMatrices,
+		frame_info: &FrameInfo,
 		inline_models_index: &InlineModelsIndex,
-		test_lights: &[PointLight],
 	)
 	{
 		let depth_map_size = 256;
-		let mut test_lights_shadow_maps = Vec::with_capacity(test_lights.len());
+		let mut test_lights_shadow_maps = Vec::with_capacity(frame_info.lights.len());
 		// TODO - perform parallel shadowmaps build.
-		for light in test_lights
+		for light in &frame_info.lights
 		{
 			let mut cube_shadow_map = CubeShadowMap {
 				size: depth_map_size,
@@ -234,7 +281,7 @@ impl Renderer
 
 		let frame_bounds = ClippingPolygon::from_box(0.0, 0.0, surface_info.width as f32, surface_info.height as f32);
 		self.visibility_calculator
-			.update_visibility(camera_matrices, &frame_bounds);
+			.update_visibility(&frame_info.camera_matrices, &frame_bounds);
 
 		let visibile_leafs_search_end_time = Clock::now();
 		let visibile_leafs_search_duration_s =
@@ -243,19 +290,31 @@ impl Renderer
 			.visible_leafs_search
 			.add_value(visibile_leafs_search_duration_s);
 
+		let triangle_models_preparation_start_time = Clock::now();
+
+		self.prepare_dynamic_models(&frame_info.model_entities);
+		self.build_dynamic_models_buffers(&frame_info.camera_matrices, &frame_info.model_entities);
+
+		let triangle_models_preparation_end_time = Clock::now();
+		let triangle_models_preparation_duration_s =
+			(triangle_models_preparation_end_time - triangle_models_preparation_start_time).as_secs_f32();
+		self.performance_counters
+			.triangle_models_preparation
+			.add_value(triangle_models_preparation_duration_s);
+
 		let surfaces_preparation_start_time = Clock::now();
 
-		self.prepare_polygons_surfaces(camera_matrices, inline_models_index);
+		self.prepare_polygons_surfaces(&frame_info.camera_matrices, inline_models_index);
 		self.allocate_surfaces_pixels::<ColorT>();
 
 		{
 			// TODO - avoid allocation.
 			let mut lights_with_shadow_maps = Vec::new();
-			for (light, shadow_map) in test_lights.iter().zip(test_lights_shadow_maps.iter())
+			for (light, shadow_map) in frame_info.lights.iter().zip(test_lights_shadow_maps.iter())
 			{
 				lights_with_shadow_maps.push((light, shadow_map));
 			}
-			self.build_polygons_surfaces::<ColorT>(camera_matrices, &lights_with_shadow_maps);
+			self.build_polygons_surfaces::<ColorT>(&frame_info.camera_matrices, &lights_with_shadow_maps);
 		}
 
 		let surfaces_preparation_end_time = Clock::now();
@@ -281,7 +340,14 @@ impl Renderer
 			.add_value(background_fill_duration_s);
 
 		let rasterization_start_time = Clock::now();
-		self.perform_rasterization(pixels, surface_info, camera_matrices, inline_models_index, root_node);
+		self.perform_rasterization(
+			pixels,
+			surface_info,
+			&frame_info.camera_matrices,
+			inline_models_index,
+			&frame_info.model_entities,
+			root_node,
+		);
 		let rasterization_end_time = Clock::now();
 		let rasterization_duration_s = (rasterization_end_time - rasterization_start_time).as_secs_f32();
 		self.performance_counters
@@ -306,12 +372,161 @@ impl Renderer
 		}
 	}
 
+	// Call this after visible leafs search.
+	fn prepare_dynamic_models(&mut self, models: &[ModelEntity])
+	{
+		self.visible_dynamic_meshes_list.clear();
+
+		self.dynamic_model_to_dynamic_meshes_index
+			.resize(models.len(), DynamicModelInfo::default());
+
+		// Reserve place in vertex/triangle buffers for each visible mesh.
+		let mut vertices_offset = 0;
+		let mut triangles_offset = 0;
+		for (entity_index, (model, dynamic_model_info)) in models
+			.iter()
+			.zip(self.dynamic_model_to_dynamic_meshes_index.iter_mut())
+			.enumerate()
+		{
+			let mut visible = false;
+			for leaf_index in self.dynamic_models_index.get_model_leafs(entity_index)
+			{
+				if self
+					.visibility_calculator
+					.get_current_frame_leaf_bounds(*leaf_index)
+					.is_some()
+				{
+					visible = true;
+					break;
+				}
+			}
+
+			if !visible
+			{
+				dynamic_model_info.first_visible_mesh = 0;
+				dynamic_model_info.num_visible_meshes = 0;
+				continue;
+			}
+
+			dynamic_model_info.first_visible_mesh = self.visible_dynamic_meshes_list.len() as u32;
+
+			for (mesh_index, mesh) in model.model.meshes.iter().enumerate()
+			{
+				self.visible_dynamic_meshes_list.push(VisibleDynamicMeshInfo {
+					entity_index: entity_index as u32,
+					mesh_index: mesh_index as u32,
+					vertices_offset,
+					triangles_offset,
+					num_visible_triangles: 0,                      // set later
+					bbox_vertices_transformed: [Vec3f::zero(); 8], // set later
+				});
+
+				vertices_offset += mesh.vertex_data_constant.len();
+				triangles_offset += mesh.triangles.len();
+			}
+
+			dynamic_model_info.num_visible_meshes = model.model.meshes.len() as u32;
+		}
+
+		if vertices_offset > self.dynamic_meshes_vertices.len()
+		{
+			self.dynamic_meshes_vertices.resize(
+				vertices_offset,
+				ModelVertex3d {
+					pos: Vec3f::zero(),
+					tc: Vec2f::zero(),
+				},
+			);
+		}
+		if triangles_offset > self.dynamic_meshes_triangles.len()
+		{
+			self.dynamic_meshes_triangles.resize(triangles_offset, [0, 0, 0]);
+		}
+	}
+
+	fn build_dynamic_models_buffers(&mut self, camera_matrices: &CameraMatrices, models: &[ModelEntity])
+	{
+		// It is safe to share vertices and triangle buffers since each mesh uses its own region.
+		let dst_vertices_shared = SharedMutSlice::new(&mut self.dynamic_meshes_vertices);
+		let dst_triangles_shared = SharedMutSlice::new(&mut self.dynamic_meshes_triangles);
+
+		let func = |visible_dynamic_mesh: &mut VisibleDynamicMeshInfo| {
+			let model = &models[visible_dynamic_mesh.entity_index as usize];
+			let frame = model.frame as usize;
+
+			let final_matrix = camera_matrices.view_matrix * get_object_matrix(model.position, model.angle_z);
+
+			// Transform bbox.
+			let bbox = &model.model.frames_info[frame].bbox;
+			visible_dynamic_mesh.bbox_vertices_transformed = [
+				Vec3f::new(bbox.min.x, bbox.min.y, bbox.min.z),
+				Vec3f::new(bbox.min.x, bbox.min.y, bbox.max.z),
+				Vec3f::new(bbox.min.x, bbox.max.y, bbox.min.z),
+				Vec3f::new(bbox.min.x, bbox.max.y, bbox.max.z),
+				Vec3f::new(bbox.max.x, bbox.min.y, bbox.min.z),
+				Vec3f::new(bbox.max.x, bbox.min.y, bbox.max.z),
+				Vec3f::new(bbox.max.x, bbox.max.y, bbox.min.z),
+				Vec3f::new(bbox.max.x, bbox.max.y, bbox.max.z),
+			]
+			.map(|pos| {
+				let pos_transformed = final_matrix * pos.extend(1.0);
+				Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w)
+			});
+
+			// TODO - premultiply texture coordinates while loading model instead?
+			let texture = &model.texture;
+			let tc_scale = Vec2f::new(texture.size[0] as f32, texture.size[1] as f32);
+			let tc_shift = model.model.tc_shift;
+
+			let mesh = &model.model.meshes[visible_dynamic_mesh.mesh_index as usize];
+
+			// Perform vertices transformation.
+			let frame_vertex_data = &mesh.vertex_data_variable
+				[frame * mesh.vertex_data_constant.len() .. (frame + 1) * mesh.vertex_data_constant.len()];
+
+			let dst_mesh_vertices = unsafe { &mut dst_vertices_shared.get()[visible_dynamic_mesh.vertices_offset ..] };
+
+			for ((v_v, v_c), dst_v) in frame_vertex_data
+				.iter()
+				.zip(mesh.vertex_data_constant.iter())
+				.zip(dst_mesh_vertices.iter_mut())
+			{
+				let pos_transformed = final_matrix * v_v.position.extend(1.0);
+				*dst_v = ModelVertex3d {
+					pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
+					tc: Vec2f::from(v_c.tex_coord).mul_element_wise(tc_scale) + tc_shift,
+				};
+			}
+
+			// Copy, filter and sort triangles.
+			let dst_triangles = unsafe { &mut dst_triangles_shared.get()[visible_dynamic_mesh.triangles_offset ..] };
+			visible_dynamic_mesh.num_visible_triangles =
+				reject_triangle_model_back_faces(&dst_mesh_vertices, &mesh.triangles, dst_triangles);
+
+			sort_model_triangles(
+				&dst_mesh_vertices,
+				&mut dst_triangles[.. visible_dynamic_mesh.num_visible_triangles],
+			);
+		};
+
+		let num_threads = rayon::current_num_threads();
+		if num_threads == 1
+		{
+			self.visible_dynamic_meshes_list.iter_mut().for_each(func);
+		}
+		else
+		{
+			self.visible_dynamic_meshes_list.par_iter_mut().for_each(func);
+		}
+	}
+
 	fn perform_rasterization<ColorT: AbstractColor>(
 		&self,
 		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
 		inline_models_index: &InlineModelsIndex,
+		models: &[ModelEntity],
 		root_node: u32,
 	)
 	{
@@ -346,6 +561,7 @@ impl Renderer
 				camera_matrices,
 				&viewport_clippung_polygon,
 				inline_models_index,
+				models,
 				root_node,
 			);
 		}
@@ -393,6 +609,7 @@ impl Renderer
 					camera_matrices,
 					&viewport_clippung_polygon,
 					inline_models_index,
+					models,
 					root_node,
 				);
 			});
@@ -801,6 +1018,7 @@ impl Renderer
 		camera_matrices: &CameraMatrices,
 		viewport_clippung_polygon: &ClippingPolygon,
 		inline_models_index: &InlineModelsIndex,
+		models: &[ModelEntity],
 		current_index: u32,
 	)
 	{
@@ -812,7 +1030,14 @@ impl Renderer
 				leaf_bounds.intersect(viewport_clippung_polygon);
 				if leaf_bounds.is_valid_and_non_empty()
 				{
-					self.draw_leaf(rasterizer, camera_matrices, &leaf_bounds, inline_models_index, leaf);
+					self.draw_leaf(
+						rasterizer,
+						camera_matrices,
+						&leaf_bounds,
+						inline_models_index,
+						models,
+						leaf,
+					);
 				}
 			}
 		}
@@ -832,6 +1057,7 @@ impl Renderer
 					camera_matrices,
 					viewport_clippung_polygon,
 					inline_models_index,
+					models,
 					node.children[(i ^ mask) as usize],
 				);
 			}
@@ -844,6 +1070,7 @@ impl Renderer
 		camera_matrices: &CameraMatrices,
 		bounds: &ClippingPolygon,
 		inline_models_index: &InlineModelsIndex,
+		models: &[ModelEntity],
 		leaf_index: u32,
 	)
 	{
@@ -852,6 +1079,7 @@ impl Renderer
 		// TODO - maybe just a little bit extend clipping polygon?
 		let clip_planes = bounds.get_clip_planes();
 
+		// Draw polygons of leaf itself.
 		for polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
 		{
 			let polygon = &self.map.polygons[polygon_index as usize];
@@ -874,88 +1102,61 @@ impl Renderer
 			);
 		}
 
-		let leaf_models = inline_models_index.get_leaf_models(leaf_index);
-		if leaf_models.is_empty()
+		// Draw contents of leaf - submodels and triangle models.
+
+		let leaf_submodels = inline_models_index.get_leaf_models(leaf_index);
+		let leaf_dynamic_models = self.dynamic_models_index.get_leaf_models(leaf_index);
+		if leaf_submodels.is_empty() && leaf_dynamic_models.is_empty()
 		{
 			return;
 		}
 
-		// TODO - use uninitialized memory and increase this value.
-		const MAX_MODELS_IN_LEAF: usize = 12;
-		let mut models_for_sorting = [(
-			0,
-			BBox {
-				min: Vec3f::zero(),
-				max: Vec3f::zero(),
-			},
-		); MAX_MODELS_IN_LEAF];
+		// Collect clip planes, that will be used for models clipping.
+		// TODO - use uninitialized memory.
+		let mut leaf_clip_planes = [Plane {
+			vec: Vec3f::zero(),
+			dist: 0.0,
+		}; MAX_LEAF_CLIP_PLANES];
+		let mut num_clip_planes = 0;
 
-		for (&model_index, model_for_sorting) in leaf_models.iter().zip(models_for_sorting.iter_mut())
-		{
-			model_for_sorting.0 = model_index;
-			model_for_sorting.1 = inline_models_index.get_model_bbox(model_index);
-		}
-		let num_models = std::cmp::min(leaf_models.len(), MAX_MODELS_IN_LEAF);
-
-		draw_ordering::order_models(&mut models_for_sorting[.. num_models], &camera_matrices.position);
-
-		// Draw models, located in this leaf, after leaf polygons.
-		// TODO - sort leaf models.
-		for (model_index, _bbox) in &models_for_sorting[.. num_models]
-		{
-			let model_matrix = inline_models_index.get_model_matrix(*model_index);
-
-			let submodel = &self.map.submodels[*model_index as usize];
-			for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
+		let mut add_clip_plane = |plane: Plane| {
+			// We need to use planes with normalized vector in order to compare distances properly.
+			let normal_length = plane.vec.magnitude();
+			if normal_length < 0.00000000001
 			{
-				self.draw_model_polygon(
-					rasterizer,
-					&model_matrix,
-					&camera_matrices.view_matrix,
-					&clip_planes,
-					leaf_index,
-					polygon_index,
-				);
+				return;
 			}
-		}
-	}
+			let plane_normalized = Plane {
+				vec: plane.vec / normal_length,
+				dist: plane.dist / normal_length,
+			};
 
-	fn draw_model_polygon<'a, ColorT: AbstractColor>(
-		&self,
-		rasterizer: &mut Rasterizer<'a, ColorT>,
-		model_transform_matrix: &Mat4f,
-		view_matrix: &Mat4f,
-		clip_planes: &ClippingPolygonPlanes,
-		leaf_index: u32,
-		polygon_index: u32,
-	)
-	{
-		let leaf = &self.map.leafs[leaf_index as usize];
+			// Perform dedupliction - iterate over previous planes.
+			// We have quadratic complexity here, but it is not a problem since number of planes are usually small (6 for cube-shaped leaf).
+			for prev_plane in &mut leaf_clip_planes[.. num_clip_planes]
+			{
+				// Dot product is angle cos since vectors are normalized.
+				let dot = plane_normalized.vec.dot(prev_plane.vec);
+				if dot >= 1.0 - 1.0 / 256.0
+				{
+					// Planes are (almost) parallel.
+					// Select plane with greater distance to clip more.
+					prev_plane.dist = prev_plane.dist.max(plane_normalized.dist);
+					return;
+				}
+			}
 
-		let polygon = &self.map.polygons[polygon_index as usize];
-		let polygon_data = &self.polygons_data[polygon_index as usize];
-		if polygon_data.visible_frame != self.current_frame
-		{
-			return;
-		}
+			if num_clip_planes == MAX_LEAF_CLIP_PLANES
+			{
+				return;
+			}
 
-		let mut vertices_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
-		let mut vertex_count = std::cmp::min(polygon.num_vertices as usize, MAX_VERTICES);
+			leaf_clip_planes[num_clip_planes] = plane_normalized;
+			num_clip_planes += 1;
+		};
 
-		// Apply model transfomration in order to move polygons to world space, before performing clipping.
-		// TODO - reduce number of transformations. Perform clipping by fully-transformed clip planes.
-		for (in_vertex, out_vertex) in self.map.vertices
-			[(polygon.first_vertex as usize) .. (polygon.first_vertex as usize) + vertex_count]
-			.iter()
-			.zip(vertices_clipped[.. vertex_count].iter_mut())
-		{
-			let vertex_transformed = model_transform_matrix * in_vertex.extend(1.0);
-			*out_vertex = vertex_transformed.truncate();
-		}
-
-		let mut vertices_temp = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
-
-		// Clip model polygon by portal planes of current leaf.
+		// Clip models polygons by portal planes of current leaf.
+		// Do this in camera space (transform clip planes for this).
 		for &portal_index in &self.map.leafs_portals
 			[(leaf.first_leaf_portal as usize) .. ((leaf.first_leaf_portal + leaf.num_leaf_portals) as usize)]
 		{
@@ -966,44 +1167,129 @@ impl Renderer
 			}
 			else
 			{
-				Plane {
-					vec: -portal.plane.vec,
-					dist: -portal.plane.dist,
-				}
+				portal.plane.get_inverted()
 			};
 
-			vertex_count =
-				clip_3d_polygon_by_plane(&vertices_clipped[.. vertex_count], &clip_plane, &mut vertices_temp[..]);
-			if vertex_count < 3
-			{
-				return;
-			}
-			vertices_clipped[.. vertex_count].copy_from_slice(&vertices_temp[.. vertex_count]);
+			add_clip_plane(clip_plane);
 		}
 
-		// Clip model also by polygons of current leaf.
-		for clip_polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
+		// Clip models also by polygons of current leaf.
+		for polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
 		{
-			let clip_polygon = &self.map.polygons[clip_polygon_index as usize];
+			add_clip_plane(self.map.polygons[polygon_index as usize].plane);
+		}
 
-			vertex_count = clip_3d_polygon_by_plane(
-				&vertices_clipped[.. vertex_count],
-				&clip_polygon.plane,
-				&mut vertices_temp[..],
+		// Perform planes transformation after deduplication.
+		// This is needed because deduplication works badly in stretched camera space.
+		// Also it's faster to transform only unique planes.
+		for plane in &mut leaf_clip_planes[.. num_clip_planes]
+		{
+			let plane_transformed_vec4 = camera_matrices.planes_matrix * plane.vec.extend(-plane.dist);
+			*plane = Plane {
+				vec: plane_transformed_vec4.truncate(),
+				dist: -plane_transformed_vec4.w,
+			};
+		}
+
+		// TODO - use uninitialized memory and increase this value.
+		const MAX_SUBMODELS_IN_LEAF: usize = 12;
+		let mut models_for_sorting = [(
+			0,
+			BBox {
+				min: Vec3f::zero(),
+				max: Vec3f::zero(),
+			},
+		); MAX_SUBMODELS_IN_LEAF];
+
+		for (&model_index, model_for_sorting) in leaf_submodels.iter().zip(models_for_sorting.iter_mut())
+		{
+			*model_for_sorting = (model_index, inline_models_index.get_model_bbox(model_index));
+		}
+		let num_models = std::cmp::min(leaf_submodels.len(), MAX_SUBMODELS_IN_LEAF);
+
+		draw_ordering::order_models(&mut models_for_sorting[.. num_models], &camera_matrices.position);
+
+		// Draw submodels, located in this leaf, after leaf polygons.
+		for (submodel_index, _bbox) in &models_for_sorting[.. num_models]
+		{
+			self.draw_submodel_in_leaf(
+				rasterizer,
+				&clip_planes,
+				&leaf_clip_planes[.. num_clip_planes],
+				*submodel_index,
 			);
+		}
+
+		// TODO - order submodels and dynamic (triangle) models together.
+		// TODO - clip meshes by portals/polygons planes of this leaf.
+		for dynamic_model_index in leaf_dynamic_models
+		{
+			let entry = self.dynamic_model_to_dynamic_meshes_index[*dynamic_model_index as usize];
+			for visible_mesh_index in entry.first_visible_mesh .. entry.first_visible_mesh + entry.num_visible_meshes
+			{
+				self.draw_mesh_in_leaf(
+					rasterizer,
+					&clip_planes,
+					&leaf_clip_planes[.. num_clip_planes],
+					models,
+					&self.visible_dynamic_meshes_list[visible_mesh_index as usize],
+				);
+			}
+		}
+	}
+
+	fn draw_submodel_in_leaf<'a, ColorT: AbstractColor>(
+		&self,
+		rasterizer: &mut Rasterizer<'a, ColorT>,
+		clip_planes: &ClippingPolygonPlanes,
+		leaf_clip_planes: &[Plane],
+		submodel_index: u32,
+	)
+	{
+		let submodel = &self.map.submodels[submodel_index as usize];
+		for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
+		{
+			self.draw_submodel_polygon(rasterizer, &clip_planes, leaf_clip_planes, polygon_index);
+		}
+	}
+
+	fn draw_submodel_polygon<'a, ColorT: AbstractColor>(
+		&self,
+		rasterizer: &mut Rasterizer<'a, ColorT>,
+		clip_planes: &ClippingPolygonPlanes,
+		leaf_clip_planes: &[Plane],
+		polygon_index: u32,
+	)
+	{
+		let polygon = &self.map.polygons[polygon_index as usize];
+		let polygon_data = &self.polygons_data[polygon_index as usize];
+		if polygon_data.visible_frame != self.current_frame
+		{
+			return;
+		}
+
+		let mut vertices_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
+		let mut vertex_count = std::cmp::min(polygon.num_vertices as usize, MAX_VERTICES);
+
+		for (in_vertex, out_vertex) in self.vertices_transformed
+			[(polygon.first_vertex as usize) .. (polygon.first_vertex as usize) + vertex_count]
+			.iter()
+			.zip(vertices_clipped[.. vertex_count].iter_mut())
+		{
+			*out_vertex = *in_vertex;
+		}
+
+		let mut vertices_temp = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
+
+		for clip_plane in leaf_clip_planes
+		{
+			vertex_count =
+				clip_3d_polygon_by_plane(&vertices_clipped[.. vertex_count], clip_plane, &mut vertices_temp[..]);
 			if vertex_count < 3
 			{
 				return;
 			}
 			vertices_clipped[.. vertex_count].copy_from_slice(&vertices_temp[.. vertex_count]);
-		}
-
-		// Transform vetices after clipping.
-		// TODO - perform clipping using transformed planes instead.
-		for v in &mut vertices_clipped[.. vertex_count]
-		{
-			let vertex_transformed = view_matrix * v.extend(1.0);
-			*v = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
 		}
 
 		draw_polygon(
@@ -1016,6 +1302,164 @@ impl Renderer
 			self.get_polygon_surface_data(polygon_data),
 			self.materials_processor.get_material(polygon.texture).blending_mode,
 		);
+	}
+
+	fn draw_mesh_in_leaf<'a, ColorT: AbstractColor>(
+		&self,
+		rasterizer: &mut Rasterizer<'a, ColorT>,
+		clip_planes: &ClippingPolygonPlanes,
+		leaf_clip_planes: &[Plane],
+		models: &[ModelEntity],
+		visible_dynamic_mesh: &VisibleDynamicMeshInfo,
+	)
+	{
+		// let bbox_vertices = visible_dynamic_mesh.bbox_vertices_transformed.map(|v| ModelVertex3d{ pos: v, tc: Vec2f::zero()} );
+		// let bbox_triangles =
+		// [
+		// [0, 3, 1 ], [ 0, 1, 2 ],
+		// [ 4, 6, 7 ], [ 4, 7, 5 ],
+		// [ 0, 1, 5 ], [ 0, 5, 4 ],
+		// [ 2, 3, 7 ], [2, 7, 6 ],
+		// [ 1, 3, 7 ], [ 1, 7, 5] ,
+		// [ 0, 2, 6], [ 0, 6, 4],
+		// ];
+
+		let model = &models[visible_dynamic_mesh.entity_index as usize];
+
+		// Find clip planes that affect this model.
+		// TODO - use uninitialized memory.
+		let mut clip_planes_3d = [Plane {
+			vec: Vec3f::zero(),
+			dist: 0.0,
+		}; MAX_LEAF_CLIP_PLANES];
+		let mut num_clip_planes_3d = 0;
+
+		let near_z_plane = Plane {
+			vec: Vec3f::unit_z(),
+			dist: Z_NEAR,
+		};
+		for clip_plane in [near_z_plane].iter().chain(leaf_clip_planes.iter())
+		{
+			let mut vertices_front = 0;
+			for v in visible_dynamic_mesh.bbox_vertices_transformed
+			{
+				if clip_plane.vec.dot(v) >= clip_plane.dist
+				{
+					vertices_front += 1;
+				}
+			}
+
+			if vertices_front == visible_dynamic_mesh.bbox_vertices_transformed.len()
+			{
+				// This clip plane is useless.
+			}
+			else if vertices_front == 0
+			{
+				// Model is fully clipped.
+				return;
+			}
+			else
+			{
+				clip_planes_3d[num_clip_planes_3d] = *clip_plane;
+				num_clip_planes_3d += 1;
+			}
+		}
+
+		let texture = &model.texture;
+
+		// TODO - use individual texture for each mesh.
+		let texture_info = TextureInfo {
+			size: [texture.size[0] as i32, texture.size[1] as i32],
+		};
+
+		let texture_data = &texture.pixels;
+
+		let mut vertices_clipped = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
+		let mut vertices_clipped_temp = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
+		let mut vertices_projected = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
+		let mut vertices_projected_temp = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
+		let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
+
+		let vertices_combined = &self.dynamic_meshes_vertices[visible_dynamic_mesh.vertices_offset ..];
+
+		let triangles = &self.dynamic_meshes_triangles[visible_dynamic_mesh.triangles_offset ..
+			visible_dynamic_mesh.triangles_offset + visible_dynamic_mesh.num_visible_triangles];
+		for triangle in triangles
+		{
+			for (&index, dst_vertex) in triangle.iter().zip(vertices_clipped.iter_mut())
+			{
+				*dst_vertex = triangle_vertex_debug_checked_fetch(vertices_combined, index);
+			}
+
+			let mut num_vertices = 3;
+			for clip_plane in &clip_planes_3d[.. num_clip_planes_3d]
+			{
+				num_vertices = clip_3d_model_polygon_by_plane(
+					&vertices_clipped[0 .. num_vertices],
+					clip_plane,
+					&mut vertices_clipped_temp,
+				);
+				if num_vertices < 3
+				{
+					break;
+				}
+				vertices_clipped[.. num_vertices].copy_from_slice(&vertices_clipped_temp[.. num_vertices]);
+			}
+			if num_vertices < 3
+			{
+				continue;
+			}
+
+			for (src, dst) in vertices_clipped[0 .. num_vertices]
+				.iter()
+				.zip(vertices_projected.iter_mut())
+			{
+				*dst = ModelVertex2d {
+					pos: src.pos.truncate() / src.pos.z,
+					tc: src.tc,
+				};
+			}
+
+			// TODO - use only required clip planes.
+			for clip_plane in clip_planes
+			{
+				num_vertices = clip_2d_model_polygon(
+					&vertices_projected[0 .. num_vertices],
+					clip_plane,
+					&mut vertices_projected_temp,
+				);
+				if num_vertices < 3
+				{
+					break;
+				}
+				vertices_projected[.. num_vertices].copy_from_slice(&vertices_projected_temp[.. num_vertices]);
+			}
+			if num_vertices < 3
+			{
+				continue;
+			}
+
+			for (src, dst) in vertices_projected[0 .. num_vertices]
+				.iter()
+				.zip(vertices_fixed.iter_mut())
+			{
+				*dst = TrianglePointProjected {
+					x: f32_to_fixed16(src.pos.x),
+					y: f32_to_fixed16(src.pos.y),
+					tc: [f32_to_fixed16(src.tc.x), f32_to_fixed16(src.tc.y)],
+				};
+			}
+
+			for t in 0 .. num_vertices - 2
+			{
+				// TODO - use unchecked vertex fetch?
+				rasterizer.fill_triangle(
+					&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
+					&texture_info,
+					texture_data,
+				);
+			} // for subtriangles
+		} // For triangles
 	}
 
 	fn get_polygon_surface_data<ColorT>(&self, polygon_data: &DrawPolygonData) -> &[ColorT]
@@ -1391,6 +1835,9 @@ fn line_z_corrected_texture_coordinates_interpolation_may_be_used(
 const TC_ERROR_THRESHOLD: f32 = 0.75;
 
 pub const MAX_VERTICES: usize = 24;
+const MAX_LEAF_CLIP_PLANES: usize = 20;
+
+const Z_NEAR: f32 = 1.0;
 
 // Returns number of result vertices. < 3 if polygon is clipped.
 pub fn project_and_clip_polygon(
@@ -1403,7 +1850,6 @@ pub fn project_and_clip_polygon(
 
 	// Perform z_near clipping.
 	let mut vertices_transformed_z_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-	const Z_NEAR: f32 = 1.0;
 	vertex_count = clip_3d_polygon_by_z_plane(
 		&vertices_transformed[.. vertex_count],
 		Z_NEAR,

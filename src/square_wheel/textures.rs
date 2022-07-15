@@ -76,49 +76,47 @@ impl Default for TextureElement
 
 pub fn load_textures(materials: &[material::Material], textures_path: &std::path::Path) -> Vec<TextureWithMips>
 {
-	let mut result = Vec::new();
-
-	for material in materials
-	{
-		let diffuse = if let Some(image) = load_image(
-			&material.diffuse.clone().unwrap_or_else(|| String::new()),
-			textures_path,
-		)
-		{
-			image
-		}
-		else
-		{
-			make_stub_image()
-		};
-
-		let normals = if let Some(normal_map_texture) = &material.normal_map
-		{
-			load_image(&normal_map_texture.clone(), textures_path)
-		}
-		else
-		{
-			None
-		};
-
-		let roughness_map = if let Some(roughness_map_texture) = &material.roughness_map
-		{
-			load_image(&roughness_map_texture.clone(), textures_path)
-		}
-		else
-		{
-			None
-		};
-
-		let mip0 = make_texture(diffuse, normals, material.roughness, roughness_map, material.is_metal);
-
-		result.push(build_mips(mip0));
-	}
-
-	result
+	materials.iter().map(|m| load_texture(m, textures_path)).collect()
 }
 
-fn load_image(file_name: &str, textures_path: &std::path::Path) -> Option<image::Image>
+pub fn load_texture(material: &material::Material, textures_path: &std::path::Path) -> TextureWithMips
+{
+	let diffuse = if let Some(image) = load_image(
+		&material.diffuse.clone().unwrap_or_else(|| String::new()),
+		textures_path,
+	)
+	{
+		image
+	}
+	else
+	{
+		make_stub_image()
+	};
+
+	let normals = if let Some(normal_map_texture) = &material.normal_map
+	{
+		load_image(&normal_map_texture.clone(), textures_path)
+	}
+	else
+	{
+		None
+	};
+
+	let roughness_map = if let Some(roughness_map_texture) = &material.roughness_map
+	{
+		load_image(&roughness_map_texture.clone(), textures_path)
+	}
+	else
+	{
+		None
+	};
+
+	let mip0 = make_texture(diffuse, normals, material.roughness, roughness_map, material.is_metal);
+
+	build_mips(mip0)
+}
+
+pub fn load_image(file_name: &str, textures_path: &std::path::Path) -> Option<image::Image>
 {
 	let mut path = std::path::PathBuf::from(textures_path);
 	path.push(file_name);
