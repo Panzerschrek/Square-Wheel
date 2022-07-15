@@ -4,6 +4,7 @@ pub struct TriangleModel
 {
 	pub frames_info: Vec<TriangleModelFrameInfo>,
 	pub meshes: Vec<TriangleModelMesh>,
+	pub tc_shift: Vec2f,
 }
 
 // TODO -  support also skeleton-based animation.

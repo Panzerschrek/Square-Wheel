@@ -81,7 +81,14 @@ pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleMode
 		file.seek(std::io::SeekFrom::Start(offset as u64))?;
 	}
 
-	Ok(Some(TriangleModel { frames_info, meshes }))
+	// Add extra shift because we use texture coordinates floor, instead of linear OpenGL interpolation as Quake III does.
+	let tc_shift = -Vec2f::new(0.5, 0.5);
+
+	Ok(Some(TriangleModel {
+		frames_info,
+		meshes,
+		tc_shift,
+	}))
 }
 
 fn load_md3_mesh(

@@ -476,6 +476,7 @@ impl Renderer
 			// TODO - premultiply texture coordinates while loading model instead?
 			let texture = &model.texture;
 			let tc_scale = Vec2f::new(texture.size[0] as f32, texture.size[1] as f32);
+			let tc_shift = model.model.tc_shift;
 
 			let mesh = &model.model.meshes[visible_dynamic_mesh.mesh_index as usize];
 
@@ -493,7 +494,7 @@ impl Renderer
 				let pos_transformed = final_matrix * v_v.position.extend(1.0);
 				*dst_v = ModelVertex3d {
 					pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
-					tc: Vec2f::from(v_c.tex_coord).mul_element_wise(tc_scale),
+					tc: Vec2f::from(v_c.tex_coord).mul_element_wise(tc_scale) + tc_shift,
 				};
 			}
 
