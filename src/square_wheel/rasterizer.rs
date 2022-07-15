@@ -777,6 +777,9 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		let long_edge_x_in_middle =
 			vertices[lower_index].x + fixed16_mul(long_edge_dx_dy, vertices[middle_index].y - vertices[lower_index].y);
 
+		let lower_part_dx_dy = fixed16_div(vertices[middle_index].x - vertices[lower_index].x, lower_part_dy);
+		let upper_part_dx_dy = fixed16_div(vertices[upper_index].x - vertices[middle_index].x, upper_part_dy);
+
 		let mut long_edge_d_tc_dy = [0, 0];
 		let mut long_edge_tc_in_middle = [0, 0];
 		let mut d_tc_dy_lower = [0, 0];
@@ -820,18 +823,16 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			self.fill_triangle_part(
 				vertices[lower_index].y,
 				vertices[middle_index].y,
-				TriangleSide {
+				PolygonSide {
 					x_start: vertices[lower_index].x,
-					dx_dy: fixed16_div(vertices[middle_index].x - vertices[lower_index].x, lower_part_dy),
-					tc_start: vertices[lower_index].tc,
-					d_tc_dy: d_tc_dy_lower,
+					dx_dy: lower_part_dx_dy,
 				},
-				TriangleSide {
+				PolygonSide {
 					x_start: vertices[lower_index].x,
 					dx_dy: long_edge_dx_dy,
-					tc_start: vertices[lower_index].tc,
-					d_tc_dy: long_edge_d_tc_dy,
 				},
+				vertices[lower_index].tc,
+				d_tc_dy_lower,
 				d_tc_dx,
 				texture_info,
 				texture_data,
@@ -839,18 +840,16 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			self.fill_triangle_part(
 				vertices[middle_index].y,
 				vertices[upper_index].y,
-				TriangleSide {
+				PolygonSide {
 					x_start: vertices[middle_index].x,
-					dx_dy: fixed16_div(vertices[upper_index].x - vertices[middle_index].x, upper_part_dy),
-					tc_start: vertices[middle_index].tc,
-					d_tc_dy: d_tc_dy_upper,
+					dx_dy: upper_part_dx_dy,
 				},
-				TriangleSide {
+				PolygonSide {
 					x_start: long_edge_x_in_middle,
 					dx_dy: long_edge_dx_dy,
-					tc_start: long_edge_tc_in_middle,
-					d_tc_dy: long_edge_d_tc_dy,
 				},
+				vertices[middle_index].tc,
+				d_tc_dy_upper,
 				d_tc_dx,
 				texture_info,
 				texture_data,
@@ -880,18 +879,16 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			self.fill_triangle_part(
 				vertices[lower_index].y,
 				vertices[middle_index].y,
-				TriangleSide {
+				PolygonSide {
 					x_start: vertices[lower_index].x,
 					dx_dy: long_edge_dx_dy,
-					tc_start: vertices[lower_index].tc,
-					d_tc_dy: long_edge_d_tc_dy,
 				},
-				TriangleSide {
+				PolygonSide {
 					x_start: vertices[lower_index].x,
-					dx_dy: fixed16_div(vertices[middle_index].x - vertices[lower_index].x, lower_part_dy),
-					tc_start: vertices[lower_index].tc,
-					d_tc_dy: d_tc_dy_lower,
+					dx_dy: lower_part_dx_dy,
 				},
+				vertices[lower_index].tc,
+				long_edge_d_tc_dy,
 				d_tc_dx,
 				texture_info,
 				texture_data,
@@ -899,18 +896,16 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			self.fill_triangle_part(
 				vertices[middle_index].y,
 				vertices[upper_index].y,
-				TriangleSide {
+				PolygonSide {
 					x_start: long_edge_x_in_middle,
 					dx_dy: long_edge_dx_dy,
-					tc_start: long_edge_tc_in_middle,
-					d_tc_dy: long_edge_d_tc_dy,
 				},
-				TriangleSide {
+				PolygonSide {
 					x_start: vertices[middle_index].x,
-					dx_dy: fixed16_div(vertices[upper_index].x - vertices[middle_index].x, upper_part_dy),
-					tc_start: vertices[middle_index].tc,
-					d_tc_dy: d_tc_dy_upper,
+					dx_dy: upper_part_dx_dy,
 				},
+				long_edge_tc_in_middle,
+				long_edge_d_tc_dy,
 				d_tc_dx,
 				texture_info,
 				texture_data,
@@ -922,8 +917,10 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		&mut self,
 		y_start: Fixed16,
 		y_end: Fixed16,
-		left_side: TriangleSide,
-		right_side: TriangleSide,
+		left_side: PolygonSide,
+		right_side: PolygonSide,
+		tc_start_left: [Fixed16; 2],
+		d_tc_dy_left: [Fixed16; 2],
 		d_tc_dx: [Fixed16; 2],
 		texture_info: &TextureInfo,
 		texture_data: &[TextureColorT],
@@ -939,7 +936,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		let mut tc_left = [0, 0];
 		for i in 0 .. 2
 		{
-			tc_left[i] = left_side.tc_start[i] + fixed16_mul(y_start_delta, left_side.d_tc_dy[i]);
+			tc_left[i] = tc_start_left[i] + fixed16_mul(y_start_delta, d_tc_dy_left[i]);
 		}
 		for y_int in y_start_int .. y_end_int
 		{
@@ -977,7 +974,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			x_right += right_side.dx_dy;
 			for i in 0 .. 2
 			{
-				tc_left[i] += left_side.d_tc_dy[i];
+				tc_left[i] += d_tc_dy_left[i];
 			}
 		}
 	}
@@ -1199,14 +1196,6 @@ struct PolygonSide
 {
 	x_start: Fixed16,
 	dx_dy: Fixed16,
-}
-
-struct TriangleSide
-{
-	x_start: Fixed16,
-	dx_dy: Fixed16,
-	tc_start: [Fixed16; 2],
-	d_tc_dy: [Fixed16; 2],
 }
 
 // We do not care if "y" is zero, because there is no difference between "panic!" and hardware exceptions.
