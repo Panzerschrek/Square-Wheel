@@ -454,11 +454,7 @@ impl Renderer
 			let model = &models[visible_dynamic_mesh.entity_index as usize];
 			let frame = model.frame as usize;
 
-			let rotate = Mat4f::from_angle_z(model.angle_z);
-			let translate = Mat4f::from_translation(model.position);
-			let world_space_matrix = translate * rotate;
-
-			let final_matrix = camera_matrices.view_matrix * world_space_matrix;
+			let final_matrix = camera_matrices.view_matrix * get_object_matrix(model.position, model.angle_z);
 
 			// Transform bbox.
 			let bbox = &model.model.frames_info[frame].bbox;

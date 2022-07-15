@@ -1,5 +1,5 @@
 use super::frame_info::*;
-use common::{bsp_map_compact, math_types::*};
+use common::{bsp_map_compact, math_types::*, matrix::*};
 use std::sync::Arc;
 
 pub struct DynamicModelsIndex
@@ -62,7 +62,7 @@ impl DynamicModelsIndex
 	{
 		// Calculate current bounding box.
 		let bbox = &model.model.frames_info[model.frame as usize].bbox;
-		let transform_matrix = Mat4f::from_translation(model.position) * Mat4f::from_angle_z(model.angle_z);
+		let transform_matrix = get_object_matrix(model.position, model.angle_z);
 
 		let bbox_vertices = [
 			(transform_matrix * Vec4f::new(bbox.min.x, bbox.min.y, bbox.min.z, 1.0)).truncate(),
