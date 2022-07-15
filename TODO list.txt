@@ -1,0 +1,45 @@
+This list contains features that needs to be done.
+Please, keep it in actual state.
+
+General:
+* Detail objects (static, but not in BSP)
+* Built-in triangle models (embedded into BSP tree)
+* Alpha-test
+* Arbitrary dynamic models rotation (Euler angles?)
+* More models formats
+* More consistent file errors handling
+* Avoid usage of "unwrap"
+
+Engine:
+* Resources manager improvements
+* Screen surface update parallel with other operations (game logic, rendering preparation)
+* Skeleton-based animation
+* Smooth animation for frame-based animated models (interpolate between 2 or more frames)
+
+Renderer:
+* Fix buggy splitting of submodels polygons when polygon lies in clip plane
+* Skyboxes
+* 3/4 and 1/4 rasterization blending
+* Better sorting of dynamic objects
+* Triangle models lighting
+* Rasterization microoptimizations
+* HDR exposure update with logarithmical speed
+* Animated textures (with N frames)
+* Models rendering improvements - avoid splitting models into pieces for each BSP tree leaf in some cases
+* Models clipping optimizations
+* Avoid applying dynamic lights to all surfaces - apply only needed lights
+* Dynamic lights with 2D shadowmap (not only cube)
+* Dynamic lights without shadows
+* Emissive textures (lamps, screens)
+* Billboards and sprites
+* Decals
+
+Lightmapper:
+* Polygons without shadows
+* Light volumes (for dynamic objects lighting)
+* Semitransparent objects shadows
+* Shadows from dynamic objects (configurable)
+
+Map compiler:
+* Speed-up of large maps compilation
+* More map source formats (Quake II, Quake III Arena), Source Engine
