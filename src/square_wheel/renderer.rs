@@ -1517,22 +1517,10 @@ impl Renderer
 
 fn sort_model_triangles(transformed_vertices: &[ModelVertex3d], triangles: &mut [Triangle])
 {
-	if true
-	{
-		sort_model_triangles_z(transformed_vertices, triangles)
-	}
-	else
-	{
-		sort_model_triangles_tricky(transformed_vertices, triangles)
-	}
-}
-
-fn sort_model_triangles_z(transformed_vertices: &[ModelVertex3d], triangles: &mut [Triangle])
-{
 	// Dumb triangles sorting, using Z coordinate.
+	// TODO - try to use other criterias - min_z, center_z, min_z + max_z ...
 
 	triangles.sort_by(|a, b| {
-		// TODO - maybe use "min" function?
 		// TODO - use unchecked fetch.
 		let a_z = transformed_vertices[a[0] as usize]
 			.pos
@@ -1547,99 +1535,6 @@ fn sort_model_triangles_z(transformed_vertices: &[ModelVertex3d], triangles: &mu
 		// TODO - avoid unwrap.
 		b_z.partial_cmp(&a_z).unwrap()
 	});
-}
-
-fn sort_model_triangles_tricky(transformed_vertices: &[ModelVertex3d], triangles: &mut [Triangle])
-{
-	// This is an ugly hand-written variant of quick-sort-like algorithm.
-	// Use it because we can't use standart sorting functions with non-transitive comparator.
-
-	// TODO - speed-up this, use unchecked indexing function.
-
-	if triangles.len() <= 1
-	{
-		return;
-	}
-
-	let s = triangles.len();
-	let last = s - 1;
-	let mut lo = 0;
-	let mut hi = last;
-
-	let last_triangle = triangles[last];
-	let last_plane = get_triangle_plane(transformed_vertices, &last_triangle);
-
-	while lo < hi
-	{
-		// Comparison function is a little bit strange.
-		// First we check if test triangle is at one side of last triangle plane.
-		// If this triangle is on both sides - check last triangle against test triangle plane.
-
-		let test_triangle = triangles[lo];
-
-		let mut vertices_front = 0;
-		for index in test_triangle
-		{
-			if last_plane.vec.dot(transformed_vertices[index as usize].pos) > last_plane.dist
-			{
-				vertices_front += 1;
-			}
-		}
-
-		let c;
-		if vertices_front == 3
-		{
-			c = true;
-		}
-		else if vertices_front == 0
-		{
-			c = false;
-		}
-		else
-		{
-			let test_plane = get_triangle_plane(transformed_vertices, &test_triangle);
-			let mut vertices_front = 0;
-			for index in last_triangle
-			{
-				if test_plane.vec.dot(transformed_vertices[index as usize].pos) > test_plane.dist
-				{
-					vertices_front += 1;
-				}
-			}
-
-			if vertices_front == 3
-			{
-				c = false;
-			}
-			else if vertices_front == 0
-			{
-				c = true;
-			}
-			else
-			{
-				// Intersecting triangles - impossible to order.
-				c = true;
-			}
-		}
-
-		if c
-		{
-			lo += 1;
-		}
-		else
-		{
-			hi -= 1;
-			triangles.swap(lo, hi);
-		}
-	}
-
-	if hi < last
-	{
-		triangles.swap(hi, last);
-	}
-
-	sort_model_triangles(transformed_vertices, &mut triangles[.. hi]);
-	sort_model_triangles(transformed_vertices, &mut triangles[hi + 1 ..]);
 }
 
 fn get_triangle_plane(transformed_vertices: &[ModelVertex3d], triangle: &Triangle) -> Plane
