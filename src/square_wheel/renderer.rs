@@ -2,7 +2,7 @@ use super::{
 	abstract_color::*, config, debug_stats_printer::*, depth_renderer::*, draw_ordering, dynamic_models_index::*,
 	fast_math::*, frame_info::*, frame_number::*, inline_models_index::*, map_materials_processor::*,
 	map_visibility_calculator::*, performance_counter::*, rasterizer::*, rect_splitting, renderer_config::*,
-	shadow_map::*, surfaces::*, textures::*, triangle_model::*,
+	shadow_map::*, surfaces::*, textures::*, triangle_model::*, triangle_models_rendering::*,
 };
 use common::{
 	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, material, math_types::*,
@@ -501,21 +501,13 @@ impl Renderer
 
 			// Copy, filter and sort triangles.
 			let dst_triangles = &mut self.dynamic_meshes_triangles[visible_dynamic_mesh.triangles_offset ..];
-			let mut num_visible_triangles = 0;
-			for triangle in &mesh.triangles
-			{
-				// Reject back faces.
-				// TODO - maybe also reject triangles outside screen borders?
-				if get_triangle_plane(&dst_mesh_vertices, triangle).dist > 0.0
-				{
-					dst_triangles[num_visible_triangles] = *triangle;
-					num_visible_triangles += 1;
-				}
-			}
+			visible_dynamic_mesh.num_visible_triangles =
+				reject_triangle_model_back_faces(&dst_mesh_vertices, &mesh.triangles, dst_triangles);
 
-			sort_model_triangles(&dst_mesh_vertices, &mut dst_triangles[.. num_visible_triangles]);
-
-			visible_dynamic_mesh.num_visible_triangles = num_visible_triangles;
+			sort_model_triangles(
+				&dst_mesh_vertices,
+				&mut dst_triangles[.. visible_dynamic_mesh.num_visible_triangles],
+			);
 		}
 	}
 
@@ -1512,50 +1504,6 @@ impl Renderer
 			self.config.textures_mip_bias = 2.0;
 			self.config_is_durty = true;
 		}
-	}
-}
-
-fn sort_model_triangles(transformed_vertices: &[ModelVertex3d], triangles: &mut [Triangle])
-{
-	// Dumb triangles sorting, using Z coordinate.
-	// TODO - try to use other criterias - min_z, center_z, min_z + max_z ...
-
-	triangles.sort_by(|a, b| {
-		let a_z = triangle_vertex_debug_checked_fetch(transformed_vertices, a[0])
-			.pos
-			.z
-			.max(triangle_vertex_debug_checked_fetch(transformed_vertices, a[1]).pos.z)
-			.max(triangle_vertex_debug_checked_fetch(transformed_vertices, a[2]).pos.z);
-		let b_z = triangle_vertex_debug_checked_fetch(transformed_vertices, b[0])
-			.pos
-			.z
-			.max(triangle_vertex_debug_checked_fetch(transformed_vertices, b[1]).pos.z)
-			.max(triangle_vertex_debug_checked_fetch(transformed_vertices, b[2]).pos.z);
-		// TODO - avoid unwrap.
-		b_z.partial_cmp(&a_z).unwrap()
-	});
-}
-
-fn get_triangle_plane(transformed_vertices: &[ModelVertex3d], triangle: &Triangle) -> Plane
-{
-	let v0 = triangle_vertex_debug_checked_fetch(transformed_vertices, triangle[0]);
-	let v1 = triangle_vertex_debug_checked_fetch(transformed_vertices, triangle[1]);
-	let v2 = triangle_vertex_debug_checked_fetch(transformed_vertices, triangle[2]);
-	let vec = (v1.pos - v0.pos).cross(v2.pos - v1.pos);
-	let dist = vec.dot(v0.pos);
-	Plane { vec, dist }
-}
-
-fn triangle_vertex_debug_checked_fetch<VertexT: Copy>(vertices: &[VertexT], index: VertexIndex) -> VertexT
-{
-	let index_s = index as usize;
-	#[cfg(debug_assertions)]
-	{
-		vertices[index_s]
-	}
-	#[cfg(not(debug_assertions))]
-	unsafe {
-		*vertices.get_unchecked(index_s)
 	}
 }
 

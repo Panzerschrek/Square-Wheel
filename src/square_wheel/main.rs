@@ -34,6 +34,7 @@ mod textures;
 mod ticks_counter;
 mod triangle_model;
 mod triangle_model_md3;
+mod triangle_models_rendering;
 
 use std::path::PathBuf;
 use structopt::StructOpt;
