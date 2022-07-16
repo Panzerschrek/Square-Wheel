@@ -1,10 +1,10 @@
-use super::textures::*;
+use super::{resources_manager::*, textures::*};
 use common::{bsp_map_compact, material::*};
 
 pub struct MapMaterialsProcessor
 {
 	materials: Vec<Material>,
-	textures: Vec<TextureWithMips>,
+	textures: Vec<SharedResourcePtr<TextureWithMips>>,
 	// Store here only animated textures.
 	textures_modified: Vec<TextureWithMips>,
 	temp_buffer: Vec<TextureElement>,
@@ -12,9 +12,13 @@ pub struct MapMaterialsProcessor
 
 impl MapMaterialsProcessor
 {
-	pub fn new(map: &bsp_map_compact::BSPMap, all_materials: &MaterialsMap, textures_path: &str) -> Self
+	pub fn new(resources_manager: ResourcesManagerSharedPtr, map: &bsp_map_compact::BSPMap) -> Self
 	{
+		let mut r = resources_manager.lock().unwrap();
+		let all_materials = r.get_materials();
+
 		let mut materials = Vec::with_capacity(map.textures.len());
+		let mut textures = Vec::with_capacity(map.textures.len());
 		for texture_name in &map.textures
 		{
 			let material_name_string = bsp_map_compact::get_texture_string(texture_name);
@@ -28,9 +32,8 @@ impl MapMaterialsProcessor
 				Material::default()
 			};
 			materials.push(material);
+			textures.push(r.get_material_texture(&material_name_string.to_string()));
 		}
-
-		let textures = load_textures(&materials, &std::path::PathBuf::from(textures_path));
 
 		let textures_modified = vec![TextureWithMips::default(); textures.len()];
 

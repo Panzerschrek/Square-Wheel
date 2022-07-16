@@ -1,4 +1,4 @@
-use super::{config, resources_manager_config::*, triangle_model, triangle_model_md3};
+use super::{config, resources_manager_config::*, textures::*, triangle_model, triangle_model_md3};
 use common::{image, material::*};
 use std::{
 	collections::HashMap,
@@ -12,8 +12,11 @@ pub struct ResourcesManager
 	config: ResourcesManagerConfig,
 
 	materials: SharedResourcePtr<MaterialsMap>,
+	default_material: Material,
+
 	models: ResourcesMap<triangle_model::TriangleModel>,
 	images: ResourcesMap<image::Image>,
+	material_textures: ResourcesMap<TextureWithMips>,
 }
 
 pub type ResourcesManagerSharedPtr = Arc<Mutex<ResourcesManager>>;
@@ -36,8 +39,10 @@ impl ResourcesManager
 		Arc::new(Mutex::new(Self {
 			config: config_parsed,
 			materials,
+			default_material: Material::default(),
 			models: ResourcesMap::new(),
 			images: ResourcesMap::new(),
+			material_textures: ResourcesMap::new(),
 		}))
 	}
 
@@ -80,6 +85,23 @@ impl ResourcesManager
 		ptr
 	}
 
+	pub fn get_material_texture(&mut self, key: &ResourceKey) -> SharedResourcePtr<TextureWithMips>
+	{
+		if let Some(p) = self.material_textures.get(key)
+		{
+			return p.clone();
+		}
+
+		let material = self.materials.get(key).unwrap_or(&self.default_material);
+
+		let texture_with_mips = load_texture(material, &self.config.textures_path);
+
+		let ptr = Arc::new(texture_with_mips);
+		self.material_textures.insert(key.clone(), ptr.clone());
+
+		ptr
+	}
+
 	pub fn clear_cache(&mut self)
 	{
 		// Remove all resources that are stored only inside cache.
@@ -91,6 +113,43 @@ impl ResourcesManager
 fn remove_unused_resource_map_entries<T>(map: &mut ResourcesMap<T>)
 {
 	map.retain(|_k, v| Arc::strong_count(v) > 1);
+}
+
+fn load_texture(material: &Material, textures_path: &str) -> TextureWithMips
+{
+	let diffuse = if let Some(image) = load_image(
+		&material.diffuse.clone().unwrap_or_else(|| String::new()),
+		textures_path,
+	)
+	{
+		image
+	}
+	else
+	{
+		image::make_stub()
+	};
+
+	let normals = if let Some(normal_map_texture) = &material.normal_map
+	{
+		load_image(&normal_map_texture.clone(), textures_path)
+	}
+	else
+	{
+		None
+	};
+
+	let roughness_map = if let Some(roughness_map_texture) = &material.roughness_map
+	{
+		load_image(&roughness_map_texture.clone(), textures_path)
+	}
+	else
+	{
+		None
+	};
+
+	let mip0 = make_texture(diffuse, normals, material.roughness, roughness_map, material.is_metal);
+
+	build_texture_mips(mip0)
 }
 
 fn load_image(file_name: &str, textures_path: &str) -> Option<image::Image>

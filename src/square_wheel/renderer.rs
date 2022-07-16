@@ -121,9 +121,7 @@ impl Renderer
 		let config_parsed = RendererConfig::from_app_config(&app_config);
 		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
 
-		let all_materials = resources_manager.lock().unwrap().get_materials();
-
-		let materials_processor = MapMaterialsProcessor::new(&*map, &*all_materials, &config_parsed.textures_path);
+		let materials_processor = MapMaterialsProcessor::new(resources_manager, &*map);
 
 		Renderer {
 			app_config,
