@@ -62,9 +62,7 @@ impl ResourcesManager
 			return p.clone();
 		}
 
-		// TODO - use dummy instead of "unwrap".
-		// TODO - specify images root path.
-		let image = image::load(&std::path::PathBuf::from(key)).unwrap();
+		let image = load_image(&key, &self.config.textures_path).unwrap_or_else(image::make_stub);
 
 		let ptr = Arc::new(image);
 		self.images.insert(key.clone(), ptr.clone());
@@ -83,4 +81,11 @@ impl ResourcesManager
 fn remove_unused_resource_map_entries<T>(map: &mut ResourcesMap<T>)
 {
 	map.retain(|_k, v| Arc::strong_count(v) > 1);
+}
+
+fn load_image(file_name: &str, textures_path: &str) -> Option<image::Image>
+{
+	let mut path = std::path::PathBuf::from(textures_path);
+	path.push(file_name);
+	image::load(&path)
 }
