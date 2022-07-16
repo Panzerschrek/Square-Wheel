@@ -349,7 +349,11 @@ impl Host
 						self.console.clone(),
 						self.resources_manager.clone(),
 					),
-					renderer: renderer::Renderer::new(self.app_config.clone(), map_rc.clone()),
+					renderer: renderer::Renderer::new(
+						self.resources_manager.clone(),
+						self.app_config.clone(),
+						map_rc.clone(),
+					),
 					inline_models_index: inline_models_index::InlineModelsIndex::new(map_rc),
 					debug_stats_printer: DebugStatsPrinter::new(self.config.show_debug_stats),
 				});

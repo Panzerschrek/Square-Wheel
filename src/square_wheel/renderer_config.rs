@@ -23,9 +23,6 @@ pub struct RendererConfig
 	pub use_directional_lightmaps: bool,
 
 	#[serde(default)]
-	pub materials_path: String,
-
-	#[serde(default)]
 	pub textures_path: String,
 }
 

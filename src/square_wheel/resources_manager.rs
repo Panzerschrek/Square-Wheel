@@ -1,7 +1,8 @@
 use super::{config, resources_manager_config::*, triangle_model, triangle_model_md3};
-use common::image;
+use common::{image, material::*};
 use std::{
 	collections::HashMap,
+	path::PathBuf,
 	sync::{Arc, Mutex},
 };
 
@@ -10,6 +11,7 @@ pub struct ResourcesManager
 {
 	config: ResourcesManagerConfig,
 
+	materials: SharedResourcePtr<MaterialsMap>,
 	models: ResourcesMap<triangle_model::TriangleModel>,
 	images: ResourcesMap<image::Image>,
 }
@@ -29,11 +31,19 @@ impl ResourcesManager
 		let config_parsed = ResourcesManagerConfig::from_app_config(&app_config);
 		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
 
+		let materials = Arc::new(load_materials(&PathBuf::from(config_parsed.materials_path.clone())));
+
 		Arc::new(Mutex::new(Self {
 			config: config_parsed,
+			materials,
 			models: ResourcesMap::new(),
 			images: ResourcesMap::new(),
 		}))
+	}
+
+	pub fn get_materials(&mut self) -> SharedResourcePtr<MaterialsMap>
+	{
+		self.materials.clone()
 	}
 
 	pub fn get_model(&mut self, key: &ResourceKey) -> SharedResourcePtr<triangle_model::TriangleModel>
@@ -45,7 +55,7 @@ impl ResourcesManager
 
 		// TODO - use dummy instead of "unwrap".
 		// TODO - specify models root path.
-		let model = triangle_model_md3::load_model_md3(&std::path::PathBuf::from(key))
+		let model = triangle_model_md3::load_model_md3(&PathBuf::from(key))
 			.unwrap()
 			.unwrap();
 
@@ -85,7 +95,7 @@ fn remove_unused_resource_map_entries<T>(map: &mut ResourcesMap<T>)
 
 fn load_image(file_name: &str, textures_path: &str) -> Option<image::Image>
 {
-	let mut path = std::path::PathBuf::from(textures_path);
+	let mut path = PathBuf::from(textures_path);
 	path.push(file_name);
 	image::load(&path)
 }
