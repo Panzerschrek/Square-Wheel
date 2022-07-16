@@ -37,7 +37,7 @@ impl ResourcesManager
 		let config_parsed = ResourcesManagerConfig::from_app_config(&app_config);
 		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
 
-		let materials = Arc::new(load_materials(&PathBuf::from(config_parsed.materials_path.clone())));
+		let materials = SharedResourcePtr::new(load_materials(&PathBuf::from(config_parsed.materials_path.clone())));
 
 		Arc::new(Mutex::new(Self {
 			config: config_parsed,
@@ -65,7 +65,7 @@ impl ResourcesManager
 			}
 		}
 
-		let mut map_path = std::path::PathBuf::from(self.config.maps_path.clone());
+		let mut map_path = PathBuf::from(self.config.maps_path.clone());
 		map_path.push(map_name);
 
 		map_path = normalize_bsp_map_file_path(map_path);
@@ -73,7 +73,7 @@ impl ResourcesManager
 		{
 			Ok(Some(map)) =>
 			{
-				let map_rc = std::sync::Arc::new(map);
+				let map_rc = SharedResourcePtr::new(map);
 				self.last_map = Some((map_name.to_string(), map_rc.clone()));
 				Some(map_rc)
 			},
@@ -101,13 +101,13 @@ impl ResourcesManager
 			return p.clone();
 		}
 
-		let mut model_path = std::path::PathBuf::from(self.config.models_path.clone());
+		let mut model_path = PathBuf::from(self.config.models_path.clone());
 		model_path.push(key);
 
 		// TODO - use dummy instead of "unwrap".
 		let model = triangle_model_md3::load_model_md3(&model_path).unwrap().unwrap();
 
-		let ptr = Arc::new(model);
+		let ptr = SharedResourcePtr::new(model);
 		self.models.insert(key.clone(), ptr.clone());
 
 		ptr
@@ -122,7 +122,7 @@ impl ResourcesManager
 
 		let image = load_image(&key, &self.config.textures_path).unwrap_or_else(image::make_stub);
 
-		let ptr = Arc::new(image);
+		let ptr = SharedResourcePtr::new(image);
 		self.images.insert(key.clone(), ptr.clone());
 
 		ptr
@@ -139,7 +139,7 @@ impl ResourcesManager
 
 		let texture_with_mips = load_texture(material, &self.config.textures_path);
 
-		let ptr = Arc::new(texture_with_mips);
+		let ptr = SharedResourcePtr::new(texture_with_mips);
 		self.material_textures.insert(key.clone(), ptr.clone());
 
 		ptr
