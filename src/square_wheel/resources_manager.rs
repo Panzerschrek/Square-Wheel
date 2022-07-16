@@ -1,5 +1,5 @@
 use super::{config, resources_manager_config::*, textures::*, triangle_model, triangle_model_md3};
-use common::{image, material::*};
+use common::{bsp_map_compact::*, bsp_map_save_load::*, image, material::*};
 use std::{
 	collections::HashMap,
 	path::PathBuf,
@@ -13,6 +13,9 @@ pub struct ResourcesManager
 
 	materials: SharedResourcePtr<MaterialsMap>,
 	default_material: Material,
+
+	// Cache single map. TODO - maybe cache more maps?
+	last_map: Option<(String, SharedResourcePtr<BSPMap>)>,
 
 	models: ResourcesMap<triangle_model::TriangleModel>,
 	images: ResourcesMap<image::Image>,
@@ -40,6 +43,7 @@ impl ResourcesManager
 			config: config_parsed,
 			materials,
 			default_material: Material::default(),
+			last_map: None,
 			models: ResourcesMap::new(),
 			images: ResourcesMap::new(),
 			material_textures: ResourcesMap::new(),
@@ -49,6 +53,45 @@ impl ResourcesManager
 	pub fn get_materials(&mut self) -> SharedResourcePtr<MaterialsMap>
 	{
 		self.materials.clone()
+	}
+
+	pub fn get_map(&mut self, map_name: &str) -> Option<SharedResourcePtr<BSPMap>>
+	{
+		if let Some(last_map) = &self.last_map
+		{
+			if last_map.0 == map_name
+			{
+				return Some(last_map.1.clone());
+			}
+		}
+
+		let mut map_path = std::path::PathBuf::from(self.config.maps_path.clone());
+		map_path.push(map_name);
+
+		map_path = normalize_bsp_map_file_path(map_path);
+		match load_map(&map_path)
+		{
+			Ok(Some(map)) =>
+			{
+				let map_rc = std::sync::Arc::new(map);
+				self.last_map = Some((map_name.to_string(), map_rc.clone()));
+				Some(map_rc)
+			},
+			Ok(None) =>
+			{
+				// self.console
+				// 	.borrow_mut()
+				// 	.add_text(format!("Failed to load map {:?}", map_path));
+				None
+			},
+			Err(e) =>
+			{
+				// self.console
+				// 	.borrow_mut()
+				// 	.add_text(format!("Failed to load map {:?}: {}", map_path, e));
+				None
+			},
+		}
 	}
 
 	pub fn get_model(&mut self, key: &ResourceKey) -> SharedResourcePtr<triangle_model::TriangleModel>
@@ -107,6 +150,7 @@ impl ResourcesManager
 		// Remove all resources that are stored only inside cache.
 		remove_unused_resource_map_entries(&mut self.models);
 		remove_unused_resource_map_entries(&mut self.images);
+		remove_unused_resource_map_entries(&mut self.material_textures);
 	}
 }
 

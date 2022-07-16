@@ -16,9 +16,6 @@ pub struct HostConfig
 
 	#[serde(default)]
 	pub fullscreen_mode: f32,
-
-	#[serde(default)]
-	pub maps_path: String,
 }
 
 impl HostConfig

@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 pub struct ResourcesManagerConfig
 {
 	#[serde(default)]
+	pub maps_path: String,
+
+	#[serde(default)]
 	pub materials_path: String,
 
 	#[serde(default)]

@@ -2,7 +2,7 @@ use super::{
 	commands_processor, commands_queue, config, console, debug_stats_printer::*, host_config::*, inline_models_index,
 	postprocessor::*, renderer, resources_manager::*, test_game, text_printer, ticks_counter::*,
 };
-use common::{bsp_map_save_load, color::*, system_window};
+use common::{color::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
@@ -334,45 +334,22 @@ impl Host
 		}
 		self.active_map = None;
 
-		let mut map_path = std::path::PathBuf::from(self.config.maps_path.clone());
-		map_path.push(args[0].clone());
-
-		map_path = bsp_map_save_load::normalize_bsp_map_file_path(map_path);
-		match bsp_map_save_load::load_map(&map_path)
+		let map_opt = self.resources_manager.lock().unwrap().get_map(&args[0]);
+		if let Some(map) = map_opt
 		{
-			Ok(Some(map)) =>
-			{
-				let map_rc = std::sync::Arc::new(map);
-				self.active_map = Some(ActiveMap {
-					game: test_game::Game::new(
-						self.commands_processor.clone(),
-						self.console.clone(),
-						self.resources_manager.clone(),
-					),
-					renderer: renderer::Renderer::new(
-						self.resources_manager.clone(),
-						self.app_config.clone(),
-						map_rc.clone(),
-					),
-					inline_models_index: inline_models_index::InlineModelsIndex::new(map_rc),
-					debug_stats_printer: DebugStatsPrinter::new(self.config.show_debug_stats),
-				});
+			self.active_map = Some(ActiveMap {
+				game: test_game::Game::new(
+					self.commands_processor.clone(),
+					self.console.clone(),
+					self.resources_manager.clone(),
+				),
+				renderer: renderer::Renderer::new(self.resources_manager.clone(), self.app_config.clone(), map.clone()),
+				inline_models_index: inline_models_index::InlineModelsIndex::new(map),
+				debug_stats_printer: DebugStatsPrinter::new(self.config.show_debug_stats),
+			});
 
-				// Clear unused resources from previous map.
-				self.resources_manager.lock().unwrap().clear_cache();
-			},
-			Ok(None) =>
-			{
-				self.console
-					.borrow_mut()
-					.add_text(format!("Failed to load map {:?}", map_path));
-			},
-			Err(e) =>
-			{
-				self.console
-					.borrow_mut()
-					.add_text(format!("Failed to load map {:?}: {}", map_path, e));
-			},
+			// Clear unused resources from previous map.
+			self.resources_manager.lock().unwrap().clear_cache();
 		}
 	}
 
