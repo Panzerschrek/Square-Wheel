@@ -1,4 +1,4 @@
-use super::{triangle_model, triangle_model_md3};
+use super::{config, resources_manager_config::*, triangle_model, triangle_model_md3};
 use common::image;
 use std::{
 	collections::HashMap,
@@ -8,6 +8,8 @@ use std::{
 // Resources loader class with internal caching.
 pub struct ResourcesManager
 {
+	config: ResourcesManagerConfig,
+
 	models: ResourcesMap<triangle_model::TriangleModel>,
 	images: ResourcesMap<image::Image>,
 }
@@ -22,9 +24,13 @@ type ResourcesMap<T> = HashMap<String, SharedResourcePtr<T>>;
 
 impl ResourcesManager
 {
-	pub fn new() -> ResourcesManagerSharedPtr
+	pub fn new(app_config: config::ConfigSharedPtr) -> ResourcesManagerSharedPtr
 	{
+		let config_parsed = ResourcesManagerConfig::from_app_config(&app_config);
+		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
+
 		Arc::new(Mutex::new(Self {
+			config: config_parsed,
 			models: ResourcesMap::new(),
 			images: ResourcesMap::new(),
 		}))
