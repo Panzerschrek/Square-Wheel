@@ -2,7 +2,7 @@ use super::{
 	abstract_color::*, config, debug_stats_printer::*, depth_renderer::*, draw_ordering, dynamic_models_index::*,
 	fast_math::*, frame_info::*, frame_number::*, inline_models_index::*, map_materials_processor::*,
 	map_visibility_calculator::*, performance_counter::*, rasterizer::*, rect_splitting, renderer_config::*,
-	shadow_map::*, surfaces::*, textures::*, triangle_model::*, triangle_models_rendering::*,
+	resources_manager::*, shadow_map::*, surfaces::*, textures::*, triangle_model::*, triangle_models_rendering::*,
 };
 use common::{
 	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, material, math_types::*,
@@ -112,15 +112,16 @@ struct DynamicModelInfo
 
 impl Renderer
 {
-	pub fn new(app_config: config::ConfigSharedPtr, map: Arc<bsp_map_compact::BSPMap>) -> Self
+	pub fn new(
+		resources_manager: ResourcesManagerSharedPtr,
+		app_config: config::ConfigSharedPtr,
+		map: Arc<bsp_map_compact::BSPMap>,
+	) -> Self
 	{
 		let config_parsed = RendererConfig::from_app_config(&app_config);
 		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
 
-		// TODO - cache materials globally.
-		let all_materials = material::load_materials(&std::path::PathBuf::from(&config_parsed.materials_path));
-
-		let materials_processor = MapMaterialsProcessor::new(&*map, &all_materials, &config_parsed.textures_path);
+		let materials_processor = MapMaterialsProcessor::new(resources_manager, &*map);
 
 		Renderer {
 			app_config,

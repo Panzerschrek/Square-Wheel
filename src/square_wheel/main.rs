@@ -26,6 +26,7 @@ mod rect_splitting;
 mod renderer;
 mod renderer_config;
 mod resources_manager;
+mod resources_manager_config;
 mod shadow_map;
 mod surfaces;
 mod test_game;

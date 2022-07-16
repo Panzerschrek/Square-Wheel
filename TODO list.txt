@@ -11,7 +11,6 @@ General:
 * Avoid usage of "unwrap"
 
 Engine:
-* Resources manager improvements
 * Screen surface update parallel with other operations (game logic, rendering preparation)
 * Skeleton-based animation
 * Smooth animation for frame-based animated models (interpolate between 2 or more frames)

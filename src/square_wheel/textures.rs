@@ -1,5 +1,5 @@
 use super::fast_math::*;
-use common::{color::*, image, material, math_types::*};
+use common::{color::*, image, math_types::*};
 
 // MAX_MIP must be not greater, than LIGHTMAP_SCALE_LOG2
 pub const MAX_MIP: usize = 3;
@@ -74,83 +74,7 @@ impl Default for TextureElement
 	}
 }
 
-pub fn load_textures(materials: &[material::Material], textures_path: &std::path::Path) -> Vec<TextureWithMips>
-{
-	materials.iter().map(|m| load_texture(m, textures_path)).collect()
-}
-
-pub fn load_texture(material: &material::Material, textures_path: &std::path::Path) -> TextureWithMips
-{
-	let diffuse = if let Some(image) = load_image(
-		&material.diffuse.clone().unwrap_or_else(|| String::new()),
-		textures_path,
-	)
-	{
-		image
-	}
-	else
-	{
-		make_stub_image()
-	};
-
-	let normals = if let Some(normal_map_texture) = &material.normal_map
-	{
-		load_image(&normal_map_texture.clone(), textures_path)
-	}
-	else
-	{
-		None
-	};
-
-	let roughness_map = if let Some(roughness_map_texture) = &material.roughness_map
-	{
-		load_image(&roughness_map_texture.clone(), textures_path)
-	}
-	else
-	{
-		None
-	};
-
-	let mip0 = make_texture(diffuse, normals, material.roughness, roughness_map, material.is_metal);
-
-	build_mips(mip0)
-}
-
-pub fn load_image(file_name: &str, textures_path: &std::path::Path) -> Option<image::Image>
-{
-	let mut path = std::path::PathBuf::from(textures_path);
-	path.push(file_name);
-	image::load(&path)
-}
-
-fn make_stub_image() -> image::Image
-{
-	let size = 32;
-	let mut result = image::Image {
-		size: [size, size],
-		pixels: vec![Color32::from_rgb(0, 0, 0); (size * size) as usize],
-	};
-
-	for y in 0 .. result.size[1]
-	{
-		for x in 0 .. result.size[0]
-		{
-			let color = if (((x >> 3) ^ (y >> 3)) & 1) != 0
-			{
-				Color32::from_rgb(224, 224, 224)
-			}
-			else
-			{
-				Color32::from_rgb(160, 160, 160)
-			};
-			result.pixels[(x + y * result.size[0]) as usize] = color;
-		}
-	}
-
-	result
-}
-
-fn make_texture(
+pub fn make_texture(
 	diffuse: image::Image,
 	mut normals: Option<image::Image>,
 	roughness: f32,
@@ -240,7 +164,7 @@ fn resize_image(image: &image::Image, target_size: [u32; 2]) -> image::Image
 	result
 }
 
-fn build_mips(mip0: Texture) -> TextureWithMips
+pub fn build_texture_mips(mip0: Texture) -> TextureWithMips
 {
 	// This function requires input texture with size multiple of ( 1 << MAX_MIP ).
 
