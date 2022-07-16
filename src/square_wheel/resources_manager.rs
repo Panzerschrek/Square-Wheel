@@ -1,4 +1,4 @@
-use super::{config, resources_manager_config::*, textures::*, triangle_model, triangle_model_md3};
+use super::{config, console::*, resources_manager_config::*, textures::*, triangle_model, triangle_model_md3};
 use common::{bsp_map_compact::*, bsp_map_save_load::*, image, material::*};
 use std::{
 	collections::HashMap,
@@ -9,6 +9,7 @@ use std::{
 // Resources loader class with internal caching.
 pub struct ResourcesManager
 {
+	console: ConsoleSharedPtr,
 	config: ResourcesManagerConfig,
 
 	materials: SharedResourcePtr<MaterialsMap>,
@@ -32,15 +33,16 @@ type ResourcesMap<T> = HashMap<String, SharedResourcePtr<T>>;
 
 impl ResourcesManager
 {
-	pub fn new(app_config: config::ConfigSharedPtr) -> ResourcesManagerSharedPtr
+	pub fn new(app_config: config::ConfigSharedPtr, console: ConsoleSharedPtr) -> ResourcesManagerSharedPtr
 	{
-		let config_parsed = ResourcesManagerConfig::from_app_config(&app_config);
-		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
+		let config = ResourcesManagerConfig::from_app_config(&app_config);
+		config.update_app_config(&app_config); // Update JSON with struct fields.
 
-		let materials = SharedResourcePtr::new(load_materials(&PathBuf::from(config_parsed.materials_path.clone())));
+		let materials = SharedResourcePtr::new(load_materials(&PathBuf::from(config.materials_path.clone())));
 
 		Arc::new(Mutex::new(Self {
-			config: config_parsed,
+			console,
+			config,
 			materials,
 			default_material: Material::default(),
 			last_map: None,
@@ -79,16 +81,16 @@ impl ResourcesManager
 			},
 			Ok(None) =>
 			{
-				// self.console
-				// 	.borrow_mut()
-				// 	.add_text(format!("Failed to load map {:?}", map_path));
+				self.console
+					.borrow_mut()
+					.add_text(format!("Failed to load map {:?}", map_path));
 				None
 			},
 			Err(e) =>
 			{
-				// self.console
-				// 	.borrow_mut()
-				// 	.add_text(format!("Failed to load map {:?}: {}", map_path, e));
+				self.console
+					.borrow_mut()
+					.add_text(format!("Failed to load map {:?}: {}", map_path, e));
 				None
 			},
 		}
@@ -135,7 +137,12 @@ impl ResourcesManager
 			return p.clone();
 		}
 
-		let material = self.materials.get(key).unwrap_or(&self.default_material);
+		let material = self.materials.get(key).unwrap_or_else(|| {
+			self.console
+				.borrow_mut()
+				.add_text(format!("Failed to find material {:?}", key));
+			&self.default_material
+		});
 
 		let texture_with_mips = load_texture(material, &self.config.textures_path);
 
