@@ -101,11 +101,11 @@ impl ResourcesManager
 			return p.clone();
 		}
 
+		let mut model_path = std::path::PathBuf::from(self.config.models_path.clone());
+		model_path.push(key);
+
 		// TODO - use dummy instead of "unwrap".
-		// TODO - specify models root path.
-		let model = triangle_model_md3::load_model_md3(&PathBuf::from(key))
-			.unwrap()
-			.unwrap();
+		let model = triangle_model_md3::load_model_md3(&model_path).unwrap().unwrap();
 
 		let ptr = Arc::new(model);
 		self.models.insert(key.clone(), ptr.clone());

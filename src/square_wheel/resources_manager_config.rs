@@ -11,6 +11,9 @@ pub struct ResourcesManagerConfig
 	pub materials_path: String,
 
 	#[serde(default)]
+	pub models_path: String,
+
+	#[serde(default)]
 	pub textures_path: String,
 }
 
