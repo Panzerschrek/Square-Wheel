@@ -63,7 +63,7 @@ pub fn order_bboxes(bboxes: &mut [BBoxForDrawOrdering])
 
 fn project_bbox_planes(bbox: &BBox, planes_matrix: &Mat4f) -> BBoxPlanesProjected
 {
-	// Of each pair of bbox planes select plane facing towards camera.
+	// Of each pair of bbox planes select plane facing towards camera (if some).
 	[
 		[
 			Plane {
@@ -163,6 +163,12 @@ fn compare_projected_bboxes(l: &ProjectedBBox, r: &ProjectedBBox) -> bool
 
 fn is_bbox_at_front_of_plane(plane: &Plane, bbox_vertices: &BBoxVerticesProjected) -> bool
 {
+	if plane.dist >= 0.0
+	{
+		// This plane facing away from camera, ignore it.
+		return false;
+	}
+
 	let mut vertices_front = 0;
 	for v in bbox_vertices
 	{
