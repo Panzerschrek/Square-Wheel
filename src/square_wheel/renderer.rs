@@ -1174,7 +1174,10 @@ impl Renderer
 		{
 			*model_for_sorting = (
 				model_index,
-				draw_ordering::project_bbox(inline_models_index.get_model_bbox_initial(model_index), camera_matrices),
+				draw_ordering::project_bbox(
+					&inline_models_index.get_model_bbox_for_ordering(model_index),
+					camera_matrices,
+				),
 			);
 		}
 		let num_models = std::cmp::min(leaf_submodels.len(), MAX_SUBMODELS_IN_LEAF);

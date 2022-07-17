@@ -69,6 +69,21 @@ impl InlineModelsIndex
 		&self.models_info[model_index as usize].bbox
 	}
 
+	pub fn get_model_bbox_for_ordering(&self, model_index: u32) -> BBox
+	{
+		// Reduce slightly bbox of inline models that is used for ordering to fix some glitches in cases with touching models.
+		let mut bbox = self.models_info[model_index as usize].bbox;
+		let center = bbox.get_center();
+		let eps = 1.0;
+		bbox.max.x = (bbox.max.x - eps).max(center.x);
+		bbox.min.x = (bbox.min.x + eps).min(center.x);
+		bbox.max.y = (bbox.max.y - eps).max(center.y);
+		bbox.min.y = (bbox.min.y + eps).min(center.y);
+		bbox.max.z = (bbox.max.z - eps).max(center.z);
+		bbox.min.z = (bbox.min.z + eps).min(center.z);
+		bbox
+	}
+
 	pub fn get_model_bbox(&self, model_index: u32) -> BBox
 	{
 		let model_info = &self.models_info[model_index as usize];
