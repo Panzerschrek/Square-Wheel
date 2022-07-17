@@ -140,7 +140,6 @@ fn project_bbox_vertices(bbox: &BBox, view_matrix: &Mat4f) -> BBoxVerticesProjec
 fn compare_projected_bboxes(l: &ProjectedBBox, r: &ProjectedBBox) -> bool
 {
 	// If one of bboxes lies totally at front of one of another's bbox planes, we can determine proper order.
-
 	for l_plane in &l.planes
 	{
 		if is_bbox_at_front_of_plane(l_plane, &r.vertices)
@@ -157,8 +156,8 @@ fn compare_projected_bboxes(l: &ProjectedBBox, r: &ProjectedBBox) -> bool
 		}
 	}
 
-	// Hard case - can't order. TODO - try to perform some ordering here.
-	false
+	// Hard case - just compare closest points.
+	get_projected_bbox_min_z(l) < get_projected_bbox_min_z(r)
 }
 
 fn is_bbox_at_front_of_plane(plane: &Plane, bbox_vertices: &BBoxVerticesProjected) -> bool
@@ -179,4 +178,14 @@ fn is_bbox_at_front_of_plane(plane: &Plane, bbox_vertices: &BBoxVerticesProjecte
 	}
 
 	vertices_front == bbox_vertices.len()
+}
+
+fn get_projected_bbox_min_z(b: &ProjectedBBox) -> f32
+{
+	let mut r = b.vertices[0].z;
+	for v in b.vertices
+	{
+		r = r.min(v.z);
+	}
+	r
 }
