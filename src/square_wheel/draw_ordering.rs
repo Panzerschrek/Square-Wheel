@@ -1,4 +1,4 @@
-use common::{bbox::*, math_types::*};
+use common::{bbox::*, math_types::*, plane::*};
 
 pub type ModelForDrawOrdering = (u32, BBox);
 
@@ -98,4 +98,65 @@ fn get_point_range_dist(range_min: f32, range_max: f32, point: f32) -> f32
 fn ranges_overlapping(l_min: f32, l_max: f32, r_min: f32, r_max: f32) -> bool
 {
 	!(l_max <= r_min || r_max <= l_min)
+}
+
+// Store only visible sides of bbox.
+pub type BBoxPlanesProjected = [Plane; 3];
+
+pub fn project_bbox(bbox: &BBox, planes_matrix: &Mat4f) -> BBoxPlanesProjected
+{
+	// Of each pair of bbox planes select plabne facing towards camera.
+	[
+		[
+			Plane {
+				vec: Vec3f::unit_x(),
+				dist: bbox.max.x,
+			},
+			Plane {
+				vec: -Vec3f::unit_x(),
+				dist: -bbox.min.x,
+			},
+		],
+		[
+			Plane {
+				vec: Vec3f::unit_y(),
+				dist: bbox.max.y,
+			},
+			Plane {
+				vec: -Vec3f::unit_y(),
+				dist: -bbox.min.y,
+			},
+		],
+		[
+			Plane {
+				vec: Vec3f::unit_z(),
+				dist: bbox.max.z,
+			},
+			Plane {
+				vec: -Vec3f::unit_z(),
+				dist: -bbox.min.z,
+			},
+		],
+	]
+	.map(|[p0, p1]| {
+		let p0_projected = project_plane(&p0, planes_matrix);
+		let p1_projected = project_plane(&p1, planes_matrix);
+		if p0_projected.dist < 0.0
+		{
+			p0_projected
+		}
+		else
+		{
+			p1_projected
+		}
+	})
+}
+
+fn project_plane(plane: &Plane, planes_matrix: &Mat4f) -> Plane
+{
+	let plane_transformed_vec4 = planes_matrix * plane.vec.extend(-plane.dist);
+	Plane {
+		vec: plane_transformed_vec4.truncate(),
+		dist: -plane_transformed_vec4.w,
+	}
 }
