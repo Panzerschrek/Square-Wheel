@@ -1211,7 +1211,14 @@ impl Renderer
 			}
 
 			let model = &models[*dynamic_model_index as usize];
-			let bbox = &model.model.frames_info[model.frame as usize].bbox;
+			let bbox = if let Some(bb) = &model.ordering_custom_bbox
+			{
+				bb
+			}
+			else
+			{
+				&model.model.frames_info[model.frame as usize].bbox
+			};
 
 			let entry = self.dynamic_model_to_dynamic_meshes_index[*dynamic_model_index as usize];
 			for visible_mesh_index in entry.first_visible_mesh .. entry.first_visible_mesh + entry.num_visible_meshes

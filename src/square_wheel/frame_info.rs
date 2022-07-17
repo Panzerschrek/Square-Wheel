@@ -1,5 +1,5 @@
 use super::{light::*, resources_manager::*, triangle_model::*};
-use common::{image::*, math_types::*, matrix::*};
+use common::{bbox::*, image::*, math_types::*, matrix::*};
 
 pub struct FrameInfo
 {
@@ -17,4 +17,8 @@ pub struct ModelEntity
 	pub frame: u32,
 	pub model: SharedResourcePtr<TriangleModel>,
 	pub texture: SharedResourcePtr<Image>,
+
+	// Use it to override bbox (in object-space) to improve models ordering.
+	// For example, use bbox with size reduced relative to true model bbox.
+	pub ordering_custom_bbox: Option<BBox>,
 }

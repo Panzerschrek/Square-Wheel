@@ -183,6 +183,7 @@ impl Game
 			frame: 0,
 			model,
 			texture,
+			ordering_custom_bbox: None,
 		});
 	}
 
