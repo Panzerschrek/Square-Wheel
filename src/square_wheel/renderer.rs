@@ -1184,11 +1184,19 @@ impl Renderer
 
 		for (&model_index, model_for_sorting) in leaf_submodels.iter().zip(models_for_sorting.iter_mut())
 		{
+			let bbox = inline_models_index.get_model_bbox_for_ordering(model_index);
+			let model_matrix = inline_models_index.get_model_matrix(model_index as u32);
+			let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
+
 			*model_for_sorting = (
 				model_index,
 				draw_ordering::project_bbox(
-					&inline_models_index.get_model_bbox_for_ordering(model_index),
-					camera_matrices,
+					&bbox,
+					&CameraMatrices {
+						view_matrix: camera_matrices.view_matrix * model_matrix,
+						planes_matrix: camera_matrices.planes_matrix * model_matrix_inverse,
+						position: camera_matrices.position,
+					},
 				),
 			);
 		}
