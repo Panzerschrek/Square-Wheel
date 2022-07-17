@@ -19,7 +19,6 @@ Renderer:
 * Fix buggy splitting of submodels polygons when polygon lies in clip plane
 * Skyboxes
 * 3/4 and 1/4 rasterization blending
-* Better sorting of dynamic objects
 * Triangle models lighting
 * Rasterization microoptimizations
 * HDR exposure update with logarithmical speed
