@@ -145,7 +145,7 @@ fn compare_projected_bboxes(l: &ProjectedBBox, r: &ProjectedBBox) -> bool
 	{
 		if is_bbox_at_front_of_plane(l_plane, &r.vertices)
 		{
-			return true;
+			return false;
 		}
 	}
 
@@ -153,7 +153,7 @@ fn compare_projected_bboxes(l: &ProjectedBBox, r: &ProjectedBBox) -> bool
 	{
 		if is_bbox_at_front_of_plane(r_plane, &l.vertices)
 		{
-			return false;
+			return true;
 		}
 	}
 
@@ -172,5 +172,5 @@ fn is_bbox_at_front_of_plane(plane: &Plane, bbox_vertices: &BBoxVerticesProjecte
 		}
 	}
 
-	vertices_front == 8
+	vertices_front == bbox_vertices.len()
 }
