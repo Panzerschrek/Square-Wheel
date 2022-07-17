@@ -64,6 +64,11 @@ impl InlineModelsIndex
 		&self.models_info[model_index as usize].leafs
 	}
 
+	pub fn get_model_bbox_initial(&self, model_index: u32) -> &BBox
+	{
+		&self.models_info[model_index as usize].bbox
+	}
+
 	pub fn get_model_bbox(&self, model_index: u32) -> BBox
 	{
 		let model_info = &self.models_info[model_index as usize];

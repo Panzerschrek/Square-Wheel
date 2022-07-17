@@ -5,8 +5,8 @@ use super::{
 	resources_manager::*, shadow_map::*, surfaces::*, textures::*, triangle_model::*, triangle_models_rendering::*,
 };
 use common::{
-	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, material, math_types::*,
-	matrix::*, plane::*, shared_mut_slice::*, system_window,
+	bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, material, math_types::*, matrix::*,
+	plane::*, shared_mut_slice::*, system_window,
 };
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
@@ -1168,21 +1168,18 @@ impl Renderer
 
 		// TODO - use uninitialized memory and increase this value.
 		const MAX_SUBMODELS_IN_LEAF: usize = 12;
-		let mut models_for_sorting = [(
-			0,
-			BBox {
-				min: Vec3f::zero(),
-				max: Vec3f::zero(),
-			},
-		); MAX_SUBMODELS_IN_LEAF];
+		let mut models_for_sorting = [draw_ordering::BBoxForDrawOrdering::default(); MAX_SUBMODELS_IN_LEAF];
 
 		for (&model_index, model_for_sorting) in leaf_submodels.iter().zip(models_for_sorting.iter_mut())
 		{
-			*model_for_sorting = (model_index, inline_models_index.get_model_bbox(model_index));
+			*model_for_sorting = (
+				model_index,
+				draw_ordering::project_bbox(inline_models_index.get_model_bbox_initial(model_index), camera_matrices),
+			);
 		}
 		let num_models = std::cmp::min(leaf_submodels.len(), MAX_SUBMODELS_IN_LEAF);
 
-		draw_ordering::order_models(&mut models_for_sorting[.. num_models], &camera_matrices.position);
+		draw_ordering::order_bboxes(&mut models_for_sorting[.. num_models]);
 
 		// Draw submodels, located in this leaf, after leaf polygons.
 		for (submodel_index, _bbox) in &models_for_sorting[.. num_models]
