@@ -101,6 +101,7 @@ struct VisibleDynamicMeshInfo
 	triangles_offset: usize,
 	num_visible_triangles: usize,
 	bbox_vertices_transformed: [Vec3f; 8],
+	camera_matrices: CameraMatrices,
 }
 
 #[derive(Default, Copy, Clone)]
@@ -394,6 +395,11 @@ impl Renderer
 					triangles_offset,
 					num_visible_triangles: 0,                      // set later
 					bbox_vertices_transformed: [Vec3f::zero(); 8], // set later
+					camera_matrices: CameraMatrices {
+						view_matrix: Mat4f::zero(),
+						planes_matrix: Mat4f::zero(),
+						position: Vec3f::zero(),
+					}, // Set later
 				});
 
 				vertices_offset += mesh.vertex_data_constant.len();
@@ -429,7 +435,13 @@ impl Renderer
 			let model = &models[visible_dynamic_mesh.entity_index as usize];
 			let frame = model.frame as usize;
 
-			let final_matrix = camera_matrices.view_matrix * get_object_matrix(model.position, model.angle_z);
+			let model_matrix = get_object_matrix(model.position, model.angle_z);
+			let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
+
+			let final_matrix = camera_matrices.view_matrix * model_matrix;
+
+			visible_dynamic_mesh.camera_matrices.view_matrix = final_matrix;
+			visible_dynamic_mesh.camera_matrices.planes_matrix = camera_matrices.planes_matrix * model_matrix_inverse;
 
 			// Transform bbox.
 			let bbox = &model.model.frames_info[frame].bbox;
@@ -1180,33 +1192,59 @@ impl Renderer
 				),
 			);
 		}
-		let num_models = std::cmp::min(leaf_submodels.len(), MAX_SUBMODELS_IN_LEAF);
+		let mut num_models = std::cmp::min(leaf_submodels.len(), MAX_SUBMODELS_IN_LEAF);
 
-		draw_ordering::order_bboxes(&mut models_for_sorting[.. num_models]);
-
-		// Draw submodels, located in this leaf, after leaf polygons.
-		for (submodel_index, _bbox) in &models_for_sorting[.. num_models]
-		{
-			self.draw_submodel_in_leaf(
-				rasterizer,
-				&clip_planes,
-				&leaf_clip_planes[.. num_clip_planes],
-				*submodel_index,
-			);
-		}
-
-		// TODO - order submodels and dynamic (triangle) models together.
+		const DYNAMIC_MESH_INDEX_ADD: u32 = 65536;
 		for dynamic_model_index in leaf_dynamic_models
 		{
+			if num_models == MAX_SUBMODELS_IN_LEAF
+			{
+				break;
+			}
+
+			let model = &models[*dynamic_model_index as usize];
+			let bbox = &model.model.frames_info[model.frame as usize].bbox;
+
 			let entry = self.dynamic_model_to_dynamic_meshes_index[*dynamic_model_index as usize];
 			for visible_mesh_index in entry.first_visible_mesh .. entry.first_visible_mesh + entry.num_visible_meshes
 			{
+				if num_models == MAX_SUBMODELS_IN_LEAF
+				{
+					break;
+				}
+
+				let mesh = &self.visible_dynamic_meshes_list[visible_mesh_index as usize];
+				models_for_sorting[num_models] = (
+					visible_mesh_index + DYNAMIC_MESH_INDEX_ADD,
+					draw_ordering::project_bbox(bbox, &mesh.camera_matrices),
+				);
+				num_models += 1;
+			}
+		}
+
+		draw_ordering::order_bboxes(&mut models_for_sorting[.. num_models]);
+
+		// Draw dynamic models and submodels, located in this leaf, after leaf polygons.
+		for (submodel_index, _bbox) in &models_for_sorting[.. num_models]
+		{
+			if *submodel_index >= DYNAMIC_MESH_INDEX_ADD
+			{
+				let visible_mesh_index = *submodel_index - DYNAMIC_MESH_INDEX_ADD;
 				self.draw_mesh_in_leaf(
 					rasterizer,
 					&clip_planes,
 					&leaf_clip_planes[.. num_clip_planes],
 					models,
 					&self.visible_dynamic_meshes_list[visible_mesh_index as usize],
+				);
+			}
+			else
+			{
+				self.draw_submodel_in_leaf(
+					rasterizer,
+					&clip_planes,
+					&leaf_clip_planes[.. num_clip_planes],
+					*submodel_index,
 				);
 			}
 		}
