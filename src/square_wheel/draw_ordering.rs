@@ -49,7 +49,7 @@ pub fn order_bboxes(bboxes: &mut [BBoxForDrawOrdering])
 
 	// TODO - maybe run sorting multiple times to resolve complex situations?
 
-	for i in 0 .. bboxes.len()
+	for i in 0 .. bboxes.len() - 1
 	{
 		for j in i + 1 .. bboxes.len()
 		{

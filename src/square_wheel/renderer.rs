@@ -1178,6 +1178,35 @@ impl Renderer
 			};
 		}
 
+		// Fast path for cases with single model, to avoid expensive sorting structures preparations.
+		if leaf_submodels.len() == 1 && leaf_dynamic_models.len() == 0
+		{
+			self.draw_submodel_in_leaf(
+				rasterizer,
+				&clip_planes,
+				&leaf_clip_planes[.. num_clip_planes],
+				leaf_submodels[0],
+			);
+			return;
+		}
+		if leaf_submodels.len() == 0 && leaf_dynamic_models.len() == 1
+		{
+			let entry = self.dynamic_model_to_dynamic_meshes_index[leaf_dynamic_models[0] as usize];
+			for visible_mesh_index in entry.first_visible_mesh .. entry.first_visible_mesh + entry.num_visible_meshes
+			{
+				self.draw_mesh_in_leaf(
+					rasterizer,
+					&clip_planes,
+					&leaf_clip_planes[.. num_clip_planes],
+					models,
+					&self.visible_dynamic_meshes_list[visible_mesh_index as usize],
+				);
+			}
+			return;
+		}
+
+		// Multiple models. Sort them.
+
 		// TODO - use uninitialized memory and increase this value.
 		const MAX_SUBMODELS_IN_LEAF: usize = 12;
 		let mut models_for_sorting = [draw_ordering::BBoxForDrawOrdering::default(); MAX_SUBMODELS_IN_LEAF];
