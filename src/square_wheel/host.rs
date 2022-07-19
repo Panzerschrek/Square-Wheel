@@ -4,7 +4,10 @@ use super::{
 };
 use common::{color::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
-use std::{cell::RefCell, rc::Rc, time::Duration};
+use std::{
+	sync::{Arc, Mutex},
+	time::Duration,
+};
 
 pub struct Host
 {
@@ -16,7 +19,7 @@ pub struct Host
 	commands_queue: commands_queue::CommandsQueuePtr<Host>,
 	commands_processor: commands_processor::CommandsProcessorPtr,
 	console: console::ConsoleSharedPtr,
-	window: Rc<RefCell<system_window::SystemWindow>>,
+	window: Arc<Mutex<system_window::SystemWindow>>,
 	postprocessor: Postprocessor,
 	resources_manager: ResourcesManagerSharedPtr,
 	active_map: Option<ActiveMap>,
@@ -73,7 +76,7 @@ impl Host
 
 		let commands_processor = commands_processor::CommandsProcessor::new(app_config.clone());
 		let console = console::Console::new(commands_processor.clone());
-		console.borrow_mut().add_text("Innitializing host".to_string());
+		console.lock().unwrap().add_text("Innitializing host".to_string());
 
 		let commands_queue = commands_queue::CommandsQueue::new(vec![
 			("map", Host::command_map),
@@ -82,7 +85,8 @@ impl Host
 		]);
 
 		commands_processor
-			.borrow_mut()
+			.lock()
+			.unwrap()
 			.register_command_queue(commands_queue.clone() as commands_queue::CommandsQueueDynPtr);
 
 		let cur_time = std::time::Instant::now();
@@ -97,7 +101,7 @@ impl Host
 			commands_queue,
 			commands_processor,
 			console: console.clone(),
-			window: Rc::new(RefCell::new(system_window::SystemWindow::new())),
+			window: Arc::new(Mutex::new(system_window::SystemWindow::new())),
 			postprocessor: Postprocessor::new(app_config.clone()),
 			resources_manager: ResourcesManager::new(app_config, console),
 			active_map: None,
@@ -111,9 +115,10 @@ impl Host
 		for command_line in &startup_commands
 		{
 			host.console
-				.borrow_mut()
+				.lock()
+				.unwrap()
 				.add_text(format!("Executing \"{}\"", command_line));
-			host.commands_processor.borrow_mut().process_command(&command_line);
+			host.commands_processor.lock().unwrap().process_command(&command_line);
 			host.process_commands();
 		}
 
@@ -129,15 +134,15 @@ impl Host
 
 		if self.config.fullscreen_mode == 0.0
 		{
-			self.window.borrow_mut().set_windowed();
+			self.window.lock().unwrap().set_windowed();
 		}
 		else if self.config.fullscreen_mode == 1.0
 		{
-			self.window.borrow_mut().set_fullscreen_desktop();
+			self.window.lock().unwrap().set_fullscreen_desktop();
 		}
 		else if self.config.fullscreen_mode == 2.0
 		{
-			self.window.borrow_mut().set_fullscreen();
+			self.window.lock().unwrap().set_fullscreen();
 		}
 		else
 		{
@@ -150,11 +155,11 @@ impl Host
 
 		if let Some(active_map) = &mut self.active_map
 		{
-			if !self.console.borrow().is_active()
+			if !self.console.lock().unwrap().is_active()
 			{
 				active_map
 					.game
-					.process_input(&self.window.borrow_mut().get_keyboard_state(), time_delta_s);
+					.process_input(&self.window.lock().unwrap().get_keyboard_state(), time_delta_s);
 			}
 			active_map.game.update(time_delta_s);
 		}
@@ -162,12 +167,13 @@ impl Host
 		let witndow_ptr_clone = self.window.clone();
 
 		witndow_ptr_clone
-			.borrow_mut()
+			.lock()
+			.unwrap()
 			.update_window_surface(|pixels, surface_info| {
 				self.draw_frame(pixels, surface_info, time_delta_s);
 			});
 
-		witndow_ptr_clone.borrow_mut().swap_buffers();
+		witndow_ptr_clone.lock().unwrap().swap_buffers();
 
 		if self.config.max_fps > 0.0
 		{
@@ -191,7 +197,7 @@ impl Host
 	{
 		// Remember if ` was pressed to avoid using it as input for console.
 		let mut has_backquote = false;
-		for event in self.window.borrow_mut().get_events()
+		for event in self.window.lock().unwrap().get_events()
 		{
 			match event
 			{
@@ -203,9 +209,9 @@ impl Host
 				{
 					if keycode == Some(Keycode::Escape)
 					{
-						if self.console.borrow().is_active()
+						if self.console.lock().unwrap().is_active()
 						{
-							self.console.borrow_mut().toggle();
+							self.console.lock().unwrap().toggle();
 						}
 						else
 						{
@@ -215,21 +221,21 @@ impl Host
 					if keycode == Some(Keycode::Backquote)
 					{
 						has_backquote = true;
-						self.console.borrow_mut().toggle();
+						self.console.lock().unwrap().toggle();
 					}
-					if self.console.borrow().is_active()
+					if self.console.lock().unwrap().is_active()
 					{
 						if let Some(k) = keycode
 						{
-							self.console.borrow_mut().process_key_press(k);
+							self.console.lock().unwrap().process_key_press(k);
 						}
 					}
 				},
 				Event::TextInput { text, .. } =>
 				{
-					if self.console.borrow().is_active() && !has_backquote
+					if self.console.lock().unwrap().is_active() && !has_backquote
 					{
-						self.console.borrow_mut().process_text_input(&text);
+						self.console.lock().unwrap().process_text_input(&text);
 					}
 				},
 				_ =>
@@ -241,7 +247,7 @@ impl Host
 	fn process_commands(&mut self)
 	{
 		let queue_ptr_copy = self.commands_queue.clone();
-		queue_ptr_copy.borrow_mut().process_commands(self);
+		queue_ptr_copy.lock().unwrap().process_commands(self);
 	}
 
 	fn synchronize_config(&mut self)
@@ -330,7 +336,7 @@ impl Host
 				*pixel = Color32::black();
 			}
 		}
-		self.console.borrow().draw(pixels, surface_info);
+		self.console.lock().unwrap().draw(pixels, surface_info);
 
 		text_printer::print(
 			pixels,
@@ -346,7 +352,10 @@ impl Host
 	{
 		if args.is_empty()
 		{
-			self.console.borrow_mut().add_text("Expected map file name".to_string());
+			self.console
+				.lock()
+				.unwrap()
+				.add_text("Expected map file name".to_string());
 			return;
 		}
 		self.active_map = None;
@@ -379,17 +388,20 @@ impl Host
 	{
 		if args.len() < 2
 		{
-			self.console.borrow_mut().add_text("Expected two args".to_string());
+			self.console.lock().unwrap().add_text("Expected two args".to_string());
 			return;
 		}
 
 		if let (Ok(width), Ok(height)) = (args[0].parse::<u32>(), args[1].parse::<u32>())
 		{
-			self.window.borrow_mut().resize(width, height);
+			self.window.lock().unwrap().resize(width, height);
 		}
 		else
 		{
-			self.console.borrow_mut().add_text("Failed to parse args".to_string());
+			self.console
+				.lock()
+				.unwrap()
+				.add_text("Failed to parse args".to_string());
 		}
 	}
 }
