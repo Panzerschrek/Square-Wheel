@@ -14,7 +14,7 @@ pub struct HostConfig
 	#[serde(default)]
 	pub show_debug_stats: bool,
 
-	#[serde(default)]
+	#[serde(default = "default_true")]
 	pub parallel_swap_buffers: bool,
 
 	#[serde(default)]
@@ -40,4 +40,9 @@ impl HostConfig
 fn max_fps_default() -> f32
 {
 	120.0
+}
+
+fn default_true() -> bool
+{
+	true
 }
