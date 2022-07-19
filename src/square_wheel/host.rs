@@ -4,7 +4,10 @@ use super::{
 };
 use common::{bsp_map_save_load, color::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
-use std::{time::Duration, sync::{Arc, Mutex}};
+use std::{
+	sync::{Arc, Mutex},
+	time::Duration,
+};
 
 pub struct Host
 {
@@ -260,9 +263,9 @@ impl Host
 
 	fn draw_frame(&mut self, time_delta_s: f32)
 	{
-		let parallel_swap_buffers = false;
+		let parallel_swap_buffers = rayon::current_num_threads() > 1;
 
-		let window_ptr_clone = self.window.clone();
+		let mut window = self.window.lock().unwrap();
 
 		let postprocessor = &mut self.postprocessor;
 		let active_map = &mut self.active_map;
@@ -270,7 +273,7 @@ impl Host
 		let fps_counter = &self.fps_counter;
 
 		// First, only prepare frame without accessing surface pixels.
-		let surface_info_initial = window_ptr_clone.lock().unwrap().get_window_surface_info();
+		let surface_info_initial = window.get_window_surface_info();
 		let mut prepare_frame_func = || {
 			if let Some(active_map) = active_map
 			{
@@ -320,9 +323,14 @@ impl Host
 
 		if parallel_swap_buffers
 		{
-			// TODO - fix tgis.
-			// rayon::join(prepare_frame_func, swap_buffers_func);
-			rayon::join(prepare_frame_func, move ||{window_ptr_clone.lock().unwrap().swap_buffers()});
+			rayon::in_place_scope(|s| {
+				// Start frame preparation.
+				s.spawn(|_s| {
+					prepare_frame_func();
+				});
+				// Swap buffers.
+				window.swap_buffers();
+			});
 		}
 		else
 		{
@@ -330,7 +338,7 @@ impl Host
 		}
 
 		// Than update surface pixels.
-		window_ptr_clone.lock().unwrap().update_window_surface(|pixels, surface_info| {
+		window.update_window_surface(|pixels, surface_info| {
 			if *surface_info != surface_info_initial
 			{
 				// Skip this frame because surface size was changed.
@@ -386,7 +394,7 @@ impl Host
 		if !parallel_swap_buffers
 		{
 			// Finally, swap buffers.
-			window_ptr_clone.lock().unwrap().swap_buffers();
+			window.swap_buffers();
 		}
 	}
 
