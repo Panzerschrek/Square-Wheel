@@ -21,7 +21,6 @@ Renderer:
 * 3/4 and 1/4 rasterization blending
 * Triangle models lighting
 * Rasterization microoptimizations
-* HDR exposure update with logarithmical speed
 * Animated textures (with N frames)
 * Models rendering improvements - avoid splitting models into pieces for each BSP tree leaf in some cases
 * Models clipping optimizations

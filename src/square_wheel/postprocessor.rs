@@ -216,9 +216,9 @@ impl Postprocessor
 
 		let mix_factor = (-self.config.exposure_update_speed * frame_duration_s).exp();
 
-		// Mix inverse values.
+		// Mix logarithms of values.
 		self.current_exposure =
-			1.0 / (mix_factor / self.current_exposure + (1.0 - mix_factor) / taget_exposure_clamped);
+			(self.current_exposure.ln() * mix_factor + taget_exposure_clamped.ln() * (1.0 - mix_factor)).exp();
 	}
 
 	// Returns sum of colors.
