@@ -16,7 +16,6 @@ Engine:
 * Smooth animation for frame-based animated models (interpolate between 2 or more frames)
 
 Renderer:
-* Fix buggy splitting of submodels polygons when polygon lies in clip plane
 * Skyboxes
 * 3/4 and 1/4 rasterization blending
 * Triangle models lighting
