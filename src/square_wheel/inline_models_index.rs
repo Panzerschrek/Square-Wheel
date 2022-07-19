@@ -213,9 +213,16 @@ fn prepare_models_info(map: &bsp_map_compact::BSPMap) -> Vec<ModelInfo>
 
 fn prepare_model_info(map: &bsp_map_compact::BSPMap, submodel: &bsp_map_compact::Submodel) -> ModelInfo
 {
+	let mut bbox = bsp_map_compact::get_submodel_bbox(map, submodel);
+	// Extend bounding box a bit to fix problem with missing polygons on BSP leaf edges.
+	let extend_eps = 1.0 / 4.0;
+	let extend_vec = Vec3f::new(extend_eps, extend_eps, extend_eps);
+	bbox.max += extend_vec;
+	bbox.min -= extend_vec;
+
 	ModelInfo {
 		leafs: Vec::new(),
-		bbox: bsp_map_compact::get_submodel_bbox(map, submodel),
+		bbox,
 		shift: Vec3f::zero(),
 		angle_z: Rad(0.0),
 	}
