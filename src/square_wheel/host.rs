@@ -4,10 +4,7 @@ use super::{
 };
 use common::{color::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
-use std::{
-	sync::{Arc, Mutex},
-	time::Duration,
-};
+use std::{cell::RefCell, rc::Rc, time::Duration};
 
 pub struct Host
 {
@@ -19,7 +16,7 @@ pub struct Host
 	commands_queue: commands_queue::CommandsQueuePtr<Host>,
 	commands_processor: commands_processor::CommandsProcessorPtr,
 	console: console::ConsoleSharedPtr,
-	window: Arc<Mutex<system_window::SystemWindow>>,
+	window: Rc<RefCell<system_window::SystemWindow>>,
 	postprocessor: Postprocessor,
 	resources_manager: ResourcesManagerSharedPtr,
 	active_map: Option<ActiveMap>,
@@ -101,7 +98,7 @@ impl Host
 			commands_queue,
 			commands_processor,
 			console: console.clone(),
-			window: Arc::new(Mutex::new(system_window::SystemWindow::new())),
+			window: Rc::new(RefCell::new(system_window::SystemWindow::new())),
 			postprocessor: Postprocessor::new(app_config.clone()),
 			resources_manager: ResourcesManager::new(app_config, console),
 			active_map: None,
@@ -134,15 +131,15 @@ impl Host
 
 		if self.config.fullscreen_mode == 0.0
 		{
-			self.window.lock().unwrap().set_windowed();
+			self.window.borrow_mut().set_windowed();
 		}
 		else if self.config.fullscreen_mode == 1.0
 		{
-			self.window.lock().unwrap().set_fullscreen_desktop();
+			self.window.borrow_mut().set_fullscreen_desktop();
 		}
 		else if self.config.fullscreen_mode == 2.0
 		{
-			self.window.lock().unwrap().set_fullscreen();
+			self.window.borrow_mut().set_fullscreen();
 		}
 		else
 		{
@@ -159,21 +156,12 @@ impl Host
 			{
 				active_map
 					.game
-					.process_input(&self.window.lock().unwrap().get_keyboard_state(), time_delta_s);
+					.process_input(&self.window.borrow_mut().get_keyboard_state(), time_delta_s);
 			}
 			active_map.game.update(time_delta_s);
 		}
 
-		let witndow_ptr_clone = self.window.clone();
-
-		witndow_ptr_clone
-			.lock()
-			.unwrap()
-			.update_window_surface(|pixels, surface_info| {
-				self.draw_frame(pixels, surface_info, time_delta_s);
-			});
-
-		witndow_ptr_clone.lock().unwrap().swap_buffers();
+		self.draw_frame(time_delta_s);
 
 		if self.config.max_fps > 0.0
 		{
@@ -197,7 +185,7 @@ impl Host
 	{
 		// Remember if ` was pressed to avoid using it as input for console.
 		let mut has_backquote = false;
-		for event in self.window.lock().unwrap().get_events()
+		for event in self.window.borrow_mut().get_events()
 		{
 			match event
 			{
@@ -272,80 +260,135 @@ impl Host
 		}
 	}
 
-	fn draw_frame(&mut self, pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo, time_delta_s: f32)
+	fn draw_frame(&mut self, time_delta_s: f32)
 	{
-		if let Some(active_map) = &mut self.active_map
+		let parallel_swap_buffers = rayon::current_num_threads() > 1;
+
+		let mut window = self.window.borrow_mut();
+
+		let postprocessor = &mut self.postprocessor;
+		let active_map = &mut self.active_map;
+		let console = self.console.clone();
+		let fps_counter = &self.fps_counter;
+
+		// First, only prepare frame without accessing surface pixels.
+		let surface_info_initial = window.get_window_surface_info();
+		let mut prepare_frame_func = || {
+			if let Some(active_map) = active_map
+			{
+				let frame_info = active_map.game.get_frame_info(&surface_info_initial);
+
+				if postprocessor.use_hdr_rendering()
+				{
+					let hdr_buffer_size = [surface_info_initial.width, surface_info_initial.height];
+					let hdr_buffer = postprocessor.get_hdr_buffer(hdr_buffer_size);
+
+					let hdr_surface_info = system_window::SurfaceInfo {
+						width: hdr_buffer_size[0],
+						height: hdr_buffer_size[1],
+						pitch: hdr_buffer_size[0],
+					};
+
+					active_map.renderer.prepare_frame::<Color64>(
+						&hdr_surface_info,
+						&frame_info,
+						&active_map.inline_models_index,
+					);
+
+					active_map.renderer.draw_frame(
+						hdr_buffer,
+						&hdr_surface_info,
+						&frame_info,
+						&active_map.inline_models_index,
+						&mut active_map.debug_stats_printer,
+					);
+				}
+				else
+				{
+					active_map.renderer.prepare_frame::<Color32>(
+						&surface_info_initial,
+						&frame_info,
+						&active_map.inline_models_index,
+					);
+				}
+			}
+		};
+
+		if parallel_swap_buffers
 		{
-			let frame_info = active_map.game.get_frame_info(surface_info);
-
-			if self.postprocessor.use_hdr_rendering()
-			{
-				let hdr_buffer_size = [surface_info.width, surface_info.height];
-				let hdr_buffer = self.postprocessor.get_hdr_buffer(hdr_buffer_size);
-
-				let hdr_surface_info = system_window::SurfaceInfo {
-					width: hdr_buffer_size[0],
-					height: hdr_buffer_size[1],
-					pitch: hdr_buffer_size[0],
-				};
-
-				active_map.renderer.prepare_frame::<Color64>(
-					&hdr_surface_info,
-					&frame_info,
-					&active_map.inline_models_index,
-				);
-
-				active_map.renderer.draw_frame(
-					hdr_buffer,
-					&hdr_surface_info,
-					&frame_info,
-					&active_map.inline_models_index,
-					&mut active_map.debug_stats_printer,
-				);
-
-				self.postprocessor.perform_postprocessing(
-					pixels,
-					surface_info,
-					time_delta_s,
-					&mut active_map.debug_stats_printer,
-				);
-			}
-			else
-			{
-				active_map.renderer.prepare_frame::<Color32>(
-					surface_info,
-					&frame_info,
-					&active_map.inline_models_index,
-				);
-				active_map.renderer.draw_frame(
-					pixels,
-					surface_info,
-					&frame_info,
-					&active_map.inline_models_index,
-					&mut active_map.debug_stats_printer,
-				);
-			}
-
-			active_map.debug_stats_printer.flush(pixels, surface_info);
+			rayon::in_place_scope(|s| {
+				// Start frame preparation.
+				s.spawn(|_s| {
+					prepare_frame_func();
+				});
+				// Swap buffers.
+				window.swap_buffers();
+			});
 		}
 		else
 		{
-			// Just clear background. TODO - maybe draw some background pattern or image?
-			for pixel in pixels.iter_mut()
-			{
-				*pixel = Color32::black();
-			}
+			prepare_frame_func();
 		}
-		self.console.lock().unwrap().draw(pixels, surface_info);
 
-		text_printer::print(
-			pixels,
-			surface_info,
-			&format!("fps {:04.2}", self.fps_counter.get_frequency()),
-			(surface_info.width - 96) as i32,
-			1,
-			Color32::from_rgb(255, 255, 255),
-		);
+		// Than update surface pixels.
+		window.update_window_surface(|pixels, surface_info| {
+			if *surface_info != surface_info_initial
+			{
+				// Skip this frame because surface size was changed.
+				return;
+			}
+
+			if let Some(active_map) = active_map
+			{
+				if postprocessor.use_hdr_rendering()
+				{
+					postprocessor.perform_postprocessing(
+						pixels,
+						surface_info,
+						time_delta_s,
+						&mut active_map.debug_stats_printer,
+					);
+				}
+				else
+				{
+					let frame_info = active_map.game.get_frame_info(&surface_info_initial);
+					active_map.renderer.draw_frame(
+						pixels,
+						surface_info,
+						&frame_info,
+						&active_map.inline_models_index,
+						&mut active_map.debug_stats_printer,
+					);
+				}
+
+				active_map.debug_stats_printer.flush(pixels, surface_info);
+			}
+			else
+			{
+				// Just clear background. TODO - maybe draw some background pattern or image?
+				for pixel in pixels.iter_mut()
+				{
+					*pixel = Color32::black();
+				}
+			}
+
+			console.lock().unwrap().draw(pixels, surface_info);
+
+			text_printer::print(
+				pixels,
+				surface_info,
+				&format!("fps {:04.2}", fps_counter.get_frequency()),
+				(surface_info.width - 96) as i32,
+				1,
+				Color32::from_rgb(255, 255, 255),
+			);
+		});
+
+		if !parallel_swap_buffers
+		{
+			// Finally, swap buffers.
+			window.swap_buffers();
+		}
 	}
 
 	fn command_map(&mut self, args: commands_queue::CommandArgs)
@@ -394,7 +437,7 @@ impl Host
 
 		if let (Ok(width), Ok(height)) = (args[0].parse::<u32>(), args[1].parse::<u32>())
 		{
-			self.window.lock().unwrap().resize(width, height);
+			self.window.borrow_mut().resize(width, height);
 		}
 		else
 		{
