@@ -262,7 +262,7 @@ impl Host
 
 	fn draw_frame(&mut self, time_delta_s: f32)
 	{
-		let parallel_swap_buffers = rayon::current_num_threads() > 1;
+		let parallel_swap_buffers = self.config.parallel_swap_buffers;
 
 		let window = &mut self.window;
 		let postprocessor = &mut self.postprocessor;

@@ -15,6 +15,9 @@ pub struct HostConfig
 	pub show_debug_stats: bool,
 
 	#[serde(default)]
+	pub parallel_swap_buffers: bool,
+
+	#[serde(default)]
 	pub fullscreen_mode: f32,
 }
 
