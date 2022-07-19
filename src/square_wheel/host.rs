@@ -1,10 +1,11 @@
 use super::{
 	commands_processor, commands_queue, config, console, debug_stats_printer::*, host_config::*, inline_models_index,
-	postprocessor::*, renderer, resources_manager::*, test_game, text_printer, ticks_counter::*,
+	performance_counter::*, postprocessor::*, renderer, resources_manager::*, test_game, text_printer,
+	ticks_counter::*,
 };
 use common::{color::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
-use std::{cell::RefCell, rc::Rc, time::Duration};
+use std::time::Duration;
 
 pub struct Host
 {
@@ -16,12 +17,13 @@ pub struct Host
 	commands_queue: commands_queue::CommandsQueuePtr<Host>,
 	commands_processor: commands_processor::CommandsProcessorPtr,
 	console: console::ConsoleSharedPtr,
-	window: Rc<RefCell<system_window::SystemWindow>>,
+	window: system_window::SystemWindow,
 	postprocessor: Postprocessor,
 	resources_manager: ResourcesManagerSharedPtr,
 	active_map: Option<ActiveMap>,
 	prev_time: std::time::Instant,
 	fps_counter: TicksCounter,
+	frame_duration_counter: PerformanceCounter,
 	quit_requested: bool,
 }
 
@@ -73,7 +75,7 @@ impl Host
 
 		let commands_processor = commands_processor::CommandsProcessor::new(app_config.clone());
 		let console = console::Console::new(commands_processor.clone());
-		console.borrow_mut().add_text("Innitializing host".to_string());
+		console.lock().unwrap().add_text("Innitializing host".to_string());
 
 		let commands_queue = commands_queue::CommandsQueue::new(vec![
 			("map", Host::command_map),
@@ -82,7 +84,8 @@ impl Host
 		]);
 
 		commands_processor
-			.borrow_mut()
+			.lock()
+			.unwrap()
 			.register_command_queue(commands_queue.clone() as commands_queue::CommandsQueueDynPtr);
 
 		let cur_time = std::time::Instant::now();
@@ -97,12 +100,13 @@ impl Host
 			commands_queue,
 			commands_processor,
 			console: console.clone(),
-			window: Rc::new(RefCell::new(system_window::SystemWindow::new())),
+			window: system_window::SystemWindow::new(),
 			postprocessor: Postprocessor::new(app_config.clone()),
 			resources_manager: ResourcesManager::new(app_config, console),
 			active_map: None,
 			prev_time: cur_time,
 			fps_counter: TicksCounter::new(),
+			frame_duration_counter: PerformanceCounter::new(200),
 			quit_requested: false,
 		};
 
@@ -111,83 +115,21 @@ impl Host
 		for command_line in &startup_commands
 		{
 			host.console
-				.borrow_mut()
+				.lock()
+				.unwrap()
 				.add_text(format!("Executing \"{}\"", command_line));
-			host.commands_processor.borrow_mut().process_command(&command_line);
+			host.commands_processor.lock().unwrap().process_command(&command_line);
 			host.process_commands();
 		}
 
 		host
 	}
 
-	// Returns true if need to continue.
-	pub fn process_frame(&mut self) -> bool
-	{
-		self.process_events();
-		self.process_commands();
-		self.synchronize_config();
-
-		if self.config.fullscreen_mode == 0.0
-		{
-			self.window.borrow_mut().set_windowed();
-		}
-		else if self.config.fullscreen_mode == 1.0
-		{
-			self.window.borrow_mut().set_fullscreen_desktop();
-		}
-		else if self.config.fullscreen_mode == 2.0
-		{
-			self.window.borrow_mut().set_fullscreen();
-		}
-		else
-		{
-			self.config.fullscreen_mode = 0.0;
-		}
-
-		let cur_time = std::time::Instant::now();
-		let time_delta_s = (cur_time - self.prev_time).as_secs_f32();
-		self.prev_time = cur_time;
-
-		if let Some(active_map) = &mut self.active_map
-		{
-			if !self.console.borrow().is_active()
-			{
-				active_map
-					.game
-					.process_input(&self.window.borrow_mut().get_keyboard_state(), time_delta_s);
-			}
-			active_map.game.update(time_delta_s);
-		}
-
-		let witndow_ptr_clone = self.window.clone();
-
-		witndow_ptr_clone.borrow_mut().end_frame(|pixels, surface_info| {
-			self.draw_frame(pixels, surface_info, time_delta_s);
-		});
-
-		if self.config.max_fps > 0.0
-		{
-			let frame_end_time = std::time::Instant::now();
-			let frame_time_s = (frame_end_time - self.prev_time).as_secs_f32();
-			let min_frame_time = 1.0 / self.config.max_fps;
-			if frame_time_s < min_frame_time
-			{
-				std::thread::sleep(Duration::from_secs_f32(
-					((min_frame_time - frame_time_s) * 1000.0).floor() / 1000.0,
-				));
-			}
-		}
-
-		self.fps_counter.tick();
-
-		!self.quit_requested
-	}
-
 	fn process_events(&mut self)
 	{
 		// Remember if ` was pressed to avoid using it as input for console.
 		let mut has_backquote = false;
-		for event in self.window.borrow_mut().get_events()
+		for event in self.window.get_events()
 		{
 			match event
 			{
@@ -199,9 +141,9 @@ impl Host
 				{
 					if keycode == Some(Keycode::Escape)
 					{
-						if self.console.borrow().is_active()
+						if self.console.lock().unwrap().is_active()
 						{
-							self.console.borrow_mut().toggle();
+							self.console.lock().unwrap().toggle();
 						}
 						else
 						{
@@ -211,21 +153,21 @@ impl Host
 					if keycode == Some(Keycode::Backquote)
 					{
 						has_backquote = true;
-						self.console.borrow_mut().toggle();
+						self.console.lock().unwrap().toggle();
 					}
-					if self.console.borrow().is_active()
+					if self.console.lock().unwrap().is_active()
 					{
 						if let Some(k) = keycode
 						{
-							self.console.borrow_mut().process_key_press(k);
+							self.console.lock().unwrap().process_key_press(k);
 						}
 					}
 				},
 				Event::TextInput { text, .. } =>
 				{
-					if self.console.borrow().is_active() && !has_backquote
+					if self.console.lock().unwrap().is_active() && !has_backquote
 					{
-						self.console.borrow_mut().process_text_input(&text);
+						self.console.lock().unwrap().process_text_input(&text);
 					}
 				},
 				_ =>
@@ -237,7 +179,7 @@ impl Host
 	fn process_commands(&mut self)
 	{
 		let queue_ptr_copy = self.commands_queue.clone();
-		queue_ptr_copy.borrow_mut().process_commands(self);
+		queue_ptr_copy.lock().unwrap().process_commands(self);
 	}
 
 	fn synchronize_config(&mut self)
@@ -262,74 +204,212 @@ impl Host
 		}
 	}
 
-	fn draw_frame(&mut self, pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo, time_delta_s: f32)
+	// Returns true if need to continue.
+	pub fn process_frame(&mut self) -> bool
 	{
-		if let Some(active_map) = &mut self.active_map
+		self.process_events();
+		self.process_commands();
+		self.synchronize_config();
+
+		if self.config.fullscreen_mode == 0.0
 		{
-			let frame_info = active_map.game.get_frame_info(surface_info);
-
-			if self.postprocessor.use_hdr_rendering()
-			{
-				let hdr_buffer_size = [surface_info.width, surface_info.height];
-				let hdr_buffer = self.postprocessor.get_hdr_buffer(hdr_buffer_size);
-
-				active_map.renderer.draw_frame(
-					hdr_buffer,
-					&system_window::SurfaceInfo {
-						width: hdr_buffer_size[0],
-						height: hdr_buffer_size[1],
-						pitch: hdr_buffer_size[0],
-					},
-					&frame_info,
-					&active_map.inline_models_index,
-					&mut active_map.debug_stats_printer,
-				);
-
-				self.postprocessor.perform_postprocessing(
-					pixels,
-					surface_info,
-					time_delta_s,
-					&mut active_map.debug_stats_printer,
-				);
-			}
-			else
-			{
-				active_map.renderer.draw_frame(
-					pixels,
-					surface_info,
-					&frame_info,
-					&active_map.inline_models_index,
-					&mut active_map.debug_stats_printer,
-				);
-			}
-
-			active_map.debug_stats_printer.flush(pixels, surface_info);
+			self.window.set_windowed();
+		}
+		else if self.config.fullscreen_mode == 1.0
+		{
+			self.window.set_fullscreen_desktop();
+		}
+		else if self.config.fullscreen_mode == 2.0
+		{
+			self.window.set_fullscreen();
 		}
 		else
 		{
-			// Just clear background. TODO - maybe draw some background pattern or image?
-			for pixel in pixels.iter_mut()
-			{
-				*pixel = Color32::black();
-			}
+			self.config.fullscreen_mode = 0.0;
 		}
-		self.console.borrow().draw(pixels, surface_info);
 
-		text_printer::print(
-			pixels,
-			surface_info,
-			&format!("fps {:04.2}", self.fps_counter.get_frequency()),
-			(surface_info.width - 96) as i32,
-			1,
-			Color32::from_rgb(255, 255, 255),
-		);
+		let cur_time = std::time::Instant::now();
+		let time_delta_s = (cur_time - self.prev_time).as_secs_f32();
+		self.prev_time = cur_time;
+
+		self.frame_duration_counter.add_value(time_delta_s);
+
+		let parallel_swap_buffers = self.config.parallel_swap_buffers;
+
+		let window = &mut self.window;
+		let keyboard_state = window.get_keyboard_state();
+
+		let postprocessor = &mut self.postprocessor;
+		let active_map = &mut self.active_map;
+		let console = self.console.clone();
+		let fps_counter = &mut self.fps_counter;
+		let max_fps = self.config.max_fps;
+		let frame_duration_counter = &self.frame_duration_counter;
+
+		let mut frame_info = None;
+
+		// First, only prepare frame without accessing surface pixels.
+		let surface_info_initial = window.get_window_surface_info();
+		let mut prepare_frame_func = || {
+			if let Some(active_map) = active_map
+			{
+				// Process game logic.
+				if !console.lock().unwrap().is_active()
+				{
+					active_map.game.process_input(&keyboard_state, time_delta_s);
+				}
+				active_map.game.update(time_delta_s);
+
+				// Get frame info from game code.
+				frame_info = Some(active_map.game.get_frame_info(&surface_info_initial));
+				let frame_info_ref = frame_info.as_ref().unwrap();
+
+				// Perform rendering frame preparation.
+				if postprocessor.use_hdr_rendering()
+				{
+					let hdr_buffer_size = [surface_info_initial.width, surface_info_initial.height];
+					let hdr_buffer = postprocessor.get_hdr_buffer(hdr_buffer_size);
+
+					let hdr_surface_info = system_window::SurfaceInfo {
+						width: hdr_buffer_size[0],
+						height: hdr_buffer_size[1],
+						pitch: hdr_buffer_size[0],
+					};
+
+					active_map.renderer.prepare_frame::<Color64>(
+						&hdr_surface_info,
+						frame_info_ref,
+						&active_map.inline_models_index,
+					);
+
+					active_map.renderer.draw_frame(
+						hdr_buffer,
+						&hdr_surface_info,
+						frame_info_ref,
+						&active_map.inline_models_index,
+						&mut active_map.debug_stats_printer,
+					);
+				}
+				else
+				{
+					active_map.renderer.prepare_frame::<Color32>(
+						&surface_info_initial,
+						frame_info_ref,
+						&active_map.inline_models_index,
+					);
+				}
+			}
+		};
+
+		let limit_fps_func = || {
+			if max_fps > 0.0
+			{
+				let min_frame_time = 1.0 / max_fps;
+				if time_delta_s < min_frame_time
+				{
+					std::thread::sleep(Duration::from_secs_f32(
+						((min_frame_time - time_delta_s) * 1000.0).floor() / 1000.0,
+					));
+				}
+			}
+		};
+
+		if parallel_swap_buffers
+		{
+			rayon::in_place_scope(|s| {
+				// Start CURRENT frame preparation.
+				s.spawn(|_s| {
+					prepare_frame_func();
+				});
+				// Swap buffers for PREVIOUS frame.
+				window.swap_buffers();
+				limit_fps_func();
+			});
+		}
+		else
+		{
+			// Prepare CURRENT frame.
+			prepare_frame_func();
+		}
+
+		// Than update surface pixels.
+		window.update_window_surface(|pixels, surface_info| {
+			if *surface_info != surface_info_initial
+			{
+				// Skip this frame because surface size was changed.
+				return;
+			}
+
+			if let Some(active_map) = active_map
+			{
+				if postprocessor.use_hdr_rendering()
+				{
+					postprocessor.perform_postprocessing(
+						pixels,
+						surface_info,
+						time_delta_s,
+						&mut active_map.debug_stats_printer,
+					);
+				}
+				else
+				{
+					let frame_info_ref = frame_info.as_ref().unwrap();
+					active_map.renderer.draw_frame(
+						pixels,
+						surface_info,
+						frame_info_ref,
+						&active_map.inline_models_index,
+						&mut active_map.debug_stats_printer,
+					);
+				}
+
+				active_map.debug_stats_printer.flush(pixels, surface_info);
+			}
+			else
+			{
+				// Just clear background. TODO - maybe draw some background pattern or image?
+				for pixel in pixels.iter_mut()
+				{
+					*pixel = Color32::black();
+				}
+			}
+
+			console.lock().unwrap().draw(pixels, surface_info);
+
+			text_printer::print(
+				pixels,
+				surface_info,
+				&format!(
+					"fps {:04.2}\n{:04.2}ms",
+					fps_counter.get_frequency(),
+					frame_duration_counter.get_average_value() * 1000.0
+				),
+				(surface_info.width - 96) as i32,
+				1,
+				Color32::from_rgb(255, 255, 255),
+			);
+		});
+
+		if !parallel_swap_buffers
+		{
+			// Finally, swap buffers for CURRENT frame.
+			window.swap_buffers();
+			limit_fps_func();
+		}
+
+		fps_counter.tick();
+
+		!self.quit_requested
 	}
 
 	fn command_map(&mut self, args: commands_queue::CommandArgs)
 	{
 		if args.is_empty()
 		{
-			self.console.borrow_mut().add_text("Expected map file name".to_string());
+			self.console
+				.lock()
+				.unwrap()
+				.add_text("Expected map file name".to_string());
 			return;
 		}
 		self.active_map = None;
@@ -362,17 +442,20 @@ impl Host
 	{
 		if args.len() < 2
 		{
-			self.console.borrow_mut().add_text("Expected two args".to_string());
+			self.console.lock().unwrap().add_text("Expected two args".to_string());
 			return;
 		}
 
 		if let (Ok(width), Ok(height)) = (args[0].parse::<u32>(), args[1].parse::<u32>())
 		{
-			self.window.borrow_mut().resize(width, height);
+			self.window.resize(width, height);
 		}
 		else
 		{
-			self.console.borrow_mut().add_text("Failed to parse args".to_string());
+			self.console
+				.lock()
+				.unwrap()
+				.add_text("Failed to parse args".to_string());
 		}
 	}
 }

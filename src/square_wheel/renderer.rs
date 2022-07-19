@@ -148,13 +148,11 @@ impl Renderer
 		}
 	}
 
-	pub fn draw_frame<ColorT: AbstractColor>(
+	pub fn prepare_frame<ColorT: AbstractColor>(
 		&mut self,
-		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
 		frame_info: &FrameInfo,
 		inline_models_index: &InlineModelsIndex,
-		debug_stats_printer: &mut DebugStatsPrinter,
 	)
 	{
 		let performance_counters_ptr = self.performance_counters.clone();
@@ -196,8 +194,6 @@ impl Renderer
 			test_lights_shadow_maps.push(cube_shadow_map);
 		}
 
-		let root_node = (self.map.nodes.len() - 1) as u32;
-
 		run_with_measure(
 			|| {
 				// TODO - before preparing frame try to shift camera a little bit away from all planes of BSP nodes before current leaf.
@@ -235,6 +231,19 @@ impl Renderer
 			},
 			&mut performance_counters.surfaces_preparation,
 		);
+	}
+
+	pub fn draw_frame<ColorT: AbstractColor>(
+		&mut self,
+		pixels: &mut [ColorT],
+		surface_info: &system_window::SurfaceInfo,
+		frame_info: &FrameInfo,
+		inline_models_index: &InlineModelsIndex,
+		debug_stats_printer: &mut DebugStatsPrinter,
+	)
+	{
+		let performance_counters_ptr = self.performance_counters.clone();
+		let mut performance_counters = performance_counters_ptr.lock().unwrap();
 
 		run_with_measure(
 			|| {
@@ -251,6 +260,7 @@ impl Renderer
 
 		run_with_measure(
 			|| {
+				let root_node = (self.map.nodes.len() - 1) as u32;
 				self.perform_rasterization(
 					pixels,
 					surface_info,
@@ -262,23 +272,6 @@ impl Renderer
 			},
 			&mut performance_counters.rasterization,
 		);
-
-		if self.config.debug_draw_depth
-		{
-			if let Some(shadow_map) = test_lights_shadow_maps.last()
-			{
-				for y in 0 .. depth_map_size
-				{
-					for x in 0 .. depth_map_size
-					{
-						let depth = shadow_map.sides[5][(x + y * depth_map_size) as usize];
-						let z = 0.5 / depth;
-						pixels[(x as usize) + (y as usize) * surface_info.pitch] =
-							ColorVec::from_color_f32x3(&[z, z, z]).into();
-					}
-				}
-			}
-		}
 
 		if debug_stats_printer.show_debug_stats()
 		{

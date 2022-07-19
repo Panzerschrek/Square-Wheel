@@ -82,14 +82,16 @@ impl ResourcesManager
 			Ok(None) =>
 			{
 				self.console
-					.borrow_mut()
+					.lock()
+					.unwrap()
 					.add_text(format!("Failed to load map {:?}", map_path));
 				None
 			},
 			Err(e) =>
 			{
 				self.console
-					.borrow_mut()
+					.lock()
+					.unwrap()
 					.add_text(format!("Failed to load map {:?}: {}", map_path, e));
 				None
 			},
@@ -139,7 +141,8 @@ impl ResourcesManager
 
 		let material = self.materials.get(key).unwrap_or_else(|| {
 			self.console
-				.borrow_mut()
+				.lock()
+				.unwrap()
 				.add_text(format!("Failed to find material {:?}", key));
 			&self.default_material
 		});

@@ -6,12 +6,15 @@ pub struct SystemWindow
 	sdl2_event_pump: sdl2::EventPump,
 }
 
+#[derive(PartialEq)]
 pub struct SurfaceInfo
 {
 	pub width: usize,
 	pub height: usize,
 	pub pitch: usize,
 }
+
+pub type KeyboardState = std::collections::HashSet<sdl2::keyboard::Scancode>;
 
 impl SystemWindow
 {
@@ -66,12 +69,22 @@ impl SystemWindow
 		self.sdl2_event_pump.poll_iter().collect()
 	}
 
-	pub fn get_keyboard_state(&mut self) -> sdl2::keyboard::KeyboardState
+	pub fn get_keyboard_state(&mut self) -> KeyboardState
 	{
-		self.sdl2_event_pump.keyboard_state()
+		self.sdl2_event_pump.keyboard_state().pressed_scancodes().collect()
 	}
 
-	pub fn end_frame<F: FnOnce(&mut [Color32], &SurfaceInfo)>(&mut self, draw_fn: F)
+	pub fn get_window_surface_info(&self) -> SurfaceInfo
+	{
+		let surface = self.sdl2_window.surface(&self.sdl2_event_pump).unwrap();
+		SurfaceInfo {
+			width: surface.width() as usize,
+			height: surface.height() as usize,
+			pitch: surface.pitch() as usize / 4,
+		}
+	}
+
+	pub fn update_window_surface<F: FnOnce(&mut [Color32], &SurfaceInfo)>(&mut self, draw_fn: F)
 	{
 		let mut surface = self.sdl2_window.surface(&self.sdl2_event_pump).unwrap();
 
@@ -86,7 +99,11 @@ impl SystemWindow
 			let pixels_32 = unsafe { pixels.align_to_mut::<Color32>().1 };
 			draw_fn(pixels_32, &surface_info)
 		});
+	}
 
+	pub fn swap_buffers(&mut self)
+	{
+		let surface = self.sdl2_window.surface(&self.sdl2_event_pump).unwrap();
 		let _ = surface.update_window();
 	}
 }

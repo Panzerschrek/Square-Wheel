@@ -1,4 +1,4 @@
-use super::math_types::*;
+use super::{math_types::*, system_window};
 use sdl2::keyboard::Scancode;
 
 pub struct CameraController
@@ -50,7 +50,7 @@ impl CameraController
 		self.elevation = Rad(elevation);
 	}
 
-	pub fn update(&mut self, keyboard_state: &sdl2::keyboard::KeyboardState, time_delta_s: f32)
+	pub fn update(&mut self, keyboard_state: &system_window::KeyboardState, time_delta_s: f32)
 	{
 		const SPEED: f32 = 256.0;
 		const JUMP_SPEED: f32 = 0.8 * SPEED;
@@ -63,19 +63,19 @@ impl CameraController
 		let left_vector = Vec3f::new(self.azimuth.cos(), self.azimuth.sin(), 0.0);
 		let mut move_vector = Vec3f::new(0.0, 0.0, 0.0);
 
-		if keyboard_state.is_scancode_pressed(Scancode::W)
+		if keyboard_state.contains(&Scancode::W)
 		{
 			move_vector += forward_vector;
 		}
-		if keyboard_state.is_scancode_pressed(Scancode::S)
+		if keyboard_state.contains(&Scancode::S)
 		{
 			move_vector -= forward_vector;
 		}
-		if keyboard_state.is_scancode_pressed(Scancode::D)
+		if keyboard_state.contains(&Scancode::D)
 		{
 			move_vector += left_vector;
 		}
-		if keyboard_state.is_scancode_pressed(Scancode::A)
+		if keyboard_state.contains(&Scancode::A)
 		{
 			move_vector -= left_vector;
 		}
@@ -86,29 +86,29 @@ impl CameraController
 			self.pos += move_vector * (time_delta_s * SPEED / move_vector_length);
 		}
 
-		if keyboard_state.is_scancode_pressed(Scancode::Space)
+		if keyboard_state.contains(&Scancode::Space)
 		{
 			self.pos.z += time_delta_s * JUMP_SPEED;
 		}
-		if keyboard_state.is_scancode_pressed(Scancode::C)
+		if keyboard_state.contains(&Scancode::C)
 		{
 			self.pos.z -= time_delta_s * JUMP_SPEED;
 		}
 
-		if keyboard_state.is_scancode_pressed(Scancode::Left)
+		if keyboard_state.contains(&Scancode::Left)
 		{
 			self.azimuth += ANGLE_SPEED * time_delta_s;
 		}
-		if keyboard_state.is_scancode_pressed(Scancode::Right)
+		if keyboard_state.contains(&Scancode::Right)
 		{
 			self.azimuth -= ANGLE_SPEED * time_delta_s;
 		}
 
-		if keyboard_state.is_scancode_pressed(Scancode::Up)
+		if keyboard_state.contains(&Scancode::Up)
 		{
 			self.elevation += ANGLE_SPEED * time_delta_s;
 		}
-		if keyboard_state.is_scancode_pressed(Scancode::Down)
+		if keyboard_state.contains(&Scancode::Down)
 		{
 			self.elevation -= ANGLE_SPEED * time_delta_s;
 		}
