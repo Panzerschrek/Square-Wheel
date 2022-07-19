@@ -4,7 +4,7 @@ use super::{
 };
 use common::{color::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
-use std::{cell::RefCell, rc::Rc, time::Duration};
+use std::time::Duration;
 
 pub struct Host
 {
@@ -16,7 +16,7 @@ pub struct Host
 	commands_queue: commands_queue::CommandsQueuePtr<Host>,
 	commands_processor: commands_processor::CommandsProcessorPtr,
 	console: console::ConsoleSharedPtr,
-	window: Rc<RefCell<system_window::SystemWindow>>,
+	window: system_window::SystemWindow,
 	postprocessor: Postprocessor,
 	resources_manager: ResourcesManagerSharedPtr,
 	active_map: Option<ActiveMap>,
@@ -98,7 +98,7 @@ impl Host
 			commands_queue,
 			commands_processor,
 			console: console.clone(),
-			window: Rc::new(RefCell::new(system_window::SystemWindow::new())),
+			window: system_window::SystemWindow::new(),
 			postprocessor: Postprocessor::new(app_config.clone()),
 			resources_manager: ResourcesManager::new(app_config, console),
 			active_map: None,
@@ -131,15 +131,15 @@ impl Host
 
 		if self.config.fullscreen_mode == 0.0
 		{
-			self.window.borrow_mut().set_windowed();
+			self.window.set_windowed();
 		}
 		else if self.config.fullscreen_mode == 1.0
 		{
-			self.window.borrow_mut().set_fullscreen_desktop();
+			self.window.set_fullscreen_desktop();
 		}
 		else if self.config.fullscreen_mode == 2.0
 		{
-			self.window.borrow_mut().set_fullscreen();
+			self.window.set_fullscreen();
 		}
 		else
 		{
@@ -156,7 +156,7 @@ impl Host
 			{
 				active_map
 					.game
-					.process_input(&self.window.borrow_mut().get_keyboard_state(), time_delta_s);
+					.process_input(&self.window.get_keyboard_state(), time_delta_s);
 			}
 			active_map.game.update(time_delta_s);
 		}
@@ -185,7 +185,7 @@ impl Host
 	{
 		// Remember if ` was pressed to avoid using it as input for console.
 		let mut has_backquote = false;
-		for event in self.window.borrow_mut().get_events()
+		for event in self.window.get_events()
 		{
 			match event
 			{
@@ -264,8 +264,7 @@ impl Host
 	{
 		let parallel_swap_buffers = rayon::current_num_threads() > 1;
 
-		let mut window = self.window.borrow_mut();
-
+		let window = &mut self.window;
 		let postprocessor = &mut self.postprocessor;
 		let active_map = &mut self.active_map;
 		let console = self.console.clone();
@@ -437,7 +436,7 @@ impl Host
 
 		if let (Ok(width), Ok(height)) = (args[0].parse::<u32>(), args[1].parse::<u32>())
 		{
-			self.window.borrow_mut().resize(width, height);
+			self.window.resize(width, height);
 		}
 		else
 		{
