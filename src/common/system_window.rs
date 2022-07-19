@@ -14,6 +14,8 @@ pub struct SurfaceInfo
 	pub pitch: usize,
 }
 
+pub type KeyboardState = std::collections::HashSet<sdl2::keyboard::Scancode>;
+
 impl SystemWindow
 {
 	pub fn new() -> Self
@@ -67,9 +69,9 @@ impl SystemWindow
 		self.sdl2_event_pump.poll_iter().collect()
 	}
 
-	pub fn get_keyboard_state(&mut self) -> sdl2::keyboard::KeyboardState
+	pub fn get_keyboard_state(&mut self) -> KeyboardState
 	{
-		self.sdl2_event_pump.keyboard_state()
+		self.sdl2_event_pump.keyboard_state().pressed_scancodes().collect()
 	}
 
 	pub fn get_window_surface_info(&self) -> SurfaceInfo

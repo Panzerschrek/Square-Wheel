@@ -49,7 +49,7 @@ impl Game
 		}
 	}
 
-	pub fn process_input(&mut self, keyboard_state: &sdl2::keyboard::KeyboardState, time_delta_s: f32)
+	pub fn process_input(&mut self, keyboard_state: &system_window::KeyboardState, time_delta_s: f32)
 	{
 		self.camera.update(keyboard_state, time_delta_s);
 	}

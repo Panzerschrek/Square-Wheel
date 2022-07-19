@@ -122,65 +122,6 @@ impl Host
 		host
 	}
 
-	// Returns true if need to continue.
-	pub fn process_frame(&mut self) -> bool
-	{
-		self.process_events();
-		self.process_commands();
-		self.synchronize_config();
-
-		if self.config.fullscreen_mode == 0.0
-		{
-			self.window.set_windowed();
-		}
-		else if self.config.fullscreen_mode == 1.0
-		{
-			self.window.set_fullscreen_desktop();
-		}
-		else if self.config.fullscreen_mode == 2.0
-		{
-			self.window.set_fullscreen();
-		}
-		else
-		{
-			self.config.fullscreen_mode = 0.0;
-		}
-
-		let cur_time = std::time::Instant::now();
-		let time_delta_s = (cur_time - self.prev_time).as_secs_f32();
-		self.prev_time = cur_time;
-
-		if let Some(active_map) = &mut self.active_map
-		{
-			if !self.console.lock().unwrap().is_active()
-			{
-				active_map
-					.game
-					.process_input(&self.window.get_keyboard_state(), time_delta_s);
-			}
-			active_map.game.update(time_delta_s);
-		}
-
-		self.draw_frame(time_delta_s);
-
-		if self.config.max_fps > 0.0
-		{
-			let frame_end_time = std::time::Instant::now();
-			let frame_time_s = (frame_end_time - self.prev_time).as_secs_f32();
-			let min_frame_time = 1.0 / self.config.max_fps;
-			if frame_time_s < min_frame_time
-			{
-				std::thread::sleep(Duration::from_secs_f32(
-					((min_frame_time - frame_time_s) * 1000.0).floor() / 1000.0,
-				));
-			}
-		}
-
-		self.fps_counter.tick();
-
-		!self.quit_requested
-	}
-
 	fn process_events(&mut self)
 	{
 		// Remember if ` was pressed to avoid using it as input for console.
@@ -260,23 +201,64 @@ impl Host
 		}
 	}
 
-	fn draw_frame(&mut self, time_delta_s: f32)
+	// Returns true if need to continue.
+	pub fn process_frame(&mut self) -> bool
 	{
+		self.process_events();
+		self.process_commands();
+		self.synchronize_config();
+
+		if self.config.fullscreen_mode == 0.0
+		{
+			self.window.set_windowed();
+		}
+		else if self.config.fullscreen_mode == 1.0
+		{
+			self.window.set_fullscreen_desktop();
+		}
+		else if self.config.fullscreen_mode == 2.0
+		{
+			self.window.set_fullscreen();
+		}
+		else
+		{
+			self.config.fullscreen_mode = 0.0;
+		}
+
+		let cur_time = std::time::Instant::now();
+		let time_delta_s = (cur_time - self.prev_time).as_secs_f32();
+		self.prev_time = cur_time;
+
 		let parallel_swap_buffers = self.config.parallel_swap_buffers;
 
 		let window = &mut self.window;
+		let keyboard_state = window.get_keyboard_state();
+
 		let postprocessor = &mut self.postprocessor;
 		let active_map = &mut self.active_map;
 		let console = self.console.clone();
-		let fps_counter = &self.fps_counter;
+		let fps_counter = &mut self.fps_counter;
+		let max_fps = self.config.max_fps;
+
+		let mut frame_info = None;
 
 		// First, only prepare frame without accessing surface pixels.
 		let surface_info_initial = window.get_window_surface_info();
 		let mut prepare_frame_func = || {
 			if let Some(active_map) = active_map
 			{
-				let frame_info = active_map.game.get_frame_info(&surface_info_initial);
+				// Process game logic.
+				if !console.lock().unwrap().is_active()
+				{
+					active_map.game.process_input(&keyboard_state, time_delta_s);
+				}
+				active_map.game.update(time_delta_s);
 
+				// Get frame info from game code.
+				frame_info = Some(active_map.game.get_frame_info(&surface_info_initial));
+				let frame_info_ref = frame_info.as_ref().unwrap();
+
+				// Perform rendering frame preparation.
 				if postprocessor.use_hdr_rendering()
 				{
 					let hdr_buffer_size = [surface_info_initial.width, surface_info_initial.height];
@@ -290,14 +272,14 @@ impl Host
 
 					active_map.renderer.prepare_frame::<Color64>(
 						&hdr_surface_info,
-						&frame_info,
+						frame_info_ref,
 						&active_map.inline_models_index,
 					);
 
 					active_map.renderer.draw_frame(
 						hdr_buffer,
 						&hdr_surface_info,
-						&frame_info,
+						frame_info_ref,
 						&active_map.inline_models_index,
 						&mut active_map.debug_stats_printer,
 					);
@@ -306,9 +288,22 @@ impl Host
 				{
 					active_map.renderer.prepare_frame::<Color32>(
 						&surface_info_initial,
-						&frame_info,
+						frame_info_ref,
 						&active_map.inline_models_index,
 					);
+				}
+			}
+		};
+
+		let limit_fps_func = || {
+			if max_fps > 0.0
+			{
+				let min_frame_time = 1.0 / max_fps;
+				if time_delta_s < min_frame_time
+				{
+					std::thread::sleep(Duration::from_secs_f32(
+						((min_frame_time - time_delta_s) * 1000.0).floor() / 1000.0,
+					));
 				}
 			}
 		};
@@ -316,16 +311,18 @@ impl Host
 		if parallel_swap_buffers
 		{
 			rayon::in_place_scope(|s| {
-				// Start frame preparation.
+				// Start CURRENT frame preparation.
 				s.spawn(|_s| {
 					prepare_frame_func();
 				});
-				// Swap buffers.
+				// Swap buffers for PREVIOUS frame.
 				window.swap_buffers();
+				limit_fps_func();
 			});
 		}
 		else
 		{
+			// Prepare CURRENT frame.
 			prepare_frame_func();
 		}
 
@@ -350,11 +347,11 @@ impl Host
 				}
 				else
 				{
-					let frame_info = active_map.game.get_frame_info(&surface_info_initial);
+					let frame_info_ref = frame_info.as_ref().unwrap();
 					active_map.renderer.draw_frame(
 						pixels,
 						surface_info,
-						&frame_info,
+						frame_info_ref,
 						&active_map.inline_models_index,
 						&mut active_map.debug_stats_printer,
 					);
@@ -385,9 +382,14 @@ impl Host
 
 		if !parallel_swap_buffers
 		{
-			// Finally, swap buffers.
+			// Finally, swap buffers for CURRENT frame.
 			window.swap_buffers();
+			limit_fps_func();
 		}
+
+		fps_counter.tick();
+
+		!self.quit_requested
 	}
 
 	fn command_map(&mut self, args: commands_queue::CommandArgs)
