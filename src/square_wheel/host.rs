@@ -1,6 +1,7 @@
 use super::{
 	commands_processor, commands_queue, config, console, debug_stats_printer::*, host_config::*, inline_models_index,
-	postprocessor::*, renderer, resources_manager::*, test_game, text_printer, ticks_counter::*,
+	performance_counter::*, postprocessor::*, renderer, resources_manager::*, test_game, text_printer,
+	ticks_counter::*,
 };
 use common::{color::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
@@ -22,6 +23,7 @@ pub struct Host
 	active_map: Option<ActiveMap>,
 	prev_time: std::time::Instant,
 	fps_counter: TicksCounter,
+	frame_duration_counter: PerformanceCounter,
 	quit_requested: bool,
 }
 
@@ -104,6 +106,7 @@ impl Host
 			active_map: None,
 			prev_time: cur_time,
 			fps_counter: TicksCounter::new(),
+			frame_duration_counter: PerformanceCounter::new(200),
 			quit_requested: false,
 		};
 
@@ -229,6 +232,8 @@ impl Host
 		let time_delta_s = (cur_time - self.prev_time).as_secs_f32();
 		self.prev_time = cur_time;
 
+		self.frame_duration_counter.add_value(time_delta_s);
+
 		let parallel_swap_buffers = self.config.parallel_swap_buffers;
 
 		let window = &mut self.window;
@@ -239,6 +244,7 @@ impl Host
 		let console = self.console.clone();
 		let fps_counter = &mut self.fps_counter;
 		let max_fps = self.config.max_fps;
+		let frame_duration_counter = &self.frame_duration_counter;
 
 		let mut frame_info = None;
 
@@ -373,7 +379,11 @@ impl Host
 			text_printer::print(
 				pixels,
 				surface_info,
-				&format!("fps {:04.2}", fps_counter.get_frequency()),
+				&format!(
+					"fps {:04.2}\n{:04.2}ms",
+					fps_counter.get_frequency(),
+					frame_duration_counter.get_average_value() * 1000.0
+				),
 				(surface_info.width - 96) as i32,
 				1,
 				Color32::from_rgb(255, 255, 255),
