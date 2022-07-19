@@ -277,13 +277,21 @@ impl Host
 				let hdr_buffer_size = [surface_info.width, surface_info.height];
 				let hdr_buffer = self.postprocessor.get_hdr_buffer(hdr_buffer_size);
 
+				let hdr_surface_info = system_window::SurfaceInfo {
+					width: hdr_buffer_size[0],
+					height: hdr_buffer_size[1],
+					pitch: hdr_buffer_size[0],
+				};
+
+				active_map.renderer.prepare_frame::<Color64>(
+					&hdr_surface_info,
+					&frame_info,
+					&active_map.inline_models_index,
+				);
+
 				active_map.renderer.draw_frame(
 					hdr_buffer,
-					&system_window::SurfaceInfo {
-						width: hdr_buffer_size[0],
-						height: hdr_buffer_size[1],
-						pitch: hdr_buffer_size[0],
-					},
+					&hdr_surface_info,
 					&frame_info,
 					&active_map.inline_models_index,
 					&mut active_map.debug_stats_printer,
@@ -298,6 +306,11 @@ impl Host
 			}
 			else
 			{
+				active_map.renderer.prepare_frame::<Color32>(
+					surface_info,
+					&frame_info,
+					&active_map.inline_models_index,
+				);
 				active_map.renderer.draw_frame(
 					pixels,
 					surface_info,
