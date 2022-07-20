@@ -225,6 +225,14 @@ mod fast_math_impl
 			unsafe { Self(_mm_setzero_si128()) }
 		}
 
+		pub fn from_color_f32x3(c: &[f32; 3]) -> Self
+		{
+			unsafe {
+				let f32_vec = _mm_set_ps(0.0, c[0], c[1], c[2]);
+				Self(_mm_cvtps_epi32(f32_vec))
+			}
+		}
+
 		pub fn from_color32(c: Color32) -> Self
 		{
 			unsafe {
@@ -269,6 +277,11 @@ mod fast_math_impl
 		pub fn add(&self, other: &Self) -> Self
 		{
 			unsafe { Self(_mm_add_epi32(self.0, other.0)) }
+		}
+
+		pub fn mul(&self, other: &Self) -> Self
+		{
+			unsafe { Self(_mm_mullo_epi32(self.0, other.0)) }
 		}
 
 		pub fn mul_scalar(&self, scalar: u32) -> Self
@@ -508,6 +521,11 @@ mod fast_math_impl
 			Self([0; 4])
 		}
 
+		pub fn from_color_f32x3(c: &[f32; 3]) -> Self
+		{
+			Self([c[2] as u32, c[1] as u32, c[0] as u32, 0])
+		}
+
 		pub fn from_color32(c: Color32) -> Self
 		{
 			let mut res = [0; 4];
@@ -554,6 +572,16 @@ mod fast_math_impl
 			for i in 0 .. 4
 			{
 				res[i] = self.0[i] + other.0[i]
+			}
+			Self(res)
+		}
+
+		pub fn mul(&self, other: &Self) -> Self
+		{
+			let mut res = [0; 4];
+			for i in 0 .. 4
+			{
+				res[i] = self.0[i] * other.0[i]
 			}
 			Self(res)
 		}

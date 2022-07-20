@@ -1467,6 +1467,10 @@ impl Renderer
 
 		let texture_data = &texture.pixels;
 
+		// TODO - use per-vertex lighting.
+		// Now just use constant color.
+		let color = [3.0, 2.0, 1.0];
+
 		let mut vertices_clipped = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
 		let mut vertices_clipped_temp = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
 		let mut vertices_projected = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
@@ -1548,6 +1552,7 @@ impl Renderer
 				// TODO - use unchecked vertex fetch?
 				rasterizer.fill_triangle(
 					&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
+					&color,
 					&texture_info,
 					texture_data,
 				);

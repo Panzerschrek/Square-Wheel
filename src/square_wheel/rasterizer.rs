@@ -1,4 +1,4 @@
-use super::abstract_color::*;
+use super::{abstract_color::*, fast_math::*};
 use common::{fixed_math::*, system_window};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -743,6 +743,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 	pub fn fill_triangle<TextureColorT: AbstractColor>(
 		&mut self,
 		vertices: &[TrianglePointProjected; 3],
+		color: &[f32; 3],
 		texture_info: &TextureInfo,
 		texture_data: &[TextureColorT],
 	)
@@ -834,6 +835,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				vertices[lower_index].tc,
 				d_tc_dy_lower,
 				d_tc_dx,
+				color,
 				texture_info,
 				texture_data,
 			);
@@ -851,6 +853,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				vertices[middle_index].tc,
 				d_tc_dy_upper,
 				d_tc_dx,
+				color,
 				texture_info,
 				texture_data,
 			);
@@ -890,6 +893,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				vertices[lower_index].tc,
 				long_edge_d_tc_dy,
 				d_tc_dx,
+				color,
 				texture_info,
 				texture_data,
 			);
@@ -907,6 +911,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				long_edge_tc_in_middle,
 				long_edge_d_tc_dy,
 				d_tc_dx,
+				color,
 				texture_info,
 				texture_data,
 			);
@@ -922,10 +927,16 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		tc_start_left: [Fixed16; 2],
 		d_tc_dy_left: [Fixed16; 2],
 		d_tc_dx: [Fixed16; 2],
+		color: &[f32; 3],
 		texture_info: &TextureInfo,
 		texture_data: &[TextureColorT],
 	)
 	{
+		const COLOR_SHIFT: i32 = 8;
+		const COLOR_SCALE: f32 = (1 << COLOR_SHIFT) as f32;
+		let color_vec =
+			ColorVecI::from_color_f32x3(&[color[0] * COLOR_SCALE, color[1] * COLOR_SCALE, color[2] * COLOR_SCALE]);
+
 		// TODO - avoid adding "0.5" for some calculations.
 		let y_start_int = fixed16_round_to_int(y_start).max(self.clip_rect.min_y);
 		let y_end_int = fixed16_round_to_int(y_end).min(self.clip_rect.max_y);
@@ -963,7 +974,11 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					let texel_address = (u + v * texture_info.size[0]) as usize;
 					let texel = unchecked_texture_fetch(texture_data, texel_address);
 
-					*dst_pixel = texel.into().into();
+					let texel_vec = texel.into();
+					let texel_vec_colored =
+						ColorVecI::shift_right::<COLOR_SHIFT>(&ColorVecI::mul(&texel_vec, &color_vec));
+
+					*dst_pixel = texel_vec_colored.into();
 					for i in 0 .. 2
 					{
 						line_tc[i] += d_tc_dx[i];
