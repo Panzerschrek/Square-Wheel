@@ -72,10 +72,9 @@ impl Game
 	pub fn get_frame_info(&self, surface_info: &system_window::SurfaceInfo) -> FrameInfo
 	{
 		let fov = std::f32::consts::PI * 0.375;
-		let camera_matrices = build_view_matrix(
+		let camera_matrices = build_view_matrix_with_full_rotation(
 			self.camera.get_pos(),
-			self.camera.get_azimuth(),
-			self.camera.get_elevation(),
+			self.camera.get_euler_angles(),
 			fov,
 			surface_info.width as f32,
 			surface_info.height as f32,
@@ -92,11 +91,7 @@ impl Game
 			let shift_vec_down = Vec3f::new(0.0, 0.0, -1.0) * 10.0;
 
 			view_model.position = self.camera.get_pos() + shift_vec_front + shift_vec_left + shift_vec_down;
-			view_model.angles = EulerAnglesF::new(
-				Rad(0.0),
-				-self.camera.get_elevation(),
-				azimuth + Rad(std::f32::consts::PI * 0.5),
-			);
+			view_model.angles = self.camera.get_euler_angles();
 			model_entities.push(view_model);
 		}
 
@@ -150,7 +145,7 @@ impl Game
 		self.console
 			.lock()
 			.unwrap()
-			.add_text(format!("{} {}", angles.0, angles.1));
+			.add_text(format!("{} {} {}", angles.0, angles.1, angles.2));
 	}
 
 	fn command_set_angles(&mut self, args: commands_queue::CommandArgs)
@@ -161,9 +156,20 @@ impl Game
 			return;
 		}
 
-		if let (Ok(azimuth), Ok(elevation)) = (args[0].parse::<f32>(), args[1].parse::<f32>())
+		let azimuth = args[0].parse::<f32>();
+		let elevation = args[1].parse::<f32>();
+		let roll = if args.len() > 2
 		{
-			self.camera.set_angles(azimuth, elevation);
+			args[2].parse::<f32>().unwrap_or(0.0)
+		}
+		else
+		{
+			0.0
+		};
+
+		if let (Ok(azimuth), Ok(elevation)) = (azimuth, elevation)
+		{
+			self.camera.set_angles(azimuth, elevation, roll);
 		}
 		else
 		{
@@ -216,11 +222,7 @@ impl Game
 
 		self.test_models.push(ModelEntity {
 			position: self.camera.get_pos(),
-			angles: EulerAnglesF::new(
-				Rad(0.0),
-				-self.camera.get_elevation(),
-				self.camera.get_azimuth() + Rad(std::f32::consts::PI * 0.5),
-			),
+			angles: self.camera.get_euler_angles(),
 			frame: 0,
 			model,
 			texture,

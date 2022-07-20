@@ -161,10 +161,9 @@ pub fn main()
 					draw_secondary_light_sources: opt.draw_secondary_light_sources,
 					draw_lightmaps_directions: opt.draw_lightmaps_directions,
 				},
-				&build_view_matrix(
+				&build_view_matrix_with_full_rotation(
 					camera_controller.get_pos(),
-					camera_controller.get_azimuth(),
-					camera_controller.get_elevation(),
+					camera_controller.get_euler_angles(),
 					std::f32::consts::PI * 0.375,
 					surface_info.width as f32,
 					surface_info.height as f32,

@@ -18,18 +18,38 @@ pub fn build_view_matrix(
 	viewport_height: f32,
 ) -> CameraMatrices
 {
-	let rotate_z = Mat4f::from_angle_z(-azimuth);
-	let rotate_x = Mat4f::from_angle_x(-elevation);
+	build_view_matrix_with_full_rotation(
+		position,
+		EulerAnglesF::new(Rad(0.0), -elevation, azimuth + Rad(std::f32::consts::PI * 0.5)),
+		fov,
+		viewport_width,
+		viewport_height,
+	)
+}
+
+pub fn build_view_matrix_with_full_rotation(
+	position: Vec3f,
+	angles: EulerAnglesF,
+	fov: f32,
+	viewport_width: f32,
+	viewport_height: f32,
+) -> CameraMatrices
+{
+	let rotate_z = Mat4f::from_angle_z(-angles.z);
+	let rotate_y = Mat4f::from_angle_y(-angles.y);
+	let rotate_x = Mat4f::from_angle_x(-angles.x);
 
 	let mut basis_change = Mat4f::identity();
+	basis_change.x.x = 0.0;
 	basis_change.y.y = 0.0;
-	basis_change.z.y = -1.0;
-	basis_change.y.z = 1.0;
 	basis_change.z.z = 0.0;
+	basis_change.x.z = 1.0;
+	basis_change.y.x = -1.0;
+	basis_change.z.y = -1.0;
 
 	complete_view_matrix(
 		position,
-		&(basis_change * rotate_x * rotate_z),
+		&(basis_change * rotate_x * rotate_y * rotate_z),
 		fov,
 		viewport_width,
 		viewport_height,
