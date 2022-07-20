@@ -181,6 +181,23 @@ pub fn get_texture_string(texture_name: &Texture) -> &str
 	std::str::from_utf8(&texture_name[0 .. null_pos]).unwrap_or("")
 }
 
+pub fn get_map_bbox(map: &BSPMap) -> BBox
+{
+	// Calculate model bounding box based on all vertices (polygons, portals, submodels).
+	let inf = 1e24;
+	let mut bbox = BBox {
+		min: Vec3f::new(inf, inf, inf),
+		max: Vec3f::new(-inf, -inf, -inf),
+	};
+
+	for vertex in &map.vertices
+	{
+		bbox.extend_with_point(vertex);
+	}
+
+	bbox
+}
+
 pub fn get_submodel_bbox(map: &BSPMap, submodel: &Submodel) -> BBox
 {
 	// Calculate model bounding box based on all vertices of all polygons.

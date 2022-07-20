@@ -169,6 +169,8 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		map.directional_lightmaps_data = Vec::new();
 	}
 
+	calculate_light_grid(sample_grid_size, &lights, &[], &[], map);
+
 	println!("Done!");
 }
 
@@ -1606,6 +1608,104 @@ fn create_secondary_light_source(
 		center: polygon_center,
 		radius: square_radius.sqrt(),
 	}
+}
+
+fn calculate_light_grid(
+	sample_grid_size: u32,
+	primary_lights: &[PointLight],
+	secondary_lights: &[SecondaryLightSource],
+	emissive_lights: &[SecondaryLightSource],
+	map: &bsp_map_compact::BSPMap,
+)
+{
+	let map_bbox = bsp_map_compact::get_map_bbox(map);
+
+	let grid_cell_size = [64.0, 64.0, 64.0]; // TODO - make it variable.
+
+	// Align grid cells properly.
+	let mut grid_start = [0.0, 0.0, 0.0]; // Position of first sample.
+	let mut grid_end = [0.0, 0.0, 0.0]; // Position of last sample.
+	let mut grid_size = [0, 0, 0];
+	for i in 0 .. 3
+	{
+		let start = (map_bbox.min[i] / grid_cell_size[i]).floor();
+		let end = (map_bbox.max[i] / grid_cell_size[i]).ceil();
+
+		grid_start[i] = start * grid_cell_size[i];
+		grid_end[i] = end * grid_cell_size[i];
+		grid_size[i] = (end - start) as u32;
+	}
+
+	println!("Calculating ligh grid");
+	println!(
+		"Light grid size: {} x {} x {} ({} elements)",
+		grid_size[0],
+		grid_size[1],
+		grid_size[2],
+		grid_size[0] * grid_size[1] * grid_size[2]
+	);
+
+	let mut num_non_zero_samples = 0;
+
+	for x in 0 .. grid_size[0]
+	{
+		for y in 0 .. grid_size[1]
+		{
+			for z in 0 .. grid_size[2]
+			{
+				let pos = Vec3f::new(
+					x as f32 * grid_cell_size[0] + grid_start[0],
+					y as f32 * grid_cell_size[1] + grid_start[1],
+					z as f32 * grid_cell_size[2] + grid_start[2],
+				);
+				let light = calculate_light_for_grid_point(
+					&pos,
+					sample_grid_size,
+					primary_lights,
+					secondary_lights,
+					emissive_lights,
+					map,
+				);
+				if light[0] > 0.0 || light[1] > 0.0 || light[2] > 0.0
+				{
+					num_non_zero_samples += 1;
+				}
+			}
+		}
+	}
+
+	println!("Num non-zero samples: {}", num_non_zero_samples);
+}
+
+fn calculate_light_for_grid_point(
+	pos: &Vec3f,
+	sample_grid_size: u32,
+	primary_lights: &[PointLight],
+	secondary_lights: &[SecondaryLightSource],
+	emissive_lights: &[SecondaryLightSource],
+	map: &bsp_map_compact::BSPMap,
+) -> [f32; 3]
+{
+	let mut total_light = [0.0, 0.0, 0.0];
+	for primay_light in primary_lights
+	{
+		let vec_to_light = primay_light.pos - pos;
+		let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
+
+		if !can_see(&primay_light.pos, &pos, map)
+		{
+			// In shadow.
+			continue;
+		}
+
+		// Do not use agle cos because we add light into light sphere.
+		let light_scale = 1.0 / vec_to_light_len2;
+		total_light[0] += primay_light.color[0] * light_scale;
+		total_light[1] += primay_light.color[1] * light_scale;
+		total_light[2] += primay_light.color[2] * light_scale;
+	}
+
+	total_light
 }
 
 fn calculate_dinstance_between_point_and_circle(
