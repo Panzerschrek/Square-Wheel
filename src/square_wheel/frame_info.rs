@@ -13,7 +13,7 @@ pub struct FrameInfo
 pub struct ModelEntity
 {
 	pub position: Vec3f,
-	pub angle_z: RadiansF,
+	pub angles: EulerAnglesF,
 	pub frame: u32,
 	pub model: SharedResourcePtr<TriangleModel>,
 	pub texture: SharedResourcePtr<Image>,

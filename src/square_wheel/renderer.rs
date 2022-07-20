@@ -428,7 +428,7 @@ impl Renderer
 			let model = &models[visible_dynamic_mesh.entity_index as usize];
 			let frame = model.frame as usize;
 
-			let model_matrix = get_object_matrix(model.position, model.angle_z);
+			let model_matrix = get_object_matrix(model.position, model.angles);
 			let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
 
 			let final_matrix = camera_matrices.view_matrix * model_matrix;

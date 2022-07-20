@@ -92,7 +92,11 @@ impl Game
 			let shift_vec_down = Vec3f::new(0.0, 0.0, -1.0) * 10.0;
 
 			view_model.position = self.camera.get_pos() + shift_vec_front + shift_vec_left + shift_vec_down;
-			view_model.angle_z = azimuth + Rad(std::f32::consts::PI * 0.5);
+			view_model.angles = EulerAnglesF::new(
+				Rad(0.0),
+				-self.camera.get_elevation(),
+				azimuth + Rad(std::f32::consts::PI * 0.5),
+			);
 			model_entities.push(view_model);
 		}
 
@@ -212,7 +216,11 @@ impl Game
 
 		self.test_models.push(ModelEntity {
 			position: self.camera.get_pos(),
-			angle_z: self.camera.get_azimuth(),
+			angles: EulerAnglesF::new(
+				Rad(0.0),
+				-self.camera.get_elevation(),
+				self.camera.get_azimuth() + Rad(std::f32::consts::PI * 0.5),
+			),
 			frame: 0,
 			model,
 			texture,
@@ -239,8 +247,8 @@ impl Game
 		let texture = self.resources_manager.lock().unwrap().get_image(&args[1]);
 
 		self.view_model = Some(ModelEntity {
-			position: self.camera.get_pos(),
-			angle_z: self.camera.get_azimuth(),
+			position: Vec3f::zero(),
+			angles: EulerAnglesF::new(Rad(0.0), Rad(0.0), Rad(0.0)),
 			frame: 0,
 			model,
 			texture,

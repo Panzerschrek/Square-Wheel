@@ -67,7 +67,7 @@ impl DynamicModelsIndex
 	{
 		// Calculate current bounding box.
 		let bbox = &model.model.frames_info[model.frame as usize].bbox;
-		let transform_matrix = get_object_matrix(model.position, model.angle_z);
+		let transform_matrix = get_object_matrix(model.position, model.angles);
 
 		let bbox_vertices = [
 			(transform_matrix * Vec4f::new(bbox.min.x, bbox.min.y, bbox.min.z, 1.0)).truncate(),

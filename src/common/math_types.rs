@@ -18,4 +18,6 @@ pub type DegreesF = cgmath::Rad<f32>;
 pub type RadiansD = cgmath::Rad<f64>;
 pub type DegreesD = cgmath::Rad<f64>;
 
+pub type EulerAnglesF = cgmath::Euler<RadiansF>;
+
 pub use cgmath::{Angle, ElementWise, InnerSpace, Matrix, Rad, SquareMatrix, Zero};

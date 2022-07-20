@@ -76,9 +76,14 @@ pub fn complete_view_matrix(
 	}
 }
 
-pub fn get_object_matrix(position: Vec3f, angle_z: RadiansF) -> Mat4f
+pub fn get_object_matrix(position: Vec3f, angles: EulerAnglesF) -> Mat4f
 {
-	let rotate = Mat4f::from_angle_z(angle_z);
+	// HACK! We multiply matrices by vectors (use inverse order). So, we need to use iverse rotation order for Euler angles.
+	let rotate_x = Mat4f::from_angle_x(angles.x);
+	let rotate_y = Mat4f::from_angle_y(angles.y);
+	let rotate_z = Mat4f::from_angle_z(angles.z);
+	let rotate = rotate_z * rotate_y * rotate_x;
+
 	let translate = Mat4f::from_translation(position);
 	translate * rotate
 }
