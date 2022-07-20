@@ -23,8 +23,15 @@ pub struct BSPMap
 	pub key_value_pairs: Vec<KeyValuePair>,
 	// UTF-8 bytes of all strings.
 	pub strings_data: Vec<u8>,
+
 	pub lightmaps_data: Vec<LightmapElement>,
 	pub directional_lightmaps_data: Vec<DirectionalLightmapElement>,
+
+	pub light_grid_header: LightGridHeader,
+	// 2D matrix with size grid_size[0] * grid_size[1]
+	pub light_grid_columns: Vec<LightGridColumn>,
+	// Combined values of light samples for each column.
+	pub light_grid_samples: Vec<LightGridElement>,
 }
 
 #[repr(C)]
@@ -132,6 +139,28 @@ pub struct DirectionalLightmapElement
 	// Color for directional light is normalized.
 	pub directional_light_color: [f32; 3],
 }
+
+#[repr(C)]
+#[derive(Default, Clone, Copy)]
+pub struct LightGridHeader
+{
+	pub grid_cell_size: [f32; 3],
+	// Position of first sample.
+	pub grid_start: [f32; 3],
+	// Number of samples.
+	pub grid_size: [u32; 3],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct LightGridColumn
+{
+	first_sample: u32,
+	num_sample: u32,
+}
+
+// TODO - use something like light cube.
+pub type LightGridElement = [f32; 3];
 
 // Conversion functions.
 //
