@@ -169,7 +169,11 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		map.directional_lightmaps_data = Vec::new();
 	}
 
-	calculate_light_grid(sample_grid_size, &lights, &[], &[], map);
+	prepare_light_grid(map);
+
+	let (light_grid_columns, light_grid_samples) = calculate_light_grid(sample_grid_size, &lights, &[], &[], map);
+	map.light_grid_columns = light_grid_columns;
+	map.light_grid_samples = light_grid_samples;
 
 	println!("Done!");
 }
@@ -1610,55 +1614,66 @@ fn create_secondary_light_source(
 	}
 }
 
+fn prepare_light_grid(map: &mut bsp_map_compact::BSPMap)
+{
+	let map_bbox = bsp_map_compact::get_map_bbox(map);
+
+	let light_grid_header = &mut map.light_grid_header;
+
+	light_grid_header.grid_cell_size = [64.0, 64.0, 64.0]; // TODO - make it variable.
+
+	// Align grid cells properly.
+	for i in 0 .. 3
+	{
+		let start = (map_bbox.min[i] / light_grid_header.grid_cell_size[i]).floor();
+		let end = (map_bbox.max[i] / light_grid_header.grid_cell_size[i]).ceil();
+
+		light_grid_header.grid_start[i] = start * light_grid_header.grid_cell_size[i];
+		light_grid_header.grid_size[i] = (end - start) as u32 + 1;
+	}
+
+	println!(
+		"Light grid size: {} x {} x {} ({} elements)",
+		light_grid_header.grid_size[0],
+		light_grid_header.grid_size[1],
+		light_grid_header.grid_size[2],
+		light_grid_header.grid_size[0] * light_grid_header.grid_size[1] * light_grid_header.grid_size[2]
+	);
+}
+
 fn calculate_light_grid(
 	sample_grid_size: u32,
 	primary_lights: &[PointLight],
 	secondary_lights: &[SecondaryLightSource],
 	emissive_lights: &[SecondaryLightSource],
 	map: &bsp_map_compact::BSPMap,
+) -> (
+	Vec<bsp_map_compact::LightGridColumn>,
+	Vec<bsp_map_compact::LightGridElement>,
 )
 {
-	let map_bbox = bsp_map_compact::get_map_bbox(map);
-
-	let grid_cell_size = [64.0, 64.0, 64.0]; // TODO - make it variable.
-
-	// Align grid cells properly.
-	let mut grid_start = [0.0, 0.0, 0.0]; // Position of first sample.
-	let mut grid_end = [0.0, 0.0, 0.0]; // Position of last sample.
-	let mut grid_size = [0, 0, 0]; // Number of samples.
-	for i in 0 .. 3
-	{
-		let start = (map_bbox.min[i] / grid_cell_size[i]).floor();
-		let end = (map_bbox.max[i] / grid_cell_size[i]).ceil();
-
-		grid_start[i] = start * grid_cell_size[i];
-		grid_end[i] = end * grid_cell_size[i];
-		grid_size[i] = (end - start) as u32 + 1;
-	}
+	let light_grid_header = &map.light_grid_header;
 
 	println!("Calculating ligh grid");
-	println!(
-		"Light grid size: {} x {} x {} ({} elements)",
-		grid_size[0],
-		grid_size[1],
-		grid_size[2],
-		grid_size[0] * grid_size[1] * grid_size[2]
-	);
 
-	let mut num_non_zero_samples = 0;
+	let mut column_light = vec![[0.0, 0.0, 0.0]; light_grid_header.grid_size[2] as usize];
 
-	let mut column_light = vec![[0.0, 0.0, 0.0]; grid_size[2] as usize];
+	let mut light_grid_columns = vec![
+		bsp_map_compact::LightGridColumn::default();
+		(light_grid_header.grid_size[0] * light_grid_header.grid_size[1]) as usize
+	];
+	let mut light_grid_samples = Vec::new();
 
-	for x in 0 .. grid_size[0]
+	for x in 0 .. light_grid_header.grid_size[0]
 	{
-		for y in 0 .. grid_size[1]
+		for y in 0 .. light_grid_header.grid_size[1]
 		{
-			for z in 0 .. grid_size[2]
+			for z in 0 .. light_grid_header.grid_size[2]
 			{
 				let pos = Vec3f::new(
-					x as f32 * grid_cell_size[0] + grid_start[0],
-					y as f32 * grid_cell_size[1] + grid_start[1],
-					z as f32 * grid_cell_size[2] + grid_start[2],
+					x as f32 * light_grid_header.grid_cell_size[0] + light_grid_header.grid_start[0],
+					y as f32 * light_grid_header.grid_cell_size[1] + light_grid_header.grid_start[1],
+					z as f32 * light_grid_header.grid_cell_size[2] + light_grid_header.grid_start[2],
 				);
 				let light = calculate_light_for_grid_point(
 					&pos,
@@ -1674,7 +1689,7 @@ fn calculate_light_grid(
 			// Search min/max Z of column with non-zero light.
 
 			let mut min_non_zero_light_z = 0;
-			while min_non_zero_light_z < grid_size[2]
+			while min_non_zero_light_z < light_grid_header.grid_size[2]
 			{
 				let light = column_light[min_non_zero_light_z as usize];
 				if light[0] > 0.0 || light[1] > 0.0 || light[2] > 0.0
@@ -1684,7 +1699,7 @@ fn calculate_light_grid(
 				min_non_zero_light_z += 1;
 			}
 
-			let mut max_non_zero_light_z = grid_size[2] - 1;
+			let mut max_non_zero_light_z = light_grid_header.grid_size[2] - 1;
 			while max_non_zero_light_z > min_non_zero_light_z
 			{
 				let light = column_light[max_non_zero_light_z as usize];
@@ -1695,12 +1710,21 @@ fn calculate_light_grid(
 				max_non_zero_light_z -= 1;
 			} // for z
 
-			let column_size = max_non_zero_light_z + 1 - min_non_zero_light_z;
-			num_non_zero_samples += column_size;
+			light_grid_columns[(x + y * light_grid_header.grid_size[0]) as usize] = bsp_map_compact::LightGridColumn {
+				first_sample: light_grid_samples.len() as u32,
+				num_samples: max_non_zero_light_z + 1 - min_non_zero_light_z,
+			};
+
+			for z in min_non_zero_light_z ..= max_non_zero_light_z
+			{
+				light_grid_samples.push(column_light[z as usize]);
+			}
 		} // for y
 	} // for x
 
-	println!("Num non-zero samples: {}", num_non_zero_samples);
+	println!("Light grid samples: {}", light_grid_samples.len());
+
+	(light_grid_columns, light_grid_samples)
 }
 
 fn calculate_light_for_grid_point(

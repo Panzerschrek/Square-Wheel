@@ -152,11 +152,11 @@ pub struct LightGridHeader
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Default, Clone, Copy)]
 pub struct LightGridColumn
 {
-	first_sample: u32,
-	num_sample: u32,
+	pub first_sample: u32,
+	pub num_samples: u32,
 }
 
 // TODO - use something like light cube.
