@@ -102,6 +102,7 @@ struct VisibleDynamicMeshInfo
 	num_visible_triangles: usize,
 	bbox_vertices_transformed: [Vec3f; 8],
 	camera_matrices: CameraMatrices,
+	light: bsp_map_compact::LightGridElement,
 }
 
 #[derive(Default, Copy, Clone)]
@@ -393,6 +394,7 @@ impl Renderer
 						planes_matrix: Mat4f::zero(),
 						position: Vec3f::zero(),
 					}, // Set later
+					light: bsp_map_compact::LightGridElement::default(), // Set later
 				});
 
 				vertices_offset += mesh.vertex_data_constant.len();
@@ -424,9 +426,13 @@ impl Renderer
 		let dst_vertices_shared = SharedMutSlice::new(&mut self.dynamic_meshes_vertices);
 		let dst_triangles_shared = SharedMutSlice::new(&mut self.dynamic_meshes_triangles);
 
+		let map = &self.map;
+
 		let func = |visible_dynamic_mesh: &mut VisibleDynamicMeshInfo| {
 			let model = &models[visible_dynamic_mesh.entity_index as usize];
 			let frame = model.frame as usize;
+
+			visible_dynamic_mesh.light = fetch_light_from_grid(map, &model.position);
 
 			let model_matrix = get_object_matrix(model.position, model.angles);
 			let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
@@ -1467,10 +1473,6 @@ impl Renderer
 
 		let texture_data = &texture.pixels;
 
-		// TODO - use per-vertex lighting.
-		// Now just use constant color.
-		let color = [3.0, 2.0, 1.0];
-
 		let mut vertices_clipped = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
 		let mut vertices_clipped_temp = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
 		let mut vertices_projected = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
@@ -1552,7 +1554,7 @@ impl Renderer
 				// TODO - use unchecked vertex fetch?
 				rasterizer.fill_triangle(
 					&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
-					&color,
+					&visible_dynamic_mesh.light,
 					&texture_info,
 					texture_data,
 				);
@@ -1612,6 +1614,54 @@ impl Renderer
 			self.config_is_durty = true;
 		}
 	}
+}
+
+fn fetch_light_from_grid(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> bsp_map_compact::LightGridElement
+{
+	let default_light = [0.0, 0.0, 0.0];
+
+	let light_grid_header = &map.light_grid_header;
+	if light_grid_header.grid_size[0] == 0 ||
+		light_grid_header.grid_size[1] == 0 ||
+		light_grid_header.grid_size[2] == 0 ||
+		light_grid_header.grid_cell_size[0] == 0.0 ||
+		light_grid_header.grid_cell_size[1] == 0.0 ||
+		light_grid_header.grid_cell_size[2] == 0.0
+	{
+		return default_light;
+	}
+
+	let grid_pos = [
+		((pos.x - light_grid_header.grid_start[0]) / light_grid_header.grid_cell_size[0])
+			.max(0.0)
+			.min(light_grid_header.grid_size[0] as f32 - 0.5),
+		((pos.y - light_grid_header.grid_start[1]) / light_grid_header.grid_cell_size[1])
+			.max(0.0)
+			.min(light_grid_header.grid_size[1] as f32 - 0.5),
+		((pos.z - light_grid_header.grid_start[2]) / light_grid_header.grid_cell_size[2])
+			.max(0.0)
+			.min(light_grid_header.grid_size[2] as f32 - 0.5),
+	];
+
+	// TODO - use linear interpolation.
+	let nearest_pos = [
+		grid_pos[0].round() as u32,
+		grid_pos[1].round() as u32,
+		grid_pos[2].round() as u32,
+	];
+
+	let column = map.light_grid_columns[(nearest_pos[0] + nearest_pos[1] * light_grid_header.grid_size[0]) as usize];
+
+	if column.num_samples == 0 ||
+		nearest_pos[2] < column.start_z ||
+		nearest_pos[2] >= column.start_z + column.num_samples
+	{
+		return default_light;
+	}
+
+	let sample_address_in_column = nearest_pos[2] - column.start_z;
+
+	map.light_grid_samples[(column.first_sample + sample_address_in_column) as usize]
 }
 
 fn draw_background<ColorT: Copy + Send + Sync>(pixels: &mut [ColorT], color: ColorT)

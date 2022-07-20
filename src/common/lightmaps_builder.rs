@@ -1713,6 +1713,7 @@ fn calculate_light_grid(
 			light_grid_columns[(x + y * light_grid_header.grid_size[0]) as usize] = bsp_map_compact::LightGridColumn {
 				first_sample: light_grid_samples.len() as u32,
 				num_samples: max_non_zero_light_z + 1 - min_non_zero_light_z,
+				start_z: min_non_zero_light_z,
 			};
 
 			for z in min_non_zero_light_z ..= max_non_zero_light_z

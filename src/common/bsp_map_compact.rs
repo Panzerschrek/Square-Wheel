@@ -155,6 +155,8 @@ pub struct LightGridHeader
 #[derive(Default, Clone, Copy)]
 pub struct LightGridColumn
 {
+	// Relative to whole grid.
+	pub start_z: u32,
 	pub first_sample: u32,
 	pub num_samples: u32,
 }
