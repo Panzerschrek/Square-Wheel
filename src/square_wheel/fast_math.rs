@@ -551,7 +551,7 @@ mod fast_math_impl
 			let mut res = 0;
 			for i in 0 .. 4
 			{
-				res |= (self.0[i] as u32) << (i * 8);
+				res |= (self.0[i] as u32).min(255) << (i * 8);
 			}
 			Color32::from_raw(res)
 		}
@@ -561,7 +561,7 @@ mod fast_math_impl
 			let mut res = 0;
 			for i in 0 .. 4
 			{
-				res |= (self.0[i] as u64) << (i * 16);
+				res |= (self.0[i] as u64).min(65535) << (i * 16);
 			}
 			Color64::from_raw(res)
 		}
