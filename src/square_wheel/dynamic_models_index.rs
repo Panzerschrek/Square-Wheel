@@ -54,6 +54,11 @@ impl DynamicModelsIndex
 		self.models_info.resize(models.len(), ModelInfo::default());
 		for (index, model) in models.iter().enumerate()
 		{
+			if model.is_view_model
+			{
+				// Do not place view models in BSP tree.
+				continue;
+			}
 			self.position_model(model, index as ModelId);
 		}
 	}

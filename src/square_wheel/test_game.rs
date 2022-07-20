@@ -10,6 +10,7 @@ pub struct Game
 	camera: camera_controller::CameraController,
 	test_lights: Vec<PointLight>,
 	test_models: Vec<ModelEntity>,
+	view_model: Option<ModelEntity>,
 	game_time: f32,
 }
 
@@ -30,6 +31,8 @@ impl Game
 			("reset_test_lights", Game::command_reset_test_lights),
 			("add_test_model", Game::command_add_test_model),
 			("reset_test_models", Game::command_reset_test_models),
+			("set_view_model", Game::command_set_view_model),
+			("reset_view_model", Game::command_reset_view_model),
 		]);
 
 		commands_processor
@@ -45,6 +48,7 @@ impl Game
 			camera: camera_controller::CameraController::new(),
 			test_lights: Vec::new(),
 			test_models: Vec::new(),
+			view_model: None,
 			game_time: 0.0,
 		}
 	}
@@ -77,11 +81,26 @@ impl Game
 			surface_info.height as f32,
 		);
 
+		let mut model_entities = self.test_models.clone();
+		if let Some(mut view_model) = self.view_model.clone()
+		{
+			let azimuth = self.camera.get_azimuth();
+
+			// TODO - use also camera elevation.
+			let shift_vec_front = Vec3f::new(-azimuth.sin(), azimuth.cos(), 0.0) * 16.0;
+			let shift_vec_left = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0) * 8.0;
+			let shift_vec_down = Vec3f::new(0.0, 0.0, -1.0) * 10.0;
+
+			view_model.position = self.camera.get_pos() + shift_vec_front + shift_vec_left + shift_vec_down;
+			view_model.angle_z = azimuth + Rad(std::f32::consts::PI * 0.5);
+			model_entities.push(view_model);
+		}
+
 		FrameInfo {
 			camera_matrices,
 			game_time_s: self.game_time,
 			lights: self.test_lights.clone(),
-			model_entities: self.test_models.clone(),
+			model_entities,
 		}
 	}
 
@@ -197,6 +216,7 @@ impl Game
 			frame: 0,
 			model,
 			texture,
+			is_view_model: false,
 			ordering_custom_bbox: None,
 		});
 	}
@@ -204,6 +224,34 @@ impl Game
 	fn command_reset_test_models(&mut self, _args: commands_queue::CommandArgs)
 	{
 		self.test_models.clear();
+	}
+
+	fn command_set_view_model(&mut self, args: commands_queue::CommandArgs)
+	{
+		self.view_model = None;
+		if args.len() < 2
+		{
+			self.console.lock().unwrap().add_text("Expected 2 args".to_string());
+			return;
+		}
+
+		let model = self.resources_manager.lock().unwrap().get_model(&args[0]);
+		let texture = self.resources_manager.lock().unwrap().get_image(&args[1]);
+
+		self.view_model = Some(ModelEntity {
+			position: self.camera.get_pos(),
+			angle_z: self.camera.get_azimuth(),
+			frame: 0,
+			model,
+			texture,
+			is_view_model: true,
+			ordering_custom_bbox: None,
+		});
+	}
+
+	fn command_reset_view_model(&mut self, _args: commands_queue::CommandArgs)
+	{
+		self.view_model = None;
 	}
 }
 

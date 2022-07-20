@@ -18,6 +18,10 @@ pub struct ModelEntity
 	pub model: SharedResourcePtr<TriangleModel>,
 	pub texture: SharedResourcePtr<Image>,
 
+	// Weapon or thing in player's hands.
+	// Draw it always and after any other models.
+	pub is_view_model: bool,
+
 	// Use it to override bbox (in object-space) to improve models ordering.
 	// For example, use bbox with size reduced relative to true model bbox.
 	pub ordering_custom_bbox: Option<BBox>,

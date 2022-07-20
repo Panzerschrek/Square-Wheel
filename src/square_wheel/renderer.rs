@@ -357,7 +357,7 @@ impl Renderer
 			.zip(self.dynamic_model_to_dynamic_meshes_index.iter_mut())
 			.enumerate()
 		{
-			let mut visible = false;
+			let mut visible = model.is_view_model;
 			for leaf_index in self.dynamic_models_index.get_model_leafs(entity_index)
 			{
 				if self
@@ -544,6 +544,8 @@ impl Renderer
 				models,
 				root_node,
 			);
+
+			self.draw_view_models(&mut rasterizer, &viewport_clippung_polygon, models);
 		}
 		else
 		{
@@ -592,6 +594,8 @@ impl Renderer
 					models,
 					root_node,
 				);
+
+				self.draw_view_models(&mut rasterizer, &viewport_clippung_polygon, models);
 			});
 		}
 	}
@@ -992,6 +996,35 @@ impl Renderer
 		}
 	}
 
+	fn draw_view_models<'a, ColorT: AbstractColor>(
+		&self,
+		rasterizer: &mut Rasterizer<'a, ColorT>,
+		viewport_clipping_polygon: &ClippingPolygon,
+		models: &[ModelEntity],
+	)
+	{
+		let clip_planes = viewport_clipping_polygon.get_clip_planes();
+
+		for (dynamic_model_index, model) in models.iter().enumerate()
+		{
+			if !model.is_view_model
+			{
+				continue;
+			}
+			let entry = self.dynamic_model_to_dynamic_meshes_index[dynamic_model_index];
+			for visible_mesh_index in entry.first_visible_mesh .. entry.first_visible_mesh + entry.num_visible_meshes
+			{
+				self.draw_mesh(
+					rasterizer,
+					&clip_planes,
+					&[], // No 3d clip planes.
+					models,
+					&self.visible_dynamic_meshes_list[visible_mesh_index as usize],
+				);
+			}
+		}
+	}
+
 	fn draw_tree_r<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
@@ -1187,7 +1220,7 @@ impl Renderer
 			let entry = self.dynamic_model_to_dynamic_meshes_index[leaf_dynamic_models[0] as usize];
 			for visible_mesh_index in entry.first_visible_mesh .. entry.first_visible_mesh + entry.num_visible_meshes
 			{
-				self.draw_mesh_in_leaf(
+				self.draw_mesh(
 					rasterizer,
 					&clip_planes,
 					&leaf_clip_planes[.. num_clip_planes],
@@ -1267,7 +1300,7 @@ impl Renderer
 			if *submodel_index >= DYNAMIC_MESH_INDEX_ADD
 			{
 				let visible_mesh_index = *submodel_index - DYNAMIC_MESH_INDEX_ADD;
-				self.draw_mesh_in_leaf(
+				self.draw_mesh(
 					rasterizer,
 					&clip_planes,
 					&leaf_clip_planes[.. num_clip_planes],
@@ -1364,7 +1397,7 @@ impl Renderer
 		);
 	}
 
-	fn draw_mesh_in_leaf<'a, ColorT: AbstractColor>(
+	fn draw_mesh<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		clip_planes: &ClippingPolygonPlanes,
