@@ -1826,7 +1826,7 @@ fn calculate_light_for_grid_point(
 				// Do not use agle cos because we add light into light sphere.
 				let vec_to_light_len2_clamped = vec_to_light_len2.max(min_dist2);
 
-				let light_scale = 1.0 / vec_to_light_len2_clamped;
+				let light_scale = angle_cos_src / vec_to_light_len2_clamped;
 				total_light[0] += sample.color[0] * light_scale;
 				total_light[1] += sample.color[1] * light_scale;
 				total_light[2] += sample.color[2] * light_scale;
