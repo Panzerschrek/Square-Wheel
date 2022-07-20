@@ -1625,7 +1625,7 @@ fn calculate_light_grid(
 	// Align grid cells properly.
 	let mut grid_start = [0.0, 0.0, 0.0]; // Position of first sample.
 	let mut grid_end = [0.0, 0.0, 0.0]; // Position of last sample.
-	let mut grid_size = [0, 0, 0];
+	let mut grid_size = [0, 0, 0]; // Number of samples.
 	for i in 0 .. 3
 	{
 		let start = (map_bbox.min[i] / grid_cell_size[i]).floor();
@@ -1633,7 +1633,7 @@ fn calculate_light_grid(
 
 		grid_start[i] = start * grid_cell_size[i];
 		grid_end[i] = end * grid_cell_size[i];
-		grid_size[i] = (end - start) as u32;
+		grid_size[i] = (end - start) as u32 + 1;
 	}
 
 	println!("Calculating ligh grid");
@@ -1646,6 +1646,8 @@ fn calculate_light_grid(
 	);
 
 	let mut num_non_zero_samples = 0;
+
+	let mut column_light = vec![[0.0, 0.0, 0.0]; grid_size[2] as usize];
 
 	for x in 0 .. grid_size[0]
 	{
@@ -1666,13 +1668,37 @@ fn calculate_light_grid(
 					emissive_lights,
 					map,
 				);
+				column_light[z as usize] = light;
+			}
+
+			// Search min/max Z of column with non-zero light.
+
+			let mut min_non_zero_light_z = 0;
+			while min_non_zero_light_z < grid_size[2]
+			{
+				let light = column_light[min_non_zero_light_z as usize];
 				if light[0] > 0.0 || light[1] > 0.0 || light[2] > 0.0
 				{
-					num_non_zero_samples += 1;
+					break;
 				}
+				min_non_zero_light_z += 1;
 			}
-		}
-	}
+
+			let mut max_non_zero_light_z = grid_size[2] - 1;
+			while max_non_zero_light_z > min_non_zero_light_z
+			{
+				let light = column_light[max_non_zero_light_z as usize];
+				if light[0] > 0.0 || light[1] > 0.0 || light[2] > 0.0
+				{
+					break;
+				}
+				max_non_zero_light_z -= 1;
+			} // for z
+
+			let column_size = max_non_zero_light_z + 1 - min_non_zero_light_z;
+			num_non_zero_samples += column_size;
+		} // for y
+	} // for x
 
 	println!("Num non-zero samples: {}", num_non_zero_samples);
 }
