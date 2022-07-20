@@ -1660,7 +1660,7 @@ fn calculate_light_grid(
 {
 	let light_grid_header = &map.light_grid_header;
 
-	println!("Calculating ligh grid");
+	println!("Calculating light grid");
 
 	let mut column_light = vec![[0.0, 0.0, 0.0]; light_grid_header.grid_size[2] as usize];
 
@@ -1669,6 +1669,10 @@ fn calculate_light_grid(
 		(light_grid_header.grid_size[0] * light_grid_header.grid_size[1]) as usize
 	];
 	let mut light_grid_samples = Vec::new();
+
+	let samples_complete = atomic::AtomicU32::new(0);
+	let samples_total =
+		light_grid_header.grid_size[0] * light_grid_header.grid_size[1] * light_grid_header.grid_size[2];
 
 	for x in 0 .. light_grid_header.grid_size[0]
 	{
@@ -1690,7 +1694,24 @@ fn calculate_light_grid(
 					map,
 				);
 				column_light[z as usize] = light;
-			}
+
+				// Track progress.
+				let samples_complete_before = samples_complete.fetch_add(1, atomic::Ordering::SeqCst);
+				let samples_complete_after = samples_complete_before + 1;
+
+				let ratio_before = samples_complete_before * 256 / samples_total;
+				let ratio_after = samples_complete_after * 256 / samples_total;
+				if ratio_after > ratio_before
+				{
+					print!(
+						"\r{:03.2}% complete ({} of {} samples)",
+						(samples_complete_after as f32) * 100.0 / (samples_total as f32),
+						samples_complete_after,
+						samples_total,
+					);
+					let _ignore_errors = std::io::stdout().flush();
+				}
+			} // for z
 
 			// Search min/max Z of column with non-zero light.
 
@@ -1729,7 +1750,8 @@ fn calculate_light_grid(
 		} // for y
 	} // for x
 
-	println!("Light grid samples: {}", light_grid_samples.len());
+	println!("\nDone!");
+	println!("Non-empty light grid samples: {}", light_grid_samples.len());
 
 	(light_grid_columns, light_grid_samples)
 }
