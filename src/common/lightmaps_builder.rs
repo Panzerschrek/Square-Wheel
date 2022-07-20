@@ -1662,6 +1662,34 @@ fn calculate_light_grid(
 
 	println!("Calculating light grid");
 
+	// Prepare sample grid shifts.
+	// We need to calculate light for multiple samples in order to make it smoother.
+	let mut sample_shifts_grid =
+		[Vec3f::zero(); (MAX_SAMPLE_GRID_SIZE * MAX_SAMPLE_GRID_SIZE * MAX_SAMPLE_GRID_SIZE) as usize];
+	if sample_grid_size > 1
+	{
+		let grid_size_f = sample_grid_size as f32;
+		let step = Vec3f::new(
+			light_grid_header.grid_cell_size[0],
+			light_grid_header.grid_cell_size[1],
+			light_grid_header.grid_cell_size[2],
+		) / grid_size_f;
+		let grid_start = (-0.5 * (grid_size_f - 1.0)) * step;
+		for x in 0 .. sample_grid_size
+		{
+			for y in 0 .. sample_grid_size
+			{
+				for z in 0 .. sample_grid_size
+				{
+					sample_shifts_grid[(x + y * sample_grid_size + z * sample_grid_size * sample_grid_size) as usize] =
+						grid_start + Vec3f::new(x as f32 * step.x, y as f32 * step.y, z as f32 * step.z) + grid_start;
+				}
+			}
+		}
+	}
+	let num_sample_grid_shifts = (sample_grid_size * sample_grid_size * sample_grid_size) as usize;
+	let multi_sampling_scale = 1.0 / (num_sample_grid_shifts as f32);
+
 	let mut column_light = vec![[0.0, 0.0, 0.0]; light_grid_header.grid_size[2] as usize];
 
 	let mut light_grid_columns = vec![
@@ -1685,15 +1713,23 @@ fn calculate_light_grid(
 					y as f32 * light_grid_header.grid_cell_size[1] + light_grid_header.grid_start[1],
 					z as f32 * light_grid_header.grid_cell_size[2] + light_grid_header.grid_start[2],
 				);
-				let light = calculate_light_for_grid_point(
-					&pos,
-					sample_grid_size,
-					primary_lights,
-					secondary_lights,
-					emissive_lights,
-					map,
-				);
-				column_light[z as usize] = light;
+
+				let mut total_light = [0.0, 0.0, 0.0];
+				for shift in &sample_shifts_grid[0 .. num_sample_grid_shifts]
+				{
+					// TODO - ignore samples outside walls and correct sample positions.
+					let light = calculate_light_for_grid_point(
+						&(pos + shift),
+						primary_lights,
+						secondary_lights,
+						emissive_lights,
+						map,
+					);
+					total_light[0] += multi_sampling_scale * light[0];
+					total_light[1] += multi_sampling_scale * light[1];
+					total_light[2] += multi_sampling_scale * light[2];
+				}
+				column_light[z as usize] = total_light;
 
 				// Track progress.
 				let samples_complete_before = samples_complete.fetch_add(1, atomic::Ordering::SeqCst);
@@ -1758,7 +1794,6 @@ fn calculate_light_grid(
 
 fn calculate_light_for_grid_point(
 	pos: &Vec3f,
-	sample_grid_size: u32,
 	primary_lights: &[PointLight],
 	secondary_lights: &[SecondaryLightSource],
 	emissive_lights: &[SecondaryLightSource],
