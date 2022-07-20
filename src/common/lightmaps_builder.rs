@@ -130,6 +130,16 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		}
 	}
 
+	// Build directional lightmaps and light grid using initial lights and secondary light sources based on combined lightmap.
+	let secondary_light_sources = if settings.save_secondary_light
+	{
+		create_secondary_light_sources(&materials_albedo, map, &map.lightmaps_data)
+	}
+	else
+	{
+		Vec::new()
+	};
+
 	if settings.build_directional_lightmap
 	{
 		let mut directional_lightmaps_data = vec![
@@ -141,16 +151,6 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 			};
 			primary_lightmap.len()
 		];
-
-		// Build directional lightmaps using initial lights and secondary light sources based on combined lightmap.
-		let secondary_light_sources = if settings.save_secondary_light
-		{
-			create_secondary_light_sources(&materials_albedo, map, &map.lightmaps_data)
-		}
-		else
-		{
-			Vec::new()
-		};
 
 		build_directional_lightmaps(
 			sample_grid_size,
@@ -171,7 +171,13 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 
 	prepare_light_grid(map);
 
-	let (light_grid_columns, light_grid_samples) = calculate_light_grid(sample_grid_size, &lights, &[], &[], map);
+	let (light_grid_columns, light_grid_samples) = calculate_light_grid(
+		sample_grid_size,
+		&lights,
+		&secondary_light_sources,
+		&emissive_light_sources,
+		map,
+	);
 	map.light_grid_columns = light_grid_columns;
 	map.light_grid_samples = light_grid_samples;
 
@@ -1755,6 +1761,56 @@ fn calculate_light_for_grid_point(
 		total_light[1] += primay_light.color[1] * light_scale;
 		total_light[2] += primay_light.color[2] * light_scale;
 	}
+
+	for light_set in [secondary_lights, emissive_lights]
+	{
+		// TODO - use visibility matrix?
+		if light_set.is_empty()
+		{
+			continue;
+		}
+
+		for light in light_set
+		{
+			if light.samples.is_empty()
+			{
+				continue;
+			}
+
+			// Compute LOD.
+			let light_source_lod = get_light_source_lod(&pos, light);
+			let min_dist2 = get_secondary_light_source_sample_min_square_distance(light.sample_size, light_source_lod);
+
+			// Iterate over all samples of this LOD.
+			for sample in &light.samples[light_source_lod]
+			{
+				let vec_to_light = sample.pos - pos;
+				let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
+				let vec_to_light_normalized = vec_to_light / vec_to_light_len2.sqrt();
+
+				let angle_cos_src = -(light.normal.dot(vec_to_light_normalized));
+				if angle_cos_src <= 0.0
+				{
+					// Do not determine visibility for texels behind light source plane.
+					continue;
+				}
+
+				if !can_see(&sample.pos, &pos, map)
+				{
+					// In shadow.
+					continue;
+				}
+
+				// Do not use agle cos because we add light into light sphere.
+				let vec_to_light_len2_clamped = vec_to_light_len2.max(min_dist2);
+
+				let light_scale = 1.0 / vec_to_light_len2_clamped;
+				total_light[0] += sample.color[0] * light_scale;
+				total_light[1] += sample.color[1] * light_scale;
+				total_light[2] += sample.color[2] * light_scale;
+			} // for light samples.
+		} // for lights
+	} // for light sets
 
 	total_light
 }
