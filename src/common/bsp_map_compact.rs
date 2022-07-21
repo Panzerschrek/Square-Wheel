@@ -251,6 +251,29 @@ pub fn get_submodel_bbox(map: &BSPMap, submodel: &Submodel) -> BBox
 	bbox
 }
 
+pub fn get_leaf_for_point(map: &BSPMap, point: &Vec3f) -> u32
+{
+	let root_node = (map.nodes.len() - 1) as u32;
+	let mut index = root_node;
+	loop
+	{
+		if index >= FIRST_LEAF_INDEX
+		{
+			return index - FIRST_LEAF_INDEX;
+		}
+
+		let node = &map.nodes[index as usize];
+		index = if node.plane.vec.dot(*point) > node.plane.dist
+		{
+			node.children[0]
+		}
+		else
+		{
+			node.children[1]
+		};
+	}
+}
+
 type PortalPtrToIndexMap = HashMap<*const bsp_builder::LeafsPortal, u32>;
 
 fn convert_portals_to_compact_format(

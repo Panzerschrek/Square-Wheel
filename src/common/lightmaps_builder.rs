@@ -190,30 +190,10 @@ fn group_lights_by_leafs(map: &bsp_map_compact::BSPMap, light_sources: &[PointLi
 {
 	let mut lights_by_leaf = vec![Vec::new(); map.leafs.len()];
 
-	let root_node = (map.nodes.len() - 1) as u32;
 	for light_source in light_sources
 	{
-		let mut index = root_node;
-		loop
-		{
-			if index >= bsp_map_compact::FIRST_LEAF_INDEX
-			{
-				index = index - bsp_map_compact::FIRST_LEAF_INDEX;
-				break;
-			}
-
-			let node = &map.nodes[index as usize];
-			index = if node.plane.vec.dot(light_source.pos) > node.plane.dist
-			{
-				node.children[0]
-			}
-			else
-			{
-				node.children[1]
-			};
-		}
-
-		lights_by_leaf[index as usize].push(*light_source);
+		let leaf_index = bsp_map_compact::get_leaf_for_point(map, &light_source.pos);
+		lights_by_leaf[leaf_index as usize].push(*light_source);
 	} // for light sources
 
 	lights_by_leaf
@@ -1688,7 +1668,6 @@ fn calculate_light_grid(
 		}
 	}
 	let num_sample_grid_shifts = (sample_grid_size * sample_grid_size * sample_grid_size) as usize;
-	let multi_sampling_scale = 1.0 / (num_sample_grid_shifts as f32);
 
 	let mut column_light = vec![[0.0, 0.0, 0.0]; light_grid_header.grid_size[2] as usize];
 
@@ -1715,19 +1694,34 @@ fn calculate_light_grid(
 				);
 
 				let mut total_light = [0.0, 0.0, 0.0];
+				let mut num_valid_shift_points = 0;
 				for shift in &sample_shifts_grid[0 .. num_sample_grid_shifts]
 				{
-					// TODO - ignore samples outside walls and correct sample positions.
+					let pos_shifted = pos + shift;
+					if !is_point_inside_leaf_volume(map, &pos_shifted)
+					{
+						// TODO - try to correct position.
+						continue;
+					}
 					let light = calculate_light_for_grid_point(
-						&(pos + shift),
+						&pos_shifted,
 						primary_lights,
 						secondary_lights,
 						emissive_lights,
 						map,
 					);
-					total_light[0] += multi_sampling_scale * light[0];
-					total_light[1] += multi_sampling_scale * light[1];
-					total_light[2] += multi_sampling_scale * light[2];
+
+					num_valid_shift_points += 1;
+					total_light[0] += light[0];
+					total_light[1] += light[1];
+					total_light[2] += light[2];
+				} // for multisample shifts
+				if num_valid_shift_points > 0
+				{
+					let multi_sampling_scale = 1.0 / (num_valid_shift_points as f32);
+					total_light[0] *= multi_sampling_scale;
+					total_light[1] *= multi_sampling_scale;
+					total_light[2] *= multi_sampling_scale;
 				}
 				column_light[z as usize] = total_light;
 
@@ -1870,6 +1864,21 @@ fn calculate_light_for_grid_point(
 	} // for light sets
 
 	total_light
+}
+
+fn is_point_inside_leaf_volume(map: &bsp_map_compact::BSPMap, point: &Vec3f) -> bool
+{
+	let leaf_index = bsp_map_compact::get_leaf_for_point(map, point);
+	let leaf = &map.leafs[leaf_index as usize];
+	for polygon in &map.polygons[leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize]
+	{
+		if point.dot(polygon.plane.vec) <= polygon.plane.dist
+		{
+			return false;
+		}
+	}
+
+	true
 }
 
 fn calculate_dinstance_between_point_and_circle(
