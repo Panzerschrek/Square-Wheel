@@ -173,10 +173,11 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 
 	let (light_grid_columns, light_grid_samples) = calculate_light_grid(
 		sample_grid_size,
-		&lights,
+		&lights_by_leaf,
 		&secondary_light_sources,
 		&emissive_light_sources,
 		map,
+		&visibility_matrix,
 	);
 	map.light_grid_columns = light_grid_columns;
 	map.light_grid_samples = light_grid_samples;
@@ -1629,10 +1630,11 @@ fn prepare_light_grid(map: &mut bsp_map_compact::BSPMap)
 
 fn calculate_light_grid(
 	sample_grid_size: u32,
-	primary_lights: &[PointLight],
+	primary_lights: &LightsByLeaf,
 	secondary_lights: &[SecondaryLightSource],
 	emissive_lights: &[SecondaryLightSource],
 	map: &bsp_map_compact::BSPMap,
+	visibility_matrix: &pvs::VisibilityMatrix,
 ) -> (
 	Vec<bsp_map_compact::LightGridColumn>,
 	Vec<bsp_map_compact::LightGridElement>,
@@ -1709,6 +1711,7 @@ fn calculate_light_grid(
 						secondary_lights,
 						emissive_lights,
 						map,
+						visibility_matrix,
 					);
 
 					num_valid_shift_points += 1;
@@ -1788,80 +1791,99 @@ fn calculate_light_grid(
 
 fn calculate_light_for_grid_point(
 	pos: &Vec3f,
-	primary_lights: &[PointLight],
+	primary_lights: &LightsByLeaf,
 	secondary_lights: &[SecondaryLightSource],
 	emissive_lights: &[SecondaryLightSource],
 	map: &bsp_map_compact::BSPMap,
+	visibility_matrix: &pvs::VisibilityMatrix,
 ) -> [f32; 3]
 {
+	let point_leaf_index = bsp_map_compact::get_leaf_for_point(map, pos) as usize;
+	let visibility_matrix_row =
+		&visibility_matrix[point_leaf_index * map.leafs.len() .. (point_leaf_index + 1) * map.leafs.len()];
+
 	let mut total_light = [0.0, 0.0, 0.0];
-	for primay_light in primary_lights
+	for light_source_leaf_index in 0 .. map.leafs.len()
 	{
-		let vec_to_light = primay_light.pos - pos;
-		let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
-
-		if !can_see(&primay_light.pos, &pos, map)
+		if !visibility_matrix_row[light_source_leaf_index]
 		{
-			// In shadow.
+			// This leaf is not visible. Ignore point ligths and secondary lights of this leaf.
 			continue;
 		}
 
-		// Do not use agle cos because we add light into light sphere.
-		let light_scale = 1.0 / vec_to_light_len2;
-		total_light[0] += primay_light.color[0] * light_scale;
-		total_light[1] += primay_light.color[1] * light_scale;
-		total_light[2] += primay_light.color[2] * light_scale;
-	}
-
-	for light_set in [secondary_lights, emissive_lights]
-	{
-		// TODO - use visibility matrix?
-		if light_set.is_empty()
+		for primay_light in &primary_lights[light_source_leaf_index]
 		{
-			continue;
-		}
+			let vec_to_light = primay_light.pos - pos;
+			let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
 
-		for light in light_set
+			if !can_see(&primay_light.pos, &pos, map)
+			{
+				// In shadow.
+				continue;
+			}
+
+			// Do not use agle cos because we add light into light sphere.
+			let light_scale = 1.0 / vec_to_light_len2;
+			total_light[0] += primay_light.color[0] * light_scale;
+			total_light[1] += primay_light.color[1] * light_scale;
+			total_light[2] += primay_light.color[2] * light_scale;
+		} // for primary lights
+
+		let light_source_leaf = &map.leafs[light_source_leaf_index as usize];
+		let light_source_leaf_polygons_range = light_source_leaf.first_polygon as usize ..
+			(light_source_leaf.first_polygon + light_source_leaf.num_polygons) as usize;
+
+		for light_set in [secondary_lights, emissive_lights]
 		{
-			if light.samples.is_empty()
+			if light_set.is_empty()
 			{
 				continue;
 			}
 
-			// Compute LOD.
-			let light_source_lod = get_light_source_lod(&pos, light);
-			let min_dist2 = get_secondary_light_source_sample_min_square_distance(light.sample_size, light_source_lod);
-
-			// Iterate over all samples of this LOD.
-			for sample in &light.samples[light_source_lod]
+			for light_source_polygon_index in light_source_leaf_polygons_range.clone()
 			{
-				let vec_to_light = sample.pos - pos;
-				let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
-				let vec_to_light_normalized = vec_to_light / vec_to_light_len2.sqrt();
-
-				let angle_cos_src = -(light.normal.dot(vec_to_light_normalized));
-				if angle_cos_src <= 0.0
+				let light = &light_set[light_source_polygon_index];
+				if light.samples.is_empty()
 				{
-					// Do not determine visibility for texels behind light source plane.
 					continue;
 				}
 
-				if !can_see(&sample.pos, &pos, map)
+				// Compute LOD.
+				let light_source_lod = get_light_source_lod(&pos, light);
+				let min_dist2 =
+					get_secondary_light_source_sample_min_square_distance(light.sample_size, light_source_lod);
+
+				// Iterate over all samples of this LOD.
+				for sample in &light.samples[light_source_lod]
 				{
-					// In shadow.
-					continue;
-				}
+					let vec_to_light = sample.pos - pos;
+					let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
+					let vec_to_light_normalized = vec_to_light / vec_to_light_len2.sqrt();
 
-				// Do not use agle cos because we add light into light sphere.
-				let vec_to_light_len2_clamped = vec_to_light_len2.max(min_dist2);
+					let angle_cos_src = -(light.normal.dot(vec_to_light_normalized));
+					if angle_cos_src <= 0.0
+					{
+						// Do not determine visibility for texels behind light source plane.
+						continue;
+					}
 
-				let light_scale = angle_cos_src / vec_to_light_len2_clamped;
-				total_light[0] += sample.color[0] * light_scale;
-				total_light[1] += sample.color[1] * light_scale;
-				total_light[2] += sample.color[2] * light_scale;
-			} // for light samples.
-		} // for lights
-	} // for light sets
+					if !can_see(&sample.pos, &pos, map)
+					{
+						// In shadow.
+						continue;
+					}
+
+					// Do not use agle cos because we add light into light sphere.
+					let vec_to_light_len2_clamped = vec_to_light_len2.max(min_dist2);
+
+					let light_scale = angle_cos_src / vec_to_light_len2_clamped;
+					total_light[0] += sample.color[0] * light_scale;
+					total_light[1] += sample.color[1] * light_scale;
+					total_light[2] += sample.color[2] * light_scale;
+				} // for light samples.
+			} // for visible leaf polygons.
+		} // for light sets.
+	} // for BSP leafs.
 
 	total_light
 }
