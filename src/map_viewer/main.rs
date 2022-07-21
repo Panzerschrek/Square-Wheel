@@ -50,6 +50,9 @@ struct Opt
 
 	#[structopt(long)]
 	draw_lightmaps_directions: bool,
+
+	#[structopt(long)]
+	draw_light_grid: bool,
 }
 
 pub fn main()
@@ -160,6 +163,7 @@ pub fn main()
 					draw_all_portals: opt.draw_all_portals,
 					draw_secondary_light_sources: opt.draw_secondary_light_sources,
 					draw_lightmaps_directions: opt.draw_lightmaps_directions,
+					draw_light_grid: opt.draw_light_grid,
 				},
 				&build_view_matrix_with_full_rotation(
 					camera_controller.get_pos(),
