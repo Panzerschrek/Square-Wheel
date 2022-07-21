@@ -171,7 +171,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 
 	prepare_light_grid(map);
 
-	let (light_grid_columns, light_grid_samples) = calculate_light_grid(
+	let light_grid_uncompressed = calculate_light_grid(
 		sample_grid_size,
 		&lights_by_leaf,
 		&secondary_light_sources,
@@ -179,6 +179,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		map,
 		&visibility_matrix,
 	);
+	let (light_grid_columns, light_grid_samples) = compress_light_grid(map, &light_grid_uncompressed);
 	map.light_grid_columns = light_grid_columns;
 	map.light_grid_samples = light_grid_samples;
 
@@ -1628,6 +1629,8 @@ fn prepare_light_grid(map: &mut bsp_map_compact::BSPMap)
 	);
 }
 
+type LightGridUncompressed = Vec<bsp_map_compact::LightGridElement>;
+
 fn calculate_light_grid(
 	sample_grid_size: u32,
 	primary_lights: &LightsByLeaf,
@@ -1635,10 +1638,7 @@ fn calculate_light_grid(
 	emissive_lights: &[SecondaryLightSource],
 	map: &bsp_map_compact::BSPMap,
 	visibility_matrix: &pvs::VisibilityMatrix,
-) -> (
-	Vec<bsp_map_compact::LightGridColumn>,
-	Vec<bsp_map_compact::LightGridElement>,
-)
+) -> LightGridUncompressed
 {
 	let light_grid_header = &map.light_grid_header;
 
@@ -1671,17 +1671,11 @@ fn calculate_light_grid(
 	}
 	let num_sample_grid_shifts = (sample_grid_size * sample_grid_size * sample_grid_size) as usize;
 
-	let mut column_light = vec![[0.0, 0.0, 0.0]; light_grid_header.grid_size[2] as usize];
-
-	let mut light_grid_columns = vec![
-		bsp_map_compact::LightGridColumn::default();
-		(light_grid_header.grid_size[0] * light_grid_header.grid_size[1]) as usize
-	];
-	let mut light_grid_samples = Vec::new();
-
 	let samples_complete = atomic::AtomicU32::new(0);
 	let samples_total =
 		light_grid_header.grid_size[0] * light_grid_header.grid_size[1] * light_grid_header.grid_size[2];
+
+	let mut light_grid = vec![[0.0, 0.0, 0.0]; samples_total as usize];
 
 	for x in 0 .. light_grid_header.grid_size[0]
 	{
@@ -1726,7 +1720,8 @@ fn calculate_light_grid(
 					total_light[1] *= multi_sampling_scale;
 					total_light[2] *= multi_sampling_scale;
 				}
-				column_light[z as usize] = total_light;
+
+				light_grid[get_light_grid_sample_address(light_grid_header, x, y, z)] = total_light;
 
 				// Track progress.
 				let samples_complete_before = samples_complete.fetch_add(1, atomic::Ordering::SeqCst);
@@ -1745,13 +1740,47 @@ fn calculate_light_grid(
 					let _ignore_errors = std::io::stdout().flush();
 				}
 			} // for z
+		} // for y
+	} // for x
 
-			// Search min/max Z of column with non-zero light.
+	println!("\nDone!");
+	light_grid
+}
 
+fn get_light_grid_sample_address(header: &bsp_map_compact::LightGridHeader, x: u32, y: u32, z: u32) -> usize
+{
+	// Store columns first
+	(z + (x + y * header.grid_size[0]) * header.grid_size[2]) as usize
+}
+
+fn compress_light_grid(
+	map: &bsp_map_compact::BSPMap,
+	light_grid: &LightGridUncompressed,
+) -> (
+	Vec<bsp_map_compact::LightGridColumn>,
+	Vec<bsp_map_compact::LightGridElement>,
+)
+{
+	let light_grid_header = &map.light_grid_header;
+
+	println!("Compressing light grid");
+
+	let mut light_grid_columns = vec![
+		bsp_map_compact::LightGridColumn::default();
+		(light_grid_header.grid_size[0] * light_grid_header.grid_size[1]) as usize
+	];
+	let mut light_grid_samples = Vec::new();
+
+	let get_sample = |x, y, z| light_grid[get_light_grid_sample_address(light_grid_header, x, y, z)];
+
+	for x in 0 .. light_grid_header.grid_size[0]
+	{
+		for y in 0 .. light_grid_header.grid_size[1]
+		{
 			let mut min_non_zero_light_z = 0;
 			while min_non_zero_light_z < light_grid_header.grid_size[2]
 			{
-				let light = column_light[min_non_zero_light_z as usize];
+				let light = get_sample(x, y, min_non_zero_light_z);
 				if light[0] > 0.0 || light[1] > 0.0 || light[2] > 0.0
 				{
 					break;
@@ -1762,7 +1791,7 @@ fn calculate_light_grid(
 			let mut max_non_zero_light_z = light_grid_header.grid_size[2] - 1;
 			while max_non_zero_light_z > min_non_zero_light_z
 			{
-				let light = column_light[max_non_zero_light_z as usize];
+				let light = get_sample(x, y, max_non_zero_light_z);
 				if light[0] > 0.0 || light[1] > 0.0 || light[2] > 0.0
 				{
 					break;
@@ -1778,12 +1807,11 @@ fn calculate_light_grid(
 
 			for z in min_non_zero_light_z ..= max_non_zero_light_z
 			{
-				light_grid_samples.push(column_light[z as usize]);
+				light_grid_samples.push(get_sample(x, y, z));
 			}
 		} // for y
 	} // for x
 
-	println!("\nDone!");
 	println!("Non-empty light grid samples: {}", light_grid_samples.len());
 
 	(light_grid_columns, light_grid_samples)
