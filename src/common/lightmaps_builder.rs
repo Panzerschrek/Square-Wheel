@@ -1677,71 +1677,68 @@ fn calculate_light_grid(
 
 	let mut light_grid = vec![[0.0, 0.0, 0.0]; samples_total as usize];
 
-	for x in 0 .. light_grid_header.grid_size[0]
-	{
-		for y in 0 .. light_grid_header.grid_size[1]
-		{
-			for z in 0 .. light_grid_header.grid_size[2]
+	light_grid
+		.par_iter_mut()
+		.enumerate()
+		.for_each(|(sample_address, dst_light)| {
+			let (x, y, z) = get_light_grid_coord_for_address(light_grid_header, sample_address);
+			let pos = Vec3f::new(
+				x as f32 * light_grid_header.grid_cell_size[0] + light_grid_header.grid_start[0],
+				y as f32 * light_grid_header.grid_cell_size[1] + light_grid_header.grid_start[1],
+				z as f32 * light_grid_header.grid_cell_size[2] + light_grid_header.grid_start[2],
+			);
+
+			let mut total_light = [0.0, 0.0, 0.0];
+			let mut num_valid_shift_points = 0;
+			for shift in &sample_shifts_grid[0 .. num_sample_grid_shifts]
 			{
-				let pos = Vec3f::new(
-					x as f32 * light_grid_header.grid_cell_size[0] + light_grid_header.grid_start[0],
-					y as f32 * light_grid_header.grid_cell_size[1] + light_grid_header.grid_start[1],
-					z as f32 * light_grid_header.grid_cell_size[2] + light_grid_header.grid_start[2],
+				let pos_shifted = pos + shift;
+				if !is_point_inside_leaf_volume(map, &pos_shifted)
+				{
+					// TODO - try to correct position.
+					continue;
+				}
+				let light = calculate_light_for_grid_point(
+					&pos_shifted,
+					primary_lights,
+					secondary_lights,
+					emissive_lights,
+					map,
+					visibility_matrix,
 				);
 
-				let mut total_light = [0.0, 0.0, 0.0];
-				let mut num_valid_shift_points = 0;
-				for shift in &sample_shifts_grid[0 .. num_sample_grid_shifts]
-				{
-					let pos_shifted = pos + shift;
-					if !is_point_inside_leaf_volume(map, &pos_shifted)
-					{
-						// TODO - try to correct position.
-						continue;
-					}
-					let light = calculate_light_for_grid_point(
-						&pos_shifted,
-						primary_lights,
-						secondary_lights,
-						emissive_lights,
-						map,
-						visibility_matrix,
-					);
+				num_valid_shift_points += 1;
+				total_light[0] += light[0];
+				total_light[1] += light[1];
+				total_light[2] += light[2];
+			} // for multisample shifts
+			if num_valid_shift_points > 0
+			{
+				let multi_sampling_scale = 1.0 / (num_valid_shift_points as f32);
+				total_light[0] *= multi_sampling_scale;
+				total_light[1] *= multi_sampling_scale;
+				total_light[2] *= multi_sampling_scale;
+			}
 
-					num_valid_shift_points += 1;
-					total_light[0] += light[0];
-					total_light[1] += light[1];
-					total_light[2] += light[2];
-				} // for multisample shifts
-				if num_valid_shift_points > 0
-				{
-					let multi_sampling_scale = 1.0 / (num_valid_shift_points as f32);
-					total_light[0] *= multi_sampling_scale;
-					total_light[1] *= multi_sampling_scale;
-					total_light[2] *= multi_sampling_scale;
-				}
+			*dst_light = total_light;
 
-				light_grid[get_light_grid_sample_address(light_grid_header, x, y, z)] = total_light;
+			// Track progress.
+			let samples_complete_before = samples_complete.fetch_add(1, atomic::Ordering::SeqCst);
+			let samples_complete_after = samples_complete_before + 1;
 
-				// Track progress.
-				let samples_complete_before = samples_complete.fetch_add(1, atomic::Ordering::SeqCst);
-				let samples_complete_after = samples_complete_before + 1;
-
-				let ratio_before = samples_complete_before * 256 / samples_total;
-				let ratio_after = samples_complete_after * 256 / samples_total;
-				if ratio_after > ratio_before
-				{
-					print!(
-						"\r{:03.2}% complete ({} of {} samples)",
-						(samples_complete_after as f32) * 100.0 / (samples_total as f32),
-						samples_complete_after,
-						samples_total,
-					);
-					let _ignore_errors = std::io::stdout().flush();
-				}
-			} // for z
-		} // for y
-	} // for x
+			let ratio_before = samples_complete_before * 256 / samples_total;
+			let ratio_after = samples_complete_after * 256 / samples_total;
+			if ratio_after > ratio_before
+			{
+				print!(
+					"\r{:03.2}% complete ({} of {} samples)",
+					(samples_complete_after as f32) * 100.0 / (samples_total as f32),
+					samples_complete_after,
+					samples_total,
+				);
+				let _ignore_errors = std::io::stdout().flush();
+			}
+		});
 
 	println!("\nDone!");
 	light_grid
@@ -1751,6 +1748,18 @@ fn get_light_grid_sample_address(header: &bsp_map_compact::LightGridHeader, x: u
 {
 	// Store columns first
 	(z + (x + y * header.grid_size[0]) * header.grid_size[2]) as usize
+}
+
+fn get_light_grid_coord_for_address(header: &bsp_map_compact::LightGridHeader, address: usize) -> (u32, u32, u32)
+{
+	// Store columns first
+	let address_u32 = address as u32;
+	let z = address_u32 % header.grid_size[2];
+	let layer = address_u32 / header.grid_size[2];
+	let x = layer % header.grid_size[0];
+	let y = layer / header.grid_size[0];
+
+	(x, y, z)
 }
 
 fn compress_light_grid(
