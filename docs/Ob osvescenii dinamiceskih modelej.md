@@ -39,6 +39,8 @@ Daleje, možno rasscitatj svet poveršinno, ispoljzuja nolrmalj dlä vyborki v s
 ### Quake III Arena
 
 Svet hranitsä v regulärnoj setke v vide fonovogo komponenta i napravlenija s intensivnostju glavnogo istocnika napravlennogo sveta.
+Pri postrojenii poziçija tocki sveta korrektirujetsä, ctoby ona ne byla vnutri sten.
+Pri vyborke proizvoditsä filjtraçija. Znacenija s nulevym osvescenijem (vne geometrii) ignorirujutsä.
 
 ### Source Engine
 

@@ -18,7 +18,7 @@ Engine:
 Renderer:
 * Skyboxes
 * 3/4 and 1/4 rasterization blending
-* Triangle models lighting
+* Triangle models per-vertex lighting (using vertices normals)
 * Rasterization microoptimizations
 * Animated textures (with N frames)
 * Models rendering improvements - avoid splitting models into pieces for each BSP tree leaf in some cases
