@@ -1626,42 +1626,95 @@ fn fetch_light_from_grid(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> bsp_map_
 		light_grid_header.grid_size[2] == 0 ||
 		light_grid_header.grid_cell_size[0] == 0.0 ||
 		light_grid_header.grid_cell_size[1] == 0.0 ||
-		light_grid_header.grid_cell_size[2] == 0.0
+		light_grid_header.grid_cell_size[2] == 0.0 ||
+		map.light_grid_samples.is_empty() ||
+		map.light_grid_columns.is_empty()
 	{
 		return default_light;
 	}
 
-	let grid_pos = [
-		((pos.x - light_grid_header.grid_start[0]) / light_grid_header.grid_cell_size[0])
-			.max(0.0)
-			.min(light_grid_header.grid_size[0] as f32 - 0.5),
-		((pos.y - light_grid_header.grid_start[1]) / light_grid_header.grid_cell_size[1])
-			.max(0.0)
-			.min(light_grid_header.grid_size[1] as f32 - 0.5),
-		((pos.z - light_grid_header.grid_start[2]) / light_grid_header.grid_cell_size[2])
-			.max(0.0)
-			.min(light_grid_header.grid_size[2] as f32 - 0.5),
+	let grid_pos = (pos - Vec3f::from(light_grid_header.grid_start))
+		.div_element_wise(Vec3f::from(light_grid_header.grid_cell_size));
+
+	let grid_pos_i = [
+		grid_pos.x.floor() as i32,
+		grid_pos.y.floor() as i32,
+		grid_pos.z.floor() as i32,
 	];
 
-	// TODO - use linear interpolation.
-	let nearest_pos = [
-		grid_pos[0].round() as u32,
-		grid_pos[1].round() as u32,
-		grid_pos[2].round() as u32,
-	];
+	// Perform linear interpolation of light grid values.
+	// We need to read 8 values in order to do this.
+	// Ignore non-existing values and absolute zero values and perform result renormalization.
+	let mut total_light = [0.0, 0.0, 0.0];
+	let mut total_factor = 0.0;
+	for dx in 0 ..= 1
+	{
+		let x = grid_pos_i[0] + dx;
+		if x < 0 || x >= (light_grid_header.grid_size[0] as i32)
+		{
+			continue;
+		}
+		let factor_x = 1.0 - (grid_pos.x - (x as f32)).abs();
 
-	let column = map.light_grid_columns[(nearest_pos[0] + nearest_pos[1] * light_grid_header.grid_size[0]) as usize];
+		for dy in 0 ..= 1
+		{
+			let y = grid_pos_i[1] + dy;
+			if y < 0 || y >= (light_grid_header.grid_size[1] as i32)
+			{
+				continue;
+			}
 
-	if column.num_samples == 0 ||
-		nearest_pos[2] < column.start_z ||
-		nearest_pos[2] >= column.start_z + column.num_samples
+			let column = map.light_grid_columns[((x as u32) + (y as u32) * light_grid_header.grid_size[0]) as usize];
+			if column.num_samples == 0
+			{
+				continue;
+			}
+
+			let factor_y = 1.0 - (grid_pos.y - (y as f32)).abs();
+
+			for dz in 0 ..= 1
+			{
+				let z = grid_pos_i[2] + dz;
+				if z < 0 || z >= (light_grid_header.grid_size[2] as i32)
+				{
+					continue;
+				}
+
+				if (z as u32) < column.start_z || (z as u32) >= column.start_z + column.num_samples
+				{
+					continue;
+				}
+
+				let sample_address_in_column = (z as u32) - column.start_z;
+				let sample_value = map.light_grid_samples[(column.first_sample + sample_address_in_column) as usize];
+				if sample_value[0] <= 0.0 && sample_value[1] <= 0.0 && sample_value[2] <= 0.0
+				{
+					continue;
+				}
+
+				let factor_z = 1.0 - (grid_pos.z - (z as f32)).abs();
+
+				let cur_sample_factor = factor_x * factor_y * factor_z;
+
+				total_light[0] += sample_value[0] * cur_sample_factor;
+				total_light[1] += sample_value[1] * cur_sample_factor;
+				total_light[2] += sample_value[2] * cur_sample_factor;
+				total_factor += cur_sample_factor;
+			} // for dz
+		} // for dy
+	} // for dx
+
+	if total_factor <= 0.0
 	{
 		return default_light;
 	}
 
-	let sample_address_in_column = nearest_pos[2] - column.start_z;
+	// Perform normalization in case if same sample points were rejected.
+	total_light[0] /= total_factor;
+	total_light[1] /= total_factor;
+	total_light[2] /= total_factor;
 
-	map.light_grid_samples[(column.first_sample + sample_address_in_column) as usize]
+	total_light
 }
 
 fn draw_background<ColorT: Copy + Send + Sync>(pixels: &mut [ColorT], color: ColorT)
