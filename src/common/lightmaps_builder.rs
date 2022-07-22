@@ -1692,25 +1692,22 @@ fn calculate_light_grid(
 			let mut num_valid_shift_points = 0;
 			for shift in &sample_shifts_grid[0 .. num_sample_grid_shifts]
 			{
-				let pos_shifted = pos + shift;
-				if !is_point_inside_leaf_volume(map, &pos_shifted)
+				if let Some(pos_corrected) = correct_light_grid_sample_position(map, &(pos + shift))
 				{
-					// TODO - try to correct position.
-					continue;
-				}
-				let light = calculate_light_for_grid_point(
-					&pos_shifted,
-					primary_lights,
-					secondary_lights,
-					emissive_lights,
-					map,
-					visibility_matrix,
-				);
+					let light = calculate_light_for_grid_point(
+						&pos_corrected,
+						primary_lights,
+						secondary_lights,
+						emissive_lights,
+						map,
+						visibility_matrix,
+					);
 
-				num_valid_shift_points += 1;
-				total_light[0] += light[0];
-				total_light[1] += light[1];
-				total_light[2] += light[2];
+					num_valid_shift_points += 1;
+					total_light[0] += light[0];
+					total_light[1] += light[1];
+					total_light[2] += light[2];
+				}
 			} // for multisample shifts
 			if num_valid_shift_points > 0
 			{
@@ -1923,6 +1920,69 @@ fn calculate_light_for_grid_point(
 	} // for BSP leafs.
 
 	total_light
+}
+
+fn correct_light_grid_sample_position(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> Option<Vec3f>
+{
+	if is_point_inside_leaf_volume(map, pos)
+	{
+		return Some(*pos);
+	}
+
+	let grid_cell_size = Vec3f::from(map.light_grid_header.grid_cell_size);
+
+	// Shifts for cube.
+	// First try side shifts, than edge shifts, lastly vertices shifts.
+	const SHIFTS: [[f32; 3]; 26] = [
+		// Cube side shifts.
+		[1.0, 0.0, 0.0],
+		[-1.0, 0.0, 0.0],
+		[0.0, 1.0, 0.0],
+		[0.0, -1.0, 0.0],
+		[0.0, 0.0, 1.0],
+		[0.0, 0.0, -1.0],
+		// Cube edge shifts.
+		[1.0, 1.0, 0.0],
+		[-1.0, 1.0, 0.0],
+		[1.0, -1.0, 0.0],
+		[-1.0, -1.0, 0.0],
+		[1.0, 0.0, 1.0],
+		[-1.0, 0.0, 1.0],
+		[1.0, 0.0, -1.0],
+		[-1.0, 0.0, -1.0],
+		[0.0, 1.0, 1.0],
+		[0.0, -1.0, 1.0],
+		[0.0, 1.0, -1.0],
+		[0.0, -1.0, -1.0],
+		// Cube vertices shifts.
+		[1.0, 1.0, 1.0],
+		[-1.0, 1.0, 1.0],
+		[1.0, -1.0, 1.0],
+		[-1.0, -1.0, 1.0],
+		[1.0, 1.0, -1.0],
+		[-1.0, 1.0, -1.0],
+		[1.0, -1.0, -1.0],
+		[-1.0, -1.0, -1.0],
+	];
+	// Try to shift sample position in order to move it into leaf bounds.
+	// Iterate over steps, for each step try all possible shifts.
+	let max_step = 3;
+	for step in 1 ..= max_step
+	{
+		let step_f = (step as f32) / (max_step as f32);
+		let step_vec = grid_cell_size * step_f;
+		for shift in SHIFTS
+		{
+			let delta = Vec3f::from(shift).mul_element_wise(step_vec);
+			let pos_shifted = pos + delta;
+			if is_point_inside_leaf_volume(map, &pos_shifted)
+			{
+				return Some(pos_shifted);
+			}
+		}
+	}
+
+	None
 }
 
 fn is_point_inside_leaf_volume(map: &bsp_map_compact::BSPMap, point: &Vec3f) -> bool
