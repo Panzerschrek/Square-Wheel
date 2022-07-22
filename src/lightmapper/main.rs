@@ -57,6 +57,14 @@ struct Opt
 	/// Number of threads. If empty - all available CPU cores will be used.
 	#[structopt(long)]
 	num_threads: Option<u32>,
+
+	/// Width (X and Y dimensions) of light grid cell.
+	#[structopt(long)]
+	light_grid_cell_width: Option<f32>,
+
+	/// Height (Z dimenision) of light grid cell.
+	#[structopt(long)]
+	light_grid_cell_height: Option<f32>,
 }
 
 fn main()
@@ -109,6 +117,8 @@ fn main()
 			build_emissive_surfaces_light: !opt.no_emissive_surfaces_light,
 			build_directional_lightmap: !opt.no_directional_lightmap,
 			num_passes: opt.num_passes.unwrap_or(1),
+			light_grid_cell_width: opt.light_grid_cell_width.unwrap_or(64.0),
+			light_grid_cell_height: opt.light_grid_cell_height.unwrap_or(64.0),
 		},
 		&materials,
 		&mut map,

@@ -23,8 +23,15 @@ pub struct BSPMap
 	pub key_value_pairs: Vec<KeyValuePair>,
 	// UTF-8 bytes of all strings.
 	pub strings_data: Vec<u8>,
+
 	pub lightmaps_data: Vec<LightmapElement>,
 	pub directional_lightmaps_data: Vec<DirectionalLightmapElement>,
+
+	pub light_grid_header: LightGridHeader,
+	// 2D matrix with size grid_size[0] * grid_size[1]
+	pub light_grid_columns: Vec<LightGridColumn>,
+	// Combined values of light samples for each column.
+	pub light_grid_samples: Vec<LightGridElement>,
 }
 
 #[repr(C)]
@@ -133,6 +140,30 @@ pub struct DirectionalLightmapElement
 	pub directional_light_color: [f32; 3],
 }
 
+#[repr(C)]
+#[derive(Default, Clone, Copy)]
+pub struct LightGridHeader
+{
+	pub grid_cell_size: [f32; 3],
+	// Position of first sample.
+	pub grid_start: [f32; 3],
+	// Number of samples.
+	pub grid_size: [u32; 3],
+}
+
+#[repr(C)]
+#[derive(Default, Clone, Copy)]
+pub struct LightGridColumn
+{
+	// Relative to whole grid.
+	pub start_z: u32,
+	pub first_sample: u32,
+	pub num_samples: u32,
+}
+
+// TODO - use something like light cube.
+pub type LightGridElement = [f32; 3];
+
 // Conversion functions.
 //
 
@@ -181,6 +212,23 @@ pub fn get_texture_string(texture_name: &Texture) -> &str
 	std::str::from_utf8(&texture_name[0 .. null_pos]).unwrap_or("")
 }
 
+pub fn get_map_bbox(map: &BSPMap) -> BBox
+{
+	// Calculate model bounding box based on all vertices (polygons, portals, submodels).
+	let inf = 1e24;
+	let mut bbox = BBox {
+		min: Vec3f::new(inf, inf, inf),
+		max: Vec3f::new(-inf, -inf, -inf),
+	};
+
+	for vertex in &map.vertices
+	{
+		bbox.extend_with_point(vertex);
+	}
+
+	bbox
+}
+
 pub fn get_submodel_bbox(map: &BSPMap, submodel: &Submodel) -> BBox
 {
 	// Calculate model bounding box based on all vertices of all polygons.
@@ -201,6 +249,29 @@ pub fn get_submodel_bbox(map: &BSPMap, submodel: &Submodel) -> BBox
 	}
 
 	bbox
+}
+
+pub fn get_leaf_for_point(map: &BSPMap, point: &Vec3f) -> u32
+{
+	let root_node = (map.nodes.len() - 1) as u32;
+	let mut index = root_node;
+	loop
+	{
+		if index >= FIRST_LEAF_INDEX
+		{
+			return index - FIRST_LEAF_INDEX;
+		}
+
+		let node = &map.nodes[index as usize];
+		index = if node.plane.vec.dot(*point) > node.plane.dist
+		{
+			node.children[0]
+		}
+		else
+		{
+			node.children[1]
+		};
+	}
 }
 
 type PortalPtrToIndexMap = HashMap<*const bsp_builder::LeafsPortal, u32>;

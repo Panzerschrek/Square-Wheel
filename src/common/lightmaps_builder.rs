@@ -15,6 +15,8 @@ pub struct LightmappingSettings
 	pub build_emissive_surfaces_light: bool,
 	pub build_directional_lightmap: bool,
 	pub num_passes: u32,
+	pub light_grid_cell_width: f32,
+	pub light_grid_cell_height: f32,
 }
 
 pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
@@ -130,6 +132,16 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		}
 	}
 
+	// Build directional lightmaps and light grid using initial lights and secondary light sources based on combined lightmap.
+	let secondary_light_sources = if settings.save_secondary_light
+	{
+		create_secondary_light_sources(&materials_albedo, map, &map.lightmaps_data)
+	}
+	else
+	{
+		Vec::new()
+	};
+
 	if settings.build_directional_lightmap
 	{
 		let mut directional_lightmaps_data = vec![
@@ -141,16 +153,6 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 			};
 			primary_lightmap.len()
 		];
-
-		// Build directional lightmaps using initial lights and secondary light sources based on combined lightmap.
-		let secondary_light_sources = if settings.save_secondary_light
-		{
-			create_secondary_light_sources(&materials_albedo, map, &map.lightmaps_data)
-		}
-		else
-		{
-			Vec::new()
-		};
 
 		build_directional_lightmaps(
 			sample_grid_size,
@@ -169,6 +171,20 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		map.directional_lightmaps_data = Vec::new();
 	}
 
+	prepare_light_grid(map, settings);
+
+	let light_grid_uncompressed = calculate_light_grid(
+		sample_grid_size,
+		&lights_by_leaf,
+		&secondary_light_sources,
+		&emissive_light_sources,
+		map,
+		&visibility_matrix,
+	);
+	let (light_grid_columns, light_grid_samples) = compress_light_grid(map, &light_grid_uncompressed);
+	map.light_grid_columns = light_grid_columns;
+	map.light_grid_samples = light_grid_samples;
+
 	println!("Done!");
 }
 
@@ -178,30 +194,10 @@ fn group_lights_by_leafs(map: &bsp_map_compact::BSPMap, light_sources: &[PointLi
 {
 	let mut lights_by_leaf = vec![Vec::new(); map.leafs.len()];
 
-	let root_node = (map.nodes.len() - 1) as u32;
 	for light_source in light_sources
 	{
-		let mut index = root_node;
-		loop
-		{
-			if index >= bsp_map_compact::FIRST_LEAF_INDEX
-			{
-				index = index - bsp_map_compact::FIRST_LEAF_INDEX;
-				break;
-			}
-
-			let node = &map.nodes[index as usize];
-			index = if node.plane.vec.dot(light_source.pos) > node.plane.dist
-			{
-				node.children[0]
-			}
-			else
-			{
-				node.children[1]
-			};
-		}
-
-		lights_by_leaf[index as usize].push(*light_source);
+		let leaf_index = bsp_map_compact::get_leaf_for_point(map, &light_source.pos);
+		lights_by_leaf[leaf_index as usize].push(*light_source);
 	} // for light sources
 
 	lights_by_leaf
@@ -1606,6 +1602,411 @@ fn create_secondary_light_source(
 		center: polygon_center,
 		radius: square_radius.sqrt(),
 	}
+}
+
+fn prepare_light_grid(map: &mut bsp_map_compact::BSPMap, settings: &LightmappingSettings)
+{
+	let map_bbox = bsp_map_compact::get_map_bbox(map);
+
+	let light_grid_header = &mut map.light_grid_header;
+
+	let width_clamped = settings.light_grid_cell_width.max(16.0).min(512.0);
+	let height_clamped = settings.light_grid_cell_height.max(16.0).min(512.0);
+	light_grid_header.grid_cell_size = [width_clamped, width_clamped, height_clamped];
+
+	// Align grid cells properly.
+	for i in 0 .. 3
+	{
+		let start = (map_bbox.min[i] / light_grid_header.grid_cell_size[i]).floor();
+		let end = (map_bbox.max[i] / light_grid_header.grid_cell_size[i]).ceil();
+
+		light_grid_header.grid_start[i] = start * light_grid_header.grid_cell_size[i];
+		light_grid_header.grid_size[i] = (end - start) as u32 + 1;
+	}
+
+	println!(
+		"Light grid size: {} x {} x {} ({} elements)",
+		light_grid_header.grid_size[0],
+		light_grid_header.grid_size[1],
+		light_grid_header.grid_size[2],
+		light_grid_header.grid_size[0] * light_grid_header.grid_size[1] * light_grid_header.grid_size[2]
+	);
+}
+
+type LightGridUncompressed = Vec<bsp_map_compact::LightGridElement>;
+
+fn calculate_light_grid(
+	sample_grid_size: u32,
+	primary_lights: &LightsByLeaf,
+	secondary_lights: &[SecondaryLightSource],
+	emissive_lights: &[SecondaryLightSource],
+	map: &bsp_map_compact::BSPMap,
+	visibility_matrix: &pvs::VisibilityMatrix,
+) -> LightGridUncompressed
+{
+	let light_grid_header = &map.light_grid_header;
+
+	println!("Calculating light grid");
+
+	// Prepare sample grid shifts.
+	// We need to calculate light for multiple samples in order to make it smoother.
+	let mut sample_shifts_grid =
+		[Vec3f::zero(); (MAX_SAMPLE_GRID_SIZE * MAX_SAMPLE_GRID_SIZE * MAX_SAMPLE_GRID_SIZE) as usize];
+	if sample_grid_size > 1
+	{
+		let grid_size_f = sample_grid_size as f32;
+		let step = Vec3f::from(light_grid_header.grid_cell_size) / grid_size_f;
+		let grid_start = (-0.5 * (grid_size_f - 1.0)) * step;
+		for x in 0 .. sample_grid_size
+		{
+			for y in 0 .. sample_grid_size
+			{
+				for z in 0 .. sample_grid_size
+				{
+					sample_shifts_grid[(x + y * sample_grid_size + z * sample_grid_size * sample_grid_size) as usize] =
+						grid_start + Vec3f::new(x as f32, y as f32, z as f32).mul_element_wise(step);
+				}
+			}
+		}
+	}
+	let num_sample_grid_shifts = (sample_grid_size * sample_grid_size * sample_grid_size) as usize;
+
+	// Limit distance to light to avoid almost infinity light for samples too close to light sources.
+	let min_light_dist = light_grid_header.grid_cell_size[0]
+		.min(light_grid_header.grid_cell_size[1])
+		.min(light_grid_header.grid_cell_size[2]) *
+		0.5;
+	let min_light_square_dist = min_light_dist * min_light_dist;
+
+	let samples_complete = atomic::AtomicU32::new(0);
+	let samples_total =
+		light_grid_header.grid_size[0] * light_grid_header.grid_size[1] * light_grid_header.grid_size[2];
+
+	let mut light_grid = vec![[0.0, 0.0, 0.0]; samples_total as usize];
+
+	light_grid
+		.par_iter_mut()
+		.enumerate()
+		.for_each(|(sample_address, dst_light)| {
+			let (x, y, z) = get_light_grid_coord_for_address(light_grid_header, sample_address);
+			let pos = Vec3f::from(light_grid_header.grid_start) +
+				Vec3f::new(x as f32, y as f32, z as f32)
+					.mul_element_wise(Vec3f::from(light_grid_header.grid_cell_size));
+
+			let mut total_light = [0.0, 0.0, 0.0];
+			let mut num_valid_shift_points = 0;
+			for shift in &sample_shifts_grid[0 .. num_sample_grid_shifts]
+			{
+				if let Some(pos_corrected) = correct_light_grid_sample_position(map, &(pos + shift))
+				{
+					let light = calculate_light_for_grid_point(
+						&pos_corrected,
+						primary_lights,
+						secondary_lights,
+						emissive_lights,
+						map,
+						visibility_matrix,
+						min_light_square_dist,
+					);
+
+					num_valid_shift_points += 1;
+					total_light[0] += light[0];
+					total_light[1] += light[1];
+					total_light[2] += light[2];
+				}
+			} // for multisample shifts
+			if num_valid_shift_points > 0
+			{
+				// Scale light properly, since we perform integration over whole sphere.
+				let scale = 1.0 / ((num_valid_shift_points as f32) * std::f32::consts::TAU);
+				total_light[0] *= scale;
+				total_light[1] *= scale;
+				total_light[2] *= scale;
+			}
+
+			*dst_light = total_light;
+
+			// Track progress.
+			let samples_complete_before = samples_complete.fetch_add(1, atomic::Ordering::SeqCst);
+			let samples_complete_after = samples_complete_before + 1;
+
+			let ratio_before = samples_complete_before * 256 / samples_total;
+			let ratio_after = samples_complete_after * 256 / samples_total;
+			if ratio_after > ratio_before
+			{
+				print!(
+					"\r{:03.2}% complete ({} of {} samples)",
+					(samples_complete_after as f32) * 100.0 / (samples_total as f32),
+					samples_complete_after,
+					samples_total,
+				);
+				let _ignore_errors = std::io::stdout().flush();
+			}
+		});
+
+	println!("\nDone!");
+	light_grid
+}
+
+fn get_light_grid_sample_address(header: &bsp_map_compact::LightGridHeader, x: u32, y: u32, z: u32) -> usize
+{
+	// Store columns first
+	(z + (x + y * header.grid_size[0]) * header.grid_size[2]) as usize
+}
+
+fn get_light_grid_coord_for_address(header: &bsp_map_compact::LightGridHeader, address: usize) -> (u32, u32, u32)
+{
+	// Store columns first
+	let address_u32 = address as u32;
+	let z = address_u32 % header.grid_size[2];
+	let layer = address_u32 / header.grid_size[2];
+	let x = layer % header.grid_size[0];
+	let y = layer / header.grid_size[0];
+
+	(x, y, z)
+}
+
+fn compress_light_grid(
+	map: &bsp_map_compact::BSPMap,
+	light_grid: &LightGridUncompressed,
+) -> (
+	Vec<bsp_map_compact::LightGridColumn>,
+	Vec<bsp_map_compact::LightGridElement>,
+)
+{
+	let light_grid_header = &map.light_grid_header;
+
+	println!("Compressing light grid");
+
+	let mut light_grid_columns = vec![
+		bsp_map_compact::LightGridColumn::default();
+		(light_grid_header.grid_size[0] * light_grid_header.grid_size[1]) as usize
+	];
+	let mut light_grid_samples = Vec::new();
+
+	let get_sample = |x, y, z| light_grid[get_light_grid_sample_address(light_grid_header, x, y, z)];
+
+	for x in 0 .. light_grid_header.grid_size[0]
+	{
+		for y in 0 .. light_grid_header.grid_size[1]
+		{
+			let mut min_non_zero_light_z = 0;
+			while min_non_zero_light_z < light_grid_header.grid_size[2]
+			{
+				let light = get_sample(x, y, min_non_zero_light_z);
+				if light[0] > 0.0 || light[1] > 0.0 || light[2] > 0.0
+				{
+					break;
+				}
+				min_non_zero_light_z += 1;
+			}
+
+			let mut max_non_zero_light_z = light_grid_header.grid_size[2] - 1;
+			while max_non_zero_light_z > min_non_zero_light_z
+			{
+				let light = get_sample(x, y, max_non_zero_light_z);
+				if light[0] > 0.0 || light[1] > 0.0 || light[2] > 0.0
+				{
+					break;
+				}
+				max_non_zero_light_z -= 1;
+			} // for z
+
+			light_grid_columns[(x + y * light_grid_header.grid_size[0]) as usize] = bsp_map_compact::LightGridColumn {
+				first_sample: light_grid_samples.len() as u32,
+				num_samples: max_non_zero_light_z + 1 - min_non_zero_light_z,
+				start_z: min_non_zero_light_z,
+			};
+
+			for z in min_non_zero_light_z ..= max_non_zero_light_z
+			{
+				light_grid_samples.push(get_sample(x, y, z));
+			}
+		} // for y
+	} // for x
+
+	println!("Non-empty light grid samples: {}", light_grid_samples.len());
+
+	(light_grid_columns, light_grid_samples)
+}
+
+fn calculate_light_for_grid_point(
+	pos: &Vec3f,
+	primary_lights: &LightsByLeaf,
+	secondary_lights: &[SecondaryLightSource],
+	emissive_lights: &[SecondaryLightSource],
+	map: &bsp_map_compact::BSPMap,
+	visibility_matrix: &pvs::VisibilityMatrix,
+	min_light_square_dist: f32,
+) -> [f32; 3]
+{
+	let point_leaf_index = bsp_map_compact::get_leaf_for_point(map, pos) as usize;
+	let visibility_matrix_row =
+		&visibility_matrix[point_leaf_index * map.leafs.len() .. (point_leaf_index + 1) * map.leafs.len()];
+
+	let mut total_light = [0.0, 0.0, 0.0];
+	for light_source_leaf_index in 0 .. map.leafs.len()
+	{
+		if !visibility_matrix_row[light_source_leaf_index]
+		{
+			// This leaf is not visible. Ignore point ligths and secondary lights of this leaf.
+			continue;
+		}
+
+		for primay_light in &primary_lights[light_source_leaf_index]
+		{
+			let vec_to_light = primay_light.pos - pos;
+			let vec_to_light_len2 = vec_to_light.magnitude2().max(min_light_square_dist);
+
+			if !can_see(&primay_light.pos, &pos, map)
+			{
+				// In shadow.
+				continue;
+			}
+
+			// Do not use agle cos because we add light into light sphere.
+			let light_scale = 1.0 / vec_to_light_len2;
+			total_light[0] += primay_light.color[0] * light_scale;
+			total_light[1] += primay_light.color[1] * light_scale;
+			total_light[2] += primay_light.color[2] * light_scale;
+		} // for primary lights
+
+		let light_source_leaf = &map.leafs[light_source_leaf_index as usize];
+		let light_source_leaf_polygons_range = light_source_leaf.first_polygon as usize ..
+			(light_source_leaf.first_polygon + light_source_leaf.num_polygons) as usize;
+
+		for light_set in [secondary_lights, emissive_lights]
+		{
+			if light_set.is_empty()
+			{
+				continue;
+			}
+
+			for light_source_polygon_index in light_source_leaf_polygons_range.clone()
+			{
+				let light = &light_set[light_source_polygon_index];
+				if light.samples.is_empty()
+				{
+					continue;
+				}
+
+				// Compute LOD.
+				let light_source_lod = get_light_source_lod(&pos, light);
+				let min_dist2 =
+					get_secondary_light_source_sample_min_square_distance(light.sample_size, light_source_lod)
+						.max(min_light_square_dist);
+
+				// Iterate over all samples of this LOD.
+				for sample in &light.samples[light_source_lod]
+				{
+					let vec_to_light = sample.pos - pos;
+					let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
+					let vec_to_light_normalized = vec_to_light / vec_to_light_len2.sqrt();
+
+					let angle_cos_src = -(light.normal.dot(vec_to_light_normalized));
+					if angle_cos_src <= 0.0
+					{
+						// Do not determine visibility for texels behind light source plane.
+						continue;
+					}
+
+					if !can_see(&sample.pos, &pos, map)
+					{
+						// In shadow.
+						continue;
+					}
+
+					// Do not use agle cos because we add light into light sphere.
+					let vec_to_light_len2_clamped = vec_to_light_len2.max(min_dist2);
+
+					let light_scale = angle_cos_src / vec_to_light_len2_clamped;
+					total_light[0] += sample.color[0] * light_scale;
+					total_light[1] += sample.color[1] * light_scale;
+					total_light[2] += sample.color[2] * light_scale;
+				} // for light samples.
+			} // for visible leaf polygons.
+		} // for light sets.
+	} // for BSP leafs.
+
+	total_light
+}
+
+fn correct_light_grid_sample_position(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> Option<Vec3f>
+{
+	if is_point_inside_leaf_volume(map, pos)
+	{
+		return Some(*pos);
+	}
+
+	let grid_cell_size = Vec3f::from(map.light_grid_header.grid_cell_size);
+
+	// Shifts for cube.
+	// First try side shifts, than edge shifts, lastly vertices shifts.
+	const SHIFTS: [[f32; 3]; 26] = [
+		// Cube side shifts.
+		[1.0, 0.0, 0.0],
+		[-1.0, 0.0, 0.0],
+		[0.0, 1.0, 0.0],
+		[0.0, -1.0, 0.0],
+		[0.0, 0.0, 1.0],
+		[0.0, 0.0, -1.0],
+		// Cube edge shifts.
+		[1.0, 1.0, 0.0],
+		[-1.0, 1.0, 0.0],
+		[1.0, -1.0, 0.0],
+		[-1.0, -1.0, 0.0],
+		[1.0, 0.0, 1.0],
+		[-1.0, 0.0, 1.0],
+		[1.0, 0.0, -1.0],
+		[-1.0, 0.0, -1.0],
+		[0.0, 1.0, 1.0],
+		[0.0, -1.0, 1.0],
+		[0.0, 1.0, -1.0],
+		[0.0, -1.0, -1.0],
+		// Cube vertices shifts.
+		[1.0, 1.0, 1.0],
+		[-1.0, 1.0, 1.0],
+		[1.0, -1.0, 1.0],
+		[-1.0, -1.0, 1.0],
+		[1.0, 1.0, -1.0],
+		[-1.0, 1.0, -1.0],
+		[1.0, -1.0, -1.0],
+		[-1.0, -1.0, -1.0],
+	];
+	// Try to shift sample position in order to move it into leaf bounds.
+	// Iterate over steps, for each step try all possible shifts.
+	let max_step = 3;
+	for step in 1 ..= max_step
+	{
+		let step_f = (step as f32) / (max_step as f32);
+		let step_vec = grid_cell_size * step_f;
+		for shift in SHIFTS
+		{
+			let delta = Vec3f::from(shift).mul_element_wise(step_vec);
+			let pos_shifted = pos + delta;
+			if is_point_inside_leaf_volume(map, &pos_shifted)
+			{
+				return Some(pos_shifted);
+			}
+		}
+	}
+
+	None
+}
+
+fn is_point_inside_leaf_volume(map: &bsp_map_compact::BSPMap, point: &Vec3f) -> bool
+{
+	let leaf_index = bsp_map_compact::get_leaf_for_point(map, point);
+	let leaf = &map.leafs[leaf_index as usize];
+	for polygon in &map.polygons[leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize]
+	{
+		if point.dot(polygon.plane.vec) <= polygon.plane.dist
+		{
+			return false;
+		}
+	}
+
+	true
 }
 
 fn calculate_dinstance_between_point_and_circle(

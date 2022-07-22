@@ -102,6 +102,7 @@ struct VisibleDynamicMeshInfo
 	num_visible_triangles: usize,
 	bbox_vertices_transformed: [Vec3f; 8],
 	camera_matrices: CameraMatrices,
+	light: bsp_map_compact::LightGridElement,
 }
 
 #[derive(Default, Copy, Clone)]
@@ -393,6 +394,7 @@ impl Renderer
 						planes_matrix: Mat4f::zero(),
 						position: Vec3f::zero(),
 					}, // Set later
+					light: bsp_map_compact::LightGridElement::default(), // Set later
 				});
 
 				vertices_offset += mesh.vertex_data_constant.len();
@@ -424,9 +426,13 @@ impl Renderer
 		let dst_vertices_shared = SharedMutSlice::new(&mut self.dynamic_meshes_vertices);
 		let dst_triangles_shared = SharedMutSlice::new(&mut self.dynamic_meshes_triangles);
 
+		let map = &self.map;
+
 		let func = |visible_dynamic_mesh: &mut VisibleDynamicMeshInfo| {
 			let model = &models[visible_dynamic_mesh.entity_index as usize];
 			let frame = model.frame as usize;
+
+			visible_dynamic_mesh.light = fetch_light_from_grid(map, &model.position);
 
 			let model_matrix = get_object_matrix(model.position, model.angles);
 			let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
@@ -1467,10 +1473,6 @@ impl Renderer
 
 		let texture_data = &texture.pixels;
 
-		// TODO - use per-vertex lighting.
-		// Now just use constant color.
-		let color = [3.0, 2.0, 1.0];
-
 		let mut vertices_clipped = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
 		let mut vertices_clipped_temp = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
 		let mut vertices_projected = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
@@ -1552,7 +1554,7 @@ impl Renderer
 				// TODO - use unchecked vertex fetch?
 				rasterizer.fill_triangle(
 					&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
-					&color,
+					&visible_dynamic_mesh.light,
 					&texture_info,
 					texture_data,
 				);
@@ -1612,6 +1614,107 @@ impl Renderer
 			self.config_is_durty = true;
 		}
 	}
+}
+
+fn fetch_light_from_grid(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> bsp_map_compact::LightGridElement
+{
+	let default_light = [0.0, 0.0, 0.0];
+
+	let light_grid_header = &map.light_grid_header;
+	if light_grid_header.grid_size[0] == 0 ||
+		light_grid_header.grid_size[1] == 0 ||
+		light_grid_header.grid_size[2] == 0 ||
+		light_grid_header.grid_cell_size[0] == 0.0 ||
+		light_grid_header.grid_cell_size[1] == 0.0 ||
+		light_grid_header.grid_cell_size[2] == 0.0 ||
+		map.light_grid_samples.is_empty() ||
+		map.light_grid_columns.is_empty()
+	{
+		return default_light;
+	}
+
+	let grid_pos = (pos - Vec3f::from(light_grid_header.grid_start))
+		.div_element_wise(Vec3f::from(light_grid_header.grid_cell_size));
+
+	let grid_pos_i = [
+		grid_pos.x.floor() as i32,
+		grid_pos.y.floor() as i32,
+		grid_pos.z.floor() as i32,
+	];
+
+	// Perform linear interpolation of light grid values.
+	// We need to read 8 values in order to do this.
+	// Ignore non-existing values and absolute zero values and perform result renormalization.
+	let mut total_light = [0.0, 0.0, 0.0];
+	let mut total_factor = 0.0;
+	for dx in 0 ..= 1
+	{
+		let x = grid_pos_i[0] + dx;
+		if x < 0 || x >= (light_grid_header.grid_size[0] as i32)
+		{
+			continue;
+		}
+		let factor_x = 1.0 - (grid_pos.x - (x as f32)).abs();
+
+		for dy in 0 ..= 1
+		{
+			let y = grid_pos_i[1] + dy;
+			if y < 0 || y >= (light_grid_header.grid_size[1] as i32)
+			{
+				continue;
+			}
+
+			let column = map.light_grid_columns[((x as u32) + (y as u32) * light_grid_header.grid_size[0]) as usize];
+			if column.num_samples == 0
+			{
+				continue;
+			}
+
+			let factor_y = 1.0 - (grid_pos.y - (y as f32)).abs();
+
+			for dz in 0 ..= 1
+			{
+				let z = grid_pos_i[2] + dz;
+				if z < 0 || z >= (light_grid_header.grid_size[2] as i32)
+				{
+					continue;
+				}
+
+				if (z as u32) < column.start_z || (z as u32) >= column.start_z + column.num_samples
+				{
+					continue;
+				}
+
+				let sample_address_in_column = (z as u32) - column.start_z;
+				let sample_value = map.light_grid_samples[(column.first_sample + sample_address_in_column) as usize];
+				if sample_value[0] <= 0.0 && sample_value[1] <= 0.0 && sample_value[2] <= 0.0
+				{
+					continue;
+				}
+
+				let factor_z = 1.0 - (grid_pos.z - (z as f32)).abs();
+
+				let cur_sample_factor = factor_x * factor_y * factor_z;
+
+				total_light[0] += sample_value[0] * cur_sample_factor;
+				total_light[1] += sample_value[1] * cur_sample_factor;
+				total_light[2] += sample_value[2] * cur_sample_factor;
+				total_factor += cur_sample_factor;
+			} // for dz
+		} // for dy
+	} // for dx
+
+	if total_factor <= 0.0
+	{
+		return default_light;
+	}
+
+	// Perform normalization in case if same sample points were rejected.
+	total_light[0] /= total_factor;
+	total_light[1] /= total_factor;
+	total_light[2] /= total_factor;
+
+	total_light
 }
 
 fn draw_background<ColorT: Copy + Send + Sync>(pixels: &mut [ColorT], color: ColorT)

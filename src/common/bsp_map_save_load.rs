@@ -114,6 +114,24 @@ pub fn save_map(bsp_map: &BSPMap, file_path: &Path) -> Result<(), std::io::Error
 		&mut header.lumps[LUMP_DIRECTIONAL_LIGHTMAPS_DATA],
 		&mut offset,
 	)?;
+	write_single_element_lump(
+		&bsp_map.light_grid_header,
+		&mut file,
+		&mut header.lumps[LUMP_LIGHT_GRID_HEADER],
+		&mut offset,
+	)?;
+	write_lump(
+		&bsp_map.light_grid_columns,
+		&mut file,
+		&mut header.lumps[LUMP_LIGHT_GRID_COLUMNS],
+		&mut offset,
+	)?;
+	write_lump(
+		&bsp_map.light_grid_samples,
+		&mut file,
+		&mut header.lumps[LUMP_LIGHT_GRID_SAMPLES],
+		&mut offset,
+	)?;
 
 	// Write header again to update lumps headers.
 	file.seek(std::io::SeekFrom::Start(0))?;
@@ -170,6 +188,9 @@ pub fn load_map(file_path: &Path) -> Result<Option<BSPMap>, std::io::Error>
 		strings_data: read_lump(&mut file, &header.lumps[LUMP_STRINGS_DATA])?,
 		lightmaps_data: read_lump(&mut file, &header.lumps[LUMP_LIGHTMAPS_DATA])?,
 		directional_lightmaps_data: read_lump(&mut file, &header.lumps[LUMP_DIRECTIONAL_LIGHTMAPS_DATA])?,
+		light_grid_header: read_single_element_lump(&mut file, &header.lumps[LUMP_LIGHT_GRID_HEADER])?,
+		light_grid_columns: read_lump(&mut file, &header.lumps[LUMP_LIGHT_GRID_COLUMNS])?,
+		light_grid_samples: read_lump(&mut file, &header.lumps[LUMP_LIGHT_GRID_SAMPLES])?,
 	};
 
 	Ok(Some(map))
@@ -192,9 +213,9 @@ struct Lump
 }
 
 const BSP_MAP_ID: [u8; 4] = ['S' as u8, 'q' as u8, 'w' as u8, 'M' as u8];
-const BSP_MAP_VERSION: u32 = 5; // Change each time when format is changed!
+const BSP_MAP_VERSION: u32 = 7; // Change each time when format is changed!
 
-const MAX_LUMPS: usize = 16;
+const MAX_LUMPS: usize = 32;
 
 const LUMP_NODES: usize = 0;
 const LUMP_LEAFS: usize = 1;
@@ -209,6 +230,9 @@ const LUMP_KEY_VALUE_PAIRS: usize = 9;
 const LUMP_STRINGS_DATA: usize = 10;
 const LUMP_LIGHTMAPS_DATA: usize = 11;
 const LUMP_DIRECTIONAL_LIGHTMAPS_DATA: usize = 12;
+const LUMP_LIGHT_GRID_HEADER: usize = 13;
+const LUMP_LIGHT_GRID_COLUMNS: usize = 14;
+const LUMP_LIGHT_GRID_SAMPLES: usize = 15;
 
 fn write_lump<T>(
 	data: &[T],
@@ -261,6 +285,48 @@ fn read_lump<T: Copy>(file: &mut std::fs::File, lump: &Lump) -> Result<Vec<T>, s
 			std::mem::size_of::<T>() * result.len(),
 		)
 	};
+	file.read_exact(bytes)?;
+
+	Ok(result)
+}
+
+fn write_single_element_lump<T>(
+	element: &T,
+	file: &mut std::fs::File,
+	lump: &mut Lump,
+	offset: &mut usize,
+) -> Result<(), std::io::Error>
+{
+	let element_size = std::mem::size_of::<T>();
+
+	lump.offset = (*offset) as u32;
+	lump.element_size = element_size as u32;
+	lump.element_count = 1;
+
+	let bytes = unsafe { std::slice::from_raw_parts(element as *const T as *const u8, element_size) };
+	file.write_all(bytes)?;
+
+	*offset += bytes.len();
+
+	Ok(())
+}
+
+fn read_single_element_lump<T: Copy>(file: &mut std::fs::File, lump: &Lump) -> Result<T, std::io::Error>
+{
+	let mut result = unsafe { std::mem::zeroed::<T>() };
+
+	let element_size = std::mem::size_of::<T>();
+	if lump.element_size != (element_size as u32)
+	{
+		// TODO - generate error?
+		println!("Wrong element size: {}, expected {}", lump.element_size, element_size);
+		return Ok(result);
+	}
+
+	// TODO - what if seek fails?
+	file.seek(std::io::SeekFrom::Start(lump.offset as u64))?;
+
+	let bytes = unsafe { std::slice::from_raw_parts_mut((&mut result) as *mut T as *mut u8, std::mem::size_of::<T>()) };
 	file.read_exact(bytes)?;
 
 	Ok(result)
