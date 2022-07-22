@@ -1719,10 +1719,11 @@ fn calculate_light_grid(
 			} // for multisample shifts
 			if num_valid_shift_points > 0
 			{
-				let multi_sampling_scale = 1.0 / (num_valid_shift_points as f32);
-				total_light[0] *= multi_sampling_scale;
-				total_light[1] *= multi_sampling_scale;
-				total_light[2] *= multi_sampling_scale;
+				// Scale light properly, since we perform integration over whole sphere.
+				let scale = 1.0 / ((num_valid_shift_points as f32) * std::f32::consts::TAU);
+				total_light[0] *= scale;
+				total_light[1] *= scale;
+				total_light[2] *= scale;
 			}
 
 			*dst_light = total_light;
