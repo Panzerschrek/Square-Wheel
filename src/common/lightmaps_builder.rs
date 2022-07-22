@@ -1671,6 +1671,13 @@ fn calculate_light_grid(
 	}
 	let num_sample_grid_shifts = (sample_grid_size * sample_grid_size * sample_grid_size) as usize;
 
+	// Limit distance to light to avoid almost infinity light for samples too close to light sources.
+	let min_light_dist = light_grid_header.grid_cell_size[0]
+		.min(light_grid_header.grid_cell_size[1])
+		.min(light_grid_header.grid_cell_size[2]) *
+		0.5;
+	let min_light_square_dist = min_light_dist * min_light_dist;
+
 	let samples_complete = atomic::AtomicU32::new(0);
 	let samples_total =
 		light_grid_header.grid_size[0] * light_grid_header.grid_size[1] * light_grid_header.grid_size[2];
@@ -1701,6 +1708,7 @@ fn calculate_light_grid(
 						emissive_lights,
 						map,
 						visibility_matrix,
+						min_light_square_dist,
 					);
 
 					num_valid_shift_points += 1;
@@ -1830,6 +1838,7 @@ fn calculate_light_for_grid_point(
 	emissive_lights: &[SecondaryLightSource],
 	map: &bsp_map_compact::BSPMap,
 	visibility_matrix: &pvs::VisibilityMatrix,
+	min_light_square_dist: f32,
 ) -> [f32; 3]
 {
 	let point_leaf_index = bsp_map_compact::get_leaf_for_point(map, pos) as usize;
@@ -1848,7 +1857,7 @@ fn calculate_light_for_grid_point(
 		for primay_light in &primary_lights[light_source_leaf_index]
 		{
 			let vec_to_light = primay_light.pos - pos;
-			let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
+			let vec_to_light_len2 = vec_to_light.magnitude2().max(min_light_square_dist);
 
 			if !can_see(&primay_light.pos, &pos, map)
 			{
@@ -1885,7 +1894,8 @@ fn calculate_light_for_grid_point(
 				// Compute LOD.
 				let light_source_lod = get_light_source_lod(&pos, light);
 				let min_dist2 =
-					get_secondary_light_source_sample_min_square_distance(light.sample_size, light_source_lod);
+					get_secondary_light_source_sample_min_square_distance(light.sample_size, light_source_lod)
+						.max(min_light_square_dist);
 
 				// Iterate over all samples of this LOD.
 				for sample in &light.samples[light_source_lod]
