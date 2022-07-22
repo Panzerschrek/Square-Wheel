@@ -15,6 +15,8 @@ pub struct LightmappingSettings
 	pub build_emissive_surfaces_light: bool,
 	pub build_directional_lightmap: bool,
 	pub num_passes: u32,
+	pub light_grid_cell_width: f32,
+	pub light_grid_cell_height: f32,
 }
 
 pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
@@ -169,7 +171,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		map.directional_lightmaps_data = Vec::new();
 	}
 
-	prepare_light_grid(map);
+	prepare_light_grid(map, settings);
 
 	let light_grid_uncompressed = calculate_light_grid(
 		sample_grid_size,
@@ -1602,13 +1604,15 @@ fn create_secondary_light_source(
 	}
 }
 
-fn prepare_light_grid(map: &mut bsp_map_compact::BSPMap)
+fn prepare_light_grid(map: &mut bsp_map_compact::BSPMap, settings: &LightmappingSettings)
 {
 	let map_bbox = bsp_map_compact::get_map_bbox(map);
 
 	let light_grid_header = &mut map.light_grid_header;
 
-	light_grid_header.grid_cell_size = [64.0, 64.0, 64.0]; // TODO - make it variable.
+	let width_clamped = settings.light_grid_cell_width.max(16.0).min(512.0);
+	let height_clamped = settings.light_grid_cell_height.max(16.0).min(512.0);
+	light_grid_header.grid_cell_size = [width_clamped, width_clamped, height_clamped];
 
 	// Align grid cells properly.
 	for i in 0 .. 3
