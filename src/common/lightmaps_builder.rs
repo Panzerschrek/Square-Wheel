@@ -1651,11 +1651,7 @@ fn calculate_light_grid(
 	if sample_grid_size > 1
 	{
 		let grid_size_f = sample_grid_size as f32;
-		let step = Vec3f::new(
-			light_grid_header.grid_cell_size[0],
-			light_grid_header.grid_cell_size[1],
-			light_grid_header.grid_cell_size[2],
-		) / grid_size_f;
+		let step = Vec3f::from(light_grid_header.grid_cell_size) / grid_size_f;
 		let grid_start = (-0.5 * (grid_size_f - 1.0)) * step;
 		for x in 0 .. sample_grid_size
 		{
@@ -1664,7 +1660,7 @@ fn calculate_light_grid(
 				for z in 0 .. sample_grid_size
 				{
 					sample_shifts_grid[(x + y * sample_grid_size + z * sample_grid_size * sample_grid_size) as usize] =
-						grid_start + Vec3f::new(x as f32 * step.x, y as f32 * step.y, z as f32 * step.z) + grid_start;
+						grid_start + Vec3f::new(x as f32, y as f32, z as f32).mul_element_wise(step);
 				}
 			}
 		}
@@ -1689,11 +1685,9 @@ fn calculate_light_grid(
 		.enumerate()
 		.for_each(|(sample_address, dst_light)| {
 			let (x, y, z) = get_light_grid_coord_for_address(light_grid_header, sample_address);
-			let pos = Vec3f::new(
-				x as f32 * light_grid_header.grid_cell_size[0] + light_grid_header.grid_start[0],
-				y as f32 * light_grid_header.grid_cell_size[1] + light_grid_header.grid_start[1],
-				z as f32 * light_grid_header.grid_cell_size[2] + light_grid_header.grid_start[2],
-			);
+			let pos = Vec3f::from(light_grid_header.grid_start) +
+				Vec3f::new(x as f32, y as f32, z as f32)
+					.mul_element_wise(Vec3f::from(light_grid_header.grid_cell_size));
 
 			let mut total_light = [0.0, 0.0, 0.0];
 			let mut num_valid_shift_points = 0;

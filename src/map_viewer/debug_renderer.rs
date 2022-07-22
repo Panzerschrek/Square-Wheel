@@ -632,7 +632,7 @@ fn draw_light_grid(
 	let cube_shift_vec = Vec3f::new(0.5, 0.5, 0.5);
 	let cube_scale = 8.0;
 
-	let light_scale = 255.0 / 4.0;
+	let light_scale = 255.0;
 
 	let light_grid_header = &bsp_map.light_grid_header;
 	for x in 0 .. light_grid_header.grid_size[0]
