@@ -1,4 +1,7 @@
-use super::{config, console::*, resources_manager_config::*, textures::*, triangle_model, triangle_model_md3};
+use super::{
+	config, console::*, resources_manager_config::*, textures::*, triangle_model, triangle_model_iqm,
+	triangle_model_md3,
+};
 use common::{bsp_map_compact::*, bsp_map_save_load::*, image, material::*};
 use std::{
 	collections::HashMap,
@@ -109,7 +112,16 @@ impl ResourcesManager
 		model_path.push(key);
 
 		// TODO - use dummy instead of "unwrap".
-		let model = triangle_model_md3::load_model_md3(&model_path).unwrap().unwrap();
+		let model = if key.ends_with(".iqm")
+		{
+			triangle_model_iqm::load_model_iqm(&model_path)
+		}
+		else
+		{
+			triangle_model_md3::load_model_md3(&model_path)
+		}
+		.unwrap()
+		.unwrap();
 
 		let ptr = SharedResourcePtr::new(model);
 		self.models.insert(key.clone(), ptr.clone());

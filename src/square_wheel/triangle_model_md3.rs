@@ -1,4 +1,4 @@
-use super::triangle_model::*;
+use super::{triangle_model::*, triangle_model_loading::*};
 use common::{bbox::*, math_types::*};
 use std::io::{Read, Seek};
 
@@ -147,24 +147,6 @@ fn load_md3_mesh(
 		vertex_data_constant,
 		vertex_data_variable,
 	}))
-}
-
-fn read_chunk<T: Copy>(file: &mut std::fs::File, offset: u64, dst: &mut [T]) -> Result<(), std::io::Error>
-{
-	file.seek(std::io::SeekFrom::Start(offset as u64))?;
-
-	if dst.is_empty()
-	{
-		return Ok(());
-	}
-
-	let bytes = unsafe {
-		std::slice::from_raw_parts_mut((&mut dst[0]) as *mut T as *mut u8, std::mem::size_of::<T>() * dst.len())
-	};
-
-	file.read_exact(bytes)?;
-
-	Ok(())
 }
 
 fn decompress_normal(normal_pitch_yaw: i16) -> Vec3f
