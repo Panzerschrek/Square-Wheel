@@ -629,6 +629,7 @@ fn draw_light_grid(
 			Vec3f::new(1.0, 1.0, 0.0),
 		],
 	];
+	let cube_shift_vec = Vec3f::new(0.5, 0.5, 0.5);
 	let cube_scale = 8.0;
 
 	let light_scale = 255.0 / 4.0;
@@ -661,9 +662,9 @@ fn draw_light_grid(
 						rasterizer,
 						&camera_matrices.view_matrix,
 						&[
-							triangle_vertices[0] * cube_scale + pos,
-							triangle_vertices[1] * cube_scale + pos,
-							triangle_vertices[2] * cube_scale + pos,
+							(triangle_vertices[0] - cube_shift_vec) * cube_scale + pos,
+							(triangle_vertices[1] - cube_shift_vec) * cube_scale + pos,
+							(triangle_vertices[2] - cube_shift_vec) * cube_scale + pos,
 						],
 						color,
 					);
