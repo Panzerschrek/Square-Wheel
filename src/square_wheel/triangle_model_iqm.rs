@@ -35,20 +35,18 @@ pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleMode
 		return Ok(None);
 	}
 
+	let texts = load_texts(&mut file, &header)?;
 	let meshes = load_meshes(&mut file, &header)?;
-
 	let triangles = load_triangles(&mut file, &header)?;
 	let vertices = load_vertices(&mut file, &header)?;
-
 	let bounds = load_bounds(&mut file, &header)?;
-
 	let joints = load_joints(&mut file, &header)?;
 	let poses = load_poses(&mut file, &header)?;
 
 	let bones = joints
 		.iter()
 		.map(|j| TriangleModelBoneInfo {
-			name: String::new(),
+			name: get_text_str(&texts, j.name).to_string(),
 			parent: j.parent,
 		})
 		.collect();
@@ -76,7 +74,7 @@ pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleMode
 	// TODO - export all meshes separately.
 	// Now just load single mesh.
 	let single_mesh = TriangleModelMesh {
-		material_name: String::new(), // TODO
+		material_name: get_text_str(&texts, meshes[0].material).to_string(),
 		triangles: triangles_transformed,
 		vertex_data: VertexData::SkeletonAnimated(vertices),
 		num_frames: header.num_frames,
@@ -92,6 +90,22 @@ pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleMode
 		frame_bones,
 		meshes: vec![single_mesh],
 	}))
+}
+
+fn load_texts(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<u8>, std::io::Error>
+{
+	read_vector(file, header.ofs_text as u64, header.num_text)
+}
+
+fn get_text_str(texts: &[u8], offset: u32) -> &str
+{
+	let start = offset as usize;
+	let mut end = start;
+	while end < texts.len() && texts[end] != 0
+	{
+		end += 1;
+	}
+	std::str::from_utf8(&texts[start .. end]).unwrap_or("")
 }
 
 fn load_meshes(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<IQMMesh>, std::io::Error>
