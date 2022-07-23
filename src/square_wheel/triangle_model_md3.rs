@@ -144,8 +144,10 @@ fn load_md3_mesh(
 		material_name: String::new(/*TODO*/),
 		triangles,
 		num_frames: src_mesh.num_frames,
-		vertex_data_constant,
-		vertex_data_variable,
+		vertex_data: VertexData::VertexAnimated(VertexAnimatedVertexData {
+			constant: vertex_data_constant,
+			variable: vertex_data_variable,
+		}),
 	}))
 }
 

@@ -1,6 +1,48 @@
 use super::triangle_model::*;
 use common::{clipping::*, math_types::*, plane::*};
 
+pub fn animate_and_transform_triangle_mesh_vertices(
+	mesh: &TriangleModelMesh,
+	frame: usize,
+	matrix: &Mat4f,
+	tc_scale: &Vec2f,
+	tc_shift: &Vec2f,
+	dst_vertices: &mut [ModelVertex3d],
+)
+{
+	match &mesh.vertex_data
+	{
+		VertexData::VertexAnimated(va) =>
+		{
+			let frame_vertex_data = &va.variable[frame * va.constant.len() .. (frame + 1) * va.constant.len()];
+
+			for ((v_v, v_c), dst_v) in frame_vertex_data
+				.iter()
+				.zip(va.constant.iter())
+				.zip(dst_vertices.iter_mut())
+			{
+				let pos_transformed = matrix * v_v.position.extend(1.0);
+				*dst_v = ModelVertex3d {
+					pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
+					tc: Vec2f::from(v_c.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
+				};
+			}
+		},
+		VertexData::SkeletonAnimated(v) =>
+		{
+			// TODO - perform proper animation.
+			for (v, dst_v) in v.iter().zip(dst_vertices.iter_mut())
+			{
+				let pos_transformed = matrix * v.position.extend(1.0);
+				*dst_v = ModelVertex3d {
+					pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
+					tc: Vec2f::from(v.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
+				};
+			}
+		},
+	}
+}
+
 pub fn reject_triangle_model_back_faces(
 	transformed_vertices: &[ModelVertex3d],
 	triangles: &[Triangle],

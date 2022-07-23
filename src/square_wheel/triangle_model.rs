@@ -20,15 +20,26 @@ pub struct TriangleModelMesh
 	pub triangles: Vec<Triangle>,
 	pub num_frames: u32,
 
-	pub vertex_data_constant: Vec<VertexAnimatedVertexConstant>,
-	// size = number of vertices * numvber of frames.
-	pub vertex_data_variable: Vec<VertexAnimatedVertexVariable>,
+	pub vertex_data: VertexData,
 }
 
 // TODO - maybe use 8-byte alignment for triangle structure?
 pub type Triangle = [VertexIndex; 3];
 
 pub type VertexIndex = u16;
+
+pub enum VertexData
+{
+	VertexAnimated(VertexAnimatedVertexData),
+	SkeletonAnimated(Vec<SkeletonAnimatedVertex>),
+}
+
+pub struct VertexAnimatedVertexData
+{
+	pub constant: Vec<VertexAnimatedVertexConstant>,
+	// size = number of vertices * numvber of frames.
+	pub variable: Vec<VertexAnimatedVertexVariable>,
+}
 
 #[derive(Copy, Clone)]
 pub struct VertexAnimatedVertexConstant
