@@ -267,7 +267,10 @@ fn create_frames(
 	{
 		let mat = get_bone_matrix(
 			Vec3f::from(joint.scale),
-			QuaternionF::from(joint.rotate),
+			QuaternionF::from_sv(
+				joint.rotate[3],
+				Vec3f::new(joint.rotate[0], joint.rotate[1], joint.rotate[2]),
+			),
 			Vec3f::from(joint.translate),
 		);
 		let inverse_mat = mat.invert().unwrap(); // TODO - avoid unwrap
@@ -275,7 +278,7 @@ fn create_frames(
 		if parent_index < joints.len()
 		{
 			let parent_mats = &base_frame_mats[parent_index];
-			base_frame_mats[index] = (mat * parent_mats.0, parent_mats.1 * inverse_mat);
+			base_frame_mats[index] = (parent_mats.0 * mat, inverse_mat * parent_mats.1);
 		}
 		else
 		{
@@ -300,6 +303,8 @@ fn create_frames(
 
 	for frame_index in 0 .. header.num_frames
 	{
+		let frame_pose_matrices =
+			&mut frame_bones[(frame_index as usize) * poses.len() .. ((frame_index + 1) as usize) * poses.len()];
 		for (pose_index, pose) in poses.iter().enumerate()
 		{
 			let mut translate = Vec3f::new(pose.channeloffset[0], pose.channeloffset[1], pose.channeloffset[2]);
@@ -319,11 +324,9 @@ fn create_frames(
 				frame_data_pos += 1;
 			}
 
-			let mut rotate = QuaternionF::new(
-				pose.channeloffset[3],
-				pose.channeloffset[4],
-				pose.channeloffset[5],
+			let mut rotate = QuaternionF::from_sv(
 				pose.channeloffset[6],
+				Vec3f::new(pose.channeloffset[3], pose.channeloffset[4], pose.channeloffset[5]),
 			);
 			if (pose.channelmask & 0x08) != 0
 			{
@@ -364,17 +367,18 @@ fn create_frames(
 			}
 
 			let mat = get_bone_matrix(scale, rotate, translate);
+			let mat1 = mat * base_frame_mats[pose_index].1;
 
-			let dst_mat = &mut frame_bones[(frame_index as usize) * poses.len() + pose_index].matrix;
+			let dst_mat = &mut frame_pose_matrices[pose_index].matrix;
 
 			let parent_pose_index = pose.parent as usize;
 			if parent_pose_index < poses.len()
 			{
-				*dst_mat = base_frame_mats[pose_index].1 * mat * base_frame_mats[parent_pose_index].0;
+				*dst_mat = base_frame_mats[parent_pose_index].0 * mat1;
 			}
 			else
 			{
-				*dst_mat = base_frame_mats[pose_index].1 * mat;
+				*dst_mat = mat1;
 			}
 		}
 	}
@@ -385,10 +389,10 @@ fn create_frames(
 fn get_bone_matrix(scale: Vec3f, rotate: QuaternionF, translate: Vec3f) -> Mat4f
 {
 	let translate = Mat4f::from_translation(translate);
-	let rotate = Mat4f::from(rotate);
+	let rotate = Mat4f::from(rotate / rotate.magnitude());
 	let scale = Mat4f::from_nonuniform_scale(scale.x, scale.y, scale.z);
-	// TODO - make sure this is correct order.
-	translate * rotate * scale
+
+	translate * scale * rotate
 }
 
 #[repr(C)]

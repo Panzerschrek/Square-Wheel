@@ -41,7 +41,7 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 				let parent = model.bones[bone_index].parent as usize;
 				if parent < model.bones.len()
 				{
-					matrices[bone_index] = frame_bones[bone_index].matrix * matrices[parent];
+					matrices[bone_index] = matrices[parent] * frame_bones[bone_index].matrix;
 				}
 				else
 				{
@@ -55,7 +55,6 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 				matrices[bone_index] = matrix_weight_scaled * matrices[bone_index];
 			}
 
-			// TODO - perform proper animation.
 			for (v, dst_v) in v.iter().zip(dst_vertices.iter_mut())
 			{
 				let mut mat =
