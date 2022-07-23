@@ -42,3 +42,19 @@ pub struct VertexAnimatedVertexVariable
 	pub position: Vec3f,
 	pub normal: Vec3f,
 }
+
+#[derive(Debug, Copy, Clone)]
+pub struct SkeletonAnimatedVertex
+{
+	pub tex_coord: [f32; 2],
+	pub position: Vec3f,
+	pub normal: Vec3f,
+	pub bones_description: [VertexBoneDescription; 4],
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct VertexBoneDescription
+{
+	pub bone_index: u8,
+	pub weight: u8,
+}
