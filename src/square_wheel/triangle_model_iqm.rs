@@ -42,6 +42,7 @@ pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleMode
 	let bounds = load_bounds(&mut file, &header)?;
 	let joints = load_joints(&mut file, &header)?;
 	let poses = load_poses(&mut file, &header)?;
+	let animations = load_animations(&mut file, &header)?;
 
 	let bones = joints
 		.iter()
@@ -71,6 +72,17 @@ pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleMode
 		})
 		.collect();
 
+	let animations_transfomed = animations
+		.iter()
+		.map(|a| TriangleModelAnimation {
+			name: get_text_str(&texts, a.name).to_string(),
+			start_frame: a.first_frame,
+			num_frames: a.num_frames,
+			frames_per_second: a.framerate,
+			looped: (a.flags & IQM_LOOP) != 0,
+		})
+		.collect();
+
 	// TODO - export all meshes separately.
 	// Now just load single mesh.
 	let single_mesh = TriangleModelMesh {
@@ -84,6 +96,7 @@ pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleMode
 	let tc_shift = -Vec2f::new(0.5, 0.5);
 
 	Ok(Some(TriangleModel {
+		animations: animations_transfomed,
 		frames_info,
 		tc_shift,
 		bones,
@@ -242,6 +255,11 @@ fn load_joints(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<IQMJo
 fn load_poses(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<IQMPose>, std::io::Error>
 {
 	read_vector(file, header.ofs_poses as u64, header.num_poses)
+}
+
+fn load_animations(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<IQMAnim>, std::io::Error>
+{
+	read_vector(file, header.ofs_anims as u64, header.num_anims)
 }
 
 fn create_frames(
@@ -480,6 +498,17 @@ struct IQMPose
 	channelscale: [f32; 10],
 }
 
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+struct IQMAnim
+{
+	name: u32,
+	first_frame: u32,
+	num_frames: u32,
+	framerate: f32,
+	flags: u32,
+}
+
 // const IQM_BYTE: u32 = 0;
 const IQM_UBYTE: u32 = 1;
 // const IQM_SHORT: u32 = 2;
@@ -497,6 +526,8 @@ const IQM_TANGENT: u32 = 3;
 const IQM_BLENDINDEXES: u32 = 4;
 const IQM_BLENDWEIGHTS: u32 = 5;
 // const IQM_COLOR: u32 = 6;
+
+const IQM_LOOP: u32 = 1;
 
 const IQM_MAGIC: [u8; 16] = [
 	'I' as u8, 'N' as u8, 'T' as u8, 'E' as u8, 'R' as u8, 'Q' as u8, 'U' as u8, 'A' as u8, 'K' as u8, 'E' as u8,

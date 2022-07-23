@@ -75,6 +75,7 @@ pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleMode
 	let tc_shift = -Vec2f::new(0.5, 0.5);
 
 	Ok(Some(TriangleModel {
+		animations: Vec::new(),
 		frames_info,
 		meshes,
 		bones: Vec::new(),

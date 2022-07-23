@@ -2,6 +2,7 @@ use common::{bbox::*, math_types::*};
 
 pub struct TriangleModel
 {
+	pub animations: Vec<TriangleModelAnimation>,
 	pub frames_info: Vec<TriangleModelFrameInfo>,
 	pub meshes: Vec<TriangleModelMesh>,
 	// Non-empty for skeleton-animated models.
@@ -11,7 +12,14 @@ pub struct TriangleModel
 	pub tc_shift: Vec2f,
 }
 
-// TODO -  support also skeleton-based animation.
+pub struct TriangleModelAnimation
+{
+	pub name: String,
+	pub start_frame: u32,
+	pub num_frames: u32,
+	pub frames_per_second: f32,
+	pub looped: bool,
+}
 
 pub struct TriangleModelFrameInfo
 {
