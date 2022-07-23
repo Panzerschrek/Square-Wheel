@@ -17,3 +17,14 @@ pub fn read_chunk<T: Copy>(file: &mut std::fs::File, offset: u64, dst: &mut [T])
 
 	Ok(())
 }
+
+pub fn read_vector<T: Copy>(file: &mut std::fs::File, offset: u64, num_elements: u32)
+	-> Result<Vec<T>, std::io::Error>
+{
+	// TODO - use uninitiaized memory instead.
+	let mut result = unsafe { vec![std::mem::zeroed::<T>(); num_elements as usize] };
+
+	read_chunk(file, offset, &mut result)?;
+
+	Ok(result)
+}

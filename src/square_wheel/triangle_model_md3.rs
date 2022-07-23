@@ -35,18 +35,8 @@ pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleMode
 		return Ok(None);
 	}
 
-	let mut frames_src = vec![Md3Frame::default(); header.num_frames as usize];
-	read_chunk(&mut file, header.lump_frameinfo as u64, &mut frames_src)?;
-
-	let mut tags_src = vec![
-		Md3Tag {
-			name: [0; MAX_QPATH],
-			origin: [0.0; 3],
-			rotation_matrix: [0.0; 9]
-		};
-		header.num_tags as usize
-	];
-	read_chunk(&mut file, header.lump_tags as u64, &mut tags_src)?;
+	let frames_src = read_vector::<Md3Frame>(&mut file, header.lump_frameinfo as u64, header.num_frames)?;
+	// let tags_src = read_vector::<Md3Tag>(&mut file, header.lump_tags as u64, header.num_tags);
 
 	// TODO - shouldn't we use "origin" here?
 	let frames_info = frames_src
@@ -105,23 +95,22 @@ fn load_md3_mesh(
 		return Ok(None);
 	}
 
-	let mut triangles_src = vec![Md3Triangle::default(); src_mesh.num_triangles as usize];
-	read_chunk(file, src_mesh.lump_triangles as u64 + mesh_offset, &mut triangles_src)?;
-
-	let mut tex_coords_src = vec![Md3TexCoord::default(); src_mesh.num_vertices as usize];
-	read_chunk(file, src_mesh.lump_texcoords as u64 + mesh_offset, &mut tex_coords_src)?;
-
-	let mut frames_src = vec![Md3Vertex::default(); (src_mesh.num_vertices * src_mesh.num_frames) as usize];
-	read_chunk(file, src_mesh.lump_framevertices as u64 + mesh_offset, &mut frames_src)?;
-
-	let mut shaders_src = vec![
-		Md3Shader {
-			name: [0; MAX_QPATH],
-			index: 0
-		};
-		src_mesh.num_shaders as usize
-	];
-	read_chunk(file, src_mesh.lump_shaders as u64 + mesh_offset, &mut shaders_src)?;
+	let triangles_src = read_vector::<Md3Triangle>(
+		file,
+		src_mesh.lump_triangles as u64 + mesh_offset,
+		src_mesh.num_triangles,
+	)?;
+	let tex_coords_src = read_vector::<Md3TexCoord>(
+		file,
+		src_mesh.lump_texcoords as u64 + mesh_offset,
+		src_mesh.num_vertices,
+	)?;
+	let frames_src = read_vector::<Md3Vertex>(
+		file,
+		src_mesh.lump_framevertices as u64 + mesh_offset,
+		src_mesh.num_vertices * src_mesh.num_frames,
+	)?;
+	// let shaders_src = read_vector::<Md3Shader>(file, src_mesh.lump_shaders as u64 + mesh_offset, src_mesh.num_shaders)?;
 
 	let triangles = triangles_src
 		.iter()

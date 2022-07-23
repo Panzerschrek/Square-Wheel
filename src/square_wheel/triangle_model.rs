@@ -6,7 +6,7 @@ pub struct TriangleModel
 	pub meshes: Vec<TriangleModelMesh>,
 	// Non-empty for skeleton-animated models.
 	pub bones: Vec<TriangleModelBoneInfo>,
-	// Frame info for all bones of specific frame. Has sie = num_frames * num_bones.
+	// Frame info for all bones of specific frame. Has size = num_frames * num_bones.
 	pub frame_bones: Vec<TriangleModelBoneFrame>,
 	pub tc_shift: Vec2f,
 }
@@ -53,7 +53,7 @@ pub enum VertexData
 pub struct VertexAnimatedVertexData
 {
 	pub constant: Vec<VertexAnimatedVertexConstant>,
-	// size = number of vertices * numvber of frames.
+	// size = number of vertices * number of frames.
 	pub variable: Vec<VertexAnimatedVertexVariable>,
 }
 

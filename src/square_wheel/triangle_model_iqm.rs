@@ -96,20 +96,12 @@ pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleMode
 
 fn load_meshes(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<IQMMesh>, std::io::Error>
 {
-	// TODO - use uninitialized memory.
-	let mut meshes = vec![IQMMesh::default(); header.num_meshes as usize];
-	read_chunk(file, header.ofs_meshes as u64, &mut meshes)?;
-
-	Ok(meshes)
+	read_vector(file, header.ofs_meshes as u64, header.num_meshes)
 }
 
 fn load_triangles(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<IQMTriangle>, std::io::Error>
 {
-	// TODO - use uninitialized memory.
-	let mut triangles = vec![IQMTriangle::default(); header.num_triangles as usize];
-	read_chunk(file, header.ofs_triangles as u64, &mut triangles)?;
-
-	Ok(triangles)
+	read_vector(file, header.ofs_triangles as u64, header.num_triangles)
 }
 
 fn load_vertices(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<SkeletonAnimatedVertex>, std::io::Error>
@@ -220,38 +212,22 @@ fn load_vertices(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<Ske
 
 fn load_vertex_arrays(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<IQMVertexArray>, std::io::Error>
 {
-	// TODO - use uninitialized memory.
-	let mut vertex_arrays = vec![IQMVertexArray::default(); header.num_vertexarrays as usize];
-	read_chunk(file, header.ofs_vertexarrays as u64, &mut vertex_arrays)?;
-
-	Ok(vertex_arrays)
+	read_vector(file, header.ofs_vertexarrays as u64, header.num_vertexarrays)
 }
 
 fn load_bounds(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<IQMBounds>, std::io::Error>
 {
-	// TODO - use uninitialized memory.
-	let mut bounds = vec![IQMBounds::default(); header.num_frames as usize];
-	read_chunk(file, header.ofs_bounds as u64, &mut bounds)?;
-
-	Ok(bounds)
+	read_vector(file, header.ofs_bounds as u64, header.num_frames)
 }
 
 fn load_joints(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<IQMJoint>, std::io::Error>
 {
-	// TODO - use uninitialized memory.
-	let mut joints = vec![IQMJoint::default(); header.num_joints as usize];
-	read_chunk(file, header.ofs_joints as u64, &mut joints)?;
-
-	Ok(joints)
+	read_vector(file, header.ofs_joints as u64, header.num_joints)
 }
 
 fn load_poses(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<IQMPose>, std::io::Error>
 {
-	// TODO - use uninitialized memory.
-	let mut poses = vec![IQMPose::default(); header.num_poses as usize];
-	read_chunk(file, header.ofs_poses as u64, &mut poses)?;
-
-	Ok(poses)
+	read_vector(file, header.ofs_poses as u64, header.num_poses)
 }
 
 fn create_frames(
