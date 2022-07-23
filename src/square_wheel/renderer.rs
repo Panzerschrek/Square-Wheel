@@ -472,6 +472,7 @@ impl Renderer
 			let dst_mesh_vertices = unsafe { &mut dst_vertices_shared.get()[visible_dynamic_mesh.vertices_offset ..] };
 
 			animate_and_transform_triangle_mesh_vertices(
+				&model.model,
 				mesh,
 				frame,
 				&final_matrix,

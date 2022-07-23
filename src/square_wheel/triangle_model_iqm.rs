@@ -53,7 +53,7 @@ pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleMode
 		})
 		.collect();
 
-	let bone_frames = create_frames(&mut file, &header, &joints, &poses)?;
+	let frame_bones = create_frames(&mut file, &header, &joints, &poses)?;
 
 	let frames_info = bounds
 		.iter()
@@ -89,7 +89,7 @@ pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleMode
 		frames_info,
 		tc_shift,
 		bones,
-		bone_frames,
+		frame_bones,
 		meshes: vec![single_mesh],
 	}))
 }
@@ -271,9 +271,10 @@ fn create_frames(
 			Vec3f::from(joint.translate),
 		);
 		let inverse_mat = mat.invert().unwrap(); // TODO - avoid unwrap
-		if (joint.parent as usize) < joints.len()
+		let parent_index = joint.parent as usize;
+		if parent_index < joints.len()
 		{
-			let parent_mats = &base_frame_mats[joint.parent as usize];
+			let parent_mats = &base_frame_mats[parent_index];
 			base_frame_mats[index] = (mat * parent_mats.0, parent_mats.1 * inverse_mat);
 		}
 		else
@@ -282,7 +283,7 @@ fn create_frames(
 		}
 	}
 
-	let mut bone_frames = vec![
+	let mut frame_bones = vec![
 		TriangleModelBoneFrame {
 			matrix: Mat4f::identity()
 		};
@@ -318,7 +319,12 @@ fn create_frames(
 				frame_data_pos += 1;
 			}
 
-			let mut rotate = QuaternionF::new(pose.channeloffset[3], pose.channeloffset[4], pose.channeloffset[5], pose.channeloffset[6]);
+			let mut rotate = QuaternionF::new(
+				pose.channeloffset[3],
+				pose.channeloffset[4],
+				pose.channeloffset[5],
+				pose.channeloffset[6],
+			);
 			if (pose.channelmask & 0x08) != 0
 			{
 				rotate.v.x += frame_data_u16[frame_data_pos] as f32 * pose.channelscale[3];
@@ -359,7 +365,7 @@ fn create_frames(
 
 			let mat = get_bone_matrix(scale, rotate, translate);
 
-			let dst_mat = &mut bone_frames[(frame_index as usize) * poses.len() + pose_index].matrix;
+			let dst_mat = &mut frame_bones[(frame_index as usize) * poses.len() + pose_index].matrix;
 
 			let parent_pose_index = pose.parent as usize;
 			if parent_pose_index < poses.len()
@@ -373,7 +379,7 @@ fn create_frames(
 		}
 	}
 
-	Ok(bone_frames)
+	Ok(frame_bones)
 }
 
 fn get_bone_matrix(scale: Vec3f, rotate: QuaternionF, translate: Vec3f) -> Mat4f

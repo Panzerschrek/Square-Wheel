@@ -7,7 +7,7 @@ pub struct TriangleModel
 	// Non-empty for skeleton-animated models.
 	pub bones: Vec<TriangleModelBoneInfo>,
 	// Frame info for all bones of specific frame. Has sie = num_frames * num_bones.
-	pub bone_frames: Vec<TriangleModelBoneFrame>,
+	pub frame_bones: Vec<TriangleModelBoneFrame>,
 	pub tc_shift: Vec2f,
 }
 
@@ -85,3 +85,5 @@ pub struct VertexBoneDescription
 	pub bone_index: u8,
 	pub weight: u8,
 }
+
+pub const MAX_TRIANGLE_MODEL_BONES: usize = 255;
