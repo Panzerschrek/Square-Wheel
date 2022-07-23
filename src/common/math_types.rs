@@ -12,6 +12,8 @@ pub type Mat3d = cgmath::Matrix3<f64>;
 pub type Mat4f = cgmath::Matrix4<f32>;
 pub type Mat4d = cgmath::Matrix4<f64>;
 
+pub type QuaternionF = cgmath::Quaternion<f32>;
+
 pub type RadiansF = cgmath::Rad<f32>;
 pub type DegreesF = cgmath::Rad<f32>;
 

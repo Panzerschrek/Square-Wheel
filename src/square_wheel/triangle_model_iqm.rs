@@ -1,6 +1,6 @@
 use super::{triangle_model::*, triangle_model_loading::*};
 use common::{bbox::*, math_types::*};
-use std::io::Read;
+use std::io::{Read, Seek};
 
 pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleModel>, std::io::Error>
 {
@@ -42,6 +42,19 @@ pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleMode
 
 	let bounds = load_bounds(&mut file, &header)?;
 
+	let joints = load_joints(&mut file, &header)?;
+	let poses = load_poses(&mut file, &header)?;
+
+	let bones = joints
+		.iter()
+		.map(|j| TriangleModelBoneInfo {
+			name: String::new(),
+			parent: j.parent,
+		})
+		.collect();
+
+	let bone_frames = create_frames(&mut file, &header, &joints, &poses)?;
+
 	let frames_info = bounds
 		.iter()
 		.map(|b| TriangleModelFrameInfo {
@@ -75,6 +88,8 @@ pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleMode
 	Ok(Some(TriangleModel {
 		frames_info,
 		tc_shift,
+		bones,
+		bone_frames,
 		meshes: vec![single_mesh],
 	}))
 }
@@ -221,6 +236,155 @@ fn load_bounds(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<IQMBo
 	Ok(bounds)
 }
 
+fn load_joints(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<IQMJoint>, std::io::Error>
+{
+	// TODO - use uninitialized memory.
+	let mut joints = vec![IQMJoint::default(); header.num_joints as usize];
+	read_chunk(file, header.ofs_joints as u64, &mut joints)?;
+
+	Ok(joints)
+}
+
+fn load_poses(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<IQMPose>, std::io::Error>
+{
+	// TODO - use uninitialized memory.
+	let mut poses = vec![IQMPose::default(); header.num_poses as usize];
+	read_chunk(file, header.ofs_poses as u64, &mut poses)?;
+
+	Ok(poses)
+}
+
+fn create_frames(
+	file: &mut std::fs::File,
+	header: &IQMHeader,
+	joints: &[IQMJoint],
+	poses: &[IQMPose],
+) -> Result<Vec<TriangleModelBoneFrame>, std::io::Error>
+{
+	// Prepare pairs of base frame and inverted base frame matrices for each joint.
+	let mut base_frame_mats = vec![(Mat4f::identity(), Mat4f::identity()); joints.len()];
+	for (index, joint) in joints.iter().enumerate()
+	{
+		let mat = get_bone_matrix(
+			Vec3f::from(joint.scale),
+			QuaternionF::from(joint.rotate),
+			Vec3f::from(joint.translate),
+		);
+		let inverse_mat = mat.invert().unwrap(); // TODO - avoid unwrap
+		if (joint.parent as usize) < joints.len()
+		{
+			let parent_mats = &base_frame_mats[joint.parent as usize];
+			base_frame_mats[index] = (mat * parent_mats.0, parent_mats.1 * inverse_mat);
+		}
+		else
+		{
+			base_frame_mats[index] = (mat, inverse_mat);
+		}
+	}
+
+	let mut bone_frames = vec![
+		TriangleModelBoneFrame {
+			matrix: Mat4f::identity()
+		};
+		poses.len() * (header.num_frames as usize)
+	];
+
+	file.seek(std::io::SeekFrom::Start(header.ofs_frames as u64))?;
+	let mut frame_data = Vec::new();
+	file.read_to_end(&mut frame_data)?;
+
+	// TODO - what if alignment is wrong?
+	let frame_data_u16 = unsafe { frame_data.align_to::<u16>().1 };
+	let mut frame_data_pos = 0;
+
+	for frame_index in 0 .. header.num_frames
+	{
+		for (pose_index, pose) in poses.iter().enumerate()
+		{
+			let mut translate = Vec3f::new(pose.channeloffset[0], pose.channeloffset[1], pose.channeloffset[2]);
+			if (pose.channelmask & 0x01) != 0
+			{
+				translate.x += frame_data_u16[frame_data_pos] as f32 * pose.channelscale[0];
+				frame_data_pos += 1;
+			}
+			if (pose.channelmask & 0x02) != 0
+			{
+				translate.y += frame_data_u16[frame_data_pos] as f32 * pose.channelscale[1];
+				frame_data_pos += 1;
+			}
+			if (pose.channelmask & 0x04) != 0
+			{
+				translate.z += frame_data_u16[frame_data_pos] as f32 * pose.channelscale[2];
+				frame_data_pos += 1;
+			}
+
+			let mut rotate = QuaternionF::new(pose.channeloffset[3], pose.channeloffset[4], pose.channeloffset[5], pose.channeloffset[6]);
+			if (pose.channelmask & 0x08) != 0
+			{
+				rotate.v.x += frame_data_u16[frame_data_pos] as f32 * pose.channelscale[3];
+				frame_data_pos += 1;
+			}
+			if (pose.channelmask & 0x10) != 0
+			{
+				rotate.v.y += frame_data_u16[frame_data_pos] as f32 * pose.channelscale[4];
+				frame_data_pos += 1;
+			}
+			if (pose.channelmask & 0x20) != 0
+			{
+				rotate.v.z += frame_data_u16[frame_data_pos] as f32 * pose.channelscale[5];
+				frame_data_pos += 1;
+			}
+			if (pose.channelmask & 0x40) != 0
+			{
+				rotate.s += frame_data_u16[frame_data_pos] as f32 * pose.channelscale[6];
+				frame_data_pos += 1;
+			}
+
+			let mut scale = Vec3f::new(pose.channeloffset[7], pose.channeloffset[8], pose.channeloffset[9]);
+			if (pose.channelmask & 0x80) != 0
+			{
+				scale.x += frame_data_u16[frame_data_pos] as f32 * pose.channelscale[7];
+				frame_data_pos += 1;
+			}
+			if (pose.channelmask & 0x100) != 0
+			{
+				scale.y += frame_data_u16[frame_data_pos] as f32 * pose.channelscale[8];
+				frame_data_pos += 1;
+			}
+			if (pose.channelmask & 0x200) != 0
+			{
+				scale.z += frame_data_u16[frame_data_pos] as f32 * pose.channelscale[9];
+				frame_data_pos += 1;
+			}
+
+			let mat = get_bone_matrix(scale, rotate, translate);
+
+			let dst_mat = &mut bone_frames[(frame_index as usize) * poses.len() + pose_index].matrix;
+
+			let parent_pose_index = pose.parent as usize;
+			if parent_pose_index < poses.len()
+			{
+				*dst_mat = base_frame_mats[pose_index].1 * mat * base_frame_mats[parent_pose_index].0;
+			}
+			else
+			{
+				*dst_mat = base_frame_mats[pose_index].1 * mat;
+			}
+		}
+	}
+
+	Ok(bone_frames)
+}
+
+fn get_bone_matrix(scale: Vec3f, rotate: QuaternionF, translate: Vec3f) -> Mat4f
+{
+	let translate = Mat4f::from_translation(translate);
+	let rotate = Mat4f::from(rotate);
+	let scale = Mat4f::from_nonuniform_scale(scale.x, scale.y, scale.z);
+	// TODO - make sure this is correct order.
+	translate * rotate * scale
+}
+
 #[repr(C)]
 #[derive(Debug)]
 struct IQMHeader
@@ -293,6 +457,27 @@ struct IQMVertexArray
 	format: u32,
 	size: u32,
 	offset: u32,
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+struct IQMJoint
+{
+	name: u32,
+	parent: u32,
+	translate: [f32; 3],
+	rotate: [f32; 4],
+	scale: [f32; 3],
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+struct IQMPose
+{
+	parent: u32,
+	channelmask: u32,
+	channeloffset: [f32; 10],
+	channelscale: [f32; 10],
 }
 
 // const IQM_BYTE: u32 = 0;

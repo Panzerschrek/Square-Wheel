@@ -87,6 +87,8 @@ pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleMode
 	Ok(Some(TriangleModel {
 		frames_info,
 		meshes,
+		bones: Vec::new(),
+		bone_frames: Vec::new(),
 		tc_shift,
 	}))
 }

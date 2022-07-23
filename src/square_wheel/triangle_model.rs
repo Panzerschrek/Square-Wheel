@@ -4,6 +4,10 @@ pub struct TriangleModel
 {
 	pub frames_info: Vec<TriangleModelFrameInfo>,
 	pub meshes: Vec<TriangleModelMesh>,
+	// Non-empty for skeleton-animated models.
+	pub bones: Vec<TriangleModelBoneInfo>,
+	// Frame info for all bones of specific frame. Has sie = num_frames * num_bones.
+	pub bone_frames: Vec<TriangleModelBoneFrame>,
 	pub tc_shift: Vec2f,
 }
 
@@ -12,6 +16,18 @@ pub struct TriangleModel
 pub struct TriangleModelFrameInfo
 {
 	pub bbox: BBox,
+}
+
+pub struct TriangleModelBoneInfo
+{
+	pub name: String,
+	pub parent: u32, // invalid index if has no parent
+}
+
+#[derive(Copy, Clone)]
+pub struct TriangleModelBoneFrame
+{
+	pub matrix: Mat4f,
 }
 
 pub struct TriangleModelMesh
