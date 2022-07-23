@@ -1,5 +1,5 @@
 use super::{triangle_model::*, triangle_model_loading::*};
-use common::math_types::*;
+use common::{bbox::*, math_types::*};
 use std::io::Read;
 
 pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleModel>, std::io::Error>
@@ -42,10 +42,41 @@ pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleMode
 
 	let bounds = load_bounds(&mut file, &header)?;
 
-	println!("bounds: {:?}", bounds);
+	let frames_info = bounds
+		.iter()
+		.map(|b| TriangleModelFrameInfo {
+			bbox: BBox::from_min_max(Vec3f::from(b.bbmins), Vec3f::from(b.bbmaxs)),
+		})
+		.collect();
 
-	println!("iqm: {:?}", header);
-	panic!("not implemented yet!");
+	let triangles_transformed = triangles
+		.iter()
+		.map(|t| {
+			[
+				t.vertex[0] as VertexIndex,
+				t.vertex[1] as VertexIndex,
+				t.vertex[2] as VertexIndex,
+			]
+		})
+		.collect();
+
+	// TODO - export all meshes separately.
+	// Now just load single mesh.
+	let single_mesh = TriangleModelMesh {
+		material_name: String::new(), // TODO
+		triangles: triangles_transformed,
+		vertex_data: VertexData::SkeletonAnimated(vertices),
+		num_frames: header.num_frames,
+	};
+
+	// Add extra shift because we use texture coordinates floor, instead of linear OpenGL interpolation as Quake III does.
+	let tc_shift = -Vec2f::new(0.5, 0.5);
+
+	Ok(Some(TriangleModel {
+		frames_info,
+		tc_shift,
+		meshes: vec![single_mesh],
+	}))
 }
 
 fn load_meshes(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<IQMMesh>, std::io::Error>
