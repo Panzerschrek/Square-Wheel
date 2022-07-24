@@ -14,7 +14,7 @@ pub struct ModelEntity
 {
 	pub position: Vec3f,
 	pub angles: EulerAnglesF,
-	pub frame: u32,
+	pub animation: AnimationPoint,
 	pub model: SharedResourcePtr<TriangleModel>,
 	pub texture: SharedResourcePtr<Image>,
 
@@ -25,4 +25,13 @@ pub struct ModelEntity
 	// Use it to override bbox (in object-space) to improve models ordering.
 	// For example, use bbox with size reduced relative to true model bbox.
 	pub ordering_custom_bbox: Option<BBox>,
+}
+
+// Two frames with interpolation fator between them.
+// value = frames[0] * lerp + frames[1] * (1.0 - lerp)
+#[derive(Clone)]
+pub struct AnimationPoint
+{
+	pub frames: [u32; 2],
+	pub lerp: f32,
 }

@@ -1,4 +1,4 @@
-use super::frame_info::*;
+use super::{frame_info::*, triangle_models_rendering::*};
 use common::{bsp_map_compact, math_types::*, matrix::*};
 use std::sync::Arc;
 
@@ -66,7 +66,7 @@ impl DynamicModelsIndex
 	fn position_model(&mut self, model: &ModelEntity, id: ModelId)
 	{
 		// Calculate current bounding box.
-		let bbox = &model.model.frames_info[model.frame as usize].bbox;
+		let bbox = get_current_triangle_model_bbox(&model.model, &model.animation);
 		let transform_matrix = get_object_matrix(model.position, model.angles);
 
 		let bbox_vertices = [

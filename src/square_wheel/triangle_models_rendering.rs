@@ -1,51 +1,112 @@
-use super::triangle_model::*;
-use common::{clipping::*, math_types::*, plane::*};
+use super::{frame_info::*, triangle_model::*};
+use common::{bbox::*, clipping::*, math_types::*, plane::*};
 
 pub fn animate_and_transform_triangle_mesh_vertices(
 	model: &TriangleModel,
 	mesh: &TriangleModelMesh,
-	frame: usize,
+	animation: &AnimationPoint,
 	matrix: &Mat4f,
 	tc_scale: &Vec2f,
 	tc_shift: &Vec2f,
 	dst_vertices: &mut [ModelVertex3d],
 )
 {
+	let frame0 = animation.frames[0] as usize;
+	let frame1 = animation.frames[1] as usize;
+	let lerp0 = animation.lerp.max(0.0).min(1.0);
+	let lerp1 = 1.0 - lerp0;
+
+	let perform_lerp = lerp0 > 0.01 && lerp0 < 0.99;
+
 	match &mesh.vertex_data
 	{
 		VertexData::VertexAnimated(va) =>
 		{
-			let frame_vertex_data = &va.variable[frame * va.constant.len() .. (frame + 1) * va.constant.len()];
+			let frame_vertex_data0 = &va.variable[frame0 * va.constant.len() .. (frame0 + 1) * va.constant.len()];
+			let frame_vertex_data1 = &va.variable[frame1 * va.constant.len() .. (frame1 + 1) * va.constant.len()];
 
-			for ((v_v, v_c), dst_v) in frame_vertex_data
-				.iter()
-				.zip(va.constant.iter())
-				.zip(dst_vertices.iter_mut())
+			if perform_lerp
 			{
-				let pos_transformed = matrix * v_v.position.extend(1.0);
-				*dst_v = ModelVertex3d {
-					pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
-					tc: Vec2f::from(v_c.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
+				// Perfomr smooth interpolation.
+				for (((v_v0, v_v1), v_c), dst_v) in frame_vertex_data0
+					.iter()
+					.zip(frame_vertex_data1)
+					.zip(va.constant.iter())
+					.zip(dst_vertices.iter_mut())
+				{
+					let position_lerped = v_v0.position * lerp0 + v_v1.position * lerp1;
+					let pos_transformed = matrix * position_lerped.extend(1.0);
+					*dst_v = ModelVertex3d {
+						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
+						tc: Vec2f::from(v_c.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
+					};
+				}
+			}
+			else
+			{
+				// Use single frame.
+				let frame_vertex_data = if lerp0 > lerp1
+				{
+					frame_vertex_data0
+				}
+				else
+				{
+					frame_vertex_data1
 				};
+				for ((v_v, v_c), dst_v) in frame_vertex_data
+					.iter()
+					.zip(va.constant.iter())
+					.zip(dst_vertices.iter_mut())
+				{
+					let pos_transformed = matrix * v_v.position.extend(1.0);
+					*dst_v = ModelVertex3d {
+						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
+						tc: Vec2f::from(v_c.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
+					};
+				}
 			}
 		},
 		VertexData::SkeletonAnimated(v) =>
 		{
-			let frame_bones = &model.frame_bones[frame * model.bones.len() .. (frame + 1) * model.bones.len()];
+			let frame_bones0 = &model.frame_bones[frame0 * model.bones.len() .. (frame0 + 1) * model.bones.len()];
+			let frame_bones1 = &model.frame_bones[frame1 * model.bones.len() .. (frame1 + 1) * model.bones.len()];
 
 			// TODO - use uninitialized memory.
 			let mut matrices = [Mat4f::zero(); MAX_TRIANGLE_MODEL_BONES];
 			// This code relies on fact that all bones are sorted in hierarchy order.
-			for bone_index in 0 .. model.bones.len()
+			if perform_lerp
 			{
-				let parent = model.bones[bone_index].parent as usize;
-				if parent < model.bones.len()
+				// Interpolate between two frames.
+				for (bone_index, (frame_bone0, frame_bone1)) in frame_bones0.iter().zip(frame_bones1.iter()).enumerate()
 				{
-					matrices[bone_index] = matrices[parent] * frame_bones[bone_index].matrix;
+					let parent = model.bones[bone_index].parent as usize;
+					// TODO - shouldn't we fix this matrix somehow?
+					let mat = frame_bone0.matrix * lerp0 + frame_bone1.matrix * lerp1;
+					if parent < model.bones.len()
+					{
+						matrices[bone_index] = matrices[parent] * mat;
+					}
+					else
+					{
+						matrices[bone_index] = mat;
+					}
 				}
-				else
+			}
+			else
+			{
+				// Use single frame.
+				let frame_bones = if lerp0 > lerp1 { frame_bones0 } else { frame_bones1 };
+				for (bone_index, frame_bone) in frame_bones.iter().enumerate()
 				{
-					matrices[bone_index] = frame_bones[bone_index].matrix;
+					let parent = model.bones[bone_index].parent as usize;
+					if parent < model.bones.len()
+					{
+						matrices[bone_index] = matrices[parent] * frame_bone.matrix;
+					}
+					else
+					{
+						matrices[bone_index] = frame_bone.matrix;
+					}
 				}
 			}
 
@@ -73,6 +134,15 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 			}
 		},
 	}
+}
+
+pub fn get_current_triangle_model_bbox(model: &TriangleModel, animation: &AnimationPoint) -> BBox
+{
+	// Just use maximum bbox.
+	// TODO - maybe interpolate it instead?
+	let mut bbox = model.frames_info[animation.frames[0] as usize].bbox;
+	bbox.extend(&model.frames_info[animation.frames[1] as usize].bbox);
+	bbox
 }
 
 pub fn reject_triangle_model_back_faces(

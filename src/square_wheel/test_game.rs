@@ -65,7 +65,11 @@ impl Game
 
 		for model in &mut self.test_models
 		{
-			model.frame = (self.game_time * 10.0) as u32 % (model.model.frames_info.len() as u32);
+			let num_frames = model.model.frames_info.len() as u32;
+			let frame_f = self.game_time * 10.0;
+			model.animation.frames[0] = (frame_f as u32) % num_frames;
+			model.animation.frames[1] = (frame_f as u32 + 1) % num_frames;
+			model.animation.lerp = 1.0 - frame_f.fract();
 		}
 	}
 
@@ -223,7 +227,10 @@ impl Game
 		self.test_models.push(ModelEntity {
 			position: self.camera.get_pos(),
 			angles: self.camera.get_euler_angles(),
-			frame: 0,
+			animation: AnimationPoint {
+				frames: [0, 0],
+				lerp: 0.0,
+			},
 			model,
 			texture,
 			is_view_model: false,
@@ -251,7 +258,10 @@ impl Game
 		self.view_model = Some(ModelEntity {
 			position: Vec3f::zero(),
 			angles: EulerAnglesF::new(Rad(0.0), Rad(0.0), Rad(0.0)),
-			frame: 0,
+			animation: AnimationPoint {
+				frames: [0, 0],
+				lerp: 0.0,
+			},
 			model,
 			texture,
 			is_view_model: true,

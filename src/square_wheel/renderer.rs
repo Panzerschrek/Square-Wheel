@@ -436,7 +436,7 @@ impl Renderer
 
 		let func = |visible_dynamic_mesh: &mut VisibleDynamicMeshInfo| {
 			let model = &models[visible_dynamic_mesh.entity_index as usize];
-			let frame = model.frame as usize;
+			let animation = &model.animation;
 
 			visible_dynamic_mesh.light = fetch_light_from_grid(map, &model.position);
 
@@ -449,7 +449,7 @@ impl Renderer
 			visible_dynamic_mesh.camera_matrices.planes_matrix = camera_matrices.planes_matrix * model_matrix_inverse;
 
 			// Transform bbox.
-			let bbox = &model.model.frames_info[frame].bbox;
+			let bbox = get_current_triangle_model_bbox(&model.model, animation);
 			visible_dynamic_mesh.bbox_vertices_transformed = [
 				Vec3f::new(bbox.min.x, bbox.min.y, bbox.min.z),
 				Vec3f::new(bbox.min.x, bbox.min.y, bbox.max.z),
@@ -474,7 +474,7 @@ impl Renderer
 			animate_and_transform_triangle_mesh_vertices(
 				&model.model,
 				mesh,
-				frame,
+				animation,
 				&final_matrix,
 				&Vec2f::new(texture.size[0] as f32, texture.size[1] as f32),
 				&model.model.tc_shift,
@@ -1269,13 +1269,13 @@ impl Renderer
 			}
 
 			let model = &models[*dynamic_model_index as usize];
-			let bbox = if let Some(bb) = &model.ordering_custom_bbox
+			let bbox = if let Some(bb) = model.ordering_custom_bbox
 			{
 				bb
 			}
 			else
 			{
-				&model.model.frames_info[model.frame as usize].bbox
+				get_current_triangle_model_bbox(&model.model, &model.animation)
 			};
 
 			let entry = self.dynamic_model_to_dynamic_meshes_index[*dynamic_model_index as usize];
@@ -1289,7 +1289,7 @@ impl Renderer
 				let mesh = &self.visible_dynamic_meshes_list[visible_mesh_index as usize];
 				models_for_sorting[num_models] = (
 					visible_mesh_index + DYNAMIC_MESH_INDEX_ADD,
-					draw_ordering::project_bbox(bbox, &mesh.camera_matrices),
+					draw_ordering::project_bbox(&bbox, &mesh.camera_matrices),
 				);
 				num_models += 1;
 			}
