@@ -122,8 +122,12 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 					matrices[v.bones_description[0].bone_index as usize] * (v.bones_description[0].weight as f32);
 				for i in 1 .. 4
 				{
-					mat +=
-						matrices[v.bones_description[i].bone_index as usize] * (v.bones_description[i].weight as f32);
+					// Avoid costly matrix operation if weight is zero.
+					if v.bones_description[i].weight > 0
+					{
+						mat += matrices[v.bones_description[i].bone_index as usize] *
+							(v.bones_description[i].weight as f32);
+					}
 				}
 
 				let pos_transformed = mat * v.position.extend(1.0);
