@@ -2,7 +2,7 @@ use super::{
 	config, console::*, resources_manager_config::*, textures::*, triangle_model, triangle_model_iqm,
 	triangle_model_md3,
 };
-use common::{bsp_map_compact::*, bsp_map_save_load::*, image, material::*};
+use common::{bbox::*, bsp_map_compact::*, bsp_map_save_load::*, image, material::*, math_types::*};
 use std::{
 	collections::HashMap,
 	path::PathBuf,
@@ -22,7 +22,9 @@ pub struct ResourcesManager
 	last_map: Option<(String, SharedResourcePtr<BSPMap>)>,
 
 	models: ResourcesMap<triangle_model::TriangleModel>,
+	stub_model: SharedResourcePtr<triangle_model::TriangleModel>,
 	images: ResourcesMap<image::Image>,
+	stub_image: SharedResourcePtr<image::Image>,
 	material_textures: ResourcesMap<TextureWithMips>,
 }
 
@@ -50,7 +52,9 @@ impl ResourcesManager
 			default_material: Material::default(),
 			last_map: None,
 			models: ResourcesMap::new(),
+			stub_model: SharedResourcePtr::new(make_stub_model()),
 			images: ResourcesMap::new(),
+			stub_image: SharedResourcePtr::new(image::make_stub()),
 			material_textures: ResourcesMap::new(),
 		}))
 	}
@@ -111,21 +115,30 @@ impl ResourcesManager
 		let mut model_path = PathBuf::from(self.config.models_path.clone());
 		model_path.push(key);
 
-		// TODO - use dummy instead of "unwrap".
-		let model = if key.ends_with(".iqm")
+		let load_result = if key.ends_with(".iqm")
 		{
 			triangle_model_iqm::load_model_iqm(&model_path)
 		}
 		else
 		{
 			triangle_model_md3::load_model_md3(&model_path)
-		}
-		.unwrap()
-		.unwrap();
+		};
 
-		let ptr = SharedResourcePtr::new(model);
+		let ptr = match load_result
+		{
+			Ok(Some(model)) => SharedResourcePtr::new(model),
+			Ok(None) => self.stub_model.clone(),
+			Err(e) =>
+			{
+				self.console
+					.lock()
+					.unwrap()
+					.add_text(format!("Failed to load model {:?}: {}", model_path, e));
+				self.stub_model.clone()
+			},
+		};
+
 		self.models.insert(key.clone(), ptr.clone());
-
 		ptr
 	}
 
@@ -136,11 +149,16 @@ impl ResourcesManager
 			return p.clone();
 		}
 
-		let image = load_image(&key, &self.config.textures_path).unwrap_or_else(image::make_stub);
+		let ptr = if let Some(image) = load_image(&key, &self.config.textures_path)
+		{
+			SharedResourcePtr::new(image)
+		}
+		else
+		{
+			self.stub_image.clone()
+		};
 
-		let ptr = SharedResourcePtr::new(image);
 		self.images.insert(key.clone(), ptr.clone());
-
 		ptr
 	}
 
@@ -179,6 +197,24 @@ impl ResourcesManager
 fn remove_unused_resource_map_entries<T>(map: &mut ResourcesMap<T>)
 {
 	map.retain(|_k, v| Arc::strong_count(v) > 1);
+}
+
+fn make_stub_model() -> triangle_model::TriangleModel
+{
+	triangle_model::TriangleModel {
+		animations: Vec::new(),
+		frames_info: vec![triangle_model::TriangleModelFrameInfo { bbox: BBox::zero() }],
+		frame_bones: Vec::new(),
+		meshes: vec![triangle_model::TriangleModelMesh {
+			name: String::new(),
+			material_name: String::new(),
+			triangles: Vec::new(),
+			num_frames: 1,
+			vertex_data: triangle_model::VertexData::SkeletonAnimated(Vec::new()),
+		}],
+		bones: Vec::new(),
+		tc_shift: Vec2f::zero(),
+	}
 }
 
 fn load_texture(material: &Material, textures_path: &str) -> TextureWithMips
