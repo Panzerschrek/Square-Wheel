@@ -276,12 +276,18 @@ impl Renderer
 
 		if debug_stats_printer.show_debug_stats()
 		{
-			self.print_debug_stats(inline_models_index, debug_stats_printer, &performance_counters);
+			self.print_debug_stats(
+				frame_info,
+				inline_models_index,
+				debug_stats_printer,
+				&performance_counters,
+			);
 		}
 	}
 
 	fn print_debug_stats(
 		&mut self,
+		frame_info: &FrameInfo,
 		inline_models_index: &InlineModelsIndex,
 		debug_stats_printer: &mut DebugStatsPrinter,
 		performance_counters: &RendererPerformanceCounters,
@@ -301,6 +307,21 @@ impl Renderer
 				num_visible_submodels_parts += inline_models_index.get_leaf_models(leaf_index as u32).len();
 				num_visible_meshes_parts += self.dynamic_models_index.get_leaf_models(leaf_index as u32).len();
 			}
+		}
+
+		let mut triangles = 0;
+		let mut triangle_vertices = 0;
+		for visible_dynamic_mesh in &self.visible_dynamic_meshes_list
+		{
+			triangles += visible_dynamic_mesh.num_visible_triangles;
+			triangle_vertices += match &frame_info.model_entities[visible_dynamic_mesh.entity_index as usize]
+				.model
+				.meshes[visible_dynamic_mesh.mesh_index as usize]
+				.vertex_data
+			{
+				VertexData::VertexAnimated(va) => va.constant.len(),
+				VertexData::SkeletonAnimated(v) => v.len(),
+			};
 		}
 
 		debug_stats_printer.add_line(format!(
@@ -331,9 +352,11 @@ impl Renderer
 		debug_stats_printer.add_line(format!("submodels parts: {}", num_visible_submodels_parts));
 		debug_stats_printer.add_line(format!("polygons: {}", self.current_frame_visible_polygons.len()));
 		debug_stats_printer.add_line(format!(
-			"dynamic meshes : {}, parts: {}",
+			"dynamic meshes : {}, parts: {}, triangles: {}, vertices: {}",
 			self.visible_dynamic_meshes_list.len(),
-			num_visible_meshes_parts
+			num_visible_meshes_parts,
+			triangles,
+			triangle_vertices
 		));
 		debug_stats_printer.add_line(format!(
 			"surfaces pixels: {}k",
