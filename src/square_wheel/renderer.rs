@@ -397,7 +397,13 @@ impl Renderer
 					light: bsp_map_compact::LightGridElement::default(), // Set later
 				});
 
-				vertices_offset += mesh.vertex_data_constant.len();
+				let num_vertices = match &mesh.vertex_data
+				{
+					VertexData::VertexAnimated(va) => va.constant.len(),
+					VertexData::SkeletonAnimated(v) => v.len(),
+				};
+
+				vertices_offset += num_vertices;
 				triangles_offset += mesh.triangles.len();
 			}
 
@@ -459,30 +465,21 @@ impl Renderer
 				Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w)
 			});
 
-			// TODO - premultiply texture coordinates while loading model instead?
 			let texture = &model.texture;
-			let tc_scale = Vec2f::new(texture.size[0] as f32, texture.size[1] as f32);
-			let tc_shift = model.model.tc_shift;
-
 			let mesh = &model.model.meshes[visible_dynamic_mesh.mesh_index as usize];
 
 			// Perform vertices transformation.
-			let frame_vertex_data = &mesh.vertex_data_variable
-				[frame * mesh.vertex_data_constant.len() .. (frame + 1) * mesh.vertex_data_constant.len()];
-
 			let dst_mesh_vertices = unsafe { &mut dst_vertices_shared.get()[visible_dynamic_mesh.vertices_offset ..] };
 
-			for ((v_v, v_c), dst_v) in frame_vertex_data
-				.iter()
-				.zip(mesh.vertex_data_constant.iter())
-				.zip(dst_mesh_vertices.iter_mut())
-			{
-				let pos_transformed = final_matrix * v_v.position.extend(1.0);
-				*dst_v = ModelVertex3d {
-					pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
-					tc: Vec2f::from(v_c.tex_coord).mul_element_wise(tc_scale) + tc_shift,
-				};
-			}
+			animate_and_transform_triangle_mesh_vertices(
+				&model.model,
+				mesh,
+				frame,
+				&final_matrix,
+				&Vec2f::new(texture.size[0] as f32, texture.size[1] as f32),
+				&model.model.tc_shift,
+				dst_mesh_vertices,
+			);
 
 			// Copy, filter and sort triangles.
 			let dst_triangles = unsafe { &mut dst_triangles_shared.get()[visible_dynamic_mesh.triangles_offset ..] };

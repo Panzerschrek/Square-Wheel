@@ -34,6 +34,8 @@ mod text_printer;
 mod textures;
 mod ticks_counter;
 mod triangle_model;
+mod triangle_model_iqm;
+mod triangle_model_loading;
 mod triangle_model_md3;
 mod triangle_models_rendering;
 

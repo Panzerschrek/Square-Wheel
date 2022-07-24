@@ -1,4 +1,4 @@
-use super::triangle_model::*;
+use super::{triangle_model::*, triangle_model_loading::*};
 use common::{bbox::*, math_types::*};
 use std::io::{Read, Seek};
 
@@ -35,18 +35,8 @@ pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleMode
 		return Ok(None);
 	}
 
-	let mut frames_src = vec![Md3Frame::default(); header.num_frames as usize];
-	read_chunk(&mut file, header.lump_frameinfo as u64, &mut frames_src)?;
-
-	let mut tags_src = vec![
-		Md3Tag {
-			name: [0; MAX_QPATH],
-			origin: [0.0; 3],
-			rotation_matrix: [0.0; 9]
-		};
-		header.num_tags as usize
-	];
-	read_chunk(&mut file, header.lump_tags as u64, &mut tags_src)?;
+	let frames_src = read_vector::<Md3Frame>(&mut file, header.lump_frameinfo as u64, header.num_frames)?;
+	// let tags_src = read_vector::<Md3Tag>(&mut file, header.lump_tags as u64, header.num_tags);
 
 	// TODO - shouldn't we use "origin" here?
 	let frames_info = frames_src
@@ -85,8 +75,11 @@ pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleMode
 	let tc_shift = -Vec2f::new(0.5, 0.5);
 
 	Ok(Some(TriangleModel {
+		animations: Vec::new(),
 		frames_info,
 		meshes,
+		bones: Vec::new(),
+		frame_bones: Vec::new(),
 		tc_shift,
 	}))
 }
@@ -103,23 +96,22 @@ fn load_md3_mesh(
 		return Ok(None);
 	}
 
-	let mut triangles_src = vec![Md3Triangle::default(); src_mesh.num_triangles as usize];
-	read_chunk(file, src_mesh.lump_triangles as u64 + mesh_offset, &mut triangles_src)?;
-
-	let mut tex_coords_src = vec![Md3TexCoord::default(); src_mesh.num_vertices as usize];
-	read_chunk(file, src_mesh.lump_texcoords as u64 + mesh_offset, &mut tex_coords_src)?;
-
-	let mut frames_src = vec![Md3Vertex::default(); (src_mesh.num_vertices * src_mesh.num_frames) as usize];
-	read_chunk(file, src_mesh.lump_framevertices as u64 + mesh_offset, &mut frames_src)?;
-
-	let mut shaders_src = vec![
-		Md3Shader {
-			name: [0; MAX_QPATH],
-			index: 0
-		};
-		src_mesh.num_shaders as usize
-	];
-	read_chunk(file, src_mesh.lump_shaders as u64 + mesh_offset, &mut shaders_src)?;
+	let triangles_src = read_vector::<Md3Triangle>(
+		file,
+		src_mesh.lump_triangles as u64 + mesh_offset,
+		src_mesh.num_triangles,
+	)?;
+	let tex_coords_src = read_vector::<Md3TexCoord>(
+		file,
+		src_mesh.lump_texcoords as u64 + mesh_offset,
+		src_mesh.num_vertices,
+	)?;
+	let frames_src = read_vector::<Md3Vertex>(
+		file,
+		src_mesh.lump_framevertices as u64 + mesh_offset,
+		src_mesh.num_vertices * src_mesh.num_frames,
+	)?;
+	// let shaders_src = read_vector::<Md3Shader>(file, src_mesh.lump_shaders as u64 + mesh_offset, src_mesh.num_shaders)?;
 
 	let triangles = triangles_src
 		.iter()
@@ -144,27 +136,11 @@ fn load_md3_mesh(
 		material_name: String::new(/*TODO*/),
 		triangles,
 		num_frames: src_mesh.num_frames,
-		vertex_data_constant,
-		vertex_data_variable,
+		vertex_data: VertexData::VertexAnimated(VertexAnimatedVertexData {
+			constant: vertex_data_constant,
+			variable: vertex_data_variable,
+		}),
 	}))
-}
-
-fn read_chunk<T: Copy>(file: &mut std::fs::File, offset: u64, dst: &mut [T]) -> Result<(), std::io::Error>
-{
-	file.seek(std::io::SeekFrom::Start(offset as u64))?;
-
-	if dst.is_empty()
-	{
-		return Ok(());
-	}
-
-	let bytes = unsafe {
-		std::slice::from_raw_parts_mut((&mut dst[0]) as *mut T as *mut u8, std::mem::size_of::<T>() * dst.len())
-	};
-
-	file.read_exact(bytes)?;
-
-	Ok(())
 }
 
 fn decompress_normal(normal_pitch_yaw: i16) -> Vec3f
