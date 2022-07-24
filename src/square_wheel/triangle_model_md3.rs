@@ -36,13 +36,42 @@ pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleMode
 	}
 
 	let frames_src = read_vector::<Md3Frame>(&mut file, header.lump_frameinfo as u64, header.num_frames)?;
-	// let tags_src = read_vector::<Md3Tag>(&mut file, header.lump_tags as u64, header.num_tags);
+	let tags_src = read_vector::<Md3Tag>(&mut file, header.lump_tags as u64, header.num_tags * header.num_frames)?;
 
 	// TODO - shouldn't we use "origin" here?
 	let frames_info = frames_src
 		.iter()
 		.map(|f| TriangleModelFrameInfo {
 			bbox: BBox::from_min_max(Vec3f::from(f.mins), Vec3f::from(f.maxs)),
+		})
+		.collect();
+
+	let bones = tags_src
+		.iter()
+		.take(header.num_tags as usize)
+		.map(|t| TriangleModelBoneInfo {
+			name: get_str(&t.name).to_string(),
+			parent: 0xFFFFFFFF,
+		})
+		.collect();
+
+	// Tagss set exists for each frame. Effectively, tag is a bone nedcription for given frame.
+	let frame_bones = tags_src
+		.iter()
+		.map(|t| TriangleModelBoneFrame {
+			// TODO - check this.
+			matrix: Mat4f::from_translation(Vec3f::from(t.origin)) *
+				Mat4f::from(Mat3f::new(
+					t.rotation_matrix[0],
+					t.rotation_matrix[1],
+					t.rotation_matrix[2],
+					t.rotation_matrix[3],
+					t.rotation_matrix[4],
+					t.rotation_matrix[5],
+					t.rotation_matrix[6],
+					t.rotation_matrix[7],
+					t.rotation_matrix[8],
+				)),
 		})
 		.collect();
 
@@ -77,9 +106,9 @@ pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleMode
 	Ok(Some(TriangleModel {
 		animations: Vec::new(),
 		frames_info,
+		frame_bones,
 		meshes,
-		bones: Vec::new(),
-		frame_bones: Vec::new(),
+		bones,
 		tc_shift,
 	}))
 }
@@ -151,6 +180,12 @@ fn decompress_normal(normal_pitch_yaw: i16) -> Vec3f
 
 	let pitch_sin = pitch.sin();
 	Vec3f::new(pitch_sin * yaw.cos(), pitch_sin * yaw.sin(), pitch.cos())
+}
+
+fn get_str(str_src: &[u8; MAX_QPATH]) -> &str
+{
+	let null_pos = str_src.iter().position(|x| *x == 0_u8).unwrap_or(str_src.len());
+	std::str::from_utf8(&str_src[0 .. null_pos]).unwrap_or("")
 }
 
 #[repr(C)]
