@@ -27,7 +27,7 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 
 			if perform_lerp
 			{
-				// Perfomr smooth interpolation.
+				// Perform smooth interpolation.
 				for (((v_v0, v_v1), v_c), dst_v) in frame_vertex_data0
 					.iter()
 					.zip(frame_vertex_data1)
@@ -68,73 +68,89 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 		},
 		VertexData::SkeletonAnimated(v) =>
 		{
-			let frame_bones0 = &model.frame_bones[frame0 * model.bones.len() .. (frame0 + 1) * model.bones.len()];
-			let frame_bones1 = &model.frame_bones[frame1 * model.bones.len() .. (frame1 + 1) * model.bones.len()];
-
-			// TODO - use uninitialized memory.
-			let mut matrices = [Mat4f::zero(); MAX_TRIANGLE_MODEL_BONES];
-			// This code relies on fact that all bones are sorted in hierarchy order.
-			if perform_lerp
+			if model.frame_bones.is_empty()
 			{
-				// Interpolate between two frames.
-				for (bone_index, (frame_bone0, frame_bone1)) in frame_bones0.iter().zip(frame_bones1.iter()).enumerate()
+				// No animation - just use source vertces.
+				for (v, dst_v) in v.iter().zip(dst_vertices.iter_mut())
 				{
-					let parent = model.bones[bone_index].parent as usize;
-					// TODO - shouldn't we fix this matrix somehow?
-					let mat = frame_bone0.matrix * lerp0 + frame_bone1.matrix * lerp1;
-					if parent < model.bones.len()
-					{
-						matrices[bone_index] = matrices[parent] * mat;
-					}
-					else
-					{
-						matrices[bone_index] = mat;
-					}
+					let pos_transformed = matrix * v.position.extend(1.0);
+					*dst_v = ModelVertex3d {
+						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
+						tc: Vec2f::from(v.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
+					};
 				}
 			}
 			else
 			{
-				// Use single frame.
-				let frame_bones = if lerp0 > lerp1 { frame_bones0 } else { frame_bones1 };
-				for (bone_index, frame_bone) in frame_bones.iter().enumerate()
+				let frame_bones0 = &model.frame_bones[frame0 * model.bones.len() .. (frame0 + 1) * model.bones.len()];
+				let frame_bones1 = &model.frame_bones[frame1 * model.bones.len() .. (frame1 + 1) * model.bones.len()];
+
+				// TODO - use uninitialized memory.
+				let mut matrices = [Mat4f::zero(); MAX_TRIANGLE_MODEL_BONES];
+				// This code relies on fact that all bones are sorted in hierarchy order.
+				if perform_lerp
 				{
-					let parent = model.bones[bone_index].parent as usize;
-					if parent < model.bones.len()
+					// Interpolate between two frames.
+					for (bone_index, (frame_bone0, frame_bone1)) in
+						frame_bones0.iter().zip(frame_bones1.iter()).enumerate()
 					{
-						matrices[bone_index] = matrices[parent] * frame_bone.matrix;
-					}
-					else
-					{
-						matrices[bone_index] = frame_bone.matrix;
+						let parent = model.bones[bone_index].parent as usize;
+						// TODO - shouldn't we fix this matrix somehow?
+						let mat = frame_bone0.matrix * lerp0 + frame_bone1.matrix * lerp1;
+						if parent < model.bones.len()
+						{
+							matrices[bone_index] = matrices[parent] * mat;
+						}
+						else
+						{
+							matrices[bone_index] = mat;
+						}
 					}
 				}
-			}
-
-			let matrix_weight_scaled = matrix * (1.0 / 255.0);
-			for bone_index in 0 .. model.bones.len()
-			{
-				matrices[bone_index] = matrix_weight_scaled * matrices[bone_index];
-			}
-
-			for (v, dst_v) in v.iter().zip(dst_vertices.iter_mut())
-			{
-				let mut mat =
-					matrices[v.bones_description[0].bone_index as usize] * (v.bones_description[0].weight as f32);
-				for i in 1 .. 4
+				else
 				{
-					// Avoid costly matrix operation if weight is zero.
-					if v.bones_description[i].weight > 0
+					// Use single frame.
+					let frame_bones = if lerp0 > lerp1 { frame_bones0 } else { frame_bones1 };
+					for (bone_index, frame_bone) in frame_bones.iter().enumerate()
 					{
-						mat += matrices[v.bones_description[i].bone_index as usize] *
-							(v.bones_description[i].weight as f32);
+						let parent = model.bones[bone_index].parent as usize;
+						if parent < model.bones.len()
+						{
+							matrices[bone_index] = matrices[parent] * frame_bone.matrix;
+						}
+						else
+						{
+							matrices[bone_index] = frame_bone.matrix;
+						}
 					}
 				}
 
-				let pos_transformed = mat * v.position.extend(1.0);
-				*dst_v = ModelVertex3d {
-					pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
-					tc: Vec2f::from(v.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
-				};
+				let matrix_weight_scaled = matrix * (1.0 / 255.0);
+				for bone_index in 0 .. model.bones.len()
+				{
+					matrices[bone_index] = matrix_weight_scaled * matrices[bone_index];
+				}
+
+				for (v, dst_v) in v.iter().zip(dst_vertices.iter_mut())
+				{
+					let mut mat =
+						matrices[v.bones_description[0].bone_index as usize] * (v.bones_description[0].weight as f32);
+					for i in 1 .. 4
+					{
+						// Avoid costly matrix operation if weight is zero.
+						if v.bones_description[i].weight > 0
+						{
+							mat += matrices[v.bones_description[i].bone_index as usize] *
+								(v.bones_description[i].weight as f32);
+						}
+					}
+
+					let pos_transformed = mat * v.position.extend(1.0);
+					*dst_v = ModelVertex3d {
+						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
+						tc: Vec2f::from(v.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
+					};
+				}
 			}
 		},
 	}

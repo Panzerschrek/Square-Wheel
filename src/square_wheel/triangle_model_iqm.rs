@@ -40,11 +40,6 @@ pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleMode
 		println!("Invalid IQM model with no meshes");
 		return Ok(None);
 	}
-	if header.num_frames == 0
-	{
-		println!("Invalid IQM model with no frames");
-		return Ok(None);
-	}
 	if header.num_joints != header.num_poses
 	{
 		println!(
