@@ -35,6 +35,25 @@ pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleMode
 		return Ok(None);
 	}
 
+	if header.num_meshes == 0
+	{
+		println!("Invalid IQM model with no meshes");
+		return Ok(None);
+	}
+	if header.num_frames == 0
+	{
+		println!("Invalid IQM model with no frames");
+		return Ok(None);
+	}
+	if header.num_joints != header.num_poses
+	{
+		println!(
+			"Invalid IQM model: joints/poses mismatch ({}/{})",
+			header.num_joints, header.num_poses
+		);
+		return Ok(None);
+	}
+
 	let texts = load_texts(&mut file, &header)?;
 	let meshes = load_meshes(&mut file, &header)?;
 	let triangles = load_triangles(&mut file, &header)?;
