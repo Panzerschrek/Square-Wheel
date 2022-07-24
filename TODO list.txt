@@ -11,9 +11,8 @@ General:
 * Avoid usage of "unwrap"
 
 Engine:
-* Screen surface update parallel with other operations (game logic, rendering preparation)
 * Smooth animation for frame-based animated models (interpolate between 2 or more frames)
-* More advanced skeleton animation - with animations blending, combination, override matrices for specific bones, etc.
+* More advanced skeleton animation - with animations combination, override matrices for specific bones, ragdoll, etc.
 * Anmation files as separate resources (share animations between different models).
 
 Renderer:
@@ -33,7 +32,6 @@ Renderer:
 
 Lightmapper:
 * Polygons without shadows
-* Light volumes (for dynamic objects lighting)
 * Semitransparent objects shadows
 * Shadows from dynamic objects (configurable)
 
