@@ -140,7 +140,7 @@ fn load_md3_mesh(
 		src_mesh.lump_framevertices as u64 + mesh_offset,
 		src_mesh.num_vertices * src_mesh.num_frames,
 	)?;
-	// let shaders_src = read_vector::<Md3Shader>(file, src_mesh.lump_shaders as u64 + mesh_offset, src_mesh.num_shaders)?;
+	let shaders_src = read_vector::<Md3Shader>(file, src_mesh.lump_shaders as u64 + mesh_offset, src_mesh.num_shaders)?;
 
 	let triangles = triangles_src
 		.iter()
@@ -161,8 +161,19 @@ fn load_md3_mesh(
 		})
 		.collect();
 
+	let material_name = if shaders_src.is_empty()
+	{
+		""
+	}
+	else
+	{
+		get_str(&shaders_src[0].name)
+	}
+	.to_string();
+
 	Ok(Some(TriangleModelMesh {
-		material_name: String::new(/*TODO*/),
+		name: get_str(&src_mesh.name).to_string(),
+		material_name,
 		triangles,
 		num_frames: src_mesh.num_frames,
 		vertex_data: VertexData::VertexAnimated(VertexAnimatedVertexData {

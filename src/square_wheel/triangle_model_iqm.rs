@@ -105,6 +105,7 @@ pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleMode
 	// TODO - export all meshes separately.
 	// Now just load single mesh.
 	let single_mesh = TriangleModelMesh {
+		name: get_text_str(&texts, meshes[0].name).to_string(),
 		material_name: get_text_str(&texts, meshes[0].material).to_string(),
 		triangles: triangles_transformed,
 		vertex_data: VertexData::SkeletonAnimated(vertices),

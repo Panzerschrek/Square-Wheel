@@ -40,6 +40,7 @@ pub struct TriangleModelBoneFrame
 
 pub struct TriangleModelMesh
 {
+	pub name: String,
 	pub material_name: String,
 	pub triangles: Vec<Triangle>,
 	pub num_frames: u32,
