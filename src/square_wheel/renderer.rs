@@ -450,17 +450,7 @@ impl Renderer
 
 			// Transform bbox.
 			let bbox = get_current_triangle_model_bbox(&model.model, animation);
-			visible_dynamic_mesh.bbox_vertices_transformed = [
-				Vec3f::new(bbox.min.x, bbox.min.y, bbox.min.z),
-				Vec3f::new(bbox.min.x, bbox.min.y, bbox.max.z),
-				Vec3f::new(bbox.min.x, bbox.max.y, bbox.min.z),
-				Vec3f::new(bbox.min.x, bbox.max.y, bbox.max.z),
-				Vec3f::new(bbox.max.x, bbox.min.y, bbox.min.z),
-				Vec3f::new(bbox.max.x, bbox.min.y, bbox.max.z),
-				Vec3f::new(bbox.max.x, bbox.max.y, bbox.min.z),
-				Vec3f::new(bbox.max.x, bbox.max.y, bbox.max.z),
-			]
-			.map(|pos| {
+			visible_dynamic_mesh.bbox_vertices_transformed = bbox.get_corners_vertices().map(|pos| {
 				let pos_transformed = final_matrix * pos.extend(1.0);
 				Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w)
 			});

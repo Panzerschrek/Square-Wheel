@@ -55,6 +55,20 @@ impl BBox
 		(self.min + self.max) * 0.5
 	}
 
+	pub fn get_corners_vertices(&self) -> [Vec3f; 8]
+	{
+		[
+			Vec3f::new(self.min.x, self.min.y, self.min.z),
+			Vec3f::new(self.min.x, self.min.y, self.max.z),
+			Vec3f::new(self.min.x, self.max.y, self.min.z),
+			Vec3f::new(self.min.x, self.max.y, self.max.z),
+			Vec3f::new(self.max.x, self.min.y, self.min.z),
+			Vec3f::new(self.max.x, self.min.y, self.max.z),
+			Vec3f::new(self.max.x, self.max.y, self.min.z),
+			Vec3f::new(self.max.x, self.max.y, self.max.z),
+		]
+	}
+
 	pub fn extend(&mut self, other: &BBox)
 	{
 		if other.min.x < self.min.x

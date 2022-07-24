@@ -69,16 +69,9 @@ impl DynamicModelsIndex
 		let bbox = get_current_triangle_model_bbox(&model.model, &model.animation);
 		let transform_matrix = get_object_matrix(model.position, model.angles);
 
-		let bbox_vertices = [
-			(transform_matrix * Vec4f::new(bbox.min.x, bbox.min.y, bbox.min.z, 1.0)).truncate(),
-			(transform_matrix * Vec4f::new(bbox.min.x, bbox.min.y, bbox.max.z, 1.0)).truncate(),
-			(transform_matrix * Vec4f::new(bbox.min.x, bbox.max.y, bbox.min.z, 1.0)).truncate(),
-			(transform_matrix * Vec4f::new(bbox.min.x, bbox.max.y, bbox.max.z, 1.0)).truncate(),
-			(transform_matrix * Vec4f::new(bbox.max.x, bbox.min.y, bbox.min.z, 1.0)).truncate(),
-			(transform_matrix * Vec4f::new(bbox.max.x, bbox.min.y, bbox.max.z, 1.0)).truncate(),
-			(transform_matrix * Vec4f::new(bbox.max.x, bbox.max.y, bbox.min.z, 1.0)).truncate(),
-			(transform_matrix * Vec4f::new(bbox.max.x, bbox.max.y, bbox.max.z, 1.0)).truncate(),
-		];
+		let bbox_vertices = bbox
+			.get_corners_vertices()
+			.map(|v| (transform_matrix * v.extend(1.0)).truncate());
 
 		// Place model in leafs.
 		let root_node = (self.map.nodes.len() - 1) as u32;

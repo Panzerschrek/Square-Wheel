@@ -84,34 +84,6 @@ impl InlineModelsIndex
 		bbox
 	}
 
-	pub fn get_model_bbox(&self, model_index: u32) -> BBox
-	{
-		let model_info = &self.models_info[model_index as usize];
-		if model_info.angle_z == Rad(0.0)
-		{
-			// No rotation - just return shifted bounding box.
-			return BBox {
-				min: model_info.bbox.min + model_info.shift,
-				max: model_info.bbox.max + model_info.shift,
-			};
-		}
-
-		// Transform original bounding box vertices and calculate new bounding box around these vertices.
-		let bbox = &model_info.bbox;
-		let transform_matrix = self.get_model_matrix(model_index);
-
-		let mut bbox = BBox::from_point(&(transform_matrix * bbox.min.extend(1.0)).truncate());
-		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox.min.x, bbox.min.y, bbox.max.z, 1.0)).truncate());
-		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox.min.x, bbox.max.y, bbox.min.z, 1.0)).truncate());
-		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox.min.x, bbox.max.y, bbox.max.z, 1.0)).truncate());
-		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox.max.x, bbox.min.y, bbox.min.z, 1.0)).truncate());
-		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox.max.x, bbox.min.y, bbox.max.z, 1.0)).truncate());
-		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox.max.x, bbox.max.y, bbox.min.z, 1.0)).truncate());
-		bbox.extend_with_point(&(transform_matrix * Vec4f::new(bbox.max.x, bbox.max.y, bbox.max.z, 1.0)).truncate());
-
-		bbox
-	}
-
 	pub fn get_num_models(&self) -> usize
 	{
 		self.models_info.len()
@@ -147,16 +119,9 @@ impl InlineModelsIndex
 		let transform_matrix = self.get_model_matrix(model_index);
 
 		// Calculate trasformed bounding box vertices.
-		let bbox_vertices = [
-			(transform_matrix * Vec4f::new(bbox.min.x, bbox.min.y, bbox.min.z, 1.0)).truncate(),
-			(transform_matrix * Vec4f::new(bbox.min.x, bbox.min.y, bbox.max.z, 1.0)).truncate(),
-			(transform_matrix * Vec4f::new(bbox.min.x, bbox.max.y, bbox.min.z, 1.0)).truncate(),
-			(transform_matrix * Vec4f::new(bbox.min.x, bbox.max.y, bbox.max.z, 1.0)).truncate(),
-			(transform_matrix * Vec4f::new(bbox.max.x, bbox.min.y, bbox.min.z, 1.0)).truncate(),
-			(transform_matrix * Vec4f::new(bbox.max.x, bbox.min.y, bbox.max.z, 1.0)).truncate(),
-			(transform_matrix * Vec4f::new(bbox.max.x, bbox.max.y, bbox.min.z, 1.0)).truncate(),
-			(transform_matrix * Vec4f::new(bbox.max.x, bbox.max.y, bbox.max.z, 1.0)).truncate(),
-		];
+		let bbox_vertices = bbox
+			.get_corners_vertices()
+			.map(|v| (transform_matrix * v.extend(1.0)).truncate());
 
 		// Place model in leafs.
 		let root_node = (self.map.nodes.len() - 1) as u32;

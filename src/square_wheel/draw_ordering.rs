@@ -121,17 +121,7 @@ fn project_plane(plane: &Plane, planes_matrix: &Mat4f) -> Plane
 
 fn project_bbox_vertices(bbox: &BBox, view_matrix: &Mat4f) -> BBoxVerticesProjected
 {
-	[
-		Vec3f::new(bbox.min.x, bbox.min.y, bbox.min.z),
-		Vec3f::new(bbox.min.x, bbox.min.y, bbox.max.z),
-		Vec3f::new(bbox.min.x, bbox.max.y, bbox.min.z),
-		Vec3f::new(bbox.min.x, bbox.max.y, bbox.max.z),
-		Vec3f::new(bbox.max.x, bbox.min.y, bbox.min.z),
-		Vec3f::new(bbox.max.x, bbox.min.y, bbox.max.z),
-		Vec3f::new(bbox.max.x, bbox.max.y, bbox.min.z),
-		Vec3f::new(bbox.max.x, bbox.max.y, bbox.max.z),
-	]
-	.map(|pos| {
+	bbox.get_corners_vertices().map(|pos| {
 		let v_tranformed = view_matrix * pos.extend(1.0);
 		Vec3f::new(v_tranformed.x, v_tranformed.y, v_tranformed.w)
 	})

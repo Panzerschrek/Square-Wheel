@@ -675,16 +675,7 @@ fn get_visible_leafs_for_submodel(
 {
 	// Know in which leafs this submodel is located.
 	let bbox = bsp_map_compact::get_submodel_bbox(map, submodel);
-	let bbox_vertices = [
-		Vec3f::new(bbox.min.x, bbox.min.y, bbox.min.z),
-		Vec3f::new(bbox.min.x, bbox.min.y, bbox.max.z),
-		Vec3f::new(bbox.min.x, bbox.max.y, bbox.min.z),
-		Vec3f::new(bbox.min.x, bbox.max.y, bbox.max.z),
-		Vec3f::new(bbox.max.x, bbox.min.y, bbox.min.z),
-		Vec3f::new(bbox.max.x, bbox.min.y, bbox.max.z),
-		Vec3f::new(bbox.max.x, bbox.max.y, bbox.min.z),
-		Vec3f::new(bbox.max.x, bbox.max.y, bbox.max.z),
-	];
+	let bbox_vertices = bbox.get_corners_vertices();
 
 	let mut submodel_leafs_list = Vec::new();
 	let root_node = (map.nodes.len() - 1) as u32;
