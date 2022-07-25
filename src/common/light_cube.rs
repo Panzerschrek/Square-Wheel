@@ -3,7 +3,7 @@ use super::{bsp_map_compact, math_types::*};
 pub struct LightCube
 {
 	light_cube: [[f32; 3]; 6],
-	// Store sum of scaled vectors for each colmponent.
+	// Store sum of scaled vectors for each component.
 	sum_scaled_light_dirs: [Vec3f; 3],
 }
 
@@ -104,7 +104,7 @@ impl LightCube
 				.max(0.0) / light_direction_vector_scaled_len2,
 		];
 
-		// Substract dominant light vector from light cube.
+		// Subtract dominant light vector from light cube.
 		let mut light_cube_corrected = self.light_cube;
 		for i in 0 .. 3
 		{
