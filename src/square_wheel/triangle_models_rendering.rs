@@ -13,6 +13,8 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 	dst_vertices: &mut [ModelVertex3d],
 )
 {
+	let normals_matrix = get_normals_matrix(model_matrix);
+
 	let frame0 = animation.frames[0] as usize;
 	let frame1 = animation.frames[1] as usize;
 	let lerp0 = animation.lerp.max(0.0).min(1.0);
@@ -24,13 +26,6 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 	{
 		VertexData::VertexAnimated(va) =>
 		{
-			let axis_matrix = Mat3f::from_cols(
-				model_matrix.x.truncate(),
-				model_matrix.y.truncate(),
-				model_matrix.z.truncate(),
-			);
-			let normals_matrix = axis_matrix.transpose().invert().unwrap_or_else(Mat3f::identity);
-
 			let frame_vertex_data0 = &va.variable[frame0 * va.constant.len() .. (frame0 + 1) * va.constant.len()];
 			let frame_vertex_data1 = &va.variable[frame1 * va.constant.len() .. (frame1 + 1) * va.constant.len()];
 
@@ -141,32 +136,44 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 					}
 				}
 
-				let matrix_weight_scaled = model_view_matrix * (1.0 / 255.0);
-				for bone_index in 0 .. model.bones.len()
+				// TODO - use uninitialized memory.
+				let mut normals_matrices = [Mat3f::zero(); MAX_TRIANGLE_MODEL_BONES];
+
+				// Calculate normals matrix based on object normals matrix and bone matrix.
+				// Multiply bone matrix by model view matrix.
+				let weight_scale = 1.0 / 255.0;
+				let normals_matrix_weight_scaled = normals_matrix * weight_scale;
+				let model_view_matrix_weight_scaled = model_view_matrix * weight_scale;
+				for (bone_matrix, bone_normal_matrix) in matrices.iter_mut().zip(normals_matrices.iter_mut())
 				{
-					matrices[bone_index] = matrix_weight_scaled * matrices[bone_index];
+					*bone_normal_matrix = normals_matrix_weight_scaled * get_normals_matrix(bone_matrix);
+					*bone_matrix = model_view_matrix_weight_scaled * *bone_matrix;
 				}
 
 				for (v, dst_v) in v.iter().zip(dst_vertices.iter_mut())
 				{
-					let mut mat =
-						matrices[v.bones_description[0].bone_index as usize] * (v.bones_description[0].weight as f32);
+					let i0 = v.bones_description[0].bone_index as usize;
+					let w0 = v.bones_description[0].weight as f32;
+					let mut mat = matrices[i0] * w0;
+					let mut normal_mat = normals_matrices[i0] * w0;
 					for i in 1 .. 4
 					{
 						// Avoid costly matrix operation if weight is zero.
 						if v.bones_description[i].weight > 0
 						{
-							mat += matrices[v.bones_description[i].bone_index as usize] *
-								(v.bones_description[i].weight as f32);
+							let ii = v.bones_description[i].bone_index as usize;
+							let wi = v.bones_description[i].weight as f32;
+							mat += matrices[ii] * wi;
+							normal_mat += normals_matrices[ii] * wi;
 						}
 					}
 
 					let pos_transformed = mat * v.position.extend(1.0);
-					// TODO - transform normal properly.
+					let normal_transformed = normal_mat * v.normal;
 					*dst_v = ModelVertex3d {
 						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
 						tc: Vec2f::from(v.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
-						light: get_vertex_light(light, &v.normal),
+						light: get_vertex_light(light, &normal_transformed),
 					};
 				}
 			}
@@ -305,4 +312,15 @@ fn get_vertex_light(light: &bsp_map_compact::LightGridElement, normal_tranformed
 	}
 
 	total_light
+}
+
+fn get_normals_matrix(model_matrix: &Mat4f) -> Mat3f
+{
+	// TODO - check thid
+	let axis_matrix = Mat3f::from_cols(
+		model_matrix.x.truncate(),
+		model_matrix.y.truncate(),
+		model_matrix.z.truncate(),
+	);
+	axis_matrix.transpose().invert().unwrap_or_else(Mat3f::identity)
 }
