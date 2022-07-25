@@ -1706,15 +1706,21 @@ fn fetch_light_from_grid(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> bsp_map_
 				let factor_z = 1.0 - (grid_pos.z - (z as f32)).abs();
 
 				let cur_sample_factor = factor_x * factor_y * factor_z;
-				/*
-				total_light[0] += sample_value[0] * cur_sample_factor;
-				total_light[1] += sample_value[1] * cur_sample_factor;
-				total_light[2] += sample_value[2] * cur_sample_factor;
+				for i in 0 .. 3
+				{
+					for cube_side in 0 .. 6
+					{
+						total_light.light_cube[cube_side][i] +=
+							sample_value.light_cube[cube_side][i] * cur_sample_factor;
+					}
+					total_light.directional_light_color[i] +=
+						sample_value.directional_light_color[i] * cur_sample_factor;
+				}
+				// TODO - maybe use different approach to interpolate this vector?
+				total_light.light_direction_vector_scaled +=
+					sample_value.light_direction_vector_scaled * cur_sample_factor;
+
 				total_factor += cur_sample_factor;
-				*/
-				// TODO - perform proper interpolation.
-				total_light = sample_value;
-				total_factor = 1.0;
 			} // for dz
 		} // for dy
 	} // for dx
@@ -1723,11 +1729,20 @@ fn fetch_light_from_grid(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> bsp_map_
 	{
 		return zero_light;
 	}
-
-	// Perform normalization in case if same sample points were rejected.
-	// total_light[0] /= total_factor;
-	// total_light[1] /= total_factor;
-	// total_light[2] /= total_factor;
+	if total_factor < 0.995
+	{
+		// Perform normalization in case if same sample points were rejected.
+		let inv_total_factor = 1.0 / total_factor;
+		for i in 0 .. 3
+		{
+			for cube_side in 0 .. 6
+			{
+				total_light.light_cube[cube_side][i] *= inv_total_factor;
+			}
+			total_light.directional_light_color[i] *= inv_total_factor;
+		}
+		total_light.light_direction_vector_scaled *= inv_total_factor;
+	}
 
 	total_light
 }
