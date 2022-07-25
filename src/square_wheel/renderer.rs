@@ -486,6 +486,7 @@ impl Renderer
 				mesh,
 				animation,
 				&fetch_light_from_grid(map, &model.position),
+				&model_matrix,
 				&final_matrix,
 				&Vec2f::new(texture.size[0] as f32, texture.size[1] as f32),
 				&model.model.tc_shift,
