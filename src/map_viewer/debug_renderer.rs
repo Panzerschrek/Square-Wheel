@@ -643,7 +643,9 @@ fn draw_light_grid(
 			for column_sample in 0 .. column.num_samples
 			{
 				let z = column_sample + column.start_z;
-				let light_grid_sample = bsp_map.light_grid_samples[(column.first_sample + column_sample) as usize];
+				// TODO - show proper light cube.
+				let light_grid_sample =
+					bsp_map.light_grid_samples[(column.first_sample + column_sample) as usize].light_cube[0];
 				let color = Color32::from_rgb(
 					(light_grid_sample[0] * light_scale).min(255.0) as u8,
 					(light_grid_sample[1] * light_scale).min(255.0) as u8,

@@ -1673,7 +1673,7 @@ fn calculate_light_grid(
 	let samples_total =
 		light_grid_header.grid_size[0] * light_grid_header.grid_size[1] * light_grid_header.grid_size[2];
 
-	let mut light_grid = vec![[0.0, 0.0, 0.0]; samples_total as usize];
+	let mut light_grid = vec![get_zero_light_grid_element(); samples_total as usize];
 
 	light_grid
 		.par_iter_mut()
@@ -1714,8 +1714,8 @@ fn calculate_light_grid(
 				total_light[1] *= scale;
 				total_light[2] *= scale;
 			}
-
-			*dst_light = total_light;
+			// TODO - use proper light grid
+			dst_light.light_cube[0] = total_light;
 
 			// Track progress.
 			let samples_complete_before = samples_complete.fetch_add(1, atomic::Ordering::SeqCst);
@@ -1757,6 +1757,11 @@ fn get_light_grid_coord_for_address(header: &bsp_map_compact::LightGridHeader, a
 	(x, y, z)
 }
 
+fn get_zero_light_grid_element() -> bsp_map_compact::LightGridElement
+{
+	bsp_map_compact::LightGridElement::default()
+}
+
 fn compress_light_grid(
 	map: &bsp_map_compact::BSPMap,
 	light_grid: &LightGridUncompressed,
@@ -1777,6 +1782,8 @@ fn compress_light_grid(
 
 	let get_sample = |x, y, z| light_grid[get_light_grid_sample_address(light_grid_header, x, y, z)];
 
+	let zero_element = get_zero_light_grid_element();
+
 	for x in 0 .. light_grid_header.grid_size[0]
 	{
 		for y in 0 .. light_grid_header.grid_size[1]
@@ -1785,7 +1792,7 @@ fn compress_light_grid(
 			while min_non_zero_light_z < light_grid_header.grid_size[2]
 			{
 				let light = get_sample(x, y, min_non_zero_light_z);
-				if light[0] > 0.0 || light[1] > 0.0 || light[2] > 0.0
+				if light != zero_element
 				{
 					break;
 				}
@@ -1796,7 +1803,7 @@ fn compress_light_grid(
 			while max_non_zero_light_z > min_non_zero_light_z
 			{
 				let light = get_sample(x, y, max_non_zero_light_z);
-				if light[0] > 0.0 || light[1] > 0.0 || light[2] > 0.0
+				if light != zero_element
 				{
 					break;
 				}
