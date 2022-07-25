@@ -5,13 +5,10 @@ General:
 * Detail objects (static, but not in BSP)
 * Built-in triangle models (embedded into BSP tree)
 * Alpha-test
-* Arbitrary dynamic models rotation (Euler angles?)
-* More models formats
 * More consistent file errors handling
 * Avoid usage of "unwrap"
 
 Engine:
-* Smooth animation for frame-based animated models (interpolate between 2 or more frames)
 * More advanced skeleton animation - with animations combination, override matrices for specific bones, ragdoll, etc.
 * Anmation files as separate resources (share animations between different models).
 
