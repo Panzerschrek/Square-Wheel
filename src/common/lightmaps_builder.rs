@@ -1705,7 +1705,7 @@ fn calculate_light_grid(
 			} // for multisample shifts
 			if num_valid_shift_points > 0
 			{
-				light_cube.scale(num_valid_shift_points as f32);
+				light_cube.scale(1.0 / (num_valid_shift_points as f32));
 			}
 			*dst_light = light_cube.convert_into_light_grid_sample();
 
