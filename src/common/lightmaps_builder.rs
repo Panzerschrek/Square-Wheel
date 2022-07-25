@@ -1,6 +1,6 @@
 use super::{
-	bsp_map_compact, image, light_hemisphere::*, lightmap::*, map_file_common, material, math_types::*, pvs,
-	shared_mut_slice::*,
+	bsp_map_compact, image, light_cube::*, light_hemisphere::*, lightmap::*, map_file_common, material, math_types::*,
+	pvs, shared_mut_slice::*,
 };
 use rayon::prelude::*;
 use std::{io::Write, sync::atomic};
@@ -1673,7 +1673,7 @@ fn calculate_light_grid(
 	let samples_total =
 		light_grid_header.grid_size[0] * light_grid_header.grid_size[1] * light_grid_header.grid_size[2];
 
-	let mut light_grid = vec![get_zero_light_grid_element(); samples_total as usize];
+	let mut light_grid = vec![bsp_map_compact::LightGridElement::default(); samples_total as usize];
 
 	light_grid
 		.par_iter_mut()
@@ -1684,13 +1684,14 @@ fn calculate_light_grid(
 				Vec3f::new(x as f32, y as f32, z as f32)
 					.mul_element_wise(Vec3f::from(light_grid_header.grid_cell_size));
 
-			let mut total_light = [0.0, 0.0, 0.0];
+			let mut light_cube = LightCube::new();
 			let mut num_valid_shift_points = 0;
 			for shift in &sample_shifts_grid[0 .. num_sample_grid_shifts]
 			{
 				if let Some(pos_corrected) = correct_light_grid_sample_position(map, &(pos + shift))
 				{
-					let light = calculate_light_for_grid_point(
+					num_valid_shift_points += 1;
+					calculate_light_for_grid_point(
 						&pos_corrected,
 						primary_lights,
 						secondary_lights,
@@ -1698,24 +1699,15 @@ fn calculate_light_grid(
 						map,
 						visibility_matrix,
 						min_light_square_dist,
+						&mut light_cube,
 					);
-
-					num_valid_shift_points += 1;
-					total_light[0] += light[0];
-					total_light[1] += light[1];
-					total_light[2] += light[2];
 				}
 			} // for multisample shifts
 			if num_valid_shift_points > 0
 			{
-				// Scale light properly, since we perform integration over whole sphere.
-				let scale = 1.0 / ((num_valid_shift_points as f32) * std::f32::consts::TAU);
-				total_light[0] *= scale;
-				total_light[1] *= scale;
-				total_light[2] *= scale;
+				light_cube.scale(num_valid_shift_points as f32);
 			}
-			// TODO - use proper light grid
-			dst_light.light_cube[0] = total_light;
+			*dst_light = light_cube.convert_into_light_grid_sample();
 
 			// Track progress.
 			let samples_complete_before = samples_complete.fetch_add(1, atomic::Ordering::SeqCst);
@@ -1757,11 +1749,6 @@ fn get_light_grid_coord_for_address(header: &bsp_map_compact::LightGridHeader, a
 	(x, y, z)
 }
 
-fn get_zero_light_grid_element() -> bsp_map_compact::LightGridElement
-{
-	bsp_map_compact::LightGridElement::default()
-}
-
 fn compress_light_grid(
 	map: &bsp_map_compact::BSPMap,
 	light_grid: &LightGridUncompressed,
@@ -1782,7 +1769,7 @@ fn compress_light_grid(
 
 	let get_sample = |x, y, z| light_grid[get_light_grid_sample_address(light_grid_header, x, y, z)];
 
-	let zero_element = get_zero_light_grid_element();
+	let zero_element = bsp_map_compact::LightGridElement::default();
 
 	for x in 0 .. light_grid_header.grid_size[0]
 	{
@@ -1836,13 +1823,13 @@ fn calculate_light_for_grid_point(
 	map: &bsp_map_compact::BSPMap,
 	visibility_matrix: &pvs::VisibilityMatrix,
 	min_light_square_dist: f32,
-) -> [f32; 3]
+	out_light_cube: &mut LightCube,
+)
 {
 	let point_leaf_index = bsp_map_compact::get_leaf_for_point(map, pos) as usize;
 	let visibility_matrix_row =
 		&visibility_matrix[point_leaf_index * map.leafs.len() .. (point_leaf_index + 1) * map.leafs.len()];
 
-	let mut total_light = [0.0, 0.0, 0.0];
 	for light_source_leaf_index in 0 .. map.leafs.len()
 	{
 		if !visibility_matrix_row[light_source_leaf_index]
@@ -1864,9 +1851,14 @@ fn calculate_light_for_grid_point(
 
 			// Do not use agle cos because we add light into light sphere.
 			let light_scale = 1.0 / vec_to_light_len2;
-			total_light[0] += primay_light.color[0] * light_scale;
-			total_light[1] += primay_light.color[1] * light_scale;
-			total_light[2] += primay_light.color[2] * light_scale;
+			out_light_cube.add_light_sample(
+				&vec_to_light,
+				&[
+					primay_light.color[0] * light_scale,
+					primay_light.color[1] * light_scale,
+					primay_light.color[2] * light_scale,
+				],
+			);
 		} // for primary lights
 
 		let light_source_leaf = &map.leafs[light_source_leaf_index as usize];
@@ -1918,15 +1910,18 @@ fn calculate_light_for_grid_point(
 					let vec_to_light_len2_clamped = vec_to_light_len2.max(min_dist2);
 
 					let light_scale = angle_cos_src / vec_to_light_len2_clamped;
-					total_light[0] += sample.color[0] * light_scale;
-					total_light[1] += sample.color[1] * light_scale;
-					total_light[2] += sample.color[2] * light_scale;
+					out_light_cube.add_light_sample(
+						&vec_to_light,
+						&[
+							sample.color[0] * light_scale,
+							sample.color[1] * light_scale,
+							sample.color[2] * light_scale,
+						],
+					);
 				} // for light samples.
 			} // for visible leaf polygons.
 		} // for light sets.
 	} // for BSP leafs.
-
-	total_light
 }
 
 fn correct_light_grid_sample_position(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> Option<Vec3f>

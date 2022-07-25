@@ -8,6 +8,7 @@ pub mod clipping_polygon;
 pub mod color;
 pub mod fixed_math;
 pub mod image;
+pub mod light_cube;
 pub mod light_hemisphere;
 pub mod lightmap;
 pub mod lightmaps_builder;
