@@ -161,8 +161,29 @@ pub struct LightGridColumn
 	pub num_samples: u32,
 }
 
-// TODO - use something like light cube.
-pub type LightGridElement = [f32; 3];
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq)]
+pub struct LightGridElement
+{
+	// -x, +x, -y, +y, -z, +z values of ambient light cube
+	pub light_cube: [[f32; 3]; 6],
+	// Vector towards predominant light direction, scaled by light intensity.
+	pub light_direction_vector_scaled: Vec3f,
+	// Color for directional light is normalized.
+	pub directional_light_color: [f32; 3],
+}
+
+impl Default for LightGridElement
+{
+	fn default() -> Self
+	{
+		Self {
+			light_cube: [[0.0; 3]; 6],
+			light_direction_vector_scaled: Vec3f::zero(),
+			directional_light_color: [0.0; 3],
+		}
+	}
+}
 
 // Conversion functions.
 //

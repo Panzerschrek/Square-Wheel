@@ -1564,7 +1564,8 @@ impl Renderer
 				// TODO - use unchecked vertex fetch?
 				rasterizer.fill_triangle(
 					&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
-					&visible_dynamic_mesh.light,
+					// TODO - perform per-vertex lighting
+					&visible_dynamic_mesh.light.light_cube[0],
 					&texture_info,
 					texture_data,
 				);
@@ -1628,7 +1629,7 @@ impl Renderer
 
 fn fetch_light_from_grid(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> bsp_map_compact::LightGridElement
 {
-	let default_light = [0.0, 0.0, 0.0];
+	let zero_light = bsp_map_compact::LightGridElement::default();
 
 	let light_grid_header = &map.light_grid_header;
 	if light_grid_header.grid_size[0] == 0 ||
@@ -1640,7 +1641,7 @@ fn fetch_light_from_grid(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> bsp_map_
 		map.light_grid_samples.is_empty() ||
 		map.light_grid_columns.is_empty()
 	{
-		return default_light;
+		return zero_light;
 	}
 
 	let grid_pos = (pos - Vec3f::from(light_grid_header.grid_start))
@@ -1655,7 +1656,7 @@ fn fetch_light_from_grid(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> bsp_map_
 	// Perform linear interpolation of light grid values.
 	// We need to read 8 values in order to do this.
 	// Ignore non-existing values and absolute zero values and perform result renormalization.
-	let mut total_light = [0.0, 0.0, 0.0];
+	let mut total_light = bsp_map_compact::LightGridElement::default();
 	let mut total_factor = 0.0;
 	for dx in 0 ..= 1
 	{
@@ -1697,7 +1698,7 @@ fn fetch_light_from_grid(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> bsp_map_
 
 				let sample_address_in_column = (z as u32) - column.start_z;
 				let sample_value = map.light_grid_samples[(column.first_sample + sample_address_in_column) as usize];
-				if sample_value[0] <= 0.0 && sample_value[1] <= 0.0 && sample_value[2] <= 0.0
+				if sample_value == zero_light
 				{
 					continue;
 				}
@@ -1705,24 +1706,28 @@ fn fetch_light_from_grid(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> bsp_map_
 				let factor_z = 1.0 - (grid_pos.z - (z as f32)).abs();
 
 				let cur_sample_factor = factor_x * factor_y * factor_z;
-
+				/*
 				total_light[0] += sample_value[0] * cur_sample_factor;
 				total_light[1] += sample_value[1] * cur_sample_factor;
 				total_light[2] += sample_value[2] * cur_sample_factor;
 				total_factor += cur_sample_factor;
+				*/
+				// TODO - perform proper interpolation.
+				total_light = sample_value;
+				total_factor = 1.0;
 			} // for dz
 		} // for dy
 	} // for dx
 
 	if total_factor <= 0.0
 	{
-		return default_light;
+		return zero_light;
 	}
 
 	// Perform normalization in case if same sample points were rejected.
-	total_light[0] /= total_factor;
-	total_light[1] /= total_factor;
-	total_light[2] /= total_factor;
+	// total_light[0] /= total_factor;
+	// total_light[1] /= total_factor;
+	// total_light[2] /= total_factor;
 
 	total_light
 }

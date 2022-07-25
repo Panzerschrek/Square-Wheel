@@ -561,74 +561,87 @@ fn draw_light_grid(
 	bsp_map: &bsp_map_compact::BSPMap,
 )
 {
-	let cube_triangles = [
-		// +X
-		[
-			Vec3f::new(1.0, 0.0, 0.0),
-			Vec3f::new(1.0, 0.0, 1.0),
-			Vec3f::new(1.0, 1.0, 1.0),
-		],
-		[
-			Vec3f::new(1.0, 0.0, 0.0),
-			Vec3f::new(1.0, 1.0, 1.0),
-			Vec3f::new(1.0, 1.0, 0.0),
-		],
+	let cube_sides_triangles = [
 		// -X
 		[
-			Vec3f::new(0.0, 0.0, 0.0),
-			Vec3f::new(0.0, 1.0, 1.0),
-			Vec3f::new(0.0, 0.0, 1.0),
+			[
+				Vec3f::new(0.0, 0.0, 0.0),
+				Vec3f::new(0.0, 1.0, 1.0),
+				Vec3f::new(0.0, 0.0, 1.0),
+			],
+			[
+				Vec3f::new(0.0, 0.0, 0.0),
+				Vec3f::new(0.0, 1.0, 0.0),
+				Vec3f::new(0.0, 1.0, 1.0),
+			],
 		],
+		// +X
 		[
-			Vec3f::new(0.0, 0.0, 0.0),
-			Vec3f::new(0.0, 1.0, 0.0),
-			Vec3f::new(0.0, 1.0, 1.0),
-		],
-		// +Y
-		[
-			Vec3f::new(0.0, 1.0, 0.0),
-			Vec3f::new(1.0, 1.0, 1.0),
-			Vec3f::new(0.0, 1.0, 1.0),
-		],
-		[
-			Vec3f::new(0.0, 1.0, 0.0),
-			Vec3f::new(1.0, 1.0, 0.0),
-			Vec3f::new(1.0, 1.0, 1.0),
+			[
+				Vec3f::new(1.0, 0.0, 0.0),
+				Vec3f::new(1.0, 0.0, 1.0),
+				Vec3f::new(1.0, 1.0, 1.0),
+			],
+			[
+				Vec3f::new(1.0, 0.0, 0.0),
+				Vec3f::new(1.0, 1.0, 1.0),
+				Vec3f::new(1.0, 1.0, 0.0),
+			],
 		],
 		// -Y
 		[
-			Vec3f::new(0.0, 0.0, 0.0),
-			Vec3f::new(0.0, 0.0, 1.0),
-			Vec3f::new(1.0, 0.0, 1.0),
+			[
+				Vec3f::new(0.0, 0.0, 0.0),
+				Vec3f::new(0.0, 0.0, 1.0),
+				Vec3f::new(1.0, 0.0, 1.0),
+			],
+			[
+				Vec3f::new(0.0, 0.0, 0.0),
+				Vec3f::new(1.0, 0.0, 1.0),
+				Vec3f::new(1.0, 0.0, 0.0),
+			],
 		],
+		// +Y
 		[
-			Vec3f::new(0.0, 0.0, 0.0),
-			Vec3f::new(1.0, 0.0, 1.0),
-			Vec3f::new(1.0, 0.0, 0.0),
-		],
-		// +Z
-		[
-			Vec3f::new(0.0, 0.0, 1.0),
-			Vec3f::new(0.0, 1.0, 1.0),
-			Vec3f::new(1.0, 1.0, 1.0),
-		],
-		[
-			Vec3f::new(0.0, 0.0, 1.0),
-			Vec3f::new(1.0, 1.0, 1.0),
-			Vec3f::new(1.0, 0.0, 1.0),
+			[
+				Vec3f::new(0.0, 1.0, 0.0),
+				Vec3f::new(1.0, 1.0, 1.0),
+				Vec3f::new(0.0, 1.0, 1.0),
+			],
+			[
+				Vec3f::new(0.0, 1.0, 0.0),
+				Vec3f::new(1.0, 1.0, 0.0),
+				Vec3f::new(1.0, 1.0, 1.0),
+			],
 		],
 		// -Z
 		[
-			Vec3f::new(0.0, 0.0, 0.0),
-			Vec3f::new(1.0, 1.0, 0.0),
-			Vec3f::new(0.0, 1.0, 0.0),
+			[
+				Vec3f::new(0.0, 0.0, 0.0),
+				Vec3f::new(1.0, 1.0, 0.0),
+				Vec3f::new(0.0, 1.0, 0.0),
+			],
+			[
+				Vec3f::new(0.0, 0.0, 0.0),
+				Vec3f::new(1.0, 0.0, 0.0),
+				Vec3f::new(1.0, 1.0, 0.0),
+			],
 		],
 		[
-			Vec3f::new(0.0, 0.0, 0.0),
-			Vec3f::new(1.0, 0.0, 0.0),
-			Vec3f::new(1.0, 1.0, 0.0),
+			// +Z
+			[
+				Vec3f::new(0.0, 0.0, 1.0),
+				Vec3f::new(0.0, 1.0, 1.0),
+				Vec3f::new(1.0, 1.0, 1.0),
+			],
+			[
+				Vec3f::new(0.0, 0.0, 1.0),
+				Vec3f::new(1.0, 1.0, 1.0),
+				Vec3f::new(1.0, 0.0, 1.0),
+			],
 		],
 	];
+
 	let cube_shift_vec = Vec3f::new(0.5, 0.5, 0.5);
 	let cube_scale = 8.0;
 
@@ -643,12 +656,6 @@ fn draw_light_grid(
 			for column_sample in 0 .. column.num_samples
 			{
 				let z = column_sample + column.start_z;
-				let light_grid_sample = bsp_map.light_grid_samples[(column.first_sample + column_sample) as usize];
-				let color = Color32::from_rgb(
-					(light_grid_sample[0] * light_scale).min(255.0) as u8,
-					(light_grid_sample[1] * light_scale).min(255.0) as u8,
-					(light_grid_sample[2] * light_scale).min(255.0) as u8,
-				);
 
 				let pos = Vec3f::new(
 					light_grid_header.grid_start[0] + x as f32 * light_grid_header.grid_cell_size[0],
@@ -656,19 +663,42 @@ fn draw_light_grid(
 					light_grid_header.grid_start[2] + z as f32 * light_grid_header.grid_cell_size[2],
 				);
 
-				for triangle_vertices in &cube_triangles
+				let grid_sample = &bsp_map.light_grid_samples[(column.first_sample + column_sample) as usize];
+
+				for (side_triangles, side_light) in cube_sides_triangles.iter().zip(grid_sample.light_cube.iter())
 				{
-					draw_triangle(
-						rasterizer,
-						&camera_matrices.view_matrix,
-						&[
-							(triangle_vertices[0] - cube_shift_vec) * cube_scale + pos,
-							(triangle_vertices[1] - cube_shift_vec) * cube_scale + pos,
-							(triangle_vertices[2] - cube_shift_vec) * cube_scale + pos,
-						],
-						color,
+					let color = Color32::from_rgb(
+						(side_light[0] * light_scale).min(255.0) as u8,
+						(side_light[1] * light_scale).min(255.0) as u8,
+						(side_light[2] * light_scale).min(255.0) as u8,
 					);
+					for triangle_vertices in side_triangles
+					{
+						draw_triangle(
+							rasterizer,
+							&camera_matrices.view_matrix,
+							&[
+								(triangle_vertices[0] - cube_shift_vec) * cube_scale + pos,
+								(triangle_vertices[1] - cube_shift_vec) * cube_scale + pos,
+								(triangle_vertices[2] - cube_shift_vec) * cube_scale + pos,
+							],
+							color,
+						);
+					}
 				}
+
+				let scale = 255.0 / 1.5;
+				let color = Color32::from_rgb(
+					(grid_sample.directional_light_color[0] * scale).min(255.0) as u8,
+					(grid_sample.directional_light_color[1] * scale).min(255.0) as u8,
+					(grid_sample.directional_light_color[2] * scale).min(255.0) as u8,
+				);
+
+				draw_line(
+					rasterizer,
+					&camera_matrices.view_matrix,
+					&(pos, pos + grid_sample.light_direction_vector_scaled * 8.0, color),
+				);
 			}
 		}
 	}
