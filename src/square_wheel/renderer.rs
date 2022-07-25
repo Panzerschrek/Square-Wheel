@@ -440,6 +440,7 @@ impl Renderer
 				ModelVertex3d {
 					pos: Vec3f::zero(),
 					tc: Vec2f::zero(),
+					light: [0.0; 3],
 				},
 			);
 		}
@@ -1526,6 +1527,7 @@ impl Renderer
 				*dst = ModelVertex2d {
 					pos: src.pos.truncate() / src.pos.z,
 					tc: src.tc,
+					light: src.light,
 				};
 			}
 

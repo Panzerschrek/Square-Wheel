@@ -39,6 +39,7 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 					*dst_v = ModelVertex3d {
 						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
 						tc: Vec2f::from(v_c.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
+						light: [0.0; 3], // TODO
 					};
 				}
 			}
@@ -62,6 +63,7 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 					*dst_v = ModelVertex3d {
 						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
 						tc: Vec2f::from(v_c.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
+						light: [0.0; 3], // TODO
 					};
 				}
 			}
@@ -77,6 +79,7 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 					*dst_v = ModelVertex3d {
 						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
 						tc: Vec2f::from(v.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
+						light: [0.0; 3], // TODO
 					};
 				}
 			}
@@ -149,6 +152,7 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 					*dst_v = ModelVertex3d {
 						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
 						tc: Vec2f::from(v.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
+						light: [0.0; 3], // TODO
 					};
 				}
 			}
