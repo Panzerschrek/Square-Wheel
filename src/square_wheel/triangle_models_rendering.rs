@@ -1,10 +1,11 @@
 use super::{frame_info::*, triangle_model::*};
-use common::{bbox::*, clipping::*, math_types::*, plane::*};
+use common::{bbox::*, bsp_map_compact, clipping::*, math_types::*, plane::*};
 
 pub fn animate_and_transform_triangle_mesh_vertices(
 	model: &TriangleModel,
 	mesh: &TriangleModelMesh,
 	animation: &AnimationPoint,
+	light: &bsp_map_compact::LightGridElement,
 	matrix: &Mat4f,
 	tc_scale: &Vec2f,
 	tc_shift: &Vec2f,
@@ -35,11 +36,13 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 					.zip(dst_vertices.iter_mut())
 				{
 					let position_lerped = v_v0.position * lerp0 + v_v1.position * lerp1;
+					let normal_lerped = v_v0.normal * lerp0 + v_v1.normal * lerp1;
 					let pos_transformed = matrix * position_lerped.extend(1.0);
+					// TODO - transform normal properly.
 					*dst_v = ModelVertex3d {
 						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
 						tc: Vec2f::from(v_c.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
-						light: [0.0; 3], // TODO
+						light: get_vertex_light(light, &normal_lerped),
 					};
 				}
 			}
@@ -60,10 +63,11 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 					.zip(dst_vertices.iter_mut())
 				{
 					let pos_transformed = matrix * v_v.position.extend(1.0);
+					// TODO - transform normal properly.
 					*dst_v = ModelVertex3d {
 						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
 						tc: Vec2f::from(v_c.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
-						light: [0.0; 3], // TODO
+						light: get_vertex_light(light, &v_v.normal),
 					};
 				}
 			}
@@ -76,10 +80,11 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 				for (v, dst_v) in v.iter().zip(dst_vertices.iter_mut())
 				{
 					let pos_transformed = matrix * v.position.extend(1.0);
+					// TODO - transform normal properly.
 					*dst_v = ModelVertex3d {
 						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
 						tc: Vec2f::from(v.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
-						light: [0.0; 3], // TODO
+						light: get_vertex_light(light, &v.normal),
 					};
 				}
 			}
@@ -149,10 +154,11 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 					}
 
 					let pos_transformed = mat * v.position.extend(1.0);
+					// TODO - transform normal properly.
 					*dst_v = ModelVertex3d {
 						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
 						tc: Vec2f::from(v.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
-						light: [0.0; 3], // TODO
+						light: get_vertex_light(light, &v.normal),
 					};
 				}
 			}
@@ -231,4 +237,61 @@ pub fn triangle_vertex_debug_checked_fetch<VertexT: Copy>(vertices: &[VertexT], 
 	unsafe {
 		*vertices.get_unchecked(index_s)
 	}
+}
+
+fn get_vertex_light(light: &bsp_map_compact::LightGridElement, normal_tranformed: &Vec3f) -> [f32; 3]
+{
+	let mut total_light = [0.0, 0.0, 0.0];
+	// Fetch light from cube.
+	if normal_tranformed.x <= 0.0
+	{
+		for i in 0 .. 3
+		{
+			total_light[i] += light.light_cube[0][i] * (-normal_tranformed.x);
+		}
+	}
+	else
+	{
+		for i in 0 .. 3
+		{
+			total_light[i] += light.light_cube[1][i] * normal_tranformed.x;
+		}
+	}
+	if normal_tranformed.y <= 0.0
+	{
+		for i in 0 .. 3
+		{
+			total_light[i] += light.light_cube[2][i] * (-normal_tranformed.y);
+		}
+	}
+	else
+	{
+		for i in 0 .. 3
+		{
+			total_light[i] += light.light_cube[3][i] * normal_tranformed.y;
+		}
+	}
+	if normal_tranformed.z <= 0.0
+	{
+		for i in 0 .. 3
+		{
+			total_light[i] += light.light_cube[4][i] * (-normal_tranformed.z);
+		}
+	}
+	else
+	{
+		for i in 0 .. 3
+		{
+			total_light[i] += light.light_cube[5][i] * normal_tranformed.z;
+		}
+	}
+
+	// Use directional component.
+	let light_dir_dot = normal_tranformed.dot(light.light_direction_vector_scaled).max(0.0);
+	for i in 0 .. 3
+	{
+		total_light[i] += light.directional_light_color[i] * light_dir_dot;
+	}
+
+	total_light
 }

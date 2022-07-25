@@ -102,7 +102,6 @@ struct VisibleDynamicMeshInfo
 	num_visible_triangles: usize,
 	bbox_vertices_transformed: [Vec3f; 8],
 	camera_matrices: CameraMatrices,
-	light: bsp_map_compact::LightGridElement,
 }
 
 #[derive(Default, Copy, Clone)]
@@ -417,7 +416,6 @@ impl Renderer
 						planes_matrix: Mat4f::zero(),
 						position: Vec3f::zero(),
 					}, // Set later
-					light: bsp_map_compact::LightGridElement::default(), // Set later
 				});
 
 				let num_vertices = match &mesh.vertex_data
@@ -462,8 +460,6 @@ impl Renderer
 			let model = &models[visible_dynamic_mesh.entity_index as usize];
 			let animation = &model.animation;
 
-			visible_dynamic_mesh.light = fetch_light_from_grid(map, &model.position);
-
 			let model_matrix = get_object_matrix(model.position, model.angles);
 			let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
 
@@ -489,6 +485,7 @@ impl Renderer
 				&model.model,
 				mesh,
 				animation,
+				&fetch_light_from_grid(map, &model.position),
 				&final_matrix,
 				&Vec2f::new(texture.size[0] as f32, texture.size[1] as f32),
 				&model.model.tc_shift,
@@ -1563,11 +1560,20 @@ impl Renderer
 
 			for t in 0 .. num_vertices - 2
 			{
+				// TODO - perform per-vertex lighting
+				let mut light = [0.0, 0.0, 0.0];
+				for i in 0 .. 3
+				{
+					light[i] = 0.33 *
+						(vertices_projected[0].light[i] +
+							vertices_projected[t + 1].light[i] +
+							vertices_projected[t + 2].light[i]);
+				}
+
 				// TODO - use unchecked vertex fetch?
 				rasterizer.fill_triangle(
 					&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
-					// TODO - perform per-vertex lighting
-					&visible_dynamic_mesh.light.light_cube[0],
+					&light,
 					&texture_info,
 					texture_data,
 				);
