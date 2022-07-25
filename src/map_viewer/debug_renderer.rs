@@ -663,11 +663,9 @@ fn draw_light_grid(
 					light_grid_header.grid_start[2] + z as f32 * light_grid_header.grid_cell_size[2],
 				);
 
-				for (side_triangles, side_light) in cube_sides_triangles.iter().zip(
-					bsp_map.light_grid_samples[(column.first_sample + column_sample) as usize]
-						.light_cube
-						.iter(),
-				)
+				let grid_sample = &bsp_map.light_grid_samples[(column.first_sample + column_sample) as usize];
+
+				for (side_triangles, side_light) in cube_sides_triangles.iter().zip(grid_sample.light_cube.iter())
 				{
 					let color = Color32::from_rgb(
 						(side_light[0] * light_scale).min(255.0) as u8,
@@ -688,6 +686,19 @@ fn draw_light_grid(
 						);
 					}
 				}
+
+				let scale = 255.0 / 1.5;
+				let color = Color32::from_rgb(
+					(grid_sample.directional_light_color[0] * scale).min(255.0) as u8,
+					(grid_sample.directional_light_color[1] * scale).min(255.0) as u8,
+					(grid_sample.directional_light_color[2] * scale).min(255.0) as u8,
+				);
+
+				draw_line(
+					rasterizer,
+					&camera_matrices.view_matrix,
+					&(pos, pos + grid_sample.light_direction_vector_scaled * 8.0, color),
+				);
 			}
 		}
 	}
