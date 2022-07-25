@@ -1,4 +1,4 @@
-use super::{frame_info::*, triangle_model::*};
+use super::{fast_math::*, frame_info::*, triangle_model::*};
 use common::{bbox::*, bsp_map_compact, clipping::*, math_types::*, plane::*};
 
 pub fn animate_and_transform_triangle_mesh_vertices(
@@ -241,53 +241,56 @@ pub fn triangle_vertex_debug_checked_fetch<VertexT: Copy>(vertices: &[VertexT], 
 
 fn get_vertex_light(light: &bsp_map_compact::LightGridElement, normal_tranformed: &Vec3f) -> [f32; 3]
 {
+	// After transformation normal may be unnormalized. Renormalize it.
+	let normal_normalized = normal_tranformed * inv_sqrt_fast(normal_tranformed.magnitude2().max(0.00000001));
+
 	let mut total_light = [0.0, 0.0, 0.0];
 	// Fetch light from cube.
-	if normal_tranformed.x <= 0.0
+	if normal_normalized.x <= 0.0
 	{
 		for i in 0 .. 3
 		{
-			total_light[i] += light.light_cube[0][i] * (-normal_tranformed.x);
+			total_light[i] += light.light_cube[0][i] * (-normal_normalized.x);
 		}
 	}
 	else
 	{
 		for i in 0 .. 3
 		{
-			total_light[i] += light.light_cube[1][i] * normal_tranformed.x;
+			total_light[i] += light.light_cube[1][i] * normal_normalized.x;
 		}
 	}
-	if normal_tranformed.y <= 0.0
+	if normal_normalized.y <= 0.0
 	{
 		for i in 0 .. 3
 		{
-			total_light[i] += light.light_cube[2][i] * (-normal_tranformed.y);
-		}
-	}
-	else
-	{
-		for i in 0 .. 3
-		{
-			total_light[i] += light.light_cube[3][i] * normal_tranformed.y;
-		}
-	}
-	if normal_tranformed.z <= 0.0
-	{
-		for i in 0 .. 3
-		{
-			total_light[i] += light.light_cube[4][i] * (-normal_tranformed.z);
+			total_light[i] += light.light_cube[2][i] * (-normal_normalized.y);
 		}
 	}
 	else
 	{
 		for i in 0 .. 3
 		{
-			total_light[i] += light.light_cube[5][i] * normal_tranformed.z;
+			total_light[i] += light.light_cube[3][i] * normal_normalized.y;
+		}
+	}
+	if normal_normalized.z <= 0.0
+	{
+		for i in 0 .. 3
+		{
+			total_light[i] += light.light_cube[4][i] * (-normal_normalized.z);
+		}
+	}
+	else
+	{
+		for i in 0 .. 3
+		{
+			total_light[i] += light.light_cube[5][i] * normal_normalized.z;
 		}
 	}
 
 	// Use directional component.
-	let light_dir_dot = normal_tranformed.dot(light.light_direction_vector_scaled).max(0.0);
+	let light_dir_dot = normal_normalized.dot(light.light_direction_vector_scaled).max(0.0);
 	for i in 0 .. 3
 	{
 		total_light[i] += light.directional_light_color[i] * light_dir_dot;
