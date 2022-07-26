@@ -1035,9 +1035,9 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					let texel = unchecked_texture_fetch(texture_data, texel_address);
 
 					let texel_vec = texel.into();
-					let texel_vec_colored = ColorVecI::shift_right::<16>(&ColorVecI::mul(&texel_vec, &line_light));
+					let texel_vec_lighted = ColorVecI::shift_right::<16>(&ColorVecI::mul(&texel_vec, &line_light));
 
-					*dst_pixel = texel_vec_colored.into();
+					*dst_pixel = texel_vec_lighted.into();
 					for i in 0 .. 2
 					{
 						line_tc[i] += d_tc_dx[i];

@@ -789,7 +789,7 @@ impl Postprocessor
 		// since bloom buffer size is smaller.
 
 		const COLOR_SHIFT: i32 = 8;
-		let average_scaler = (1 << COLOR_SHIFT) / ((BLOOM_BUFFER_SCALE * BLOOM_BUFFER_SCALE) as u32);
+		let average_scaler = (1 << COLOR_SHIFT) / ((BLOOM_BUFFER_SCALE * BLOOM_BUFFER_SCALE) as i32);
 
 		let mut colors_sum = ColorVec::zero();
 		for dst_y in 0 .. self.bloom_buffer_size[1]
@@ -840,7 +840,7 @@ impl Postprocessor
 		let mut blur_kernel_i = [0; MAX_GAUSSIAN_KERNEL_SIZE];
 		for (dst, src) in blur_kernel_i.iter_mut().zip(blur_kernel.iter())
 		{
-			*dst = (src * ((1 << COLOR_SHIFT) as f32)) as u32;
+			*dst = (src * ((1 << COLOR_SHIFT) as f32)) as i32;
 		}
 
 		// TODO - speed-up bluring code - process borders specially.
@@ -887,7 +887,7 @@ impl Postprocessor
 		// Do this in order to avoid additional multiplication while applying bloom.
 		for (dst, src) in blur_kernel_i.iter_mut().zip(blur_kernel.iter())
 		{
-			*dst = (src * self.config.bloom_scale * ((1 << COLOR_SHIFT) as f32)) as u32;
+			*dst = (src * self.config.bloom_scale * ((1 << COLOR_SHIFT) as f32)) as i32;
 		}
 
 		// Perform vertical blur. Use buffer 1 as source and buffer 0 as destination.
