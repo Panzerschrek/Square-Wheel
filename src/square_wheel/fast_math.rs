@@ -225,6 +225,16 @@ mod fast_math_impl
 			unsafe { Self(_mm_setzero_si128()) }
 		}
 
+		pub fn from_color_u32x3(c: &[u32; 3]) -> Self
+		{
+			unsafe { Self(_mm_set_epi32(0, c[0] as i32, c[1] as i32, c[2] as i32)) }
+		}
+
+		pub fn from_color_i32x3(c: &[i32; 3]) -> Self
+		{
+			unsafe { Self(_mm_set_epi32(0, c[0], c[1], c[2])) }
+		}
+
 		pub fn from_color_f32x3(c: &[f32; 3]) -> Self
 		{
 			unsafe {
@@ -519,6 +529,16 @@ mod fast_math_impl
 		pub fn zero() -> Self
 		{
 			Self([0; 4])
+		}
+
+		pub fn from_color_u32x3(c: &[u32; 3]) -> Self
+		{
+			Self([c[2], c[1], c[0], 0])
+		}
+
+		pub fn from_color_i32x3(c: &[i32; 3]) -> Self
+		{
+			Self([c[2] as u32, c[1] as u32, c[0] as u32, 0])
 		}
 
 		pub fn from_color_f32x3(c: &[f32; 3]) -> Self

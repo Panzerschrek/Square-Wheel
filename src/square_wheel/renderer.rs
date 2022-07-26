@@ -1556,25 +1556,18 @@ impl Renderer
 					x: f32_to_fixed16(src.pos.x),
 					y: f32_to_fixed16(src.pos.y),
 					tc: [f32_to_fixed16(src.tc.x), f32_to_fixed16(src.tc.y)],
+					light: [
+						f32_to_fixed16(src.light[0]),
+						f32_to_fixed16(src.light[1]),
+						f32_to_fixed16(src.light[2]),
+					],
 				};
 			}
 
 			for t in 0 .. num_vertices - 2
 			{
-				// TODO - perform per-vertex lighting
-				let mut light = [0.0, 0.0, 0.0];
-				for i in 0 .. 3
-				{
-					light[i] = 0.33 *
-						(vertices_projected[0].light[i] +
-							vertices_projected[t + 1].light[i] +
-							vertices_projected[t + 2].light[i]);
-				}
-
-				// TODO - use unchecked vertex fetch?
 				rasterizer.fill_triangle(
 					&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
-					&light,
 					&texture_info,
 					texture_data,
 				);
