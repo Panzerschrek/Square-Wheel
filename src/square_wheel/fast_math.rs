@@ -309,6 +309,7 @@ mod fast_math_impl
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse4.1")))]
 mod fast_math_impl
 {
+	use super::*;
 	use common::color::*;
 
 	pub fn inv_sqrt_fast(x: f32) -> f32
@@ -478,20 +479,20 @@ mod fast_math_impl
 		pub fn mul_scalar_add(&self, scalar: f32, b: &Self) -> Self
 		{
 			Self([
-				f32::mul_add(self.0[0], scalar, b.0[0]),
-				f32::mul_add(self.0[1], scalar, b.0[1]),
-				f32::mul_add(self.0[2], scalar, b.0[2]),
-				f32::mul_add(self.0[3], scalar, b.0[3]),
+				f32_mul_add(self.0[0], scalar, b.0[0]),
+				f32_mul_add(self.0[1], scalar, b.0[1]),
+				f32_mul_add(self.0[2], scalar, b.0[2]),
+				f32_mul_add(self.0[3], scalar, b.0[3]),
 			])
 		}
 
 		pub fn mul_add(&self, b: &Self, c: &Self) -> Self
 		{
 			Self([
-				f32::mul_add(self.0[0], b.0[0], c.0[0]),
-				f32::mul_add(self.0[1], b.0[1], c.0[1]),
-				f32::mul_add(self.0[2], b.0[2], c.0[2]),
-				f32::mul_add(self.0[3], b.0[3], c.0[3]),
+				f32_mul_add(self.0[0], b.0[0], c.0[0]),
+				f32_mul_add(self.0[1], b.0[1], c.0[1]),
+				f32_mul_add(self.0[2], b.0[2], c.0[2]),
+				f32_mul_add(self.0[3], b.0[3], c.0[3]),
 			])
 		}
 
@@ -620,4 +621,19 @@ mod fast_math_impl
 			Self(res)
 		}
 	} // impl ColorVecI
+}
+
+// On relatively modern CPUs FMA instruction is faster than sequential multiplication and addition. So, use native "mul_add" on such CPUs.
+// But on old CPUs there is no such instruction, so, compiler uses ridiculously slow emulation. To avoid this just use combination of  multiplication and addition.
+
+#[cfg(all(target_arch = "x86_64", target_feature = "fma"))]
+pub fn f32_mul_add(x: f32, y: f32, z: f32) -> f32
+{
+	f32::mul_add(x, y, z)
+}
+
+#[cfg(not(all(target_arch = "x86_64", target_feature = "fma")))]
+pub fn f32_mul_add(x: f32, y: f32, z: f32) -> f32
+{
+	x * y + z
 }

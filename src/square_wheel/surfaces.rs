@@ -459,7 +459,7 @@ fn build_surface_impl_6_static_params<
 			let lightmap_v = lightmap_base_v >> LIGHTAP_SCALE_LOG2;
 			let lightmap_v_plus_one = lightmap_v + 1;
 			debug_assert!(lightmap_v_plus_one < lightmap_size[1]);
-			let k = f32::mul_add(
+			let k = f32_mul_add(
 				(lightmap_base_v & lightmap_fetch_mask) as f32,
 				inv_lightmap_scale_f,
 				k_shift,
@@ -520,7 +520,7 @@ fn build_surface_impl_6_static_params<
 				debug_assert!(lightmap_u_plus_one < lightmap_size[0]);
 				let l0 = unsafe { debug_only_checked_fetch(&line_lightmap, lightmap_u as usize) };
 				let l1 = unsafe { debug_only_checked_fetch(&line_lightmap, lightmap_u_plus_one as usize) };
-				let k = f32::mul_add(
+				let k = f32_mul_add(
 					(lightmap_base_u & lightmap_fetch_mask) as f32,
 					inv_lightmap_scale_f,
 					k_shift,
@@ -660,28 +660,28 @@ fn build_surface_impl_6_static_params<
 				{
 					// Normal transformed to world space.
 					Vec3f::new(
-						f32::mul_add(
+						f32_mul_add(
 							texel_normal.x,
 							u_vec_normalized.x,
-							f32::mul_add(
+							f32_mul_add(
 								texel_normal.y,
 								v_vec_normalized.x,
 								texel_normal.z * plane_normal_normalized.x,
 							),
 						),
-						f32::mul_add(
+						f32_mul_add(
 							texel_normal.x,
 							u_vec_normalized.y,
-							f32::mul_add(
+							f32_mul_add(
 								texel_normal.y,
 								v_vec_normalized.y,
 								texel_normal.z * plane_normal_normalized.y,
 							),
 						),
-						f32::mul_add(
+						f32_mul_add(
 							texel_normal.x,
 							u_vec_normalized.z,
-							f32::mul_add(
+							f32_mul_add(
 								texel_normal.y,
 								v_vec_normalized.z,
 								texel_normal.z * plane_normal_normalized.z,
@@ -863,9 +863,9 @@ impl LightmapElementOps for LightmapElementOpsSimple
 	{
 		let one_minus_ratio = 1.0 - ratio;
 		[
-			f32::mul_add(a[0], ratio, b[0] * one_minus_ratio),
-			f32::mul_add(a[1], ratio, b[1] * one_minus_ratio),
-			f32::mul_add(a[2], ratio, b[2] * one_minus_ratio),
+			f32_mul_add(a[0], ratio, b[0] * one_minus_ratio),
+			f32_mul_add(a[1], ratio, b[1] * one_minus_ratio),
+			f32_mul_add(a[2], ratio, b[2] * one_minus_ratio),
 		]
 	}
 
@@ -890,44 +890,44 @@ impl LightmapElementOps for LightmapElementOpsDirectional
 		let one_minus_ratio = 1.0 - ratio;
 		Self::LightmapElement {
 			ambient_light: [
-				f32::mul_add(a.ambient_light[0], ratio, b.ambient_light[0] * one_minus_ratio),
-				f32::mul_add(a.ambient_light[1], ratio, b.ambient_light[1] * one_minus_ratio),
-				f32::mul_add(a.ambient_light[2], ratio, b.ambient_light[2] * one_minus_ratio),
+				f32_mul_add(a.ambient_light[0], ratio, b.ambient_light[0] * one_minus_ratio),
+				f32_mul_add(a.ambient_light[1], ratio, b.ambient_light[1] * one_minus_ratio),
+				f32_mul_add(a.ambient_light[2], ratio, b.ambient_light[2] * one_minus_ratio),
 			],
 			light_direction_vector_scaled: Vec3f::new(
-				f32::mul_add(
+				f32_mul_add(
 					a.light_direction_vector_scaled.x,
 					ratio,
 					b.light_direction_vector_scaled.x * one_minus_ratio,
 				),
-				f32::mul_add(
+				f32_mul_add(
 					a.light_direction_vector_scaled.y,
 					ratio,
 					b.light_direction_vector_scaled.y * one_minus_ratio,
 				),
-				f32::mul_add(
+				f32_mul_add(
 					a.light_direction_vector_scaled.z,
 					ratio,
 					b.light_direction_vector_scaled.z * one_minus_ratio,
 				),
 			),
-			directional_light_deviation: f32::mul_add(
+			directional_light_deviation: f32_mul_add(
 				a.directional_light_deviation,
 				ratio,
 				b.directional_light_deviation * one_minus_ratio,
 			),
 			directional_light_color: [
-				f32::mul_add(
+				f32_mul_add(
 					a.directional_light_color[0],
 					ratio,
 					b.directional_light_color[0] * one_minus_ratio,
 				),
-				f32::mul_add(
+				f32_mul_add(
 					a.directional_light_color[1],
 					ratio,
 					b.directional_light_color[1] * one_minus_ratio,
 				),
-				f32::mul_add(
+				f32_mul_add(
 					a.directional_light_color[2],
 					ratio,
 					b.directional_light_color[2] * one_minus_ratio,
@@ -998,8 +998,8 @@ fn cube_shadow_map_side_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f, side
 
 	let depth = inv_fast(vec.z.max(MIN_POSITIVE_VALUE));
 	let half_depth = 0.5 * depth;
-	let u_f = f32::mul_add(vec.x, half_depth, 0.5).max(0.0).min(ONE_MINUS_EPS) * cubemap_size_f;
-	let v_f = f32::mul_add(vec.y, half_depth, 0.5).max(0.0).min(ONE_MINUS_EPS) * cubemap_size_f;
+	let u_f = f32_mul_add(vec.x, half_depth, 0.5).max(0.0).min(ONE_MINUS_EPS) * cubemap_size_f;
+	let v_f = f32_mul_add(vec.y, half_depth, 0.5).max(0.0).min(ONE_MINUS_EPS) * cubemap_size_f;
 	// It is safe to use "unsafe" f32 to int conversion, since NaN and Inf is not possible here.
 	let u = unsafe { u_f.to_int_unchecked::<u32>() };
 	let v = unsafe { v_f.to_int_unchecked::<u32>() };
@@ -1029,7 +1029,7 @@ fn get_specular_intensity(vec_to_camera_reflected_light_angle_cos: f32, inv_roug
 		let a = 0.1875;
 		let b = 0.75;
 		let c = 0.75;
-		f32::mul_add(x, f32::mul_add(x, a, b), c) * inv_roughness
+		f32_mul_add(x, f32_mul_add(x, a, b), c) * inv_roughness
 	}
 	else
 	{
@@ -1041,7 +1041,7 @@ fn get_specular_intensity(vec_to_camera_reflected_light_angle_cos: f32, inv_roug
 		const A: f32 = 2.0 * std::f32::consts::PI / SQRT_7;
 		const B: f32 = std::f32::consts::PI * SQRT_7 / 2.0;
 
-		inv_fast(f32::mul_add(x * x, B, A)) * inv_roughness
+		inv_fast(f32_mul_add(x * x, B, A)) * inv_roughness
 	}
 }
 
@@ -1056,7 +1056,7 @@ fn get_fresnel_factor_base(vec_to_camera_normal_angle_cos: f32) -> f32
 
 fn get_specular_k_dielectric(fresnel_factor_base: f32, roughness: f32) -> f32
 {
-	let fresnel_factor = f32::mul_add(
+	let fresnel_factor = f32_mul_add(
 		fresnel_factor_base,
 		1.0 - DIELECTRIC_ZERO_REFLECTIVITY,
 		DIELECTRIC_ZERO_REFLECTIVITY,
@@ -1065,7 +1065,7 @@ fn get_specular_k_dielectric(fresnel_factor_base: f32, roughness: f32) -> f32
 	// For glossy surface we can just use Fresnel factor for diffuse/specular mixing.
 	// But for rough srufaces we can't. Normally we should use some sort of integral of Schlick's approximation.
 	// But it's too expensive. So, just make mix of Fresnel factor depending on view angle with constant factor for absolutely rough surface.
-	f32::mul_add(
+	f32_mul_add(
 		fresnel_factor,
 		1.0 - roughness,
 		DIELECTRIC_AVERAGE_REFLECTIVITY * roughness,
@@ -1074,7 +1074,7 @@ fn get_specular_k_dielectric(fresnel_factor_base: f32, roughness: f32) -> f32
 
 fn get_specular_k_metal(fresnel_factor_base: f32, roughness: f32) -> f32
 {
-	f32::mul_add(
+	f32_mul_add(
 		fresnel_factor_base,
 		1.0 - roughness,
 		METAL_AVERAGE_SCHLICK_FACTOR * roughness,
@@ -1090,16 +1090,16 @@ const METAL_AVERAGE_SCHLICK_FACTOR: f32 = 0.5;
 // Faster version of dot product, because it uses "mul_add".
 fn vec3_dot(a: &Vec3f, b: &Vec3f) -> f32
 {
-	f32::mul_add(a.x, b.x, f32::mul_add(a.y, b.y, a.z * b.z))
+	f32_mul_add(a.x, b.x, f32_mul_add(a.y, b.y, a.z * b.z))
 }
 
 // Faster than naive vec = a * scalar + b, because of "mul_add".
 fn vec3_scalar_mul_add(a: &Vec3f, scalar: f32, b: &Vec3f) -> Vec3f
 {
 	Vec3f::new(
-		f32::mul_add(a.x, scalar, b.x),
-		f32::mul_add(a.y, scalar, b.y),
-		f32::mul_add(a.z, scalar, b.z),
+		f32_mul_add(a.x, scalar, b.x),
+		f32_mul_add(a.y, scalar, b.y),
+		f32_mul_add(a.z, scalar, b.z),
 	)
 }
 

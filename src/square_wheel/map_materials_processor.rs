@@ -1,4 +1,4 @@
-use super::{resources_manager::*, textures::*};
+use super::{fast_math::*, resources_manager::*, textures::*};
 use common::{bsp_map_compact, material::*};
 
 pub struct MapMaterialsProcessor
@@ -116,8 +116,8 @@ fn make_turb_distortion(
 	// Shift rows.
 	for y in 0 .. size[1]
 	{
-		let shift = f32::mul_add(
-			f32::mul_add(y as f32, frequency_scaled, time_based_shift).sin(),
+		let shift = f32_mul_add(
+			f32_mul_add(y as f32, frequency_scaled, time_based_shift).sin(),
 			amplitude_corrected,
 			constant_shift[0],
 		)
@@ -150,8 +150,8 @@ fn make_turb_distortion(
 			*temp_dst = dst.pixels[(x + y * size[0]) as usize];
 		}
 
-		let shift = f32::mul_add(
-			f32::mul_add(x as f32, frequency_scaled, time_based_shift).sin(),
+		let shift = f32_mul_add(
+			f32_mul_add(x as f32, frequency_scaled, time_based_shift).sin(),
 			amplitude_corrected,
 			constant_shift[1],
 		)
