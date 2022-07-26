@@ -102,7 +102,6 @@ struct VisibleDynamicMeshInfo
 	num_visible_triangles: usize,
 	bbox_vertices_transformed: [Vec3f; 8],
 	camera_matrices: CameraMatrices,
-	light: bsp_map_compact::LightGridElement,
 }
 
 #[derive(Default, Copy, Clone)]
@@ -417,7 +416,6 @@ impl Renderer
 						planes_matrix: Mat4f::zero(),
 						position: Vec3f::zero(),
 					}, // Set later
-					light: bsp_map_compact::LightGridElement::default(), // Set later
 				});
 
 				let num_vertices = match &mesh.vertex_data
@@ -440,6 +438,7 @@ impl Renderer
 				ModelVertex3d {
 					pos: Vec3f::zero(),
 					tc: Vec2f::zero(),
+					light: [0.0; 3],
 				},
 			);
 		}
@@ -460,8 +459,6 @@ impl Renderer
 		let func = |visible_dynamic_mesh: &mut VisibleDynamicMeshInfo| {
 			let model = &models[visible_dynamic_mesh.entity_index as usize];
 			let animation = &model.animation;
-
-			visible_dynamic_mesh.light = fetch_light_from_grid(map, &model.position);
 
 			let model_matrix = get_object_matrix(model.position, model.angles);
 			let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
@@ -488,6 +485,8 @@ impl Renderer
 				&model.model,
 				mesh,
 				animation,
+				&fetch_light_from_grid(map, &model.position),
+				&model_matrix,
 				&final_matrix,
 				&Vec2f::new(texture.size[0] as f32, texture.size[1] as f32),
 				&model.model.tc_shift,
@@ -1526,6 +1525,7 @@ impl Renderer
 				*dst = ModelVertex2d {
 					pos: src.pos.truncate() / src.pos.z,
 					tc: src.tc,
+					light: src.light,
 				};
 			}
 
@@ -1556,16 +1556,18 @@ impl Renderer
 					x: f32_to_fixed16(src.pos.x),
 					y: f32_to_fixed16(src.pos.y),
 					tc: [f32_to_fixed16(src.tc.x), f32_to_fixed16(src.tc.y)],
+					light: [
+						f32_to_fixed16(src.light[0]),
+						f32_to_fixed16(src.light[1]),
+						f32_to_fixed16(src.light[2]),
+					],
 				};
 			}
 
 			for t in 0 .. num_vertices - 2
 			{
-				// TODO - use unchecked vertex fetch?
 				rasterizer.fill_triangle(
 					&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
-					// TODO - perform per-vertex lighting
-					&visible_dynamic_mesh.light.light_cube[0],
 					&texture_info,
 					texture_data,
 				);
@@ -1706,15 +1708,21 @@ fn fetch_light_from_grid(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> bsp_map_
 				let factor_z = 1.0 - (grid_pos.z - (z as f32)).abs();
 
 				let cur_sample_factor = factor_x * factor_y * factor_z;
-				/*
-				total_light[0] += sample_value[0] * cur_sample_factor;
-				total_light[1] += sample_value[1] * cur_sample_factor;
-				total_light[2] += sample_value[2] * cur_sample_factor;
+				for i in 0 .. 3
+				{
+					for cube_side in 0 .. 6
+					{
+						total_light.light_cube[cube_side][i] +=
+							sample_value.light_cube[cube_side][i] * cur_sample_factor;
+					}
+					total_light.directional_light_color[i] +=
+						sample_value.directional_light_color[i] * cur_sample_factor;
+				}
+				// TODO - maybe use different approach to interpolate this vector?
+				total_light.light_direction_vector_scaled +=
+					sample_value.light_direction_vector_scaled * cur_sample_factor;
+
 				total_factor += cur_sample_factor;
-				*/
-				// TODO - perform proper interpolation.
-				total_light = sample_value;
-				total_factor = 1.0;
 			} // for dz
 		} // for dy
 	} // for dx
@@ -1723,11 +1731,20 @@ fn fetch_light_from_grid(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> bsp_map_
 	{
 		return zero_light;
 	}
-
-	// Perform normalization in case if same sample points were rejected.
-	// total_light[0] /= total_factor;
-	// total_light[1] /= total_factor;
-	// total_light[2] /= total_factor;
+	if total_factor < 0.995
+	{
+		// Perform normalization in case if same sample points were rejected.
+		let inv_total_factor = 1.0 / total_factor;
+		for i in 0 .. 3
+		{
+			for cube_side in 0 .. 6
+			{
+				total_light.light_cube[cube_side][i] *= inv_total_factor;
+			}
+			total_light.directional_light_color[i] *= inv_total_factor;
+		}
+		total_light.light_direction_vector_scaled *= inv_total_factor;
+	}
 
 	total_light
 }

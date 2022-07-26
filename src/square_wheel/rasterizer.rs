@@ -743,7 +743,6 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 	pub fn fill_triangle<TextureColorT: AbstractColor>(
 		&mut self,
 		vertices: &[TrianglePointProjected; 3],
-		color: &[f32; 3],
 		texture_info: &TextureInfo,
 		texture_data: &[TextureColorT],
 	)
@@ -792,11 +791,34 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 
 			d_tc_dy_lower[i] = fixed16_div(
 				vertices[middle_index].tc[i] - vertices[lower_index].tc[i],
-				lower_part_dy.max(FIXED16_HALF),
+				lower_part_dy,
 			);
 			d_tc_dy_upper[i] = fixed16_div(
 				vertices[upper_index].tc[i] - vertices[middle_index].tc[i],
-				upper_part_dy.max(FIXED16_HALF),
+				upper_part_dy,
+			);
+		}
+
+		let mut long_edge_d_light_dy = [0, 0, 0];
+		let mut long_edge_light_in_middle = [0, 0, 0];
+		let mut d_light_dy_lower = [0, 0, 0];
+		let mut d_light_dy_upper = [0, 0, 0];
+		for i in 0 .. 3
+		{
+			long_edge_d_light_dy[i] = fixed16_div(
+				vertices[upper_index].light[i] - vertices[lower_index].light[i],
+				long_edge_dy,
+			);
+			long_edge_light_in_middle[i] =
+				vertices[lower_index].light[i] + fixed16_mul(long_edge_d_light_dy[i], lower_part_dy);
+
+			d_light_dy_lower[i] = fixed16_div(
+				vertices[middle_index].light[i] - vertices[lower_index].light[i],
+				lower_part_dy,
+			);
+			d_light_dy_upper[i] = fixed16_div(
+				vertices[upper_index].light[i] - vertices[middle_index].light[i],
+				upper_part_dy,
 			);
 		}
 
@@ -812,12 +834,20 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			//          _ \
 			//            _\
 
+			let middle_dx = (long_edge_x_in_middle - vertices[middle_index].x).max(FIXED16_HALF);
+
 			let mut d_tc_dx = [0, 0];
 			for i in 0 .. 2
 			{
-				d_tc_dx[i] = fixed16_div(
-					long_edge_tc_in_middle[i] - vertices[middle_index].tc[i],
-					(long_edge_x_in_middle - vertices[middle_index].x).max(FIXED16_HALF),
+				d_tc_dx[i] = fixed16_div(long_edge_tc_in_middle[i] - vertices[middle_index].tc[i], middle_dx);
+			}
+
+			let mut d_light_dx = [0, 0, 0];
+			for i in 0 .. 3
+			{
+				d_light_dx[i] = fixed16_div(
+					long_edge_light_in_middle[i] - vertices[middle_index].light[i],
+					middle_dx,
 				);
 			}
 
@@ -835,7 +865,9 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				vertices[lower_index].tc,
 				d_tc_dy_lower,
 				d_tc_dx,
-				color,
+				vertices[lower_index].light,
+				d_light_dy_lower,
+				d_light_dx,
 				texture_info,
 				texture_data,
 			);
@@ -853,7 +885,9 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				vertices[middle_index].tc,
 				d_tc_dy_upper,
 				d_tc_dx,
-				color,
+				vertices[middle_index].light,
+				d_light_dy_upper,
+				d_light_dx,
 				texture_info,
 				texture_data,
 			);
@@ -870,12 +904,20 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			//  / _
 			// /_
 
+			let middle_dx = (vertices[middle_index].x - long_edge_x_in_middle).max(FIXED16_HALF);
+
 			let mut d_tc_dx = [0, 0];
 			for i in 0 .. 2
 			{
-				d_tc_dx[i] = fixed16_div(
-					vertices[middle_index].tc[i] - long_edge_tc_in_middle[i],
-					(vertices[middle_index].x - long_edge_x_in_middle).max(FIXED16_HALF),
+				d_tc_dx[i] = fixed16_div(vertices[middle_index].tc[i] - long_edge_tc_in_middle[i], middle_dx);
+			}
+
+			let mut d_light_dx = [0, 0, 0];
+			for i in 0 .. 3
+			{
+				d_light_dx[i] = fixed16_div(
+					vertices[middle_index].light[i] - long_edge_light_in_middle[i],
+					middle_dx,
 				);
 			}
 
@@ -893,7 +935,9 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				vertices[lower_index].tc,
 				long_edge_d_tc_dy,
 				d_tc_dx,
-				color,
+				vertices[lower_index].light,
+				long_edge_d_light_dy,
+				d_light_dx,
 				texture_info,
 				texture_data,
 			);
@@ -911,7 +955,9 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				long_edge_tc_in_middle,
 				long_edge_d_tc_dy,
 				d_tc_dx,
-				color,
+				long_edge_light_in_middle,
+				long_edge_d_light_dy,
+				d_light_dx,
 				texture_info,
 				texture_data,
 			);
@@ -927,16 +973,13 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		tc_start_left: [Fixed16; 2],
 		d_tc_dy_left: [Fixed16; 2],
 		d_tc_dx: [Fixed16; 2],
-		color: &[f32; 3],
+		light_start_left: [Fixed16; 3],
+		d_light_left: [Fixed16; 3],
+		d_light_dx: [Fixed16; 3],
 		texture_info: &TextureInfo,
 		texture_data: &[TextureColorT],
 	)
 	{
-		const COLOR_SHIFT: i32 = 8;
-		const COLOR_SCALE: f32 = (1 << COLOR_SHIFT) as f32;
-		let color_vec =
-			ColorVecI::from_color_f32x3(&[color[0] * COLOR_SCALE, color[1] * COLOR_SCALE, color[2] * COLOR_SCALE]);
-
 		// TODO - avoid adding "0.5" for some calculations.
 		let y_start_int = fixed16_round_to_int(y_start).max(self.clip_rect.min_y);
 		let y_end_int = fixed16_round_to_int(y_end).min(self.clip_rect.max_y);
@@ -949,6 +992,17 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		{
 			tc_left[i] = tc_start_left[i] + fixed16_mul(y_start_delta, d_tc_dy_left[i]);
 		}
+
+		// TODO - prevent light underflow.
+		// TODO - try to optimize this and perform all light operations using ColorVecI class.
+		let mut light_left = [0, 0, 0];
+		for i in 0 .. 3
+		{
+			light_left[i] = light_start_left[i] + fixed16_mul(y_start_delta, d_light_left[i]);
+		}
+
+		let d_light_dx_vec = ColorVecI::from_color_i32x3(&d_light_dx);
+
 		for y_int in y_start_int .. y_end_int
 		{
 			let x_start_int = fixed16_floor_to_int(x_left).max(self.clip_rect.min_x);
@@ -961,6 +1015,12 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				{
 					line_tc[i] = tc_left[i] + fixed16_mul(x_start_delta, d_tc_dx[i]);
 				}
+
+				let mut line_light = ColorVecI::from_color_i32x3(&[
+					light_left[0] + fixed16_mul(x_start_delta, d_light_dx[0]),
+					light_left[1] + fixed16_mul(x_start_delta, d_light_dx[1]),
+					light_left[2] + fixed16_mul(x_start_delta, d_light_dx[2]),
+				]);
 
 				let line_buffer_offset = y_int * self.row_size;
 				let line_dst = &mut self.color_buffer
@@ -975,14 +1035,14 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					let texel = unchecked_texture_fetch(texture_data, texel_address);
 
 					let texel_vec = texel.into();
-					let texel_vec_colored =
-						ColorVecI::shift_right::<COLOR_SHIFT>(&ColorVecI::mul(&texel_vec, &color_vec));
+					let texel_vec_lighted = ColorVecI::shift_right::<16>(&ColorVecI::mul(&texel_vec, &line_light));
 
-					*dst_pixel = texel_vec_colored.into();
+					*dst_pixel = texel_vec_lighted.into();
 					for i in 0 .. 2
 					{
 						line_tc[i] += d_tc_dx[i];
 					}
+					line_light = ColorVecI::add(&line_light, &d_light_dx_vec);
 				}
 			}
 			x_left += left_side.dx_dy;
@@ -990,6 +1050,10 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			for i in 0 .. 2
 			{
 				tc_left[i] += d_tc_dy_left[i];
+			}
+			for i in 0 .. 3
+			{
+				light_left[i] += d_light_left[i];
 			}
 		}
 	}
@@ -1184,6 +1248,7 @@ pub struct TrianglePointProjected
 	pub x: Fixed16,
 	pub y: Fixed16,
 	pub tc: [Fixed16; 2],
+	pub light: [Fixed16; 3],
 }
 
 #[derive(Copy, Clone, Default)]

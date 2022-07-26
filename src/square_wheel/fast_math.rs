@@ -225,6 +225,16 @@ mod fast_math_impl
 			unsafe { Self(_mm_setzero_si128()) }
 		}
 
+		pub fn from_color_u32x3(c: &[u32; 3]) -> Self
+		{
+			unsafe { Self(_mm_set_epi32(0, c[0] as i32, c[1] as i32, c[2] as i32)) }
+		}
+
+		pub fn from_color_i32x3(c: &[i32; 3]) -> Self
+		{
+			unsafe { Self(_mm_set_epi32(0, c[0], c[1], c[2])) }
+		}
+
 		pub fn from_color_f32x3(c: &[f32; 3]) -> Self
 		{
 			unsafe {
@@ -284,15 +294,9 @@ mod fast_math_impl
 			unsafe { Self(_mm_mullo_epi32(self.0, other.0)) }
 		}
 
-		pub fn mul_scalar(&self, scalar: u32) -> Self
+		pub fn mul_scalar(&self, scalar: i32) -> Self
 		{
-			let scalar_i32 = scalar as i32;
-			unsafe {
-				Self(_mm_mullo_epi32(
-					self.0,
-					_mm_set_epi32(scalar_i32, scalar_i32, scalar_i32, scalar_i32),
-				))
-			}
+			unsafe { Self(_mm_mullo_epi32(self.0, _mm_set_epi32(scalar, scalar, scalar, scalar))) }
 		}
 
 		pub fn shift_right<const COUNT: i32>(&self) -> Self
@@ -512,7 +516,7 @@ mod fast_math_impl
 
 	#[repr(C, align(32))]
 	#[derive(Copy, Clone)]
-	pub struct ColorVecI([u32; 4]);
+	pub struct ColorVecI([i32; 4]);
 
 	impl ColorVecI
 	{
@@ -521,9 +525,19 @@ mod fast_math_impl
 			Self([0; 4])
 		}
 
+		pub fn from_color_u32x3(c: &[u32; 3]) -> Self
+		{
+			Self([c[2] as i32, c[1] as i32, c[0] as i32, 0])
+		}
+
+		pub fn from_color_i32x3(c: &[i32; 3]) -> Self
+		{
+			Self([c[2], c[1], c[0], 0])
+		}
+
 		pub fn from_color_f32x3(c: &[f32; 3]) -> Self
 		{
-			Self([c[2] as u32, c[1] as u32, c[0] as u32, 0])
+			Self([c[2] as i32, c[1] as i32, c[0] as i32, 0])
 		}
 
 		pub fn from_color32(c: Color32) -> Self
@@ -531,7 +545,7 @@ mod fast_math_impl
 			let mut res = [0; 4];
 			for i in 0 .. 4
 			{
-				res[i] = ((c.get_raw() >> (i * 8)) & 0xFF) as u32;
+				res[i] = ((c.get_raw() >> (i * 8)) & 0xFF) as i32;
 			}
 			Self(res)
 		}
@@ -541,7 +555,7 @@ mod fast_math_impl
 			let mut res = [0; 4];
 			for i in 0 .. 4
 			{
-				res[i] = ((c.get_raw() >> (i * 16)) & 0xFFFF) as u32;
+				res[i] = ((c.get_raw() >> (i * 16)) & 0xFFFF) as i32;
 			}
 			Self(res)
 		}
@@ -586,7 +600,7 @@ mod fast_math_impl
 			Self(res)
 		}
 
-		pub fn mul_scalar(&self, scalar: u32) -> Self
+		pub fn mul_scalar(&self, scalar: i32) -> Self
 		{
 			let mut res = [0; 4];
 			for i in 0 .. 4

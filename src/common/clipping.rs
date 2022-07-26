@@ -189,6 +189,7 @@ pub struct ModelVertex2d
 {
 	pub pos: Vec2f,
 	pub tc: Vec2f,
+	pub light: [f32; 3],
 }
 
 #[derive(Copy, Clone)]
@@ -196,6 +197,7 @@ pub struct ModelVertex3d
 {
 	pub pos: Vec3f,
 	pub tc: Vec2f,
+	pub light: [f32; 3],
 }
 
 pub fn clip_2d_model_polygon(
@@ -320,6 +322,11 @@ fn get_model_line_line_intersection(v0: &ModelVertex2d, v1: &ModelVertex2d, line
 	ModelVertex2d {
 		pos: v0.pos * k1 - v1.pos * k0,
 		tc: v0.tc * k1 - v1.tc * k0,
+		light: [
+			v0.light[0] * k1 - v1.light[0] * k0,
+			v0.light[1] * k1 - v1.light[1] * k0,
+			v0.light[2] * k1 - v1.light[2] * k0,
+		],
 	}
 }
 
@@ -333,5 +340,10 @@ fn get_model_line_plane_intersection(v0: &ModelVertex3d, v1: &ModelVertex3d, pla
 	ModelVertex3d {
 		pos: v0.pos * k1 - v1.pos * k0,
 		tc: v0.tc * k1 - v1.tc * k0,
+		light: [
+			v0.light[0] * k1 - v1.light[0] * k0,
+			v0.light[1] * k1 - v1.light[1] * k0,
+			v0.light[2] * k1 - v1.light[2] * k0,
+		],
 	}
 }

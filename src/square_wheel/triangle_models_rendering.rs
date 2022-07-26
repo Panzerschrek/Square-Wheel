@@ -1,16 +1,20 @@
-use super::{frame_info::*, triangle_model::*};
-use common::{bbox::*, clipping::*, math_types::*, plane::*};
+use super::{fast_math::*, frame_info::*, triangle_model::*};
+use common::{bbox::*, bsp_map_compact, clipping::*, math_types::*, plane::*};
 
 pub fn animate_and_transform_triangle_mesh_vertices(
 	model: &TriangleModel,
 	mesh: &TriangleModelMesh,
 	animation: &AnimationPoint,
-	matrix: &Mat4f,
+	light: &bsp_map_compact::LightGridElement,
+	model_matrix: &Mat4f,
+	model_view_matrix: &Mat4f,
 	tc_scale: &Vec2f,
 	tc_shift: &Vec2f,
 	dst_vertices: &mut [ModelVertex3d],
 )
 {
+	let normals_matrix = get_normals_matrix(model_matrix);
+
 	let frame0 = animation.frames[0] as usize;
 	let frame1 = animation.frames[1] as usize;
 	let lerp0 = animation.lerp.max(0.0).min(1.0);
@@ -35,10 +39,13 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 					.zip(dst_vertices.iter_mut())
 				{
 					let position_lerped = v_v0.position * lerp0 + v_v1.position * lerp1;
-					let pos_transformed = matrix * position_lerped.extend(1.0);
+					let pos_transformed = model_view_matrix * position_lerped.extend(1.0);
+					let normal_lerped = v_v0.normal * lerp0 + v_v1.normal * lerp1;
+					let normal_transformed = normals_matrix * normal_lerped;
 					*dst_v = ModelVertex3d {
 						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
 						tc: Vec2f::from(v_c.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
+						light: get_vertex_light(light, &normal_transformed),
 					};
 				}
 			}
@@ -58,10 +65,12 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 					.zip(va.constant.iter())
 					.zip(dst_vertices.iter_mut())
 				{
-					let pos_transformed = matrix * v_v.position.extend(1.0);
+					let pos_transformed = model_view_matrix * v_v.position.extend(1.0);
+					let normal_transformed = normals_matrix * v_v.normal;
 					*dst_v = ModelVertex3d {
 						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
 						tc: Vec2f::from(v_c.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
+						light: get_vertex_light(light, &normal_transformed),
 					};
 				}
 			}
@@ -73,10 +82,12 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 				// No animation - just use source vertces.
 				for (v, dst_v) in v.iter().zip(dst_vertices.iter_mut())
 				{
-					let pos_transformed = matrix * v.position.extend(1.0);
+					let pos_transformed = model_view_matrix * v.position.extend(1.0);
+					// TODO - transform normal properly.
 					*dst_v = ModelVertex3d {
 						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
 						tc: Vec2f::from(v.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
+						light: get_vertex_light(light, &v.normal),
 					};
 				}
 			}
@@ -125,30 +136,44 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 					}
 				}
 
-				let matrix_weight_scaled = matrix * (1.0 / 255.0);
-				for bone_index in 0 .. model.bones.len()
+				// TODO - use uninitialized memory.
+				let mut normals_matrices = [Mat3f::zero(); MAX_TRIANGLE_MODEL_BONES];
+
+				// Calculate normals matrix based on object normals matrix and bone matrix.
+				// Multiply bone matrix by model view matrix.
+				let weight_scale = 1.0 / 255.0;
+				let normals_matrix_weight_scaled = normals_matrix * weight_scale;
+				let model_view_matrix_weight_scaled = model_view_matrix * weight_scale;
+				for (bone_matrix, bone_normal_matrix) in matrices.iter_mut().zip(normals_matrices.iter_mut())
 				{
-					matrices[bone_index] = matrix_weight_scaled * matrices[bone_index];
+					*bone_normal_matrix = normals_matrix_weight_scaled * get_normals_matrix(bone_matrix);
+					*bone_matrix = model_view_matrix_weight_scaled * *bone_matrix;
 				}
 
 				for (v, dst_v) in v.iter().zip(dst_vertices.iter_mut())
 				{
-					let mut mat =
-						matrices[v.bones_description[0].bone_index as usize] * (v.bones_description[0].weight as f32);
+					let i0 = v.bones_description[0].bone_index as usize;
+					let w0 = v.bones_description[0].weight as f32;
+					let mut mat = matrices[i0] * w0;
+					let mut normal_mat = normals_matrices[i0] * w0;
 					for i in 1 .. 4
 					{
 						// Avoid costly matrix operation if weight is zero.
 						if v.bones_description[i].weight > 0
 						{
-							mat += matrices[v.bones_description[i].bone_index as usize] *
-								(v.bones_description[i].weight as f32);
+							let ii = v.bones_description[i].bone_index as usize;
+							let wi = v.bones_description[i].weight as f32;
+							mat += matrices[ii] * wi;
+							normal_mat += normals_matrices[ii] * wi;
 						}
 					}
 
 					let pos_transformed = mat * v.position.extend(1.0);
+					let normal_transformed = normal_mat * v.normal;
 					*dst_v = ModelVertex3d {
 						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
 						tc: Vec2f::from(v.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
+						light: get_vertex_light(light, &normal_transformed),
 					};
 				}
 			}
@@ -227,4 +252,75 @@ pub fn triangle_vertex_debug_checked_fetch<VertexT: Copy>(vertices: &[VertexT], 
 	unsafe {
 		*vertices.get_unchecked(index_s)
 	}
+}
+
+fn get_vertex_light(light: &bsp_map_compact::LightGridElement, normal_tranformed: &Vec3f) -> [f32; 3]
+{
+	// After transformation normal may be unnormalized. Renormalize it.
+	let normal_normalized = normal_tranformed * inv_sqrt_fast(normal_tranformed.magnitude2().max(0.00000001));
+
+	let mut total_light = [0.0, 0.0, 0.0];
+	// Fetch light from cube.
+	if normal_normalized.x <= 0.0
+	{
+		for i in 0 .. 3
+		{
+			total_light[i] += light.light_cube[0][i] * (-normal_normalized.x);
+		}
+	}
+	else
+	{
+		for i in 0 .. 3
+		{
+			total_light[i] += light.light_cube[1][i] * normal_normalized.x;
+		}
+	}
+	if normal_normalized.y <= 0.0
+	{
+		for i in 0 .. 3
+		{
+			total_light[i] += light.light_cube[2][i] * (-normal_normalized.y);
+		}
+	}
+	else
+	{
+		for i in 0 .. 3
+		{
+			total_light[i] += light.light_cube[3][i] * normal_normalized.y;
+		}
+	}
+	if normal_normalized.z <= 0.0
+	{
+		for i in 0 .. 3
+		{
+			total_light[i] += light.light_cube[4][i] * (-normal_normalized.z);
+		}
+	}
+	else
+	{
+		for i in 0 .. 3
+		{
+			total_light[i] += light.light_cube[5][i] * normal_normalized.z;
+		}
+	}
+
+	// Use directional component.
+	let light_dir_dot = normal_normalized.dot(light.light_direction_vector_scaled).max(0.0);
+	for i in 0 .. 3
+	{
+		total_light[i] += light.directional_light_color[i] * light_dir_dot;
+	}
+
+	total_light
+}
+
+fn get_normals_matrix(model_matrix: &Mat4f) -> Mat3f
+{
+	// TODO - check thid
+	let axis_matrix = Mat3f::from_cols(
+		model_matrix.x.truncate(),
+		model_matrix.y.truncate(),
+		model_matrix.z.truncate(),
+	);
+	axis_matrix.transpose().invert().unwrap_or_else(Mat3f::identity)
 }
