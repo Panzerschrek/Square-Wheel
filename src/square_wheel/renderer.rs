@@ -1143,7 +1143,7 @@ impl Renderer
 					dist: 1.0,
 				},
 				Plane {
-					vec: Vec3f::unit_z(),
+					vec: -Vec3f::unit_z(),
 					dist: 1.0,
 				},
 			),
@@ -1155,11 +1155,11 @@ impl Renderer
 					dist: -1.0,
 				},
 				Plane {
-					vec: Vec3f::unit_y(),
+					vec: -Vec3f::unit_y(),
 					dist: 1.0,
 				},
 				Plane {
-					vec: Vec3f::unit_z(),
+					vec: -Vec3f::unit_z(),
 					dist: 1.0,
 				},
 			),
@@ -1171,11 +1171,11 @@ impl Renderer
 					dist: -1.0,
 				},
 				Plane {
-					vec: Vec3f::unit_x(),
+					vec: -Vec3f::unit_x(),
 					dist: 1.0,
 				},
 				Plane {
-					vec: Vec3f::unit_z(),
+					vec: -Vec3f::unit_z(),
 					dist: 1.0,
 				},
 			),
@@ -1191,7 +1191,7 @@ impl Renderer
 					dist: 1.0,
 				},
 				Plane {
-					vec: Vec3f::unit_z(),
+					vec: -Vec3f::unit_z(),
 					dist: 1.0,
 				},
 			),
@@ -1207,7 +1207,7 @@ impl Renderer
 					dist: 1.0,
 				},
 				Plane {
-					vec: Vec3f::unit_y(),
+					vec: -Vec3f::unit_y(),
 					dist: 1.0,
 				},
 			),
