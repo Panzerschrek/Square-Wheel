@@ -554,7 +554,10 @@ impl Renderer
 				screen_rect.max.y,
 			);
 
-			self.draw_skybox(&mut rasterizer, camera_matrices, &viewport_clippung_polygon);
+			if !self.config.invert_polygons_order
+			{
+				self.draw_skybox(&mut rasterizer, camera_matrices, &viewport_clippung_polygon);
+			}
 
 			self.draw_tree_r(
 				&mut rasterizer,
@@ -564,6 +567,11 @@ impl Renderer
 				models,
 				root_node,
 			);
+
+			if self.config.invert_polygons_order
+			{
+				self.draw_skybox(&mut rasterizer, camera_matrices, &viewport_clippung_polygon);
+			}
 
 			self.draw_view_models(&mut rasterizer, &viewport_clippung_polygon, models);
 		}
@@ -606,7 +614,10 @@ impl Renderer
 					rect_corrected.max.y,
 				);
 
-				self.draw_skybox(&mut rasterizer, camera_matrices, &viewport_clippung_polygon);
+				if !self.config.invert_polygons_order
+				{
+					self.draw_skybox(&mut rasterizer, camera_matrices, &viewport_clippung_polygon);
+				}
 
 				self.draw_tree_r(
 					&mut rasterizer,
@@ -616,6 +627,11 @@ impl Renderer
 					models,
 					root_node,
 				);
+
+				if self.config.invert_polygons_order
+				{
+					self.draw_skybox(&mut rasterizer, camera_matrices, &viewport_clippung_polygon);
+				}
 
 				self.draw_view_models(&mut rasterizer, &viewport_clippung_polygon, models);
 			});
