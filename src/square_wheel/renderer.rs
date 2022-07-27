@@ -551,6 +551,8 @@ impl Renderer
 				screen_rect.max.y,
 			);
 
+			self.draw_skybox(&mut rasterizer, camera_matrices, &viewport_clippung_polygon);
+
 			self.draw_tree_r(
 				&mut rasterizer,
 				camera_matrices,
@@ -600,6 +602,8 @@ impl Renderer
 					rect_corrected.max.x,
 					rect_corrected.max.y,
 				);
+
+				self.draw_skybox(&mut rasterizer, camera_matrices, &viewport_clippung_polygon);
 
 				self.draw_tree_r(
 					&mut rasterizer,
@@ -1037,6 +1041,210 @@ impl Renderer
 					&self.visible_dynamic_meshes_list[visible_mesh_index as usize],
 				);
 			}
+		}
+	}
+
+	fn draw_skybox<'a, ColorT: AbstractColor>(
+		&self,
+		rasterizer: &mut Rasterizer<'a, ColorT>,
+		camera_matrices: &CameraMatrices,
+		viewport_clippung_polygon: &ClippingPolygon,
+	)
+	{
+		// TODO - use proper skybox index.
+		let mut skybox_textures = None;
+		for i in 0 .. self.map.textures.len()
+		{
+			skybox_textures = self.materials_processor.get_skybox_textures(i as u32);
+			if skybox_textures.is_some()
+			{
+				break;
+			}
+		}
+		if skybox_textures.is_none()
+		{
+			return;
+		}
+
+		const BOX_VERTICES: [[f32; 3]; 8] = [
+			[-1.0, -1.0, -1.0],
+			[-1.0, -1.0, 1.0],
+			[-1.0, 1.0, -1.0],
+			[-1.0, 1.0, 1.0],
+			[1.0, -1.0, -1.0],
+			[1.0, -1.0, 1.0],
+			[1.0, 1.0, -1.0],
+			[1.0, 1.0, 1.0],
+		];
+
+		// TODO - fix texture coordinates equation.
+		const BOX_POLYGONS: [([usize; 4], Plane, Plane, Plane); 6] = [
+			// -X
+			(
+				[0, 1, 3, 2],
+				Plane {
+					vec: -Vec3f::unit_x(),
+					dist: -1.0,
+				},
+				Plane {
+					vec: Vec3f::unit_y(),
+					dist: 0.0,
+				},
+				Plane {
+					vec: Vec3f::unit_z(),
+					dist: 0.0,
+				},
+			),
+			// +X
+			(
+				[4, 5, 7, 6],
+				Plane {
+					vec: Vec3f::unit_x(),
+					dist: -1.0,
+				},
+				Plane {
+					vec: Vec3f::unit_y(),
+					dist: 0.0,
+				},
+				Plane {
+					vec: Vec3f::unit_z(),
+					dist: 0.0,
+				},
+			),
+			// -Y
+			(
+				[0, 1, 5, 4],
+				Plane {
+					vec: Vec3f::unit_y(),
+					dist: -1.0,
+				},
+				Plane {
+					vec: Vec3f::unit_x(),
+					dist: 0.0,
+				},
+				Plane {
+					vec: Vec3f::unit_z(),
+					dist: 0.0,
+				},
+			),
+			// +Y
+			(
+				[2, 3, 7, 6],
+				Plane {
+					vec: -Vec3f::unit_y(),
+					dist: -1.0,
+				},
+				Plane {
+					vec: Vec3f::unit_x(),
+					dist: 0.0,
+				},
+				Plane {
+					vec: Vec3f::unit_z(),
+					dist: 0.0,
+				},
+			),
+			// -Z
+			(
+				[0, 2, 6, 4],
+				Plane {
+					vec: Vec3f::unit_z(),
+					dist: -1.0,
+				},
+				Plane {
+					vec: Vec3f::unit_x(),
+					dist: 0.0,
+				},
+				Plane {
+					vec: Vec3f::unit_y(),
+					dist: 0.0,
+				},
+			),
+			// +Z
+			(
+				[1, 3, 7, 5],
+				Plane {
+					vec: -Vec3f::unit_z(),
+					dist: -1.0,
+				},
+				Plane {
+					vec: Vec3f::unit_x(),
+					dist: 0.0,
+				},
+				Plane {
+					vec: Vec3f::unit_y(),
+					dist: 0.0,
+				},
+			),
+		];
+
+		let skybox_matrix = Mat4f::from_translation(camera_matrices.position);
+		let skybox_view_matrix = camera_matrices.view_matrix * skybox_matrix;
+		let skybox_planes_matrix = camera_matrices.planes_matrix; // TODO - shift it
+
+		let bbox_vertices_transformed = BOX_VERTICES.map(|v| {
+			let v_transformed = skybox_view_matrix * Vec4f::new(v[0], v[1], v[2], 1.0);
+			Vec3f::new(v_transformed.x, v_transformed.y, v_transformed.w)
+		});
+
+		let clip_planes = viewport_clippung_polygon.get_clip_planes();
+
+		for (side, polygon) in BOX_POLYGONS.iter().enumerate()
+		{
+			let mut vertices_transformed = [
+				bbox_vertices_transformed[polygon.0[0]],
+				bbox_vertices_transformed[polygon.0[1]],
+				bbox_vertices_transformed[polygon.0[2]],
+				bbox_vertices_transformed[polygon.0[3]],
+			];
+
+			// TODO - select proper mip.
+			let mip = 0;
+
+			let side_texture = &skybox_textures.unwrap()[side][mip];
+			let texture_size = [side_texture.size, side_texture.size];
+			let texture_data = &side_texture.pixels;
+
+			let plane = polygon.1;
+			let plane_transformed = skybox_planes_matrix * plane.vec.extend(-plane.dist);
+			let plane_transformed_w = -plane_transformed.w;
+			let depth_equation = DepthEquation {
+				d_inv_z_dx: plane_transformed.x / plane_transformed_w,
+				d_inv_z_dy: plane_transformed.y / plane_transformed_w,
+				k: plane_transformed.z / plane_transformed_w,
+			};
+
+			let tex_coord_equation = [polygon.2, polygon.3];
+			// Calculate texture coordinates equations.
+			let tc_basis_transformed = [
+				skybox_planes_matrix * tex_coord_equation[0].vec.extend(tex_coord_equation[0].dist),
+				skybox_planes_matrix * tex_coord_equation[1].vec.extend(tex_coord_equation[1].dist),
+			];
+			// Equation projeted to polygon plane.
+			let tc_equation = TexCoordEquation {
+				d_tc_dx: [
+					tc_basis_transformed[0].x + tc_basis_transformed[0].w * depth_equation.d_inv_z_dx,
+					tc_basis_transformed[1].x + tc_basis_transformed[1].w * depth_equation.d_inv_z_dx,
+				],
+				d_tc_dy: [
+					tc_basis_transformed[0].y + tc_basis_transformed[0].w * depth_equation.d_inv_z_dy,
+					tc_basis_transformed[1].y + tc_basis_transformed[1].w * depth_equation.d_inv_z_dy,
+				],
+				k: [
+					tc_basis_transformed[0].z + tc_basis_transformed[0].w * depth_equation.k,
+					tc_basis_transformed[1].z + tc_basis_transformed[1].w * depth_equation.k,
+				],
+			};
+
+			draw_polygon(
+				rasterizer,
+				&clip_planes,
+				&vertices_transformed,
+				&depth_equation,
+				&tc_equation,
+				&texture_size,
+				texture_data,
+				material::BlendingMode::None,
+			);
 		}
 	}
 

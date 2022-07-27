@@ -1,4 +1,4 @@
-use super::{fast_math::*, resources_manager::*, textures::*};
+use super::{abstract_color::*, fast_math::*, resources_manager::*, textures::*};
 use common::{bsp_map_compact, color::*, material::*};
 use std::{borrow::Borrow, collections::HashMap};
 
@@ -106,6 +106,11 @@ impl MapMaterialsProcessor
 
 		// Return source texture.
 		&self.textures[material_index as usize]
+	}
+
+	pub fn get_skybox_textures<ColorT: AbstractColor>(&self, material_index: u32) -> Option<&SkyboxTextures<ColorT>>
+	{
+		// TODO
 	}
 
 	pub fn get_skybox_textures_32(&self, material_index: u32) -> Option<&SkyboxTextures<Color32>>
