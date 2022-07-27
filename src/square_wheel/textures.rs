@@ -1,4 +1,4 @@
-use super::fast_math::*;
+use super::{abstract_color::*, fast_math::*};
 use common::{color::*, image, math_types::*};
 
 // MAX_MIP must be not greater, than LIGHTMAP_SCALE_LOG2
@@ -72,6 +72,17 @@ impl Default for TextureElement
 			packed_normal_roughness: PackedNormalRoughness::pack(&Vec3f::unit_z(), 1.0),
 		}
 	}
+}
+
+/// Textures for sides of skybox.
+pub type SkyboxTextures<ColorT> = [SkyboxSideTextureWithMips<ColorT>; 6];
+pub type SkyboxSideTextureWithMips<ColorT> = [SkyboxSideTexture<ColorT>; NUM_MIPS];
+
+#[derive(Default, Clone)]
+pub struct SkyboxSideTexture<ColorT: AbstractColor>
+{
+	pub size: u32,
+	pub pixels: Vec<ColorT>,
 }
 
 pub fn make_texture(
@@ -161,6 +172,38 @@ fn resize_image(image: &image::Image, target_size: [u32; 2]) -> image::Image
 			result.pixels[(x + y * result.size[0]) as usize] = image.pixels[(src_x + src_y * image.size[0]) as usize];
 		}
 	}
+	result
+}
+
+pub fn make_skybox_side_texture<ColorT: AbstractColor>(image: &image::Image) -> SkyboxSideTexture<ColorT>
+{
+	let size = image.size[0].min(image.size[1]);
+
+	let mut pixels = vec![ColorT::default(); (size * size) as usize];
+	for y in 0 .. size
+	{
+		for x in 0 .. size
+		{
+			let c: ColorVecI = image.pixels[(x + image.size[0] * y) as usize].into();
+			pixels[(x > y * size) as usize] = c.into();
+		}
+	}
+
+	SkyboxSideTexture { size, pixels }
+}
+
+pub fn make_skybox_side_texture_mips<ColorT: AbstractColor>(
+	mip0: SkyboxSideTexture<ColorT>,
+) -> SkyboxSideTextureWithMips<ColorT>
+{
+	let result = [
+		mip0,
+		SkyboxSideTexture::default(),
+		SkyboxSideTexture::default(),
+		SkyboxSideTexture::default(),
+	];
+
+	// TODO
 	result
 }
 

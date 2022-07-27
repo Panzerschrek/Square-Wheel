@@ -1,8 +1,8 @@
 use super::{
-	config, console::*, resources_manager_config::*, textures::*, triangle_model, triangle_model_iqm,
-	triangle_model_md3,
+	abstract_color::*, config, console::*, resources_manager_config::*, textures::*, triangle_model,
+	triangle_model_iqm, triangle_model_md3,
 };
-use common::{bbox::*, bsp_map_compact::*, bsp_map_save_load::*, image, material::*, math_types::*};
+use common::{bbox::*, bsp_map_compact::*, bsp_map_save_load::*, color::*, image, material::*, math_types::*};
 use std::{
 	collections::HashMap,
 	path::PathBuf,
@@ -26,6 +26,8 @@ pub struct ResourcesManager
 	images: ResourcesMap<image::Image>,
 	stub_image: SharedResourcePtr<image::Image>,
 	material_textures: ResourcesMap<TextureWithMips>,
+	skybox_textures_32: ResourcesMap<SkyboxTextures<Color32>>,
+	skybox_textures_64: ResourcesMap<SkyboxTextures<Color64>>,
 }
 
 pub type ResourcesManagerSharedPtr = Arc<Mutex<ResourcesManager>>;
@@ -56,6 +58,8 @@ impl ResourcesManager
 			images: ResourcesMap::new(),
 			stub_image: SharedResourcePtr::new(image::make_stub()),
 			material_textures: ResourcesMap::new(),
+			skybox_textures_32: ResourcesMap::new(),
+			skybox_textures_64: ResourcesMap::new(),
 		}))
 	}
 
@@ -185,12 +189,37 @@ impl ResourcesManager
 		ptr
 	}
 
+	pub fn get_skybox_textures_32(&mut self, key: &ResourceKey) -> SharedResourcePtr<SkyboxTextures<Color32>>
+	{
+		if let Some(p) = self.skybox_textures_32.get(key)
+		{
+			return p.clone();
+		}
+
+		let material = self.materials.get(key).unwrap_or_else(|| {
+			self.console
+				.lock()
+				.unwrap()
+				.add_text(format!("Failed to find material {:?}", key));
+			&self.default_material
+		});
+
+		let skybox_texture = load_skybox_texture(material, &self.config.textures_path);
+
+		let ptr = SharedResourcePtr::new(skybox_texture);
+		self.skybox_textures_32.insert(key.clone(), ptr.clone());
+
+		ptr
+	}
+
 	pub fn clear_cache(&mut self)
 	{
 		// Remove all resources that are stored only inside cache.
 		remove_unused_resource_map_entries(&mut self.models);
 		remove_unused_resource_map_entries(&mut self.images);
 		remove_unused_resource_map_entries(&mut self.material_textures);
+		remove_unused_resource_map_entries(&mut self.skybox_textures_32);
+		remove_unused_resource_map_entries(&mut self.skybox_textures_64);
 	}
 }
 
@@ -252,6 +281,38 @@ fn load_texture(material: &Material, textures_path: &str) -> TextureWithMips
 	let mip0 = make_texture(diffuse, normals, material.roughness, roughness_map, material.is_metal);
 
 	build_texture_mips(mip0)
+}
+
+fn load_skybox_texture<ColorT: AbstractColor>(material: &Material, textures_path: &str) -> SkyboxTextures<ColorT>
+{
+	// TODO - avoi "unwrap"
+	let mut result = SkyboxTextures::default();
+	for (side_image, out_side) in material
+		.skybox
+		.as_ref()
+		.unwrap()
+		.side_images
+		.iter()
+		.zip(result.iter_mut())
+	{
+		*out_side = load_skybox_texture_side(textures_path, &side_image);
+	}
+	result
+}
+
+fn load_skybox_texture_side<ColorT: AbstractColor>(
+	textures_path: &str,
+	texture_image_name: &str,
+) -> SkyboxSideTextureWithMips<ColorT>
+{
+	if texture_image_name.is_empty()
+	{
+		return SkyboxSideTextureWithMips::default();
+	}
+
+	let image = load_image(texture_image_name, textures_path).unwrap_or_else(image::make_stub);
+	let mip0 = make_skybox_side_texture(&image);
+	make_skybox_side_texture_mips(mip0)
 }
 
 fn load_image(file_name: &str, textures_path: &str) -> Option<image::Image>

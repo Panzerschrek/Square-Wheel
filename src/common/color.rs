@@ -1,4 +1,4 @@
-#[derive(Clone, Copy)]
+#[derive(Default, Clone, Copy)]
 pub struct Color32(u32);
 
 impl Color32
@@ -111,7 +111,7 @@ impl Color32
 	}
 }
 
-#[derive(Clone, Copy)]
+#[derive(Default, Clone, Copy)]
 pub struct Color64(u64);
 
 impl Color64

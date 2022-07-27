@@ -1,7 +1,7 @@
 use super::fast_math::*;
 use common::color::*;
 
-pub trait AbstractColor: Copy + Send + Sync + From<ColorVec> + From<ColorVecI> + Into<ColorVecI>
+pub trait AbstractColor: Default + Copy + Send + Sync + From<ColorVec> + From<ColorVecI> + Into<ColorVecI>
 {
 	fn average(a: Self, b: Self) -> Self;
 	fn saturated_sum(a: Self, b: Self) -> Self;
