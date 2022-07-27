@@ -110,7 +110,22 @@ impl MapMaterialsProcessor
 
 	pub fn get_skybox_textures<ColorT: AbstractColor>(&self, material_index: u32) -> Option<&SkyboxTextures<ColorT>>
 	{
-		// TODO
+		// Use an ugly hack to return proper skybox texture.
+		let color_size = std::mem::size_of::<ColorT>();
+		if color_size == 4
+		{
+			self.get_skybox_textures_32(material_index)
+				.map(|x| unsafe { std::mem::transmute(x) })
+		}
+		else if color_size == 8
+		{
+			self.get_skybox_textures_64(material_index)
+				.map(|x| unsafe { std::mem::transmute(x) })
+		}
+		else
+		{
+			panic!("Unsupported type!");
+		}
 	}
 
 	pub fn get_skybox_textures_32(&self, material_index: u32) -> Option<&SkyboxTextures<Color32>>

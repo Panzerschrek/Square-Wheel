@@ -1078,7 +1078,7 @@ impl Renderer
 		];
 
 		// TODO - fix texture coordinates equation.
-		const BOX_POLYGONS: [([usize; 4], Plane, Plane, Plane); 6] = [
+		let bbox_polygons: [([usize; 4], Plane, Plane, Plane); 6] = [
 			// -X
 			(
 				[0, 1, 3, 2],
@@ -1188,9 +1188,9 @@ impl Renderer
 
 		let clip_planes = viewport_clippung_polygon.get_clip_planes();
 
-		for (side, polygon) in BOX_POLYGONS.iter().enumerate()
+		for (side, polygon) in bbox_polygons.iter().enumerate()
 		{
-			let mut vertices_transformed = [
+			let vertices_transformed = [
 				bbox_vertices_transformed[polygon.0[0]],
 				bbox_vertices_transformed[polygon.0[1]],
 				bbox_vertices_transformed[polygon.0[2]],
