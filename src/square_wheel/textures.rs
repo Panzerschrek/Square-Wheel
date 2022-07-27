@@ -185,7 +185,7 @@ pub fn make_skybox_side_texture<ColorT: AbstractColor>(image: &image::Image) -> 
 		for x in 0 .. size
 		{
 			let c: ColorVecI = image.pixels[(x + image.size[0] * y) as usize].into();
-			pixels[(x > y * size) as usize] = c.into();
+			pixels[(x + y * size) as usize] = c.into();
 		}
 	}
 

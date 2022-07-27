@@ -212,6 +212,29 @@ impl ResourcesManager
 		ptr
 	}
 
+	pub fn get_skybox_textures_64(&mut self, key: &ResourceKey) -> SharedResourcePtr<SkyboxTextures<Color64>>
+	{
+		if let Some(p) = self.skybox_textures_64.get(key)
+		{
+			return p.clone();
+		}
+
+		let material = self.materials.get(key).unwrap_or_else(|| {
+			self.console
+				.lock()
+				.unwrap()
+				.add_text(format!("Failed to find material {:?}", key));
+			&self.default_material
+		});
+
+		let skybox_texture = load_skybox_texture(material, &self.config.textures_path);
+
+		let ptr = SharedResourcePtr::new(skybox_texture);
+		self.skybox_textures_64.insert(key.clone(), ptr.clone());
+
+		ptr
+	}
+
 	pub fn clear_cache(&mut self)
 	{
 		// Remove all resources that are stored only inside cache.

@@ -1,10 +1,13 @@
 use super::{fast_math::*, resources_manager::*, textures::*};
-use common::{bsp_map_compact, material::*};
+use common::{bsp_map_compact, color::*, material::*};
+use std::{borrow::Borrow, collections::HashMap};
 
 pub struct MapMaterialsProcessor
 {
 	materials: Vec<Material>,
 	textures: Vec<SharedResourcePtr<TextureWithMips>>,
+	skybox_textures_32: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color32>>>,
+	skybox_textures_64: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color64>>>,
 	// Store here only animated textures.
 	textures_modified: Vec<TextureWithMips>,
 	temp_buffer: Vec<TextureElement>,
@@ -19,7 +22,9 @@ impl MapMaterialsProcessor
 
 		let mut materials = Vec::with_capacity(map.textures.len());
 		let mut textures = Vec::with_capacity(map.textures.len());
-		for texture_name in &map.textures
+		let mut skybox_textures_32 = HashMap::new();
+		let mut skybox_textures_64 = HashMap::new();
+		for (texture_index, texture_name) in map.textures.iter().enumerate()
 		{
 			let material_name_string = bsp_map_compact::get_texture_string(texture_name);
 			let material = if let Some(material) = all_materials.get(material_name_string)
@@ -31,8 +36,19 @@ impl MapMaterialsProcessor
 				println!("Failed to find material \"{}\"", material_name_string);
 				Material::default()
 			};
+
+			let material_name = material_name_string.to_string();
+
+			// TODO - load skyboxes lazily.
+			// TODO - create stub regular texture for skyboxes.
+			if material.skybox.is_some()
+			{
+				skybox_textures_32.insert(texture_index as u32, r.get_skybox_textures_32(&material_name));
+				skybox_textures_64.insert(texture_index as u32, r.get_skybox_textures_64(&material_name));
+			}
+
 			materials.push(material);
-			textures.push(r.get_material_texture(&material_name_string.to_string()));
+			textures.push(r.get_material_texture(&material_name));
 		}
 
 		let textures_modified = vec![TextureWithMips::default(); textures.len()];
@@ -41,6 +57,8 @@ impl MapMaterialsProcessor
 			materials,
 			textures,
 			textures_modified,
+			skybox_textures_32,
+			skybox_textures_64,
 			temp_buffer: Vec::new(),
 		}
 	}
@@ -88,6 +106,16 @@ impl MapMaterialsProcessor
 
 		// Return source texture.
 		&self.textures[material_index as usize]
+	}
+
+	pub fn get_skybox_textures_32(&self, material_index: u32) -> Option<&SkyboxTextures<Color32>>
+	{
+		self.skybox_textures_32.get(&material_index).map(|x| x.borrow())
+	}
+
+	pub fn get_skybox_textures_64(&self, material_index: u32) -> Option<&SkyboxTextures<Color64>>
+	{
+		self.skybox_textures_64.get(&material_index).map(|x| x.borrow())
 	}
 }
 
