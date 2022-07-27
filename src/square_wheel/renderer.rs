@@ -1083,48 +1083,48 @@ impl Renderer
 			(
 				[0, 1, 3, 2],
 				Plane {
+					vec: Vec3f::unit_x(),
+					dist: -1.0,
+				},
+				Plane {
+					vec: Vec3f::unit_y(),
+					dist: 1.0,
+				},
+				Plane {
+					vec: Vec3f::unit_z(),
+					dist: 1.0,
+				},
+			),
+			// +X
+			(
+				[4, 6, 7, 5],
+				Plane {
 					vec: -Vec3f::unit_x(),
 					dist: -1.0,
 				},
 				Plane {
 					vec: Vec3f::unit_y(),
-					dist: 0.0,
+					dist: 1.0,
 				},
 				Plane {
 					vec: Vec3f::unit_z(),
-					dist: 0.0,
-				},
-			),
-			// +X
-			(
-				[4, 5, 7, 6],
-				Plane {
-					vec: Vec3f::unit_x(),
-					dist: -1.0,
-				},
-				Plane {
-					vec: Vec3f::unit_y(),
-					dist: 0.0,
-				},
-				Plane {
-					vec: Vec3f::unit_z(),
-					dist: 0.0,
+					dist: 1.0,
 				},
 			),
 			// -Y
 			(
-				[0, 1, 5, 4],
+				[0, 4, 5, 1],
 				Plane {
 					vec: Vec3f::unit_y(),
 					dist: -1.0,
 				},
 				Plane {
 					vec: Vec3f::unit_x(),
-					dist: 0.0,
+					dist: 1.0,
 				},
 				Plane {
 					vec: Vec3f::unit_z(),
-					dist: 0.0,
+					dist: 1.0,
 				},
 			),
 			// +Y
@@ -1136,11 +1136,11 @@ impl Renderer
 				},
 				Plane {
 					vec: Vec3f::unit_x(),
-					dist: 0.0,
+					dist: 1.0,
 				},
 				Plane {
 					vec: Vec3f::unit_z(),
-					dist: 0.0,
+					dist: 1.0,
 				},
 			),
 			// -Z
@@ -1152,37 +1152,38 @@ impl Renderer
 				},
 				Plane {
 					vec: Vec3f::unit_x(),
-					dist: 0.0,
+					dist: 1.0,
 				},
 				Plane {
 					vec: Vec3f::unit_y(),
-					dist: 0.0,
+					dist: 1.0,
 				},
 			),
 			// +Z
 			(
-				[1, 3, 7, 5],
+				[1, 5, 7, 3],
 				Plane {
 					vec: -Vec3f::unit_z(),
 					dist: -1.0,
 				},
 				Plane {
 					vec: Vec3f::unit_x(),
-					dist: 0.0,
+					dist: 1.0,
 				},
 				Plane {
 					vec: Vec3f::unit_y(),
-					dist: 0.0,
+					dist: 1.0,
 				},
 			),
 		];
 
 		let skybox_matrix = Mat4f::from_translation(camera_matrices.position);
+		let skybox_matrix_inverse = skybox_matrix.transpose().invert().unwrap();
 		let skybox_view_matrix = camera_matrices.view_matrix * skybox_matrix;
-		let skybox_planes_matrix = camera_matrices.planes_matrix; // TODO - shift it
+		let skybox_planes_matrix = camera_matrices.planes_matrix * skybox_matrix_inverse;
 
 		let bbox_vertices_transformed = BOX_VERTICES.map(|v| {
-			let v_transformed = skybox_view_matrix * Vec4f::new(v[0], v[1], v[2], 1.0);
+			let v_transformed = skybox_view_matrix * (Vec3f::from(v) * 4.0).extend(1.0);
 			Vec3f::new(v_transformed.x, v_transformed.y, v_transformed.w)
 		});
 
@@ -1202,6 +1203,7 @@ impl Renderer
 
 			let side_texture = &skybox_textures.unwrap()[side][mip];
 			let texture_size = [side_texture.size, side_texture.size];
+			let tc_equation_scale = side_texture.size as f32 * 0.5;
 			let texture_data = &side_texture.pixels;
 
 			let plane = polygon.1;
@@ -1216,8 +1218,10 @@ impl Renderer
 			let tex_coord_equation = [polygon.2, polygon.3];
 			// Calculate texture coordinates equations.
 			let tc_basis_transformed = [
-				skybox_planes_matrix * tex_coord_equation[0].vec.extend(tex_coord_equation[0].dist),
-				skybox_planes_matrix * tex_coord_equation[1].vec.extend(tex_coord_equation[1].dist),
+				skybox_planes_matrix *
+					(tex_coord_equation[0].vec.extend(tex_coord_equation[0].dist) * tc_equation_scale),
+				skybox_planes_matrix *
+					(tex_coord_equation[1].vec.extend(tex_coord_equation[1].dist) * tc_equation_scale),
 			];
 			// Equation projeted to polygon plane.
 			let tc_equation = TexCoordEquation {
