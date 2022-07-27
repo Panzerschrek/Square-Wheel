@@ -30,6 +30,8 @@ pub struct Renderer
 	num_visible_surfaces_pixels: usize,
 	current_frame_visible_polygons: Vec<u32>,
 	mip_bias: f32,
+	// Material index and clipping polygon of current frame sky.
+	current_sky: Option<(u32, ClippingPolygon)>,
 	materials_processor: MapMaterialsProcessor,
 	performance_counters: Arc<Mutex<RendererPerformanceCounters>>,
 	// TODO - maybe extract dynamic models-related stuff into separate class?
@@ -135,6 +137,7 @@ impl Renderer
 			num_visible_surfaces_pixels: 0,
 			current_frame_visible_polygons: Vec::with_capacity(map.polygons.len()),
 			mip_bias: 0.0,
+			current_sky: None,
 			visibility_calculator: MapVisibilityCalculator::new(map.clone()),
 			shadows_maps_renderer: DepthRenderer::new(map.clone()),
 			map: map.clone(),
@@ -623,6 +626,8 @@ impl Renderer
 	{
 		self.current_frame_visible_polygons.clear();
 
+		self.current_sky = None;
+
 		let mut surfaces_pixels_accumulated_offset = 0;
 
 		// TODO - try to speed-up iteration, do not scan all leafs.
@@ -727,7 +732,9 @@ impl Renderer
 			return;
 		}
 
-		if !self.materials_processor.get_material(polygon.texture).draw
+		let material = self.materials_processor.get_material(polygon.texture);
+
+		if !material.draw
 		{
 			// Do not prepare surfaces for invisible polygons.
 			return;
@@ -750,6 +757,26 @@ impl Renderer
 		let vertex_count = project_and_clip_polygon(clip_planes, polygon_vertices_transformed, &mut vertices_2d[..]);
 		if vertex_count < 3
 		{
+			return;
+		}
+
+		if material.skybox.is_some()
+		{
+			// Do not draw sky polygons but update bounds.
+			let mut polygon_bounds = ClippingPolygon::from_point(&vertices_2d[0]);
+			for p in &vertices_2d[1 .. vertex_count]
+			{
+				polygon_bounds.extend_with_point(p);
+			}
+
+			if let Some(current_sky) = &mut self.current_sky
+			{
+				current_sky.1.extend(&polygon_bounds);
+			}
+			else
+			{
+				self.current_sky = Some((polygon.texture, polygon_bounds));
+			}
 			return;
 		}
 
@@ -1051,20 +1078,29 @@ impl Renderer
 		viewport_clippung_polygon: &ClippingPolygon,
 	)
 	{
-		// TODO - use proper skybox index.
-		let mut skybox_textures = None;
-		for i in 0 .. self.map.textures.len()
+		let (material_index, mut bounds) = if let Some(current_sky) = self.current_sky
 		{
-			skybox_textures = self.materials_processor.get_skybox_textures(i as u32);
-			if skybox_textures.is_some()
-			{
-				break;
-			}
+			current_sky
 		}
-		if skybox_textures.is_none()
+		else
+		{
+			return;
+		};
+
+		bounds.intersect(viewport_clippung_polygon);
+		if bounds.is_empty_or_invalid()
 		{
 			return;
 		}
+
+		let skybox_textures = if let Some(t) = self.materials_processor.get_skybox_textures(material_index)
+		{
+			t
+		}
+		else
+		{
+			return;
+		};
 
 		const BOX_VERTICES: [[f32; 3]; 8] = [
 			[-1.0, -1.0, -1.0],
@@ -1187,7 +1223,7 @@ impl Renderer
 			Vec3f::new(v_transformed.x, v_transformed.y, v_transformed.w)
 		});
 
-		let clip_planes = viewport_clippung_polygon.get_clip_planes();
+		let clip_planes = bounds.get_clip_planes();
 
 		for (side, polygon) in bbox_polygons.iter().enumerate()
 		{
@@ -1201,7 +1237,7 @@ impl Renderer
 			// TODO - select proper mip.
 			let mip = 0;
 
-			let side_texture = &skybox_textures.unwrap()[side][mip];
+			let side_texture = &skybox_textures[side][mip];
 			let texture_size = [side_texture.size, side_texture.size];
 			let tc_equation_scale = side_texture.size as f32 * 0.5;
 			let texture_data = &side_texture.pixels;
