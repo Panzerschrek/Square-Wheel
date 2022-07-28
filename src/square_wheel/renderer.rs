@@ -1273,14 +1273,6 @@ impl Renderer
 				bbox_vertices_transformed[polygon.0[3]],
 			];
 
-			// TODO - select proper mip.
-			let mip = 0;
-
-			let side_texture = &skybox_textures[side][mip];
-			let texture_size = [side_texture.size, side_texture.size];
-			let tc_equation_scale = side_texture.size as f32 * 0.5;
-			let texture_data = &side_texture.pixels;
-
 			let plane = polygon.1;
 			let plane_transformed = skybox_planes_matrix * plane.vec.extend(-plane.dist);
 			let plane_transformed_w = -plane_transformed.w;
@@ -1289,6 +1281,9 @@ impl Renderer
 				d_inv_z_dy: plane_transformed.y / plane_transformed_w,
 				k: plane_transformed.z / plane_transformed_w,
 			};
+
+			let side_textures = &skybox_textures[side];
+			let tc_equation_scale = side_textures[0].size as f32 * 0.5;
 
 			let tex_coord_equation = [polygon.2, polygon.3];
 			// Calculate texture coordinates equations.
@@ -1314,14 +1309,47 @@ impl Renderer
 				],
 			};
 
+			let mip = {
+				let mut vertices_2d = [Vec2f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
+				let vertex_count = project_and_clip_polygon(&clip_planes, &vertices_transformed, &mut vertices_2d[..]);
+				if vertex_count < 3
+				{
+					continue;
+				}
+				calculate_mip(
+					&vertices_2d[.. vertex_count],
+					&depth_equation,
+					&tc_equation,
+					self.mip_bias,
+				)
+			};
+
+			let tc_equation_scale = 1.0 / ((1 << mip) as f32);
+			let tc_equation_scaled = TexCoordEquation {
+				d_tc_dx: [
+					tc_equation.d_tc_dx[0] * tc_equation_scale,
+					tc_equation.d_tc_dx[1] * tc_equation_scale,
+				],
+				d_tc_dy: [
+					tc_equation.d_tc_dy[0] * tc_equation_scale,
+					tc_equation.d_tc_dy[1] * tc_equation_scale,
+				],
+				k: [
+					tc_equation.k[0] * tc_equation_scale,
+					tc_equation.k[1] * tc_equation_scale,
+				],
+			};
+
+			let side_texture = &side_textures[mip as usize];
+
 			draw_polygon(
 				rasterizer,
 				&clip_planes,
 				&vertices_transformed,
 				&depth_equation,
-				&tc_equation,
-				&texture_size,
-				texture_data,
+				&tc_equation_scaled,
+				&[side_texture.size, side_texture.size],
+				&side_texture.pixels,
 				material::BlendingMode::None,
 			);
 		}
