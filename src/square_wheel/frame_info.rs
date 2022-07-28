@@ -7,6 +7,7 @@ pub struct FrameInfo
 	pub game_time_s: f32,
 	pub model_entities: Vec<ModelEntity>,
 	pub lights: Vec<PointLight>,
+	pub skybox_angles: EulerAnglesF,
 }
 
 #[derive(Clone)]

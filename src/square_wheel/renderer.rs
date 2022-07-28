@@ -268,6 +268,7 @@ impl Renderer
 					pixels,
 					surface_info,
 					&frame_info.camera_matrices,
+					&frame_info.skybox_angles,
 					inline_models_index,
 					&frame_info.model_entities,
 					root_node,
@@ -523,6 +524,7 @@ impl Renderer
 		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
+		skybox_angles: &EulerAnglesF,
 		inline_models_index: &InlineModelsIndex,
 		models: &[ModelEntity],
 		root_node: u32,
@@ -556,7 +558,12 @@ impl Renderer
 
 			if !self.config.invert_polygons_order
 			{
-				self.draw_skybox(&mut rasterizer, camera_matrices, &viewport_clippung_polygon);
+				self.draw_skybox(
+					&mut rasterizer,
+					camera_matrices,
+					skybox_angles,
+					&viewport_clippung_polygon,
+				);
 			}
 
 			self.draw_tree_r(
@@ -570,7 +577,12 @@ impl Renderer
 
 			if self.config.invert_polygons_order
 			{
-				self.draw_skybox(&mut rasterizer, camera_matrices, &viewport_clippung_polygon);
+				self.draw_skybox(
+					&mut rasterizer,
+					camera_matrices,
+					skybox_angles,
+					&viewport_clippung_polygon,
+				);
 			}
 
 			self.draw_view_models(&mut rasterizer, &viewport_clippung_polygon, models);
@@ -616,7 +628,12 @@ impl Renderer
 
 				if !self.config.invert_polygons_order
 				{
-					self.draw_skybox(&mut rasterizer, camera_matrices, &viewport_clippung_polygon);
+					self.draw_skybox(
+						&mut rasterizer,
+						camera_matrices,
+						skybox_angles,
+						&viewport_clippung_polygon,
+					);
 				}
 
 				self.draw_tree_r(
@@ -630,7 +647,12 @@ impl Renderer
 
 				if self.config.invert_polygons_order
 				{
-					self.draw_skybox(&mut rasterizer, camera_matrices, &viewport_clippung_polygon);
+					self.draw_skybox(
+						&mut rasterizer,
+						camera_matrices,
+						skybox_angles,
+						&viewport_clippung_polygon,
+					);
 				}
 
 				self.draw_view_models(&mut rasterizer, &viewport_clippung_polygon, models);
@@ -1091,6 +1113,7 @@ impl Renderer
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		camera_matrices: &CameraMatrices,
+		skybox_angles: &EulerAnglesF,
 		viewport_clippung_polygon: &ClippingPolygon,
 	)
 	{
@@ -1229,7 +1252,7 @@ impl Renderer
 			),
 		];
 
-		let skybox_matrix = Mat4f::from_translation(camera_matrices.position);
+		let skybox_matrix = get_object_matrix(camera_matrices.position, *skybox_angles);
 		let skybox_matrix_inverse = skybox_matrix.transpose().invert().unwrap();
 		let skybox_view_matrix = camera_matrices.view_matrix * skybox_matrix;
 		let skybox_planes_matrix = camera_matrices.planes_matrix * skybox_matrix_inverse;
