@@ -321,8 +321,11 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			if x_start_int < x_end_int
 			{
 				let line_buffer_offset = y_int * self.row_size;
-				let line_dst = &mut self.color_buffer
-					[(x_start_int + line_buffer_offset) as usize .. (x_end_int + line_buffer_offset) as usize];
+				let line_dst = unchecked_slice_range_mut(
+					&mut self.color_buffer,
+					(x_start_int + line_buffer_offset) as usize,
+					(x_end_int + line_buffer_offset) as usize,
+				);
 
 				let span_start_x = x_start_int as i64;
 				let span_end_x = (x_end_int - 1) as i64;
@@ -513,8 +516,11 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			if x_start_int < x_end_int
 			{
 				let line_buffer_offset = y_int * self.row_size;
-				let line_dst = &mut self.color_buffer
-					[(x_start_int + line_buffer_offset) as usize .. (x_end_int + line_buffer_offset) as usize];
+				let line_dst = unchecked_slice_range_mut(
+					&mut self.color_buffer,
+					(x_start_int + line_buffer_offset) as usize,
+					(x_end_int + line_buffer_offset) as usize,
+				);
 
 				// Calculate z for span start/end, calculate texture coordinates based on this z.
 				// Then just use liner interpolation of texture coordinates across span.
@@ -694,8 +700,11 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			if x_start_int < x_end_int
 			{
 				let line_buffer_offset = y_int * self.row_size;
-				let line_dst = &mut self.color_buffer
-					[(x_start_int + line_buffer_offset) as usize .. (x_end_int + line_buffer_offset) as usize];
+				let line_dst = unchecked_slice_range_mut(
+					&mut self.color_buffer,
+					(x_start_int + line_buffer_offset) as usize,
+					(x_end_int + line_buffer_offset) as usize,
+				);
 
 				let mut tc = [tc_left[0], tc_left[1]];
 				// Prevent division by zero or overflow.
@@ -1026,8 +1035,11 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				]);
 
 				let line_buffer_offset = y_int * self.row_size;
-				let line_dst = &mut self.color_buffer
-					[(x_start_int + line_buffer_offset) as usize .. (x_end_int + line_buffer_offset) as usize];
+				let line_dst = unchecked_slice_range_mut(
+					&mut self.color_buffer,
+					(x_start_int + line_buffer_offset) as usize,
+					(x_end_int + line_buffer_offset) as usize,
+				);
 
 				for dst_pixel in line_dst
 				{
@@ -1318,6 +1330,21 @@ fn unchecked_texture_fetch<ColorT: Copy>(texture_data: &[ColorT], texel_address:
 	#[cfg(not(debug_assertions))]
 	unsafe {
 		*texture_data.get_unchecked(texel_address)
+	}
+}
+
+fn unchecked_slice_range_mut<T>(data: &mut [T], start: usize, end: usize) -> &mut [T]
+{
+	// operator [ .. ] checks bounds and calls panic! handler in case if index is out of bounds.
+	// This check is useless here since we clamp properly.
+	// So, use "get_unchecked_mut" in release mode.
+	#[cfg(debug_assertions)]
+	{
+		&mut data[start .. end]
+	}
+	#[cfg(not(debug_assertions))]
+	unsafe {
+		data.get_unchecked_mut(start .. end)
 	}
 }
 
