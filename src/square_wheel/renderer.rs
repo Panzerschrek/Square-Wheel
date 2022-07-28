@@ -30,6 +30,8 @@ pub struct Renderer
 	num_visible_surfaces_pixels: usize,
 	current_frame_visible_polygons: Vec<u32>,
 	mip_bias: f32,
+	// Material index and clipping polygon of current frame sky.
+	current_sky: Option<(u32, ClippingPolygon)>,
 	materials_processor: MapMaterialsProcessor,
 	performance_counters: Arc<Mutex<RendererPerformanceCounters>>,
 	// TODO - maybe extract dynamic models-related stuff into separate class?
@@ -135,6 +137,7 @@ impl Renderer
 			num_visible_surfaces_pixels: 0,
 			current_frame_visible_polygons: Vec::with_capacity(map.polygons.len()),
 			mip_bias: 0.0,
+			current_sky: None,
 			visibility_calculator: MapVisibilityCalculator::new(map.clone()),
 			shadows_maps_renderer: DepthRenderer::new(map.clone()),
 			map: map.clone(),
@@ -265,6 +268,7 @@ impl Renderer
 					pixels,
 					surface_info,
 					&frame_info.camera_matrices,
+					&frame_info.skybox_angles,
 					inline_models_index,
 					&frame_info.model_entities,
 					root_node,
@@ -520,6 +524,7 @@ impl Renderer
 		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
+		skybox_angles: &EulerAnglesF,
 		inline_models_index: &InlineModelsIndex,
 		models: &[ModelEntity],
 		root_node: u32,
@@ -544,23 +549,43 @@ impl Renderer
 				},
 			);
 
-			let viewport_clippung_polygon = ClippingPolygon::from_box(
+			let viewport_clipping_polygon = ClippingPolygon::from_box(
 				screen_rect.min.x,
 				screen_rect.min.y,
 				screen_rect.max.x,
 				screen_rect.max.y,
 			);
 
+			if !self.config.invert_polygons_order
+			{
+				self.draw_skybox(
+					&mut rasterizer,
+					camera_matrices,
+					skybox_angles,
+					&viewport_clipping_polygon,
+				);
+			}
+
 			self.draw_tree_r(
 				&mut rasterizer,
 				camera_matrices,
-				&viewport_clippung_polygon,
+				&viewport_clipping_polygon,
 				inline_models_index,
 				models,
 				root_node,
 			);
 
-			self.draw_view_models(&mut rasterizer, &viewport_clippung_polygon, models);
+			if self.config.invert_polygons_order
+			{
+				self.draw_skybox(
+					&mut rasterizer,
+					camera_matrices,
+					skybox_angles,
+					&viewport_clipping_polygon,
+				);
+			}
+
+			self.draw_view_models(&mut rasterizer, &viewport_clipping_polygon, models);
 		}
 		else
 		{
@@ -594,23 +619,43 @@ impl Renderer
 				rect_corrected.max += Vec2f::new(0.5, 0.5);
 
 				// Use clipping polygon to totally reject whole leafs and polygons.
-				let viewport_clippung_polygon = ClippingPolygon::from_box(
+				let viewport_clipping_polygon = ClippingPolygon::from_box(
 					rect_corrected.min.x,
 					rect_corrected.min.y,
 					rect_corrected.max.x,
 					rect_corrected.max.y,
 				);
 
+				if !self.config.invert_polygons_order
+				{
+					self.draw_skybox(
+						&mut rasterizer,
+						camera_matrices,
+						skybox_angles,
+						&viewport_clipping_polygon,
+					);
+				}
+
 				self.draw_tree_r(
 					&mut rasterizer,
 					camera_matrices,
-					&viewport_clippung_polygon,
+					&viewport_clipping_polygon,
 					inline_models_index,
 					models,
 					root_node,
 				);
 
-				self.draw_view_models(&mut rasterizer, &viewport_clippung_polygon, models);
+				if self.config.invert_polygons_order
+				{
+					self.draw_skybox(
+						&mut rasterizer,
+						camera_matrices,
+						skybox_angles,
+						&viewport_clipping_polygon,
+					);
+				}
+
+				self.draw_view_models(&mut rasterizer, &viewport_clipping_polygon, models);
 			});
 		}
 	}
@@ -618,6 +663,8 @@ impl Renderer
 	fn prepare_polygons_surfaces(&mut self, camera_matrices: &CameraMatrices, inline_models_index: &InlineModelsIndex)
 	{
 		self.current_frame_visible_polygons.clear();
+
+		self.current_sky = None;
 
 		let mut surfaces_pixels_accumulated_offset = 0;
 
@@ -723,7 +770,9 @@ impl Renderer
 			return;
 		}
 
-		if !self.materials_processor.get_material(polygon.texture).draw
+		let material = self.materials_processor.get_material(polygon.texture);
+
+		if !material.draw
 		{
 			// Do not prepare surfaces for invisible polygons.
 			return;
@@ -746,6 +795,26 @@ impl Renderer
 		let vertex_count = project_and_clip_polygon(clip_planes, polygon_vertices_transformed, &mut vertices_2d[..]);
 		if vertex_count < 3
 		{
+			return;
+		}
+
+		if material.skybox.is_some()
+		{
+			// Do not draw sky polygons but update bounds.
+			let mut polygon_bounds = ClippingPolygon::from_point(&vertices_2d[0]);
+			for p in &vertices_2d[1 .. vertex_count]
+			{
+				polygon_bounds.extend_with_point(p);
+			}
+
+			if let Some(current_sky) = &mut self.current_sky
+			{
+				current_sky.1.extend(&polygon_bounds);
+			}
+			else
+			{
+				self.current_sky = Some((polygon.texture, polygon_bounds));
+			}
 			return;
 		}
 
@@ -1040,11 +1109,170 @@ impl Renderer
 		}
 	}
 
+	fn draw_skybox<'a, ColorT: AbstractColor>(
+		&self,
+		rasterizer: &mut Rasterizer<'a, ColorT>,
+		camera_matrices: &CameraMatrices,
+		skybox_angles: &EulerAnglesF,
+		viewport_clipping_polygon: &ClippingPolygon,
+	)
+	{
+		let (material_index, mut bounds) = if let Some(current_sky) = self.current_sky
+		{
+			current_sky
+		}
+		else
+		{
+			return;
+		};
+
+		bounds.intersect(viewport_clipping_polygon);
+		if bounds.is_empty_or_invalid()
+		{
+			return;
+		}
+
+		let skybox_textures = if let Some(t) = self.materials_processor.get_skybox_textures(material_index)
+		{
+			t
+		}
+		else
+		{
+			return;
+		};
+
+		const BOX_VERTICES: [[f32; 3]; 8] = [
+			[-1.0, -1.0, -1.0],
+			[-1.0, -1.0, 1.0],
+			[-1.0, 1.0, -1.0],
+			[-1.0, 1.0, 1.0],
+			[1.0, -1.0, -1.0],
+			[1.0, -1.0, 1.0],
+			[1.0, 1.0, -1.0],
+			[1.0, 1.0, 1.0],
+		];
+
+		let side_plane_dist = -1.0;
+		let side_tc_shift = 1.0;
+		let bbox_polygons = [
+			// -X
+			([0, 1, 3, 2], Vec3f::unit_x(), Vec3f::unit_y(), -Vec3f::unit_z()),
+			// +X
+			([4, 6, 7, 5], -Vec3f::unit_x(), -Vec3f::unit_y(), -Vec3f::unit_z()),
+			// -Y
+			([0, 4, 5, 1], Vec3f::unit_y(), -Vec3f::unit_x(), -Vec3f::unit_z()),
+			// +Y
+			([2, 3, 7, 6], -Vec3f::unit_y(), Vec3f::unit_x(), -Vec3f::unit_z()),
+			// -Z
+			([0, 2, 6, 4], Vec3f::unit_z(), Vec3f::unit_x(), -Vec3f::unit_y()),
+			// +Z
+			([1, 5, 7, 3], -Vec3f::unit_z(), Vec3f::unit_x(), Vec3f::unit_y()),
+		];
+
+		let skybox_matrix = get_object_matrix(camera_matrices.position, *skybox_angles);
+		let skybox_matrix_inverse = skybox_matrix.transpose().invert().unwrap();
+		let skybox_view_matrix = camera_matrices.view_matrix * skybox_matrix;
+		let skybox_planes_matrix = camera_matrices.planes_matrix * skybox_matrix_inverse;
+
+		let bbox_vertices_transformed = BOX_VERTICES.map(|v| {
+			let v_transformed = skybox_view_matrix * (Vec3f::from(v) * 4.0).extend(1.0);
+			Vec3f::new(v_transformed.x, v_transformed.y, v_transformed.w)
+		});
+
+		let clip_planes = bounds.get_clip_planes();
+
+		for (side, polygon) in bbox_polygons.iter().enumerate()
+		{
+			let vertices_transformed = [
+				bbox_vertices_transformed[polygon.0[0]],
+				bbox_vertices_transformed[polygon.0[1]],
+				bbox_vertices_transformed[polygon.0[2]],
+				bbox_vertices_transformed[polygon.0[3]],
+			];
+
+			let plane_transformed = skybox_planes_matrix * polygon.1.extend(-side_plane_dist);
+			let plane_transformed_w = -plane_transformed.w;
+			let depth_equation = DepthEquation {
+				d_inv_z_dx: plane_transformed.x / plane_transformed_w,
+				d_inv_z_dy: plane_transformed.y / plane_transformed_w,
+				k: plane_transformed.z / plane_transformed_w,
+			};
+
+			let side_textures = &skybox_textures[side];
+			let tc_equation_scale = side_textures[0].size as f32 * 0.5;
+
+			// Calculate texture coordinates equations.
+			let tc_basis_transformed = [
+				skybox_planes_matrix * (polygon.2.extend(side_tc_shift) * tc_equation_scale),
+				skybox_planes_matrix * (polygon.3.extend(side_tc_shift) * tc_equation_scale),
+			];
+			// Equation projeted to polygon plane.
+			let tc_equation = TexCoordEquation {
+				d_tc_dx: [
+					tc_basis_transformed[0].x + tc_basis_transformed[0].w * depth_equation.d_inv_z_dx,
+					tc_basis_transformed[1].x + tc_basis_transformed[1].w * depth_equation.d_inv_z_dx,
+				],
+				d_tc_dy: [
+					tc_basis_transformed[0].y + tc_basis_transformed[0].w * depth_equation.d_inv_z_dy,
+					tc_basis_transformed[1].y + tc_basis_transformed[1].w * depth_equation.d_inv_z_dy,
+				],
+				k: [
+					tc_basis_transformed[0].z + tc_basis_transformed[0].w * depth_equation.k,
+					tc_basis_transformed[1].z + tc_basis_transformed[1].w * depth_equation.k,
+				],
+			};
+
+			let mip = {
+				let mut vertices_2d = [Vec2f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
+				let vertex_count = project_and_clip_polygon(&clip_planes, &vertices_transformed, &mut vertices_2d[..]);
+				if vertex_count < 3
+				{
+					continue;
+				}
+				calculate_mip(
+					&vertices_2d[.. vertex_count],
+					&depth_equation,
+					&tc_equation,
+					self.mip_bias,
+				)
+			};
+
+			let tc_equation_scale = 1.0 / ((1 << mip) as f32);
+			let tc_equation_scaled = TexCoordEquation {
+				d_tc_dx: [
+					tc_equation.d_tc_dx[0] * tc_equation_scale,
+					tc_equation.d_tc_dx[1] * tc_equation_scale,
+				],
+				d_tc_dy: [
+					tc_equation.d_tc_dy[0] * tc_equation_scale,
+					tc_equation.d_tc_dy[1] * tc_equation_scale,
+				],
+				k: [
+					tc_equation.k[0] * tc_equation_scale,
+					tc_equation.k[1] * tc_equation_scale,
+				],
+			};
+
+			let side_texture = &side_textures[mip as usize];
+
+			draw_polygon(
+				rasterizer,
+				&clip_planes,
+				&vertices_transformed,
+				&depth_equation,
+				&tc_equation_scaled,
+				&[side_texture.size, side_texture.size],
+				&side_texture.pixels,
+				material::BlendingMode::None,
+			);
+		}
+	}
+
 	fn draw_tree_r<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		camera_matrices: &CameraMatrices,
-		viewport_clippung_polygon: &ClippingPolygon,
+		viewport_clipping_polygon: &ClippingPolygon,
 		inline_models_index: &InlineModelsIndex,
 		models: &[ModelEntity],
 		current_index: u32,
@@ -1055,7 +1283,7 @@ impl Renderer
 			let leaf = current_index - bsp_map_compact::FIRST_LEAF_INDEX;
 			if let Some(mut leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf)
 			{
-				leaf_bounds.intersect(viewport_clippung_polygon);
+				leaf_bounds.intersect(viewport_clipping_polygon);
 				if leaf_bounds.is_valid_and_non_empty()
 				{
 					self.draw_leaf(
@@ -1083,7 +1311,7 @@ impl Renderer
 				self.draw_tree_r(
 					rasterizer,
 					camera_matrices,
-					viewport_clippung_polygon,
+					viewport_clipping_polygon,
 					inline_models_index,
 					models,
 					node.children[(i ^ mask) as usize],

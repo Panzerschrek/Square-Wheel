@@ -101,6 +101,7 @@ impl Game
 
 		FrameInfo {
 			camera_matrices,
+			skybox_angles: EulerAnglesF::new(Rad(0.0), Rad(0.0), Rad(0.0)),
 			game_time_s: self.game_time,
 			lights: self.test_lights.clone(),
 			model_entities,

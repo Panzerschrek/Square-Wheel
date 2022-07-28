@@ -1,4 +1,4 @@
-use super::{bbox::*, bsp_builder, map_polygonizer, math_types::*, plane::*};
+use super::{bbox::*, bsp_builder, map_polygonizer, material::*, math_types::*, plane::*};
 use std::collections::HashMap;
 
 // This file contains declaration of compact BSP map representation.
@@ -191,6 +191,7 @@ impl Default for LightGridElement
 pub fn convert_bsp_map_to_compact_format(
 	bsp_tree: &bsp_builder::BSPTree,
 	entities: &[map_polygonizer::Entity],
+	materials: &MaterialsMap,
 ) -> BSPMap
 {
 	let mut out_map = BSPMap::default();
@@ -203,6 +204,7 @@ pub fn convert_bsp_map_to_compact_format(
 	convert_node_child_to_compact_format(
 		&bsp_tree.root,
 		&portal_ptr_to_index_map,
+		materials,
 		&mut out_map,
 		&mut leaf_ptr_to_index_map,
 		&mut texture_name_to_index_map,
@@ -211,7 +213,7 @@ pub fn convert_bsp_map_to_compact_format(
 	fill_portals_leafs(&bsp_tree.portals, &leaf_ptr_to_index_map, &mut out_map);
 
 	// Skip model for entity 0 - world model.
-	convert_submodels_to_compact_format(&entities[1 ..], &mut out_map, &mut texture_name_to_index_map);
+	convert_submodels_to_compact_format(&entities[1 ..], materials, &mut out_map, &mut texture_name_to_index_map);
 	convert_entities_to_compact_format(entities, &mut out_map);
 
 	fill_textures(&texture_name_to_index_map, &mut out_map);
@@ -336,6 +338,7 @@ type TextureNameToIndexMap = HashMap<String, u32>;
 fn convert_node_child_to_compact_format(
 	node_child: &bsp_builder::BSPNodeChild,
 	portal_ptr_to_index_map: &PortalPtrToIndexMap,
+	materials: &MaterialsMap,
 	out_map: &mut BSPMap,
 	leaf_ptr_to_index_map: &mut LeafPtrToIndexMap,
 	texture_name_to_index_map: &mut TextureNameToIndexMap,
@@ -348,6 +351,7 @@ fn convert_node_child_to_compact_format(
 			let node_converted = convert_node_to_compact_format(
 				node_ptr,
 				portal_ptr_to_index_map,
+				materials,
 				out_map,
 				leaf_ptr_to_index_map,
 				texture_name_to_index_map,
@@ -359,8 +363,13 @@ fn convert_node_child_to_compact_format(
 		bsp_builder::BSPNodeChild::LeafChild(leaf_ptr) =>
 		{
 			let leaf_index = out_map.leafs.len();
-			let leaf_converted =
-				convert_leaf_to_compact_format(leaf_ptr, portal_ptr_to_index_map, out_map, texture_name_to_index_map);
+			let leaf_converted = convert_leaf_to_compact_format(
+				leaf_ptr,
+				portal_ptr_to_index_map,
+				materials,
+				out_map,
+				texture_name_to_index_map,
+			);
 			out_map.leafs.push(leaf_converted);
 
 			let leaf = leaf_ptr.borrow();
@@ -375,6 +384,7 @@ fn convert_node_child_to_compact_format(
 fn convert_node_to_compact_format(
 	node_ptr: &bsp_builder::BSPNodePtr,
 	portal_ptr_to_index_map: &PortalPtrToIndexMap,
+	materials: &MaterialsMap,
 	out_map: &mut BSPMap,
 	leaf_ptr_to_index_map: &mut LeafPtrToIndexMap,
 	texture_name_to_index_map: &mut TextureNameToIndexMap,
@@ -384,6 +394,7 @@ fn convert_node_to_compact_format(
 	let child0 = convert_node_child_to_compact_format(
 		&node.children[0],
 		portal_ptr_to_index_map,
+		materials,
 		out_map,
 		leaf_ptr_to_index_map,
 		texture_name_to_index_map,
@@ -391,6 +402,7 @@ fn convert_node_to_compact_format(
 	let child1 = convert_node_child_to_compact_format(
 		&node.children[1],
 		portal_ptr_to_index_map,
+		materials,
 		out_map,
 		leaf_ptr_to_index_map,
 		texture_name_to_index_map,
@@ -404,13 +416,14 @@ fn convert_node_to_compact_format(
 fn convert_leaf_to_compact_format(
 	leaf_ptr: &bsp_builder::BSPLeafPtr,
 	portal_ptr_to_index_map: &PortalPtrToIndexMap,
+	materials: &MaterialsMap,
 	out_map: &mut BSPMap,
 	texture_name_to_index_map: &mut TextureNameToIndexMap,
 ) -> BSPLeaf
 {
 	let leaf = leaf_ptr.borrow();
 
-	let polygons_splitted = bsp_builder::split_long_polygons(&leaf.polygons);
+	let polygons_splitted = bsp_builder::split_long_polygons(&leaf.polygons, materials);
 
 	let first_polygon = out_map.polygons.len() as u32;
 	for polygon in &polygons_splitted
@@ -548,6 +561,7 @@ fn fill_textures(texture_name_to_index_map: &TextureNameToIndexMap, out_map: &mu
 
 fn convert_submodels_to_compact_format(
 	submodels: &[map_polygonizer::Entity],
+	materials: &MaterialsMap,
 	out_map: &mut BSPMap,
 	texture_name_to_index_map: &mut TextureNameToIndexMap,
 )
@@ -558,20 +572,22 @@ fn convert_submodels_to_compact_format(
 		{
 			continue;
 		}
-		let submodel_converted = convert_submodel_to_compact_format(submodel, out_map, texture_name_to_index_map);
+		let submodel_converted =
+			convert_submodel_to_compact_format(submodel, materials, out_map, texture_name_to_index_map);
 		out_map.submodels.push(submodel_converted);
 	}
 }
 
 fn convert_submodel_to_compact_format(
 	submodel: &map_polygonizer::Entity,
+	materials: &MaterialsMap,
 	out_map: &mut BSPMap,
 	texture_name_to_index_map: &mut TextureNameToIndexMap,
 ) -> Submodel
 {
 	let first_polygon = out_map.polygons.len() as u32;
 
-	let polygons_splitted = bsp_builder::split_long_polygons(&submodel.polygons);
+	let polygons_splitted = bsp_builder::split_long_polygons(&submodel.polygons, materials);
 	for polygon in &polygons_splitted
 	{
 		let polygon_converted = convert_polygon_to_compact_format(&polygon, out_map, texture_name_to_index_map);

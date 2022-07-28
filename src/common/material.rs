@@ -54,6 +54,10 @@ pub struct Material
 	/// If some - use texture turbulence effect.
 	#[serde(default)]
 	pub turb: Option<TurbParams>,
+
+	/// If some - this is a skybox.
+	#[serde(default)]
+	pub skybox: Option<SkyboxParams>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone)]
@@ -89,6 +93,17 @@ pub struct TurbParams
 	pub scroll_speed: [f32; 2],
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SkyboxParams
+{
+	/// Side images in order -X, +X, -Y, +Y, -Z, +Z. If empty - side is not drawn.
+	pub side_images: [String; 6],
+
+	// Side images are modulated by this value.
+	#[serde(default = "default_one")]
+	pub brightness: f32,
+}
+
 impl Default for Material
 {
 	fn default() -> Self
@@ -106,6 +121,7 @@ impl Default for Material
 			emissive_light: [0.0, 0.0, 0.0],
 			blending_mode: BlendingMode::None,
 			turb: None,
+			skybox: None,
 		}
 	}
 }
