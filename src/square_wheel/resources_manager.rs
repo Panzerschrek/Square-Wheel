@@ -308,17 +308,13 @@ fn load_texture(material: &Material, textures_path: &str) -> TextureWithMips
 
 fn load_skybox_texture<ColorT: AbstractColor>(material: &Material, textures_path: &str) -> SkyboxTextures<ColorT>
 {
-	// TODO - avoi "unwrap"
+	// TODO - avoid "unwrap".
+	let skybox = material.skybox.as_ref().unwrap();
+
 	let mut result = SkyboxTextures::default();
-	for (side_image, out_side) in material
-		.skybox
-		.as_ref()
-		.unwrap()
-		.side_images
-		.iter()
-		.zip(result.iter_mut())
+	for (side_image, out_side) in skybox.side_images.iter().zip(result.iter_mut())
 	{
-		*out_side = load_skybox_texture_side(textures_path, &side_image);
+		*out_side = load_skybox_texture_side(textures_path, &side_image, skybox.brightness);
 	}
 	result
 }
@@ -326,6 +322,7 @@ fn load_skybox_texture<ColorT: AbstractColor>(material: &Material, textures_path
 fn load_skybox_texture_side<ColorT: AbstractColor>(
 	textures_path: &str,
 	texture_image_name: &str,
+	brightness: f32,
 ) -> SkyboxSideTextureWithMips<ColorT>
 {
 	if texture_image_name.is_empty()
@@ -334,7 +331,7 @@ fn load_skybox_texture_side<ColorT: AbstractColor>(
 	}
 
 	let image = load_image(texture_image_name, textures_path).unwrap_or_else(image::make_stub);
-	let mip0 = make_skybox_side_texture(&image);
+	let mip0 = make_skybox_side_texture(&image, brightness);
 	make_skybox_side_texture_mips(mip0)
 }
 

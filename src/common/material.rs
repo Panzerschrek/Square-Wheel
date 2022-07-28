@@ -98,6 +98,10 @@ pub struct SkyboxParams
 {
 	/// Side images in order -X, +X, -Y, +Y, -Z, +Z. If empty - side is not drawn.
 	pub side_images: [String; 6],
+
+	// Side images are modulated by this value.
+	#[serde(default = "default_one")]
+	pub brightness: f32,
 }
 
 impl Default for Material

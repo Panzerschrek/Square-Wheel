@@ -175,8 +175,17 @@ fn resize_image(image: &image::Image, target_size: [u32; 2]) -> image::Image
 	result
 }
 
-pub fn make_skybox_side_texture<ColorT: AbstractColor>(image: &image::Image) -> SkyboxSideTexture<ColorT>
+pub fn make_skybox_side_texture<ColorT: AbstractColor>(
+	image: &image::Image,
+	brightness: f32,
+) -> SkyboxSideTexture<ColorT>
 {
+	const SHIFT: i32 = 8;
+	const SCALE: f32 = (1 << SHIFT) as f32;
+
+	let brightness_i = (brightness * SCALE) as i32;
+	let brightness_vec = ColorVecI::from_color_i32x3(&[brightness_i, brightness_i, brightness_i]);
+
 	let size = image.size[0].min(image.size[1]);
 
 	let mut pixels = vec![ColorT::default(); (size * size) as usize];
@@ -185,7 +194,8 @@ pub fn make_skybox_side_texture<ColorT: AbstractColor>(image: &image::Image) -> 
 		for x in 0 .. size
 		{
 			let c: ColorVecI = image.pixels[(x + image.size[0] * y) as usize].into();
-			pixels[(x + y * size) as usize] = c.into();
+			pixels[(x + y * size) as usize] =
+				ColorVecI::shift_right::<SHIFT>(&ColorVecI::mul(&c, &brightness_vec)).into();
 		}
 	}
 
