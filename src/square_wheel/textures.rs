@@ -196,14 +196,55 @@ pub fn make_skybox_side_texture_mips<ColorT: AbstractColor>(
 	mip0: SkyboxSideTexture<ColorT>,
 ) -> SkyboxSideTextureWithMips<ColorT>
 {
-	let result = [
+	let mut result = [
 		mip0,
 		SkyboxSideTexture::default(),
 		SkyboxSideTexture::default(),
 		SkyboxSideTexture::default(),
 	];
 
-	// TODO
+	for i in 1 .. NUM_MIPS
+	{
+		let prev_mip = &mut result[i - 1];
+		let mut mip = SkyboxSideTexture {
+			size: prev_mip.size >> 1,
+			pixels: Vec::new(),
+		};
+
+		if mip.size == 0
+		{
+			continue;
+		}
+
+		mip.pixels = vec![ColorT::default(); (mip.size * mip.size) as usize];
+
+		let prev_mip_size = prev_mip.size as usize;
+		let mip_size = mip.size as usize;
+		for y in 0 .. mip_size
+		{
+			let src_offset0 = (y * 2) * prev_mip_size;
+			let src_offset1 = (y * 2 + 1) * prev_mip_size;
+			for (dst, x) in mip.pixels[y * mip_size .. (y + 1) * mip_size]
+				.iter_mut()
+				.zip(0 .. mip_size)
+			{
+				let src_x = x * 2;
+				let p00 = prev_mip.pixels[src_x + src_offset0].into();
+				let p01 = prev_mip.pixels[src_x + src_offset1].into();
+				let p10 = prev_mip.pixels[src_x + 1 + src_offset0].into();
+				let p11 = prev_mip.pixels[src_x + 1 + src_offset1].into();
+
+				let average = ColorVecI::shift_right::<2>(&ColorVecI::add(
+					&ColorVecI::add(&p00, &p01),
+					&ColorVecI::add(&p10, &p11),
+				));
+
+				*dst = average.into();
+			}
+		}
+		result[i] = mip;
+	}
+
 	result
 }
 
