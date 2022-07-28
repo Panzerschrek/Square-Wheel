@@ -1066,12 +1066,28 @@ fn remove_expired_portals_from_leafs_r(node_child: &mut BSPNodeChild)
 	}
 }
 
-pub fn split_long_polygons(polygons: &[Polygon]) -> Vec<Polygon>
+pub fn split_long_polygons(polygons: &[Polygon], materials: &material::MaterialsMap) -> Vec<Polygon>
 {
 	let mut result = Vec::new();
 	for polygon in polygons
 	{
-		split_long_polygon_r(polygon, &mut result, 0)
+		let mut need_split = true;
+		if let Some(material) = materials.get(&polygon.texture_info.texture)
+		{
+			if !material.light && material.skybox.is_some()
+			{
+				need_split = false;
+			}
+		}
+
+		if need_split
+		{
+			split_long_polygon_r(polygon, &mut result, 0)
+		}
+		else
+		{
+			result.push(polygon.clone());
+		}
 	}
 	result
 }
