@@ -992,11 +992,31 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			let x_end_int = fixed16_floor_to_int(x_right).min(self.clip_rect.max_x);
 			if x_start_int < x_end_int
 			{
+				let num_line_pixels = x_end_int - x_start_int;
 				let x_start_delta = int_to_fixed16(x_start_int) + FIXED16_HALF - x_left;
 				let mut line_tc = [0, 0];
+				let mut d_line_tc = [0, 0];
+				// Correct TC equation to avoid out of borders texture fetch.
 				for i in 0 .. 2
 				{
-					line_tc[i] = tc_left[i] + fixed16_mul(x_start_delta, d_tc_dx[i]);
+					let max_coord = int_to_fixed16(texture_info.size[i] as i32) - 1;
+					line_tc[i] = (tc_left[i] + fixed16_mul(x_start_delta, d_tc_dx[i]))
+						.max(0)
+						.min(max_coord);
+					let end_tc = line_tc[i] + d_tc_dx[i] * (num_line_pixels - 1);
+
+					d_line_tc[i] = if end_tc < 0
+					{
+						(-line_tc[i]) / num_line_pixels
+					}
+					else if end_tc > max_coord
+					{
+						(max_coord - line_tc[i]) / num_line_pixels
+					}
+					else
+					{
+						d_tc_dx[i]
+					};
 				}
 
 				let mut line_light = ColorVecI::from_color_i32x3(&[
@@ -1011,9 +1031,12 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 
 				for dst_pixel in line_dst
 				{
-					// TODO - avoid clamping texture coordinates. Correct equations instead.
-					let u = fixed16_floor_to_int(line_tc[0]).max(0).min(texture_info.size[0] - 1);
-					let v = fixed16_floor_to_int(line_tc[1]).max(0).min(texture_info.size[1] - 1);
+					let u = fixed16_floor_to_int(line_tc[0]);
+					let v = fixed16_floor_to_int(line_tc[1]);
+					debug_assert!(u >= 0);
+					debug_assert!(u < texture_info.size[0]);
+					debug_assert!(v >= 0);
+					debug_assert!(v < texture_info.size[1]);
 					let texel_address = (u + v * texture_info.size[0]) as usize;
 					let texel = unchecked_texture_fetch(texture_data, texel_address);
 
@@ -1023,7 +1046,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					*dst_pixel = texel_vec_lighted.into();
 					for i in 0 .. 2
 					{
-						line_tc[i] += d_tc_dx[i];
+						line_tc[i] += d_line_tc[i];
 					}
 					line_light = ColorVecI::add(&line_light, &d_light_dx_vec);
 				}
