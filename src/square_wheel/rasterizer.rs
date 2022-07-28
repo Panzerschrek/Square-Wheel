@@ -770,17 +770,20 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		}
 		middle_index = 3 - upper_index - lower_index;
 
+		let upper_vertex = &vertices[upper_index];
+		let lower_vertex = &vertices[lower_index];
+		let middle_vertex = &vertices[middle_index];
+
 		// Use hack with miminun dy to avoid division by zero and overflows.
-		let long_edge_dy = (vertices[upper_index].y - vertices[lower_index].y).max(FIXED16_HALF);
-		let lower_part_dy = (vertices[middle_index].y - vertices[lower_index].y).max(FIXED16_HALF);
-		let upper_part_dy = (vertices[upper_index].y - vertices[middle_index].y).max(FIXED16_HALF);
+		let long_edge_dy = (upper_vertex.y - lower_vertex.y).max(FIXED16_HALF);
+		let lower_part_dy = (middle_vertex.y - lower_vertex.y).max(FIXED16_HALF);
+		let upper_part_dy = (upper_vertex.y - middle_vertex.y).max(FIXED16_HALF);
 
-		let long_edge_dx_dy = fixed16_div(vertices[upper_index].x - vertices[lower_index].x, long_edge_dy);
-		let long_edge_x_in_middle =
-			vertices[lower_index].x + fixed16_mul(long_edge_dx_dy, vertices[middle_index].y - vertices[lower_index].y);
+		let long_edge_dx_dy = fixed16_div(upper_vertex.x - lower_vertex.x, long_edge_dy);
+		let long_edge_x_in_middle = lower_vertex.x + fixed16_mul(long_edge_dx_dy, middle_vertex.y - lower_vertex.y);
 
-		let lower_part_dx_dy = fixed16_div(vertices[middle_index].x - vertices[lower_index].x, lower_part_dy);
-		let upper_part_dx_dy = fixed16_div(vertices[upper_index].x - vertices[middle_index].x, upper_part_dy);
+		let lower_part_dx_dy = fixed16_div(middle_vertex.x - lower_vertex.x, lower_part_dy);
+		let upper_part_dx_dy = fixed16_div(upper_vertex.x - middle_vertex.x, upper_part_dy);
 
 		let mut long_edge_d_tc_dy = [0, 0];
 		let mut long_edge_tc_in_middle = [0, 0];
@@ -788,17 +791,11 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		let mut d_tc_dy_upper = [0, 0];
 		for i in 0 .. 2
 		{
-			long_edge_d_tc_dy[i] = fixed16_div(vertices[upper_index].tc[i] - vertices[lower_index].tc[i], long_edge_dy);
-			long_edge_tc_in_middle[i] = vertices[lower_index].tc[i] + fixed16_mul(long_edge_d_tc_dy[i], lower_part_dy);
+			long_edge_d_tc_dy[i] = fixed16_div(upper_vertex.tc[i] - lower_vertex.tc[i], long_edge_dy);
+			long_edge_tc_in_middle[i] = lower_vertex.tc[i] + fixed16_mul(long_edge_d_tc_dy[i], lower_part_dy);
 
-			d_tc_dy_lower[i] = fixed16_div(
-				vertices[middle_index].tc[i] - vertices[lower_index].tc[i],
-				lower_part_dy,
-			);
-			d_tc_dy_upper[i] = fixed16_div(
-				vertices[upper_index].tc[i] - vertices[middle_index].tc[i],
-				upper_part_dy,
-			);
+			d_tc_dy_lower[i] = fixed16_div(middle_vertex.tc[i] - lower_vertex.tc[i], lower_part_dy);
+			d_tc_dy_upper[i] = fixed16_div(upper_vertex.tc[i] - middle_vertex.tc[i], upper_part_dy);
 		}
 
 		let mut long_edge_d_light_dy = [0, 0, 0];
@@ -807,21 +804,11 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		let mut d_light_dy_upper = [0, 0, 0];
 		for i in 0 .. 3
 		{
-			long_edge_d_light_dy[i] = fixed16_div(
-				vertices[upper_index].light[i] - vertices[lower_index].light[i],
-				long_edge_dy,
-			);
-			long_edge_light_in_middle[i] =
-				vertices[lower_index].light[i] + fixed16_mul(long_edge_d_light_dy[i], lower_part_dy);
+			long_edge_d_light_dy[i] = fixed16_div(upper_vertex.light[i] - lower_vertex.light[i], long_edge_dy);
+			long_edge_light_in_middle[i] = lower_vertex.light[i] + fixed16_mul(long_edge_d_light_dy[i], lower_part_dy);
 
-			d_light_dy_lower[i] = fixed16_div(
-				vertices[middle_index].light[i] - vertices[lower_index].light[i],
-				lower_part_dy,
-			);
-			d_light_dy_upper[i] = fixed16_div(
-				vertices[upper_index].light[i] - vertices[middle_index].light[i],
-				upper_part_dy,
-			);
+			d_light_dy_lower[i] = fixed16_div(middle_vertex.light[i] - lower_vertex.light[i], lower_part_dy);
+			d_light_dy_upper[i] = fixed16_div(upper_vertex.light[i] - middle_vertex.light[i], upper_part_dy);
 		}
 
 		if long_edge_x_in_middle >= vertices[middle_index].x
@@ -836,58 +823,55 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			//          _ \
 			//            _\
 
-			let middle_dx = (long_edge_x_in_middle - vertices[middle_index].x).max(FIXED16_HALF);
+			let middle_dx = (long_edge_x_in_middle - middle_vertex.x).max(FIXED16_HALF);
 
 			let mut d_tc_dx = [0, 0];
 			for i in 0 .. 2
 			{
-				d_tc_dx[i] = fixed16_div(long_edge_tc_in_middle[i] - vertices[middle_index].tc[i], middle_dx);
+				d_tc_dx[i] = fixed16_div(long_edge_tc_in_middle[i] - middle_vertex.tc[i], middle_dx);
 			}
 
 			let mut d_light_dx = [0, 0, 0];
 			for i in 0 .. 3
 			{
-				d_light_dx[i] = fixed16_div(
-					long_edge_light_in_middle[i] - vertices[middle_index].light[i],
-					middle_dx,
-				);
+				d_light_dx[i] = fixed16_div(long_edge_light_in_middle[i] - middle_vertex.light[i], middle_dx);
 			}
 
 			self.fill_triangle_part(
-				vertices[lower_index].y,
-				vertices[middle_index].y,
+				lower_vertex.y,
+				middle_vertex.y,
 				PolygonSide {
-					x_start: vertices[lower_index].x,
+					x_start: lower_vertex.x,
 					dx_dy: lower_part_dx_dy,
 				},
 				PolygonSide {
-					x_start: vertices[lower_index].x,
+					x_start: lower_vertex.x,
 					dx_dy: long_edge_dx_dy,
 				},
-				vertices[lower_index].tc,
+				lower_vertex.tc,
 				d_tc_dy_lower,
 				d_tc_dx,
-				vertices[lower_index].light,
+				lower_vertex.light,
 				d_light_dy_lower,
 				d_light_dx,
 				texture_info,
 				texture_data,
 			);
 			self.fill_triangle_part(
-				vertices[middle_index].y,
-				vertices[upper_index].y,
+				middle_vertex.y,
+				upper_vertex.y,
 				PolygonSide {
-					x_start: vertices[middle_index].x,
+					x_start: middle_vertex.x,
 					dx_dy: upper_part_dx_dy,
 				},
 				PolygonSide {
 					x_start: long_edge_x_in_middle,
 					dx_dy: long_edge_dx_dy,
 				},
-				vertices[middle_index].tc,
+				middle_vertex.tc,
 				d_tc_dy_upper,
 				d_tc_dx,
-				vertices[middle_index].light,
+				middle_vertex.light,
 				d_light_dy_upper,
 				d_light_dx,
 				texture_info,
@@ -906,52 +890,49 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			//  / _
 			// /_
 
-			let middle_dx = (vertices[middle_index].x - long_edge_x_in_middle).max(FIXED16_HALF);
+			let middle_dx = (middle_vertex.x - long_edge_x_in_middle).max(FIXED16_HALF);
 
 			let mut d_tc_dx = [0, 0];
 			for i in 0 .. 2
 			{
-				d_tc_dx[i] = fixed16_div(vertices[middle_index].tc[i] - long_edge_tc_in_middle[i], middle_dx);
+				d_tc_dx[i] = fixed16_div(middle_vertex.tc[i] - long_edge_tc_in_middle[i], middle_dx);
 			}
 
 			let mut d_light_dx = [0, 0, 0];
 			for i in 0 .. 3
 			{
-				d_light_dx[i] = fixed16_div(
-					vertices[middle_index].light[i] - long_edge_light_in_middle[i],
-					middle_dx,
-				);
+				d_light_dx[i] = fixed16_div(middle_vertex.light[i] - long_edge_light_in_middle[i], middle_dx);
 			}
 
 			self.fill_triangle_part(
-				vertices[lower_index].y,
-				vertices[middle_index].y,
+				lower_vertex.y,
+				middle_vertex.y,
 				PolygonSide {
-					x_start: vertices[lower_index].x,
+					x_start: lower_vertex.x,
 					dx_dy: long_edge_dx_dy,
 				},
 				PolygonSide {
-					x_start: vertices[lower_index].x,
+					x_start: lower_vertex.x,
 					dx_dy: lower_part_dx_dy,
 				},
-				vertices[lower_index].tc,
+				lower_vertex.tc,
 				long_edge_d_tc_dy,
 				d_tc_dx,
-				vertices[lower_index].light,
+				lower_vertex.light,
 				long_edge_d_light_dy,
 				d_light_dx,
 				texture_info,
 				texture_data,
 			);
 			self.fill_triangle_part(
-				vertices[middle_index].y,
-				vertices[upper_index].y,
+				middle_vertex.y,
+				upper_vertex.y,
 				PolygonSide {
 					x_start: long_edge_x_in_middle,
 					dx_dy: long_edge_dx_dy,
 				},
 				PolygonSide {
-					x_start: vertices[middle_index].x,
+					x_start: middle_vertex.x,
 					dx_dy: upper_part_dx_dy,
 				},
 				long_edge_tc_in_middle,
