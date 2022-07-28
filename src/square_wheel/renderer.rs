@@ -1152,104 +1152,21 @@ impl Renderer
 			[1.0, 1.0, 1.0],
 		];
 
-		// TODO - fix texture coordinates equation.
-		let bbox_polygons: [([usize; 4], Plane, Plane, Plane); 6] = [
+		let side_plane_dist = -1.0;
+		let side_tc_shift = 1.0;
+		let bbox_polygons = [
 			// -X
-			(
-				[0, 1, 3, 2],
-				Plane {
-					vec: Vec3f::unit_x(),
-					dist: -1.0,
-				},
-				Plane {
-					vec: Vec3f::unit_y(),
-					dist: 1.0,
-				},
-				Plane {
-					vec: -Vec3f::unit_z(),
-					dist: 1.0,
-				},
-			),
+			([0, 1, 3, 2], Vec3f::unit_x(), Vec3f::unit_y(), -Vec3f::unit_z()),
 			// +X
-			(
-				[4, 6, 7, 5],
-				Plane {
-					vec: -Vec3f::unit_x(),
-					dist: -1.0,
-				},
-				Plane {
-					vec: -Vec3f::unit_y(),
-					dist: 1.0,
-				},
-				Plane {
-					vec: -Vec3f::unit_z(),
-					dist: 1.0,
-				},
-			),
+			([4, 6, 7, 5], -Vec3f::unit_x(), -Vec3f::unit_y(), -Vec3f::unit_z()),
 			// -Y
-			(
-				[0, 4, 5, 1],
-				Plane {
-					vec: Vec3f::unit_y(),
-					dist: -1.0,
-				},
-				Plane {
-					vec: -Vec3f::unit_x(),
-					dist: 1.0,
-				},
-				Plane {
-					vec: -Vec3f::unit_z(),
-					dist: 1.0,
-				},
-			),
+			([0, 4, 5, 1], Vec3f::unit_y(), -Vec3f::unit_x(), -Vec3f::unit_z()),
 			// +Y
-			(
-				[2, 3, 7, 6],
-				Plane {
-					vec: -Vec3f::unit_y(),
-					dist: -1.0,
-				},
-				Plane {
-					vec: Vec3f::unit_x(),
-					dist: 1.0,
-				},
-				Plane {
-					vec: -Vec3f::unit_z(),
-					dist: 1.0,
-				},
-			),
+			([2, 3, 7, 6], -Vec3f::unit_y(), Vec3f::unit_x(), -Vec3f::unit_z()),
 			// -Z
-			(
-				[0, 2, 6, 4],
-				Plane {
-					vec: Vec3f::unit_z(),
-					dist: -1.0,
-				},
-				Plane {
-					vec: Vec3f::unit_x(),
-					dist: 1.0,
-				},
-				Plane {
-					vec: -Vec3f::unit_y(),
-					dist: 1.0,
-				},
-			),
+			([0, 2, 6, 4], Vec3f::unit_z(), Vec3f::unit_x(), -Vec3f::unit_y()),
 			// +Z
-			(
-				[1, 5, 7, 3],
-				Plane {
-					vec: -Vec3f::unit_z(),
-					dist: -1.0,
-				},
-				Plane {
-					vec: Vec3f::unit_x(),
-					dist: 1.0,
-				},
-				Plane {
-					vec: Vec3f::unit_y(),
-					dist: 1.0,
-				},
-			),
+			([1, 5, 7, 3], -Vec3f::unit_z(), Vec3f::unit_x(), Vec3f::unit_y()),
 		];
 
 		let skybox_matrix = get_object_matrix(camera_matrices.position, *skybox_angles);
@@ -1273,8 +1190,7 @@ impl Renderer
 				bbox_vertices_transformed[polygon.0[3]],
 			];
 
-			let plane = polygon.1;
-			let plane_transformed = skybox_planes_matrix * plane.vec.extend(-plane.dist);
+			let plane_transformed = skybox_planes_matrix * polygon.1.extend(-side_plane_dist);
 			let plane_transformed_w = -plane_transformed.w;
 			let depth_equation = DepthEquation {
 				d_inv_z_dx: plane_transformed.x / plane_transformed_w,
@@ -1285,13 +1201,10 @@ impl Renderer
 			let side_textures = &skybox_textures[side];
 			let tc_equation_scale = side_textures[0].size as f32 * 0.5;
 
-			let tex_coord_equation = [polygon.2, polygon.3];
 			// Calculate texture coordinates equations.
 			let tc_basis_transformed = [
-				skybox_planes_matrix *
-					(tex_coord_equation[0].vec.extend(tex_coord_equation[0].dist) * tc_equation_scale),
-				skybox_planes_matrix *
-					(tex_coord_equation[1].vec.extend(tex_coord_equation[1].dist) * tc_equation_scale),
+				skybox_planes_matrix * (polygon.2.extend(side_tc_shift) * tc_equation_scale),
+				skybox_planes_matrix * (polygon.3.extend(side_tc_shift) * tc_equation_scale),
 			];
 			// Equation projeted to polygon plane.
 			let tc_equation = TexCoordEquation {
