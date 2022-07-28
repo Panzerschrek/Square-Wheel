@@ -549,7 +549,7 @@ impl Renderer
 				},
 			);
 
-			let viewport_clippung_polygon = ClippingPolygon::from_box(
+			let viewport_clipping_polygon = ClippingPolygon::from_box(
 				screen_rect.min.x,
 				screen_rect.min.y,
 				screen_rect.max.x,
@@ -562,14 +562,14 @@ impl Renderer
 					&mut rasterizer,
 					camera_matrices,
 					skybox_angles,
-					&viewport_clippung_polygon,
+					&viewport_clipping_polygon,
 				);
 			}
 
 			self.draw_tree_r(
 				&mut rasterizer,
 				camera_matrices,
-				&viewport_clippung_polygon,
+				&viewport_clipping_polygon,
 				inline_models_index,
 				models,
 				root_node,
@@ -581,11 +581,11 @@ impl Renderer
 					&mut rasterizer,
 					camera_matrices,
 					skybox_angles,
-					&viewport_clippung_polygon,
+					&viewport_clipping_polygon,
 				);
 			}
 
-			self.draw_view_models(&mut rasterizer, &viewport_clippung_polygon, models);
+			self.draw_view_models(&mut rasterizer, &viewport_clipping_polygon, models);
 		}
 		else
 		{
@@ -619,7 +619,7 @@ impl Renderer
 				rect_corrected.max += Vec2f::new(0.5, 0.5);
 
 				// Use clipping polygon to totally reject whole leafs and polygons.
-				let viewport_clippung_polygon = ClippingPolygon::from_box(
+				let viewport_clipping_polygon = ClippingPolygon::from_box(
 					rect_corrected.min.x,
 					rect_corrected.min.y,
 					rect_corrected.max.x,
@@ -632,14 +632,14 @@ impl Renderer
 						&mut rasterizer,
 						camera_matrices,
 						skybox_angles,
-						&viewport_clippung_polygon,
+						&viewport_clipping_polygon,
 					);
 				}
 
 				self.draw_tree_r(
 					&mut rasterizer,
 					camera_matrices,
-					&viewport_clippung_polygon,
+					&viewport_clipping_polygon,
 					inline_models_index,
 					models,
 					root_node,
@@ -651,11 +651,11 @@ impl Renderer
 						&mut rasterizer,
 						camera_matrices,
 						skybox_angles,
-						&viewport_clippung_polygon,
+						&viewport_clipping_polygon,
 					);
 				}
 
-				self.draw_view_models(&mut rasterizer, &viewport_clippung_polygon, models);
+				self.draw_view_models(&mut rasterizer, &viewport_clipping_polygon, models);
 			});
 		}
 	}
@@ -1114,7 +1114,7 @@ impl Renderer
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		camera_matrices: &CameraMatrices,
 		skybox_angles: &EulerAnglesF,
-		viewport_clippung_polygon: &ClippingPolygon,
+		viewport_clipping_polygon: &ClippingPolygon,
 	)
 	{
 		let (material_index, mut bounds) = if let Some(current_sky) = self.current_sky
@@ -1126,7 +1126,7 @@ impl Renderer
 			return;
 		};
 
-		bounds.intersect(viewport_clippung_polygon);
+		bounds.intersect(viewport_clipping_polygon);
 		if bounds.is_empty_or_invalid()
 		{
 			return;
@@ -1331,7 +1331,7 @@ impl Renderer
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		camera_matrices: &CameraMatrices,
-		viewport_clippung_polygon: &ClippingPolygon,
+		viewport_clipping_polygon: &ClippingPolygon,
 		inline_models_index: &InlineModelsIndex,
 		models: &[ModelEntity],
 		current_index: u32,
@@ -1342,7 +1342,7 @@ impl Renderer
 			let leaf = current_index - bsp_map_compact::FIRST_LEAF_INDEX;
 			if let Some(mut leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf)
 			{
-				leaf_bounds.intersect(viewport_clippung_polygon);
+				leaf_bounds.intersect(viewport_clipping_polygon);
 				if leaf_bounds.is_valid_and_non_empty()
 				{
 					self.draw_leaf(
@@ -1370,7 +1370,7 @@ impl Renderer
 				self.draw_tree_r(
 					rasterizer,
 					camera_matrices,
-					viewport_clippung_polygon,
+					viewport_clipping_polygon,
 					inline_models_index,
 					models,
 					node.children[(i ^ mask) as usize],
