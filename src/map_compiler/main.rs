@@ -94,7 +94,7 @@ fn main()
 
 	if opt.print_stats
 	{
-		print_stats(&map_polygonized, &bsp_tree, &map_compact);
+		print_stats(&map_polygonized, &bsp_tree, &submodels_bsp_trees, &map_compact);
 	}
 }
 
@@ -138,6 +138,7 @@ fn get_material_texture_size(
 fn print_stats(
 	map_polygonized: &map_polygonizer::MapPolygonized,
 	bsp_tree: &bsp_builder::BSPTree,
+	submodels_bsp_trees: &[bsp_builder::SubmodelBSPNode],
 	map_compact: &bsp_map_compact::BSPMap,
 )
 {
@@ -164,7 +165,7 @@ fn print_stats(
 
 	println!(
 		"Compact map nodes: {}, leafs: {}, polygons: {}, portals: {}, leafs_portals: {}, vertices: {}, textures: {}, \
-		 submodels: {}",
+		 submodels: {}, sumbodels nodes: {}",
 		map_compact.nodes.len(),
 		map_compact.leafs.len(),
 		map_compact.polygons.len(),
@@ -173,7 +174,23 @@ fn print_stats(
 		map_compact.vertices.len(),
 		map_compact.textures.len(),
 		map_compact.submodels.len(),
+		map_compact.submodels_bsp_nodes.len()
 	);
+
+	for (index, submodels_bsp_tree) in submodels_bsp_trees.iter().enumerate()
+	{
+		let mut stats = SubmodelBSPStats::default();
+		calculate_submodel_bsp_tree_stats_r(&submodels_bsp_tree, 0, &mut stats);
+		stats.average_depth /= stats.num_nodes as f32;
+
+		println!(
+			"Submodel {} BSP Tree stats: {:?}, average polygons in node: {}, average vertices in polygon: {}",
+			index + 1,
+			stats,
+			(stats.num_polygons as f32) / (stats.num_nodes as f32),
+			(stats.num_polygon_vertices as f32) / (stats.num_polygons.max(1) as f32),
+		);
+	}
 }
 
 #[derive(Debug, Default)]
@@ -234,5 +251,57 @@ fn calculate_bsp_tree_stats_r(node_child: &bsp_builder::BSPNodeChild, depth: usi
 				stats.num_polygon_vertices += polygon.vertices.len();
 			}
 		},
+	}
+}
+
+#[derive(Debug, Default)]
+struct SubmodelBSPStats
+{
+	num_nodes: usize,
+	num_polygons: usize,
+	num_polygon_vertices: usize,
+	min_polygons_in_node: usize,
+	max_polygons_in_node: usize,
+	min_depth: usize,
+	max_depth: usize,
+	average_depth: f32,
+}
+
+fn calculate_submodel_bsp_tree_stats_r(node: &bsp_builder::SubmodelBSPNode, depth: usize, stats: &mut SubmodelBSPStats)
+{
+	stats.num_nodes += 1;
+	for child in &node.children
+	{
+		if let Some(c) = child
+		{
+			calculate_submodel_bsp_tree_stats_r(c, depth + 1, stats);
+		}
+	}
+
+	if stats.min_depth == 0
+	{
+		stats.min_depth = depth;
+	}
+	else
+	{
+		stats.min_depth = std::cmp::min(stats.min_depth, depth);
+	}
+	stats.max_depth = std::cmp::max(stats.max_depth, depth);
+	stats.average_depth += depth as f32;
+
+	if stats.min_polygons_in_node == 0
+	{
+		stats.min_polygons_in_node = std::cmp::max(1, node.polygons.len());
+	}
+	else
+	{
+		stats.min_polygons_in_node = std::cmp::min(stats.min_polygons_in_node, node.polygons.len());
+	}
+	stats.max_polygons_in_node = std::cmp::max(stats.max_polygons_in_node, node.polygons.len());
+
+	stats.num_polygons += node.polygons.len();
+	for polygon in &node.polygons
+	{
+		stats.num_polygon_vertices += polygon.vertices.len();
 	}
 }
