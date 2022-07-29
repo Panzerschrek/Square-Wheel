@@ -47,6 +47,16 @@ pub struct LeafsPortal
 pub type LeafsPortalPtr = rc::Rc<cell::RefCell<LeafsPortal>>;
 pub type LeafsPortalWeakPtr = rc::Weak<cell::RefCell<LeafsPortal>>;
 
+#[derive(Debug)]
+pub struct SubmodelBSPNode
+{
+	// Dummy plane for leaf nodes.
+	pub plane: Plane,
+	// Contains polygons on splitter plane for nodes, contains  list of all polygons for leafs.
+	pub polygons: Vec<Polygon>,
+	pub children: [Option<Box<SubmodelBSPNode>>; 2],
+}
+
 pub fn build_leaf_bsp_tree(map_entities: &[map_polygonizer::Entity], materials: &material::MaterialsMap) -> BSPTree
 {
 	let world_entity = &map_entities[0];
@@ -84,46 +94,6 @@ pub fn build_leaf_bsp_tree(map_entities: &[map_polygonizer::Entity], materials: 
 		root: tree_root,
 		portals,
 	}
-}
-
-fn filter_out_invisible_polygons(polygons: &[Polygon], materials: &material::MaterialsMap) -> Vec<Polygon>
-{
-	let mut result = Vec::new();
-
-	for polygon in polygons
-	{
-		if let Some(material) = materials.get(&polygon.texture_info.texture)
-		{
-			if !material.bsp
-			{
-				continue;
-			}
-		}
-
-		result.push(polygon.clone());
-	}
-	result
-}
-
-fn build_bounding_box(entity: &map_polygonizer::Entity) -> BBox
-{
-	let inf = 1.0e8;
-	let bbox_extend = 128.0;
-	let mut bbox = BBox {
-		min: Vec3f::new(inf, inf, inf),
-		max: Vec3f::new(-inf, -inf, -inf),
-	};
-	for polygon in &entity.polygons
-	{
-		for v in &polygon.vertices
-		{
-			bbox.extend_with_point(v);
-		}
-	}
-	bbox.min -= Vec3f::new(bbox_extend, bbox_extend, bbox_extend);
-	bbox.max += Vec3f::new(bbox_extend, bbox_extend, bbox_extend);
-
-	bbox
 }
 
 fn build_leaf_bsp_tree_r(mut in_polygons: Vec<Polygon>) -> BSPNodeChild
@@ -192,62 +162,6 @@ fn build_leaf_bsp_tree_r(mut in_polygons: Vec<Polygon>) -> BSPNodeChild
 			build_leaf_bsp_tree_r(polygons_back),
 		],
 	})))
-}
-
-// Returns pair of front and back polygons.
-fn split_polygon(in_polygon: &Polygon, plane: &Plane) -> (Polygon, Polygon)
-{
-	let mut polygon_front = Polygon {
-		plane: in_polygon.plane,
-		texture_info: in_polygon.texture_info.clone(),
-		vertices: Vec::new(),
-	};
-	let mut polygon_back = Polygon {
-		plane: in_polygon.plane,
-		texture_info: in_polygon.texture_info.clone(),
-		vertices: Vec::new(),
-	};
-
-	let mut prev_vert = in_polygon.vertices.last().unwrap();
-	let mut prev_vert_pos = get_point_position_relative_plane(&prev_vert, plane);
-	for vert in &in_polygon.vertices
-	{
-		let vert_pos = get_point_position_relative_plane(&vert, plane);
-
-		match vert_pos
-		{
-			PointPositionRelativePlane::Front =>
-			{
-				if prev_vert_pos == PointPositionRelativePlane::Back
-				{
-					let intersection = clipping::get_line_plane_intersection(prev_vert, vert, plane);
-					polygon_back.vertices.push(intersection);
-					polygon_front.vertices.push(intersection);
-				}
-				polygon_front.vertices.push(*vert);
-			},
-			PointPositionRelativePlane::Back =>
-			{
-				if prev_vert_pos == PointPositionRelativePlane::Front
-				{
-					let intersection = clipping::get_line_plane_intersection(prev_vert, vert, plane);
-					polygon_front.vertices.push(intersection);
-					polygon_back.vertices.push(intersection);
-				}
-				polygon_back.vertices.push(*vert);
-			},
-			PointPositionRelativePlane::OnPlane =>
-			{
-				polygon_front.vertices.push(*vert);
-				polygon_back.vertices.push(*vert);
-			},
-		};
-
-		prev_vert = vert;
-		prev_vert_pos = vert_pos;
-	}
-
-	(polygon_front, polygon_back)
 }
 
 // Returns None if can't find any situable splitter.
@@ -346,6 +260,303 @@ fn get_splitter_plane_score(polygons: &[Polygon], plane: &Plane) -> Option<f32>
 	}
 
 	Some(score_scaled)
+}
+
+pub fn build_submodel_bsp_tree(
+	submodel: &map_polygonizer::Entity,
+	materials: &material::MaterialsMap,
+) -> SubmodelBSPNode
+{
+	let polygons_filtered = filter_out_invisible_polygons(&submodel.polygons, materials);
+	if polygons_filtered.is_empty()
+	{
+		return SubmodelBSPNode {
+			polygons: Vec::new(),
+			plane: Plane {
+				vec: Vec3f::zero(),
+				dist: 0.0,
+			},
+			children: [None, None],
+		};
+	}
+
+	build_submodel_bsp_tree_r(polygons_filtered)
+}
+
+fn build_submodel_bsp_tree_r(mut in_polygons: Vec<Polygon>) -> SubmodelBSPNode
+{
+	if let Some(splitter_plane) = choose_submodel_best_splitter_plane(&in_polygons)
+	{
+		let mut polygons_front = Vec::new();
+		let mut polygons_back = Vec::new();
+		let mut polygons_coplanar = Vec::new();
+		for polygon in in_polygons.drain(..)
+		{
+			match get_polygon_position_relative_plane(&polygon, &splitter_plane)
+			{
+				PolygonPositionRelativePlane::Front =>
+				{
+					polygons_front.push(polygon);
+				},
+				PolygonPositionRelativePlane::Back =>
+				{
+					polygons_back.push(polygon);
+				},
+				PolygonPositionRelativePlane::CoplanarFront | PolygonPositionRelativePlane::CoplanarBack =>
+				{
+					polygons_coplanar.push(polygon);
+				},
+				PolygonPositionRelativePlane::Splitted =>
+				{
+					let (front_polygon, back_polygon) = split_polygon(&polygon, &splitter_plane);
+					// Check for number of vertices is not needed here, but add anyway to avoid further problems if something is broken.
+					if front_polygon.vertices.len() >= 3
+					{
+						polygons_front.push(front_polygon);
+					}
+					if back_polygon.vertices.len() >= 3
+					{
+						polygons_back.push(back_polygon);
+					}
+				},
+			}
+		}
+
+		let child_front = if polygons_front.is_empty()
+		{
+			None
+		}
+		else
+		{
+			Some(Box::new(build_submodel_bsp_tree_r(polygons_front)))
+		};
+
+		let child_back = if polygons_back.is_empty()
+		{
+			None
+		}
+		else
+		{
+			Some(Box::new(build_submodel_bsp_tree_r(polygons_back)))
+		};
+
+		SubmodelBSPNode {
+			polygons: polygons_coplanar,
+			plane: splitter_plane,
+			children: [child_front, child_back],
+		}
+	}
+	else
+	{
+		let dummy_plane = in_polygons[0].plane;
+		SubmodelBSPNode {
+			polygons: in_polygons,
+			plane: dummy_plane,
+			children: [None, None],
+		}
+	}
+}
+
+// Returns None if can't find any situable splitter.
+fn choose_submodel_best_splitter_plane(polygons: &[Polygon]) -> Option<Plane>
+{
+	let mut best_score_plane: Option<(f32, Plane)> = None;
+	for polygon in polygons
+	{
+		if let Some(score) = get_submodel_splitter_plane_score(polygons, &polygon.plane)
+		{
+			if let Some((prev_score, _)) = best_score_plane
+			{
+				if score < prev_score
+				{
+					best_score_plane = Some((score, polygon.plane))
+				}
+			}
+			else
+			{
+				best_score_plane = Some((score, polygon.plane))
+			}
+		}
+	}
+
+	best_score_plane.map(|x| x.1)
+}
+
+// smaller score means better
+// None score means plane is not a splitter
+fn get_submodel_splitter_plane_score(polygons: &[Polygon], plane: &Plane) -> Option<f32>
+{
+	let mut polygons_front = 0i32;
+	let mut polygons_back = 0i32;
+	let mut polygons_splitted = 0i32;
+	let mut polygons_complanar_front = 0i32;
+	let mut polygons_complanar_back = 0i32;
+	for polygon in polygons
+	{
+		match get_polygon_position_relative_plane(polygon, plane)
+		{
+			PolygonPositionRelativePlane::Front =>
+			{
+				polygons_front += 1;
+			},
+			PolygonPositionRelativePlane::Back =>
+			{
+				polygons_back += 1;
+			},
+			PolygonPositionRelativePlane::CoplanarFront =>
+			{
+				polygons_complanar_front += 1;
+			},
+			PolygonPositionRelativePlane::CoplanarBack =>
+			{
+				polygons_complanar_back += 1;
+			},
+			PolygonPositionRelativePlane::Splitted =>
+			{
+				polygons_splitted += 1;
+			},
+		}
+	}
+
+	let polygons_complanar_total = polygons_complanar_front + polygons_complanar_back;
+
+	if polygons_complanar_total == polygons.len() as i32
+	{
+		// All polygons are in single plane. We can just create leaf node.
+		return None;
+	}
+	if polygons_splitted == 0 &&
+		(polygons_complanar_front == 0 || polygons_complanar_back == 0) &&
+		(polygons_front == 0 || polygons_back == 0)
+	{
+		// In case if all polygons of this plane facing towards single direction and all other polygons are located on one side
+		// there is no reason to create splitter using this plane.
+		// Anyway polygons on this plane will be ordered with all other polygons.
+		return None;
+	}
+
+	// TODO - tune this carefully.
+	const SPLITTED_POLYGON_SCALE: i32 = 5;
+	let base_score = (polygons_front - polygons_back).abs() + SPLITTED_POLYGON_SCALE * polygons_splitted;
+
+	// Make score greater (worse) for planes non-parallel to axis planes.
+	let mut num_zero_normal_components = 0;
+	let plane_vec_as_array: &[f32; 3] = plane.vec.as_ref();
+	for component in plane_vec_as_array
+	{
+		if *component == 0.0
+		{
+			num_zero_normal_components += 1;
+		}
+	}
+
+	let mut score_scaled = base_score as f32;
+	if num_zero_normal_components == 0
+	{
+		score_scaled *= 2.0;
+	}
+	if num_zero_normal_components == 1
+	{
+		score_scaled *= 1.5;
+	}
+
+	Some(score_scaled)
+}
+
+// Returns pair of front and back polygons.
+fn split_polygon(in_polygon: &Polygon, plane: &Plane) -> (Polygon, Polygon)
+{
+	let mut polygon_front = Polygon {
+		plane: in_polygon.plane,
+		texture_info: in_polygon.texture_info.clone(),
+		vertices: Vec::new(),
+	};
+	let mut polygon_back = Polygon {
+		plane: in_polygon.plane,
+		texture_info: in_polygon.texture_info.clone(),
+		vertices: Vec::new(),
+	};
+
+	let mut prev_vert = in_polygon.vertices.last().unwrap();
+	let mut prev_vert_pos = get_point_position_relative_plane(&prev_vert, plane);
+	for vert in &in_polygon.vertices
+	{
+		let vert_pos = get_point_position_relative_plane(&vert, plane);
+
+		match vert_pos
+		{
+			PointPositionRelativePlane::Front =>
+			{
+				if prev_vert_pos == PointPositionRelativePlane::Back
+				{
+					let intersection = clipping::get_line_plane_intersection(prev_vert, vert, plane);
+					polygon_back.vertices.push(intersection);
+					polygon_front.vertices.push(intersection);
+				}
+				polygon_front.vertices.push(*vert);
+			},
+			PointPositionRelativePlane::Back =>
+			{
+				if prev_vert_pos == PointPositionRelativePlane::Front
+				{
+					let intersection = clipping::get_line_plane_intersection(prev_vert, vert, plane);
+					polygon_front.vertices.push(intersection);
+					polygon_back.vertices.push(intersection);
+				}
+				polygon_back.vertices.push(*vert);
+			},
+			PointPositionRelativePlane::OnPlane =>
+			{
+				polygon_front.vertices.push(*vert);
+				polygon_back.vertices.push(*vert);
+			},
+		};
+
+		prev_vert = vert;
+		prev_vert_pos = vert_pos;
+	}
+
+	(polygon_front, polygon_back)
+}
+
+fn filter_out_invisible_polygons(polygons: &[Polygon], materials: &material::MaterialsMap) -> Vec<Polygon>
+{
+	let mut result = Vec::new();
+
+	for polygon in polygons
+	{
+		if let Some(material) = materials.get(&polygon.texture_info.texture)
+		{
+			if !material.bsp
+			{
+				continue;
+			}
+		}
+
+		result.push(polygon.clone());
+	}
+	result
+}
+
+fn build_bounding_box(entity: &map_polygonizer::Entity) -> BBox
+{
+	let inf = 1.0e8;
+	let bbox_extend = 128.0;
+	let mut bbox = BBox {
+		min: Vec3f::new(inf, inf, inf),
+		max: Vec3f::new(-inf, -inf, -inf),
+	};
+	for polygon in &entity.polygons
+	{
+		for v in &polygon.vertices
+		{
+			bbox.extend_with_point(v);
+		}
+	}
+	bbox.min -= Vec3f::new(bbox_extend, bbox_extend, bbox_extend);
+	bbox.max += Vec3f::new(bbox_extend, bbox_extend, bbox_extend);
+
+	bbox
 }
 
 #[derive(PartialEq, Eq)]

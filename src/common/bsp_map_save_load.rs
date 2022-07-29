@@ -85,6 +85,12 @@ pub fn save_map(bsp_map: &BSPMap, file_path: &Path) -> Result<(), std::io::Error
 		&mut offset,
 	)?;
 	write_lump(
+		&bsp_map.submodels_bsp_nodes,
+		&mut file,
+		&mut header.lumps[LUMP_SUBMODELS_BSP_NODES],
+		&mut offset,
+	)?;
+	write_lump(
 		&bsp_map.entities,
 		&mut file,
 		&mut header.lumps[LUMP_ENTITIES],
@@ -183,6 +189,7 @@ pub fn load_map(file_path: &Path) -> Result<Option<BSPMap>, std::io::Error>
 		vertices: read_lump(&mut file, &header.lumps[LUMP_VERTICES])?,
 		textures: read_lump(&mut file, &header.lumps[LUMP_TEXTURES])?,
 		submodels: read_lump(&mut file, &header.lumps[LUMP_SUBMODELS])?,
+		submodels_bsp_nodes: read_lump(&mut file, &header.lumps[LUMP_SUBMODELS_BSP_NODES])?,
 		entities: read_lump(&mut file, &header.lumps[LUMP_ENTITIES])?,
 		key_value_pairs: read_lump(&mut file, &header.lumps[LUMP_KEY_VALUE_PAIRS])?,
 		strings_data: read_lump(&mut file, &header.lumps[LUMP_STRINGS_DATA])?,
@@ -213,7 +220,7 @@ struct Lump
 }
 
 const BSP_MAP_ID: [u8; 4] = ['S' as u8, 'q' as u8, 'w' as u8, 'M' as u8];
-const BSP_MAP_VERSION: u32 = 8; // Change each time when format is changed!
+const BSP_MAP_VERSION: u32 = 10; // Change each time when format is changed!
 
 const MAX_LUMPS: usize = 32;
 
@@ -225,14 +232,15 @@ const LUMP_LEAFS_PORTALS: usize = 4;
 const LUMP_VERTICES: usize = 5;
 const LUMP_TEXTURES: usize = 6;
 const LUMP_SUBMODELS: usize = 7;
-const LUMP_ENTITIES: usize = 8;
-const LUMP_KEY_VALUE_PAIRS: usize = 9;
-const LUMP_STRINGS_DATA: usize = 10;
-const LUMP_LIGHTMAPS_DATA: usize = 11;
-const LUMP_DIRECTIONAL_LIGHTMAPS_DATA: usize = 12;
-const LUMP_LIGHT_GRID_HEADER: usize = 13;
-const LUMP_LIGHT_GRID_COLUMNS: usize = 14;
-const LUMP_LIGHT_GRID_SAMPLES: usize = 15;
+const LUMP_SUBMODELS_BSP_NODES: usize = 8;
+const LUMP_ENTITIES: usize = 9;
+const LUMP_KEY_VALUE_PAIRS: usize = 10;
+const LUMP_STRINGS_DATA: usize = 11;
+const LUMP_LIGHTMAPS_DATA: usize = 12;
+const LUMP_DIRECTIONAL_LIGHTMAPS_DATA: usize = 13;
+const LUMP_LIGHT_GRID_HEADER: usize = 14;
+const LUMP_LIGHT_GRID_COLUMNS: usize = 15;
+const LUMP_LIGHT_GRID_SAMPLES: usize = 16;
 
 fn write_lump<T>(
 	data: &[T],
