@@ -84,8 +84,12 @@ fn main()
 		.map(|s| bsp_builder::build_submodel_bsp_tree(s, &materials))
 		.collect::<Vec<_>>();
 
-	let map_compact =
-		bsp_map_compact_conversion::convert_bsp_map_to_compact_format(&bsp_tree, &map_polygonized, &materials);
+	let map_compact = bsp_map_compact_conversion::convert_bsp_map_to_compact_format(
+		&bsp_tree,
+		&map_polygonized,
+		&submodels_bsp_trees,
+		&materials,
+	);
 	bsp_map_save_load::save_map(&map_compact, &opt.output).unwrap();
 
 	if opt.print_stats

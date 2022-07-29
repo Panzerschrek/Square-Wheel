@@ -90,9 +90,15 @@ pub fn main()
 					map_bsp_tree_opt = Some(bsp_builder::build_leaf_bsp_tree(&map_polygonized, &materials));
 					if opt.draw_bsp_map_compact || opt.draw_map_sectors_graph_compact
 					{
+						let submodels_bsp_trees = map_polygonized[1 ..]
+							.iter()
+							.map(|s| bsp_builder::build_submodel_bsp_tree(s, &materials))
+							.collect::<Vec<_>>();
+
 						map_bsp_compact_opt = Some(bsp_map_compact_conversion::convert_bsp_map_to_compact_format(
 							map_bsp_tree_opt.as_ref().unwrap(),
 							&map_polygonized,
+							&submodels_bsp_trees,
 							&materials,
 						));
 					}

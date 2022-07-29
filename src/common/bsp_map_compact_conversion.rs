@@ -4,6 +4,8 @@ use std::collections::HashMap;
 pub fn convert_bsp_map_to_compact_format(
 	bsp_tree: &bsp_builder::BSPTree,
 	entities: &[map_polygonizer::Entity],
+	// Excluding world entity.
+	entites_bsp_trees: &[bsp_builder::SubmodelBSPNode],
 	materials: &MaterialsMap,
 ) -> BSPMap
 {
@@ -25,7 +27,13 @@ pub fn convert_bsp_map_to_compact_format(
 
 	fill_portals_leafs(&bsp_tree.portals, &leaf_ptr_to_index_map, &mut out_map);
 
-	convert_entities_to_compact_format(entities, materials, &mut out_map, &mut texture_name_to_index_map);
+	convert_entities_to_compact_format(
+		entities,
+		entites_bsp_trees,
+		materials,
+		&mut out_map,
+		&mut texture_name_to_index_map,
+	);
 
 	fill_textures(&texture_name_to_index_map, &mut out_map);
 
@@ -296,6 +304,8 @@ fn fill_textures(texture_name_to_index_map: &TextureNameToIndexMap, out_map: &mu
 
 fn convert_entities_to_compact_format(
 	entities: &[map_polygonizer::Entity],
+	// Excluding world entity.
+	entites_bsp_trees: &[bsp_builder::SubmodelBSPNode],
 	materials: &MaterialsMap,
 	out_map: &mut BSPMap,
 	texture_name_to_index_map: &mut TextureNameToIndexMap,
@@ -305,13 +315,23 @@ fn convert_entities_to_compact_format(
 	for (entity_index, entity) in entities.iter().enumerate()
 	{
 		let mut submodel_index = !0;
-		if entity_index != 0 && !entity.polygons.is_empty()
+		if entity_index != 0
 		{
-			// Create submodels for entities with non-empty polygons list. Skip entity #0 - world entity.
-			submodel_index = out_map.submodels.len() as u32;
-			let submodel_converted =
-				convert_submodel_to_compact_format(entity, materials, out_map, texture_name_to_index_map);
-			out_map.submodels.push(submodel_converted);
+			// Create submodels for entities with non-empty BSP tree. Skip entity #0 - world entity.
+			let entity_bsp_tree = &entites_bsp_trees[entity_index - 1];
+			if !entity_bsp_tree.polygons.is_empty() ||
+				entity_bsp_tree.children[0].is_some() ||
+				entity_bsp_tree.children[1].is_some()
+			{
+				submodel_index = out_map.submodels.len() as u32;
+				let submodel_converted = convert_submodel_bsp_tree_to_compact_format(
+					entity_bsp_tree,
+					materials,
+					out_map,
+					texture_name_to_index_map,
+				);
+				out_map.submodels.push(submodel_converted);
+			}
 		}
 
 		let entity_converted = convert_entity_to_compact_format(entity, submodel_index, out_map, &mut strings_cache);
@@ -319,26 +339,66 @@ fn convert_entities_to_compact_format(
 	}
 }
 
-fn convert_submodel_to_compact_format(
-	submodel: &map_polygonizer::Entity,
+fn convert_submodel_bsp_tree_to_compact_format(
+	submodel_bsp_tree: &bsp_builder::SubmodelBSPNode,
 	materials: &MaterialsMap,
 	out_map: &mut BSPMap,
 	texture_name_to_index_map: &mut TextureNameToIndexMap,
 ) -> Submodel
 {
+	let polygons_before = out_map.polygons.len();
+	let root_node = convert_submodel_bsp_tree_node_to_compact_format_r(
+		submodel_bsp_tree,
+		materials,
+		out_map,
+		texture_name_to_index_map,
+	);
+	let polygons_after = out_map.polygons.len();
+
+	Submodel {
+		root_node,
+		first_polygon: polygons_before as u32,
+		num_polygons: (polygons_after - polygons_before) as u32,
+	}
+}
+
+fn convert_submodel_bsp_tree_node_to_compact_format_r(
+	node: &bsp_builder::SubmodelBSPNode,
+	materials: &MaterialsMap,
+	out_map: &mut BSPMap,
+	texture_name_to_index_map: &mut TextureNameToIndexMap,
+) -> u32
+{
+	let mut children = [!0, !0];
+	for i in 0 .. 2
+	{
+		if let Some(c) = &node.children[i]
+		{
+			children[i] =
+				convert_submodel_bsp_tree_node_to_compact_format_r(c, materials, out_map, texture_name_to_index_map)
+		}
+	}
+
 	let first_polygon = out_map.polygons.len() as u32;
 
-	let polygons_splitted = bsp_builder::split_long_polygons(&submodel.polygons, materials);
+	let polygons_splitted = bsp_builder::split_long_polygons(&node.polygons, materials);
 	for polygon in &polygons_splitted
 	{
 		let polygon_converted = convert_polygon_to_compact_format(&polygon, out_map, texture_name_to_index_map);
 		out_map.polygons.push(polygon_converted);
 	}
 
-	Submodel {
+	let out_node = SubmodelBSPNode {
+		plane: node.plane,
 		first_polygon,
 		num_polygons: polygons_splitted.len() as u32,
-	}
+		children,
+	};
+
+	let index = out_map.submodels_bsp_nodes.len() as u32;
+	out_map.submodels_bsp_nodes.push(out_node);
+
+	index
 }
 
 type StringsCache = std::collections::HashMap<String, StringRef>;

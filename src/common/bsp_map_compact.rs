@@ -16,6 +16,7 @@ pub struct BSPMap
 	pub vertices: Vec<Vec3f>,
 	pub textures: Vec<Texture>,
 	pub submodels: Vec<Submodel>,
+	pub submodels_bsp_nodes: Vec<SubmodelBSPNode>,
 
 	// Data for entities. Entity is a set of string key-value pairs.
 	pub entities: Vec<Entity>,
@@ -87,8 +88,22 @@ pub struct Portal
 #[derive(Clone, Copy)]
 pub struct Submodel
 {
+	pub root_node: u32,
+	// Polygons of submodels are stored sequentially.
+	// But for proper ordering BSP tree must be used.
 	pub first_polygon: u32,
 	pub num_polygons: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SubmodelBSPNode
+{
+	pub plane: Plane,
+	pub first_polygon: u32,
+	pub num_polygons: u32,
+	// Invalid index if child does not exists.
+	pub children: [u32; 2],
 }
 
 #[repr(C)]
