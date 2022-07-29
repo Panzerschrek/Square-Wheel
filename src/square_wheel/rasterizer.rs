@@ -176,23 +176,29 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				next_right_index -= vertices.len();
 			}
 
-			let dy_left = vertices[next_left_index].y - vertices[left_index].y;
-			let dy_right = vertices[next_right_index].y - vertices[right_index].y;
-			let next_y = std::cmp::min(vertices[next_left_index].y, vertices[next_right_index].y);
+			// TODO - use unchecked fetch?
+			let left_vertex = &vertices[left_index];
+			let next_left_vertex = &vertices[next_left_index];
+			let right_vertex = &vertices[right_index];
+			let next_right_vertex = &vertices[next_right_index];
+
+			let dy_left = next_left_vertex.y - left_vertex.y;
+			let dy_right = next_right_vertex.y - right_vertex.y;
+			let next_y = std::cmp::min(next_left_vertex.y, next_right_vertex.y);
 			if dy_left > FIXED16_HALF && dy_right > FIXED16_HALF
 			{
-				let dx_dy_left = fixed16_div(vertices[next_left_index].x - vertices[left_index].x, dy_left);
-				let dx_dy_right = fixed16_div(vertices[next_right_index].x - vertices[right_index].x, dy_right);
+				let dx_dy_left = fixed16_div(next_left_vertex.x - left_vertex.x, dy_left);
+				let dx_dy_right = fixed16_div(next_right_vertex.x - right_vertex.x, dy_right);
 				draw_func(
 					self,
 					cur_y,
 					next_y,
 					PolygonSide {
-						x_start: vertices[left_index].x + fixed16_mul(dx_dy_left, cur_y - vertices[left_index].y),
+						x_start: left_vertex.x + fixed16_mul(dx_dy_left, cur_y - left_vertex.y),
 						dx_dy: dx_dy_left,
 					},
 					PolygonSide {
-						x_start: vertices[right_index].x + fixed16_mul(dx_dy_right, cur_y - vertices[right_index].y),
+						x_start: right_vertex.x + fixed16_mul(dx_dy_right, cur_y - right_vertex.y),
 						dx_dy: dx_dy_right,
 					},
 					depth_equation,
@@ -209,16 +215,12 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				{
 					// Fill single line.
 					let thin_line_y = int_to_fixed16(cur_y_int) + FIXED16_HALF;
-					let x_start_left = vertices[left_index].x +
+					let x_start_left = left_vertex.x +
+						fixed16_mul_div(thin_line_y - left_vertex.y, next_left_vertex.x - left_vertex.x, dy_left);
+					let x_start_right = right_vertex.x +
 						fixed16_mul_div(
-							thin_line_y - vertices[left_index].y,
-							vertices[next_left_index].x - vertices[left_index].x,
-							dy_left,
-						);
-					let x_start_right = vertices[right_index].x +
-						fixed16_mul_div(
-							thin_line_y - vertices[right_index].y,
-							vertices[next_right_index].x - vertices[right_index].x,
+							thin_line_y - right_vertex.y,
+							next_right_vertex.x - right_vertex.x,
 							dy_right,
 						);
 					draw_func(
@@ -246,7 +248,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				break;
 			}
 
-			if vertices[next_right_index].y < vertices[next_left_index].y
+			if next_right_vertex.y < next_left_vertex.y
 			{
 				right_index = next_right_index;
 			}
@@ -319,8 +321,11 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			if x_start_int < x_end_int
 			{
 				let line_buffer_offset = y_int * self.row_size;
-				let line_dst = &mut self.color_buffer
-					[(x_start_int + line_buffer_offset) as usize .. (x_end_int + line_buffer_offset) as usize];
+				let line_dst = unchecked_slice_range_mut(
+					&mut self.color_buffer,
+					(x_start_int + line_buffer_offset) as usize,
+					(x_end_int + line_buffer_offset) as usize,
+				);
 
 				let span_start_x = x_start_int as i64;
 				let span_end_x = (x_end_int - 1) as i64;
@@ -511,8 +516,11 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			if x_start_int < x_end_int
 			{
 				let line_buffer_offset = y_int * self.row_size;
-				let line_dst = &mut self.color_buffer
-					[(x_start_int + line_buffer_offset) as usize .. (x_end_int + line_buffer_offset) as usize];
+				let line_dst = unchecked_slice_range_mut(
+					&mut self.color_buffer,
+					(x_start_int + line_buffer_offset) as usize,
+					(x_end_int + line_buffer_offset) as usize,
+				);
 
 				// Calculate z for span start/end, calculate texture coordinates based on this z.
 				// Then just use liner interpolation of texture coordinates across span.
@@ -692,8 +700,11 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			if x_start_int < x_end_int
 			{
 				let line_buffer_offset = y_int * self.row_size;
-				let line_dst = &mut self.color_buffer
-					[(x_start_int + line_buffer_offset) as usize .. (x_end_int + line_buffer_offset) as usize];
+				let line_dst = unchecked_slice_range_mut(
+					&mut self.color_buffer,
+					(x_start_int + line_buffer_offset) as usize,
+					(x_end_int + line_buffer_offset) as usize,
+				);
 
 				let mut tc = [tc_left[0], tc_left[1]];
 				// Prevent division by zero or overflow.
@@ -768,17 +779,20 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		}
 		middle_index = 3 - upper_index - lower_index;
 
+		let upper_vertex = &vertices[upper_index];
+		let lower_vertex = &vertices[lower_index];
+		let middle_vertex = &vertices[middle_index];
+
 		// Use hack with miminun dy to avoid division by zero and overflows.
-		let long_edge_dy = (vertices[upper_index].y - vertices[lower_index].y).max(FIXED16_HALF);
-		let lower_part_dy = (vertices[middle_index].y - vertices[lower_index].y).max(FIXED16_HALF);
-		let upper_part_dy = (vertices[upper_index].y - vertices[middle_index].y).max(FIXED16_HALF);
+		let long_edge_dy = (upper_vertex.y - lower_vertex.y).max(FIXED16_HALF);
+		let lower_part_dy = (middle_vertex.y - lower_vertex.y).max(FIXED16_HALF);
+		let upper_part_dy = (upper_vertex.y - middle_vertex.y).max(FIXED16_HALF);
 
-		let long_edge_dx_dy = fixed16_div(vertices[upper_index].x - vertices[lower_index].x, long_edge_dy);
-		let long_edge_x_in_middle =
-			vertices[lower_index].x + fixed16_mul(long_edge_dx_dy, vertices[middle_index].y - vertices[lower_index].y);
+		let long_edge_dx_dy = fixed16_div(upper_vertex.x - lower_vertex.x, long_edge_dy);
+		let long_edge_x_in_middle = lower_vertex.x + fixed16_mul(long_edge_dx_dy, middle_vertex.y - lower_vertex.y);
 
-		let lower_part_dx_dy = fixed16_div(vertices[middle_index].x - vertices[lower_index].x, lower_part_dy);
-		let upper_part_dx_dy = fixed16_div(vertices[upper_index].x - vertices[middle_index].x, upper_part_dy);
+		let lower_part_dx_dy = fixed16_div(middle_vertex.x - lower_vertex.x, lower_part_dy);
+		let upper_part_dx_dy = fixed16_div(upper_vertex.x - middle_vertex.x, upper_part_dy);
 
 		let mut long_edge_d_tc_dy = [0, 0];
 		let mut long_edge_tc_in_middle = [0, 0];
@@ -786,17 +800,11 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		let mut d_tc_dy_upper = [0, 0];
 		for i in 0 .. 2
 		{
-			long_edge_d_tc_dy[i] = fixed16_div(vertices[upper_index].tc[i] - vertices[lower_index].tc[i], long_edge_dy);
-			long_edge_tc_in_middle[i] = vertices[lower_index].tc[i] + fixed16_mul(long_edge_d_tc_dy[i], lower_part_dy);
+			long_edge_d_tc_dy[i] = fixed16_div(upper_vertex.tc[i] - lower_vertex.tc[i], long_edge_dy);
+			long_edge_tc_in_middle[i] = lower_vertex.tc[i] + fixed16_mul(long_edge_d_tc_dy[i], lower_part_dy);
 
-			d_tc_dy_lower[i] = fixed16_div(
-				vertices[middle_index].tc[i] - vertices[lower_index].tc[i],
-				lower_part_dy,
-			);
-			d_tc_dy_upper[i] = fixed16_div(
-				vertices[upper_index].tc[i] - vertices[middle_index].tc[i],
-				upper_part_dy,
-			);
+			d_tc_dy_lower[i] = fixed16_div(middle_vertex.tc[i] - lower_vertex.tc[i], lower_part_dy);
+			d_tc_dy_upper[i] = fixed16_div(upper_vertex.tc[i] - middle_vertex.tc[i], upper_part_dy);
 		}
 
 		let mut long_edge_d_light_dy = [0, 0, 0];
@@ -805,21 +813,11 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		let mut d_light_dy_upper = [0, 0, 0];
 		for i in 0 .. 3
 		{
-			long_edge_d_light_dy[i] = fixed16_div(
-				vertices[upper_index].light[i] - vertices[lower_index].light[i],
-				long_edge_dy,
-			);
-			long_edge_light_in_middle[i] =
-				vertices[lower_index].light[i] + fixed16_mul(long_edge_d_light_dy[i], lower_part_dy);
+			long_edge_d_light_dy[i] = fixed16_div(upper_vertex.light[i] - lower_vertex.light[i], long_edge_dy);
+			long_edge_light_in_middle[i] = lower_vertex.light[i] + fixed16_mul(long_edge_d_light_dy[i], lower_part_dy);
 
-			d_light_dy_lower[i] = fixed16_div(
-				vertices[middle_index].light[i] - vertices[lower_index].light[i],
-				lower_part_dy,
-			);
-			d_light_dy_upper[i] = fixed16_div(
-				vertices[upper_index].light[i] - vertices[middle_index].light[i],
-				upper_part_dy,
-			);
+			d_light_dy_lower[i] = fixed16_div(middle_vertex.light[i] - lower_vertex.light[i], lower_part_dy);
+			d_light_dy_upper[i] = fixed16_div(upper_vertex.light[i] - middle_vertex.light[i], upper_part_dy);
 		}
 
 		if long_edge_x_in_middle >= vertices[middle_index].x
@@ -834,58 +832,55 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			//          _ \
 			//            _\
 
-			let middle_dx = (long_edge_x_in_middle - vertices[middle_index].x).max(FIXED16_HALF);
+			let middle_dx = (long_edge_x_in_middle - middle_vertex.x).max(FIXED16_HALF);
 
 			let mut d_tc_dx = [0, 0];
 			for i in 0 .. 2
 			{
-				d_tc_dx[i] = fixed16_div(long_edge_tc_in_middle[i] - vertices[middle_index].tc[i], middle_dx);
+				d_tc_dx[i] = fixed16_div(long_edge_tc_in_middle[i] - middle_vertex.tc[i], middle_dx);
 			}
 
 			let mut d_light_dx = [0, 0, 0];
 			for i in 0 .. 3
 			{
-				d_light_dx[i] = fixed16_div(
-					long_edge_light_in_middle[i] - vertices[middle_index].light[i],
-					middle_dx,
-				);
+				d_light_dx[i] = fixed16_div(long_edge_light_in_middle[i] - middle_vertex.light[i], middle_dx);
 			}
 
 			self.fill_triangle_part(
-				vertices[lower_index].y,
-				vertices[middle_index].y,
+				lower_vertex.y,
+				middle_vertex.y,
 				PolygonSide {
-					x_start: vertices[lower_index].x,
+					x_start: lower_vertex.x,
 					dx_dy: lower_part_dx_dy,
 				},
 				PolygonSide {
-					x_start: vertices[lower_index].x,
+					x_start: lower_vertex.x,
 					dx_dy: long_edge_dx_dy,
 				},
-				vertices[lower_index].tc,
+				lower_vertex.tc,
 				d_tc_dy_lower,
 				d_tc_dx,
-				vertices[lower_index].light,
+				lower_vertex.light,
 				d_light_dy_lower,
 				d_light_dx,
 				texture_info,
 				texture_data,
 			);
 			self.fill_triangle_part(
-				vertices[middle_index].y,
-				vertices[upper_index].y,
+				middle_vertex.y,
+				upper_vertex.y,
 				PolygonSide {
-					x_start: vertices[middle_index].x,
+					x_start: middle_vertex.x,
 					dx_dy: upper_part_dx_dy,
 				},
 				PolygonSide {
 					x_start: long_edge_x_in_middle,
 					dx_dy: long_edge_dx_dy,
 				},
-				vertices[middle_index].tc,
+				middle_vertex.tc,
 				d_tc_dy_upper,
 				d_tc_dx,
-				vertices[middle_index].light,
+				middle_vertex.light,
 				d_light_dy_upper,
 				d_light_dx,
 				texture_info,
@@ -904,52 +899,49 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			//  / _
 			// /_
 
-			let middle_dx = (vertices[middle_index].x - long_edge_x_in_middle).max(FIXED16_HALF);
+			let middle_dx = (middle_vertex.x - long_edge_x_in_middle).max(FIXED16_HALF);
 
 			let mut d_tc_dx = [0, 0];
 			for i in 0 .. 2
 			{
-				d_tc_dx[i] = fixed16_div(vertices[middle_index].tc[i] - long_edge_tc_in_middle[i], middle_dx);
+				d_tc_dx[i] = fixed16_div(middle_vertex.tc[i] - long_edge_tc_in_middle[i], middle_dx);
 			}
 
 			let mut d_light_dx = [0, 0, 0];
 			for i in 0 .. 3
 			{
-				d_light_dx[i] = fixed16_div(
-					vertices[middle_index].light[i] - long_edge_light_in_middle[i],
-					middle_dx,
-				);
+				d_light_dx[i] = fixed16_div(middle_vertex.light[i] - long_edge_light_in_middle[i], middle_dx);
 			}
 
 			self.fill_triangle_part(
-				vertices[lower_index].y,
-				vertices[middle_index].y,
+				lower_vertex.y,
+				middle_vertex.y,
 				PolygonSide {
-					x_start: vertices[lower_index].x,
+					x_start: lower_vertex.x,
 					dx_dy: long_edge_dx_dy,
 				},
 				PolygonSide {
-					x_start: vertices[lower_index].x,
+					x_start: lower_vertex.x,
 					dx_dy: lower_part_dx_dy,
 				},
-				vertices[lower_index].tc,
+				lower_vertex.tc,
 				long_edge_d_tc_dy,
 				d_tc_dx,
-				vertices[lower_index].light,
+				lower_vertex.light,
 				long_edge_d_light_dy,
 				d_light_dx,
 				texture_info,
 				texture_data,
 			);
 			self.fill_triangle_part(
-				vertices[middle_index].y,
-				vertices[upper_index].y,
+				middle_vertex.y,
+				upper_vertex.y,
 				PolygonSide {
 					x_start: long_edge_x_in_middle,
 					dx_dy: long_edge_dx_dy,
 				},
 				PolygonSide {
-					x_start: vertices[middle_index].x,
+					x_start: middle_vertex.x,
 					dx_dy: upper_part_dx_dy,
 				},
 				long_edge_tc_in_middle,
@@ -1009,11 +1001,31 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			let x_end_int = fixed16_floor_to_int(x_right).min(self.clip_rect.max_x);
 			if x_start_int < x_end_int
 			{
+				let num_line_pixels = x_end_int - x_start_int;
 				let x_start_delta = int_to_fixed16(x_start_int) + FIXED16_HALF - x_left;
 				let mut line_tc = [0, 0];
+				let mut d_line_tc = [0, 0];
+				// Correct TC equation to avoid out of borders texture fetch.
 				for i in 0 .. 2
 				{
-					line_tc[i] = tc_left[i] + fixed16_mul(x_start_delta, d_tc_dx[i]);
+					let max_coord = int_to_fixed16(texture_info.size[i] as i32) - 1;
+					line_tc[i] = (tc_left[i] + fixed16_mul(x_start_delta, d_tc_dx[i]))
+						.max(0)
+						.min(max_coord);
+					let end_tc = line_tc[i] + d_tc_dx[i] * (num_line_pixels - 1);
+
+					d_line_tc[i] = if end_tc < 0
+					{
+						(-line_tc[i]) / num_line_pixels
+					}
+					else if end_tc > max_coord
+					{
+						(max_coord - line_tc[i]) / num_line_pixels
+					}
+					else
+					{
+						d_tc_dx[i]
+					};
 				}
 
 				let mut line_light = ColorVecI::from_color_i32x3(&[
@@ -1023,14 +1035,20 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				]);
 
 				let line_buffer_offset = y_int * self.row_size;
-				let line_dst = &mut self.color_buffer
-					[(x_start_int + line_buffer_offset) as usize .. (x_end_int + line_buffer_offset) as usize];
+				let line_dst = unchecked_slice_range_mut(
+					&mut self.color_buffer,
+					(x_start_int + line_buffer_offset) as usize,
+					(x_end_int + line_buffer_offset) as usize,
+				);
 
 				for dst_pixel in line_dst
 				{
-					// TODO - avoid clamping texture coordinates. Correct equations instead.
-					let u = fixed16_floor_to_int(line_tc[0]).max(0).min(texture_info.size[0] - 1);
-					let v = fixed16_floor_to_int(line_tc[1]).max(0).min(texture_info.size[1] - 1);
+					let u = fixed16_floor_to_int(line_tc[0]);
+					let v = fixed16_floor_to_int(line_tc[1]);
+					debug_assert!(u >= 0);
+					debug_assert!(u < texture_info.size[0]);
+					debug_assert!(v >= 0);
+					debug_assert!(v < texture_info.size[1]);
 					let texel_address = (u + v * texture_info.size[0]) as usize;
 					let texel = unchecked_texture_fetch(texture_data, texel_address);
 
@@ -1040,7 +1058,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					*dst_pixel = texel_vec_lighted.into();
 					for i in 0 .. 2
 					{
-						line_tc[i] += d_tc_dx[i];
+						line_tc[i] += d_line_tc[i];
 					}
 					line_light = ColorVecI::add(&line_light, &d_light_dx_vec);
 				}
@@ -1109,22 +1127,28 @@ impl<'a> DepthRasterizer<'a>
 				next_right_index -= vertices.len();
 			}
 
-			let dy_left = vertices[next_left_index].y - vertices[left_index].y;
-			let dy_right = vertices[next_right_index].y - vertices[right_index].y;
-			let next_y = std::cmp::min(vertices[next_left_index].y, vertices[next_right_index].y);
+			// TODO - use unchecked fetch?
+			let left_vertex = &vertices[left_index];
+			let next_left_vertex = &vertices[next_left_index];
+			let right_vertex = &vertices[right_index];
+			let next_right_vertex = &vertices[next_right_index];
+
+			let dy_left = next_left_vertex.y - left_vertex.y;
+			let dy_right = next_right_vertex.y - right_vertex.y;
+			let next_y = std::cmp::min(next_left_vertex.y, next_right_vertex.y);
 			if dy_left > FIXED16_HALF && dy_right > FIXED16_HALF
 			{
-				let dx_dy_left = fixed16_div(vertices[next_left_index].x - vertices[left_index].x, dy_left);
-				let dx_dy_right = fixed16_div(vertices[next_right_index].x - vertices[right_index].x, dy_right);
+				let dx_dy_left = fixed16_div(next_left_vertex.x - left_vertex.x, dy_left);
+				let dx_dy_right = fixed16_div(next_right_vertex.x - right_vertex.x, dy_right);
 				self.fill_polygon_part(
 					cur_y,
 					next_y,
 					PolygonSide {
-						x_start: vertices[left_index].x + fixed16_mul(dx_dy_left, cur_y - vertices[left_index].y),
+						x_start: left_vertex.x + fixed16_mul(dx_dy_left, cur_y - left_vertex.y),
 						dx_dy: dx_dy_left,
 					},
 					PolygonSide {
-						x_start: vertices[right_index].x + fixed16_mul(dx_dy_right, cur_y - vertices[right_index].y),
+						x_start: right_vertex.x + fixed16_mul(dx_dy_right, cur_y - right_vertex.y),
 						dx_dy: dx_dy_right,
 					},
 					depth_equation,
@@ -1138,16 +1162,12 @@ impl<'a> DepthRasterizer<'a>
 				{
 					// Fill single line.
 					let thin_line_y = int_to_fixed16(cur_y_int) + FIXED16_HALF;
-					let x_start_left = vertices[left_index].x +
+					let x_start_left = left_vertex.x +
+						fixed16_mul_div(thin_line_y - left_vertex.y, next_left_vertex.x - left_vertex.x, dy_left);
+					let x_start_right = right_vertex.x +
 						fixed16_mul_div(
-							thin_line_y - vertices[left_index].y,
-							vertices[next_left_index].x - vertices[left_index].x,
-							dy_left,
-						);
-					let x_start_right = vertices[right_index].x +
-						fixed16_mul_div(
-							thin_line_y - vertices[right_index].y,
-							vertices[next_right_index].x - vertices[right_index].x,
+							thin_line_y - right_vertex.y,
+							next_right_vertex.x - right_vertex.x,
 							dy_right,
 						);
 					self.fill_polygon_part(
@@ -1310,6 +1330,21 @@ fn unchecked_texture_fetch<ColorT: Copy>(texture_data: &[ColorT], texel_address:
 	#[cfg(not(debug_assertions))]
 	unsafe {
 		*texture_data.get_unchecked(texel_address)
+	}
+}
+
+fn unchecked_slice_range_mut<T>(data: &mut [T], start: usize, end: usize) -> &mut [T]
+{
+	// operator [ .. ] checks bounds and calls panic! handler in case if index is out of bounds.
+	// This check is useless here since we clamp properly.
+	// So, use "get_unchecked_mut" in release mode.
+	#[cfg(debug_assertions)]
+	{
+		&mut data[start .. end]
+	}
+	#[cfg(not(debug_assertions))]
+	unsafe {
+		data.get_unchecked_mut(start .. end)
 	}
 }
 
