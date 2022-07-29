@@ -2,8 +2,8 @@ mod debug_rasterizer;
 mod debug_renderer;
 
 use common::{
-	bsp_builder, bsp_map_compact, bsp_map_save_load, lightmaps_builder, map_file_q1, map_polygonizer, material,
-	matrix::*, system_window,
+	bsp_builder, bsp_map_compact_conversion, bsp_map_save_load, lightmaps_builder, map_file_q1, map_polygonizer,
+	material, matrix::*, system_window,
 };
 use sdl2::{event::Event, keyboard::Keycode};
 use std::{path::PathBuf, time::Duration};
@@ -90,7 +90,7 @@ pub fn main()
 					map_bsp_tree_opt = Some(bsp_builder::build_leaf_bsp_tree(&map_polygonized, &materials));
 					if opt.draw_bsp_map_compact || opt.draw_map_sectors_graph_compact
 					{
-						map_bsp_compact_opt = Some(bsp_map_compact::convert_bsp_map_to_compact_format(
+						map_bsp_compact_opt = Some(bsp_map_compact_conversion::convert_bsp_map_to_compact_format(
 							map_bsp_tree_opt.as_ref().unwrap(),
 							&map_polygonized,
 							&materials,
