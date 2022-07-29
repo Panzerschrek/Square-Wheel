@@ -25,9 +25,7 @@ pub fn convert_bsp_map_to_compact_format(
 
 	fill_portals_leafs(&bsp_tree.portals, &leaf_ptr_to_index_map, &mut out_map);
 
-	// Skip model for entity 0 - world model.
-	convert_submodels_to_compact_format(&entities[1 ..], materials, &mut out_map, &mut texture_name_to_index_map);
-	convert_entities_to_compact_format(entities, &mut out_map);
+	convert_entities_to_compact_format(entities, materials, &mut out_map, &mut texture_name_to_index_map);
 
 	fill_textures(&texture_name_to_index_map, &mut out_map);
 
@@ -296,22 +294,28 @@ fn fill_textures(texture_name_to_index_map: &TextureNameToIndexMap, out_map: &mu
 	}
 }
 
-fn convert_submodels_to_compact_format(
-	submodels: &[map_polygonizer::Entity],
+fn convert_entities_to_compact_format(
+	entities: &[map_polygonizer::Entity],
 	materials: &MaterialsMap,
 	out_map: &mut BSPMap,
 	texture_name_to_index_map: &mut TextureNameToIndexMap,
 )
 {
-	for submodel in submodels
+	let mut strings_cache = StringsCache::new();
+	for (entity_index, entity) in entities.iter().enumerate()
 	{
-		if submodel.polygons.is_empty()
+		let mut submodel_index = !0;
+		if entity_index != 0 && !entity.polygons.is_empty()
 		{
-			continue;
+			// Create submodels for entities with non-empty polygons list. Skip entity #0 - world entity.
+			submodel_index = out_map.submodels.len() as u32;
+			let submodel_converted =
+				convert_submodel_to_compact_format(entity, materials, out_map, texture_name_to_index_map);
+			out_map.submodels.push(submodel_converted);
 		}
-		let submodel_converted =
-			convert_submodel_to_compact_format(submodel, materials, out_map, texture_name_to_index_map);
-		out_map.submodels.push(submodel_converted);
+
+		let entity_converted = convert_entity_to_compact_format(entity, submodel_index, out_map, &mut strings_cache);
+		out_map.entities.push(entity_converted);
 	}
 }
 
@@ -337,20 +341,11 @@ fn convert_submodel_to_compact_format(
 	}
 }
 
-fn convert_entities_to_compact_format(entities: &[map_polygonizer::Entity], out_map: &mut BSPMap)
-{
-	let mut strings_cache = StringsCache::new();
-	for entity in entities
-	{
-		let entity_converted = convert_entity_to_compact_format(entity, out_map, &mut strings_cache);
-		out_map.entities.push(entity_converted);
-	}
-}
-
 type StringsCache = std::collections::HashMap<String, StringRef>;
 
 fn convert_entity_to_compact_format(
 	entity: &map_polygonizer::Entity,
+	submodel_index: u32,
 	out_map: &mut BSPMap,
 	strings_cache: &mut StringsCache,
 ) -> Entity
@@ -369,6 +364,7 @@ fn convert_entity_to_compact_format(
 	Entity {
 		first_key_value_pair,
 		num_key_value_pairs: entity.keys.len() as u32,
+		submodel_index,
 	}
 }
 

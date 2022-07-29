@@ -213,7 +213,7 @@ struct Lump
 }
 
 const BSP_MAP_ID: [u8; 4] = ['S' as u8, 'q' as u8, 'w' as u8, 'M' as u8];
-const BSP_MAP_VERSION: u32 = 8; // Change each time when format is changed!
+const BSP_MAP_VERSION: u32 = 9; // Change each time when format is changed!
 
 const MAX_LUMPS: usize = 32;
 

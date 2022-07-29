@@ -89,7 +89,6 @@ pub struct Submodel
 {
 	pub first_polygon: u32,
 	pub num_polygons: u32,
-	// TODO - save keys/values?
 }
 
 #[repr(C)]
@@ -98,6 +97,8 @@ pub struct Entity
 {
 	pub first_key_value_pair: u32,
 	pub num_key_value_pairs: u32,
+	// invalid index if this entity has no submodel.
+	pub submodel_index: u32,
 }
 
 #[repr(C)]
