@@ -85,7 +85,7 @@ pub fn save_map(bsp_map: &BSPMap, file_path: &Path) -> Result<(), std::io::Error
 		&mut offset,
 	)?;
 	write_lump(
-		&bsp_map.submodels,
+		&bsp_map.submodels_bsp_nodes,
 		&mut file,
 		&mut header.lumps[LUMP_SUBMODELS_BSP_NODES],
 		&mut offset,
