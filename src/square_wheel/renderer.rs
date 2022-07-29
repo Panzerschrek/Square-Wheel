@@ -1450,8 +1450,14 @@ impl Renderer
 		// Fast path for cases with single model, to avoid expensive sorting structures preparations.
 		if leaf_submodels.len() == 1 && leaf_dynamic_models.len() == 0
 		{
+			// TODO - cache matrices?
+			let model_matrix = inline_models_index.get_model_matrix(leaf_submodels[0] as u32);
+			let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
+			let planes_matrix = camera_matrices.planes_matrix * model_matrix_inverse;
+
 			self.draw_submodel_in_leaf(
 				rasterizer,
+				&planes_matrix,
 				&clip_planes,
 				&leaf_clip_planes[.. num_clip_planes],
 				leaf_submodels[0],
@@ -1553,8 +1559,13 @@ impl Renderer
 			}
 			else
 			{
+				// TODO - cache matrices?
+				let model_matrix = inline_models_index.get_model_matrix(*submodel_index as u32);
+				let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
+				let planes_matrix = camera_matrices.planes_matrix * model_matrix_inverse;
 				self.draw_submodel_in_leaf(
 					rasterizer,
+					&planes_matrix,
 					&clip_planes,
 					&leaf_clip_planes[.. num_clip_planes],
 					*submodel_index,
@@ -1566,15 +1577,57 @@ impl Renderer
 	fn draw_submodel_in_leaf<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
+		planes_matrix: &Mat4f,
 		clip_planes: &ClippingPolygonPlanes,
 		leaf_clip_planes: &[Plane],
 		submodel_index: u32,
 	)
 	{
 		let submodel = &self.map.submodels[submodel_index as usize];
-		for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
+		self.draw_submodel_bsp_node_r(
+			rasterizer,
+			planes_matrix,
+			clip_planes,
+			leaf_clip_planes,
+			submodel.root_node,
+		);
+	}
+
+	fn draw_submodel_bsp_node_r<'a, ColorT: AbstractColor>(
+		&self,
+		rasterizer: &mut Rasterizer<'a, ColorT>,
+		planes_matrix: &Mat4f,
+		clip_planes: &ClippingPolygonPlanes,
+		leaf_clip_planes: &[Plane],
+		node_index: u32,
+	)
+	{
+		let &node = &self.map.submodels_bsp_nodes[node_index as usize];
+
+		let plane_transformed = planes_matrix * node.plane.vec.extend(-node.plane.dist);
+		let mut mask = if plane_transformed.w >= 0.0 { 1 } else { 0 };
+		if self.config.invert_polygons_order
+		{
+			mask ^= 1;
+		}
+
+		let c_b = node.children[mask as usize];
+		let c_f = node.children[(mask ^ 1) as usize];
+
+		let num_nodes = self.map.submodels_bsp_nodes.len() as u32;
+		if c_b < num_nodes
+		{
+			self.draw_submodel_bsp_node_r(rasterizer, planes_matrix, clip_planes, leaf_clip_planes, c_b);
+		}
+
+		for polygon_index in node.first_polygon .. (node.first_polygon + node.num_polygons)
 		{
 			self.draw_submodel_polygon(rasterizer, &clip_planes, leaf_clip_planes, polygon_index);
+		}
+
+		if c_f < num_nodes
+		{
+			self.draw_submodel_bsp_node_r(rasterizer, planes_matrix, clip_planes, leaf_clip_planes, c_f);
 		}
 	}
 
@@ -1593,8 +1646,8 @@ impl Renderer
 			return;
 		}
 
-		// HACK! Shift polygon vertices a bit away from camera to fix buggy pol.ygon clipping,
-		// When polygon lies exactly on clip plane.
+		// HACK! Shift polygon vertices a bit away from camera to fix buggy polygon clipping,
+		// when polygon lies exactly on clip plane.
 		// Such hack doesn't solve problems completely, but it resolves most actual cases.
 		let vertex_pos_shift_eps = 1.0 / 4.0;
 
