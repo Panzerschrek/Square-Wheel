@@ -101,7 +101,8 @@ pub fn build_submodel_bsp_tree(
 	materials: &material::MaterialsMap,
 ) -> SubmodelBSPNode
 {
-	if submodel.polygons.is_empty()
+	let polygons_filtered = filter_out_invisible_polygons(&submodel.polygons, materials);
+	if polygons_filtered.is_empty()
 	{
 		return SubmodelBSPNode {
 			polygons: Vec::new(),
@@ -113,7 +114,7 @@ pub fn build_submodel_bsp_tree(
 		};
 	}
 
-	build_submodel_bsp_tree_r(filter_out_invisible_polygons(&submodel.polygons, materials))
+	build_submodel_bsp_tree_r(polygons_filtered)
 }
 
 pub fn build_submodel_bsp_tree_r(mut in_polygons: Vec<Polygon>) -> SubmodelBSPNode
