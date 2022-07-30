@@ -242,7 +242,17 @@ mod fast_math_impl
 
 		pub fn from_color_i32x3(c: &[i32; 3]) -> Self
 		{
+			Self::from_color_i32x3_with_zero(c)
+		}
+
+		pub fn from_color_i32x3_with_zero(c: &[i32; 3]) -> Self
+		{
 			unsafe { Self(_mm_set_epi32(0, c[0], c[1], c[2])) }
+		}
+
+		pub fn from_color_i32x3_with_one(c: &[i32; 3]) -> Self
+		{
+			unsafe { Self(_mm_set_epi32(1, c[0], c[1], c[2])) }
 		}
 
 		pub fn from_color_f32x3(c: &[f32; 3]) -> Self
@@ -553,7 +563,17 @@ mod fast_math_impl
 
 		pub fn from_color_i32x3(c: &[i32; 3]) -> Self
 		{
+			Self::from_color_i32x3_with_zero(c)
+		}
+
+		pub fn from_color_i32x3_with_zero(c: &[i32; 3]) -> Self
+		{
 			Self([c[2], c[1], c[0], 0])
+		}
+
+		pub fn from_color_i32x3_with_one(c: &[i32; 3]) -> Self
+		{
+			Self([c[2], c[1], c[0], 1])
 		}
 
 		pub fn from_color_f32x3(c: &[f32; 3]) -> Self

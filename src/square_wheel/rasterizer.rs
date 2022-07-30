@@ -18,6 +18,7 @@ pub use common::material::BlendingMode;
 const BLENDING_MODE_NONE: usize = 0;
 const BLENDING_MODE_AVERAGE: usize = 1;
 const BLENDING_MODE_ADDITIVE: usize = 2;
+const BLENDING_MODE_ALPHA_TEST: usize = 3;
 
 pub struct Rasterizer<'a, ColorT: AbstractColor>
 {
@@ -115,6 +116,14 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				),
 			BlendingMode::Additive => self
 				.fill_polygon_impl_2_static_params::<TEXTURE_COORDINATES_INTERPOLATION_MODE, BLENDING_MODE_ADDITIVE>(
+					vertices,
+					depth_equation,
+					tex_coord_equation,
+					texture_info,
+					texture_data,
+				),
+			BlendingMode::AlphaTest => self
+				.fill_polygon_impl_2_static_params::<TEXTURE_COORDINATES_INTERPOLATION_MODE, BLENDING_MODE_ALPHA_TEST>(
 					vertices,
 					depth_equation,
 					tex_coord_equation,
@@ -427,6 +436,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					debug_assert!(pix_tc[1] <= texture_size_minus_one[1] as u32);
 					let texel_address = (pix_tc[0] + pix_tc[1] * texture_width) as usize;
 					let texel = unchecked_texture_fetch(texture_data, texel_address);
+					// TODO - remove copy-paste, move blending code into separate function.
 					if BLENDING_MODE == BLENDING_MODE_NONE
 					{
 						*dst_pixel = texel;
@@ -438,6 +448,13 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					else if BLENDING_MODE == BLENDING_MODE_ADDITIVE
 					{
 						*dst_pixel = ColorT::saturated_sum(*dst_pixel, texel);
+					}
+					else if BLENDING_MODE == BLENDING_MODE_ALPHA_TEST
+					{
+						if texel.test_alpha()
+						{
+							*dst_pixel = texel;
+						}
 					}
 
 					span_inv_z += span_d_inv_z;
@@ -577,6 +594,13 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					else if BLENDING_MODE == BLENDING_MODE_ADDITIVE
 					{
 						*dst_pixel = ColorT::saturated_sum(*dst_pixel, texel);
+					}
+					else if BLENDING_MODE == BLENDING_MODE_ALPHA_TEST
+					{
+						if texel.test_alpha()
+						{
+							*dst_pixel = texel;
+						}
 					}
 
 					span_tc[0] += span_d_tc[0];
@@ -736,6 +760,13 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					{
 						*dst_pixel = ColorT::saturated_sum(*dst_pixel, texel);
 					}
+					else if BLENDING_MODE == BLENDING_MODE_ALPHA_TEST
+					{
+						if texel.test_alpha()
+						{
+							*dst_pixel = texel;
+						}
+					}
 
 					tc[0] += d_tc[0];
 					tc[1] += d_tc[1];
@@ -772,6 +803,10 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			BlendingMode::Additive =>
 			{
 				self.fill_triangle_impl::<TextureColorT, BLENDING_MODE_ADDITIVE>(vertices, texture_info, texture_data)
+			},
+			BlendingMode::AlphaTest =>
+			{
+				self.fill_triangle_impl::<TextureColorT, BLENDING_MODE_ALPHA_TEST>(vertices, texture_info, texture_data)
 			},
 		}
 	}
@@ -1018,7 +1053,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			light_left[i] = light_start_left[i] + fixed16_mul(y_start_delta, d_light_left[i]);
 		}
 
-		let d_light_dx_vec = ColorVecI::from_color_i32x3(&d_light_dx);
+		let d_light_dx_vec = ColorVecI::from_color_i32x3_with_zero(&d_light_dx);
 
 		for y_int in y_start_int .. y_end_int
 		{
@@ -1053,7 +1088,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					};
 				}
 
-				let mut line_light = ColorVecI::from_color_i32x3(&[
+				let mut line_light = ColorVecI::from_color_i32x3_with_one(&[
 					light_left[0] + fixed16_mul(x_start_delta, d_light_dx[0]),
 					light_left[1] + fixed16_mul(x_start_delta, d_light_dx[1]),
 					light_left[2] + fixed16_mul(x_start_delta, d_light_dx[2]),
@@ -1092,6 +1127,13 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					else if BLENDING_MODE == BLENDING_MODE_ADDITIVE
 					{
 						*dst_pixel = ColorT::saturated_sum(*dst_pixel, texel_converted);
+					}
+					else if BLENDING_MODE == BLENDING_MODE_ALPHA_TEST
+					{
+						if texel_converted.test_alpha()
+						{
+							*dst_pixel = texel_converted;
+						}
 					}
 
 					for i in 0 .. 2
