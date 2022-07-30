@@ -34,34 +34,55 @@ fn get_texture_opacity(texture_name: &bsp_map_compact::Texture, materials: &Mate
 	}
 }
 
-pub fn can_see(from: &Vec3f, to: &Vec3f, map: &bsp_map_compact::BSPMap) -> bool
+pub fn can_see(from: &Vec3f, to: &Vec3f, map: &bsp_map_compact::BSPMap, opacity_table: &MaterialsOpacityTable) -> bool
 {
-	get_shadow_factor(from, to, map) > 0.0
+	get_shadow_factor(from, to, map, opacity_table) > 0.0
 }
 
-pub fn get_shadow_factor(from: &Vec3f, to: &Vec3f, map: &bsp_map_compact::BSPMap) -> f32
+pub fn get_shadow_factor(
+	from: &Vec3f,
+	to: &Vec3f,
+	map: &bsp_map_compact::BSPMap,
+	opacity_table: &MaterialsOpacityTable,
+) -> f32
 {
 	let root_node = (map.nodes.len() - 1) as u32;
-	get_shadow_factor_r(from, to, root_node, map)
+	get_shadow_factor_r(from, to, root_node, map, opacity_table)
 	// TODO - check intersection with submodel polygons?
 }
 
 // Speed-up intersection calculation - recursively determine loction of check edge withing BSP tree.
 // Than check only leafs where edge is actually located.
-fn get_shadow_factor_r(v0: &Vec3f, v1: &Vec3f, current_index: u32, map: &bsp_map_compact::BSPMap) -> f32
+fn get_shadow_factor_r(
+	v0: &Vec3f,
+	v1: &Vec3f,
+	current_index: u32,
+	map: &bsp_map_compact::BSPMap,
+	opacity_table: &MaterialsOpacityTable,
+) -> f32
 {
 	if current_index >= bsp_map_compact::FIRST_LEAF_INDEX
 	{
 		let leaf_index = current_index - bsp_map_compact::FIRST_LEAF_INDEX;
 		let leaf = &map.leafs[leaf_index as usize];
-		for i in 0 .. leaf.num_polygons
+		let mut shadow_factor_accumulated = 1.0;
+		for polygon in &map.polygons[leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize]
 		{
-			if edge_intersects_with_polygon(v0, v1, (leaf.first_polygon + i) as usize, map)
+			let opacity = opacity_table[polygon.texture as usize];
+			if opacity >= 1.0
 			{
-				return 0.0;
+				continue;
+			}
+			if edge_intersects_with_polygon(v0, v1, polygon, map)
+			{
+				if opacity <= 0.0
+				{
+					return 0.0;
+				}
+				shadow_factor_accumulated *= opacity;
 			}
 		}
-		return 1.0;
+		return shadow_factor_accumulated;
 	}
 	else
 	{
@@ -70,11 +91,11 @@ fn get_shadow_factor_r(v0: &Vec3f, v1: &Vec3f, current_index: u32, map: &bsp_map
 		let dist1 = v1.dot(node.plane.vec) - node.plane.dist;
 		if dist0 >= 0.0 && dist1 >= 0.0
 		{
-			return get_shadow_factor_r(v0, v1, node.children[0], map);
+			return get_shadow_factor_r(v0, v1, node.children[0], map, opacity_table);
 		}
 		if dist0 <= 0.0 && dist1 <= 0.0
 		{
-			return get_shadow_factor_r(v0, v1, node.children[1], map);
+			return get_shadow_factor_r(v0, v1, node.children[1], map, opacity_table);
 		}
 
 		// Split edge using BSP node plane.
@@ -98,13 +119,15 @@ fn get_shadow_factor_r(v0: &Vec3f, v1: &Vec3f, current_index: u32, map: &bsp_map
 		let intersection_pos_front = intersection_pos * (1.0 - eps) + v_back * eps;
 		let intersection_pos_back = intersection_pos * (1.0 - eps) + v_front * eps;
 
-		let shadow_factor_front = get_shadow_factor_r(v_front, &intersection_pos_front, node.children[0], map);
+		let shadow_factor_front =
+			get_shadow_factor_r(v_front, &intersection_pos_front, node.children[0], map, opacity_table);
 		if shadow_factor_front <= 0.0
 		{
 			return 0.0;
 		}
 
-		let shadow_factor_back = get_shadow_factor_r(&intersection_pos_back, v_back, node.children[1], map);
+		let shadow_factor_back =
+			get_shadow_factor_r(&intersection_pos_back, v_back, node.children[1], map, opacity_table);
 		if shadow_factor_back <= 0.0
 		{
 			return 0.0;
@@ -115,9 +138,13 @@ fn get_shadow_factor_r(v0: &Vec3f, v1: &Vec3f, current_index: u32, map: &bsp_map
 	}
 }
 
-fn edge_intersects_with_polygon(v0: &Vec3f, v1: &Vec3f, polygon_index: usize, map: &bsp_map_compact::BSPMap) -> bool
+fn edge_intersects_with_polygon(
+	v0: &Vec3f,
+	v1: &Vec3f,
+	polygon: &bsp_map_compact::Polygon,
+	map: &bsp_map_compact::BSPMap,
+) -> bool
 {
-	let polygon = &map.polygons[polygon_index];
 	let plane = &polygon.plane;
 
 	let dist0 = v0.dot(plane.vec) - plane.dist;
