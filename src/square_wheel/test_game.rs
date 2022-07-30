@@ -8,7 +8,6 @@ pub struct Game
 	console: console::ConsoleSharedPtr,
 	resources_manager: ResourcesManagerSharedPtr,
 	commands_queue: commands_queue::CommandsQueuePtr<Game>,
-	map: Arc<bsp_map_compact::BSPMap>,
 	camera: camera_controller::CameraController,
 	submodels: Vec<SubmodelEntityOpt>,
 	test_lights: Vec<PointLight>,
@@ -44,20 +43,13 @@ impl Game
 			.unwrap()
 			.register_command_queue(commands_queue.clone() as commands_queue::CommandsQueueDynPtr);
 
-		let submodels = vec![
-			Some(SubmodelEntity {
-				shift: Vec3f::zero(),
-				angle_z: Rad(0.0)
-			});
-			map.submodels.len()
-		];
+		let submodels = vec![None; map.submodels.len()];
 
 		Self {
 			commands_processor,
 			console,
 			resources_manager,
 			commands_queue,
-			map,
 			camera: camera_controller::CameraController::new(),
 			submodels,
 			test_lights: Vec::new(),
@@ -76,6 +68,23 @@ impl Game
 	{
 		self.process_commands();
 		self.game_time += time_delta_s;
+
+		for (index, submodel_opt) in self.submodels.iter_mut().enumerate()
+		{
+			let phase = index as f32;
+			*submodel_opt = Some(SubmodelEntity {
+				angle_z: Rad((0.0625 * self.game_time + phase).sin() * 0.25),
+				shift: 32.0 *
+					Vec3f::new(
+						(0.5 * self.game_time + phase).sin(),
+						(0.33 * self.game_time + phase).sin(),
+						(0.11111 * self.game_time + phase).sin(),
+					),
+			});
+		}
+
+		let hide_submodel_index = self.game_time as usize % self.submodels.len();
+		self.submodels[hide_submodel_index] = None;
 
 		for model in &mut self.test_models
 		{

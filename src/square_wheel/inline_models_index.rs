@@ -36,6 +36,8 @@ impl InlineModelsIndex
 
 	pub fn position_models(&mut self, submodels: &[SubmodelEntityOpt])
 	{
+		debug_assert!(submodels.len() == self.models_info.len());
+
 		for (index, submodel) in submodels.iter().enumerate()
 		{
 			if self.models_info[index as usize].current_entity != *submodel
