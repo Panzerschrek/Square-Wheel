@@ -47,7 +47,7 @@ impl Game
 		let submodels = vec![
 			SubmodelEntity {
 				shift: Vec3f::zero(),
-				angle_z: 0.0
+				angle_z: Rad(0.0)
 			};
 			map.submodels.len()
 		];

@@ -1,3 +1,4 @@
+use super::frame_info::*;
 use common::{bbox::*, bsp_map_compact, math_types::*};
 use std::sync::Arc;
 
@@ -30,22 +31,22 @@ impl InlineModelsIndex
 {
 	pub fn new(map: Arc<bsp_map_compact::BSPMap>) -> Self
 	{
-		let mut result = Self {
+		Self {
 			leafs_info: vec![LeafInfo::default(); map.leafs.len()],
 			models_info: prepare_models_info(&map),
 			map,
-		};
-
-		// Make initial positioning.
-		for i in 0 .. result.models_info.len() as u32
-		{
-			result.force_reposition_model(i, &Vec3f::zero(), Rad(0.0));
 		}
-
-		result
 	}
 
-	pub fn reposition_model(&mut self, model_index: u32, shift: &Vec3f, angle_z: RadiansF)
+	pub fn position_models(&mut self, submodels: &[SubmodelEntity])
+	{
+		for (index, submodel) in submodels.iter().enumerate()
+		{
+			self.reposition_model(index as u32, &submodel.shift, submodel.angle_z);
+		}
+	}
+
+	fn reposition_model(&mut self, model_index: u32, shift: &Vec3f, angle_z: RadiansF)
 	{
 		let model_info = &self.models_info[model_index as usize];
 		if model_info.shift != *shift || model_info.angle_z != angle_z
