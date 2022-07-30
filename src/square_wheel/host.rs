@@ -1,5 +1,5 @@
 use super::{
-	commands_processor, commands_queue, config, console, debug_stats_printer::*, host_config::*, inline_models_index,
+	commands_processor, commands_queue, config, console, debug_stats_printer::*, host_config::*,
 	performance_counter::*, postprocessor::*, renderer, resources_manager::*, test_game, text_printer,
 	ticks_counter::*,
 };
@@ -31,7 +31,6 @@ struct ActiveMap
 {
 	game: test_game::Game,
 	renderer: renderer::Renderer,
-	inline_models_index: inline_models_index::InlineModelsIndex,
 	debug_stats_printer: DebugStatsPrinter,
 }
 
@@ -276,27 +275,22 @@ impl Host
 						pitch: hdr_buffer_size[0],
 					};
 
-					active_map.renderer.prepare_frame::<Color64>(
-						&hdr_surface_info,
-						frame_info_ref,
-						&active_map.inline_models_index,
-					);
+					active_map
+						.renderer
+						.prepare_frame::<Color64>(&hdr_surface_info, frame_info_ref);
 
 					active_map.renderer.draw_frame(
 						hdr_buffer,
 						&hdr_surface_info,
 						frame_info_ref,
-						&active_map.inline_models_index,
 						&mut active_map.debug_stats_printer,
 					);
 				}
 				else
 				{
-					active_map.renderer.prepare_frame::<Color32>(
-						&surface_info_initial,
-						frame_info_ref,
-						&active_map.inline_models_index,
-					);
+					active_map
+						.renderer
+						.prepare_frame::<Color32>(&surface_info_initial, frame_info_ref);
 				}
 			}
 		};
@@ -358,7 +352,6 @@ impl Host
 						pixels,
 						surface_info,
 						frame_info_ref,
-						&active_map.inline_models_index,
 						&mut active_map.debug_stats_printer,
 					);
 				}
@@ -422,9 +415,9 @@ impl Host
 					self.commands_processor.clone(),
 					self.console.clone(),
 					self.resources_manager.clone(),
+					map.clone(),
 				),
 				renderer: renderer::Renderer::new(self.resources_manager.clone(), self.app_config.clone(), map.clone()),
-				inline_models_index: inline_models_index::InlineModelsIndex::new(map),
 				debug_stats_printer: DebugStatsPrinter::new(self.config.show_debug_stats),
 			});
 

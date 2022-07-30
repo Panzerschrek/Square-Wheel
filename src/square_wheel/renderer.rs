@@ -30,6 +30,7 @@ pub struct Renderer
 	num_visible_surfaces_pixels: usize,
 	current_frame_visible_polygons: Vec<u32>,
 	mip_bias: f32,
+	inline_models_index: InlineModelsIndex,
 	// Material index and clipping polygon of current frame sky.
 	current_sky: Option<(u32, ClippingPolygon)>,
 	materials_processor: MapMaterialsProcessor,
@@ -137,6 +138,7 @@ impl Renderer
 			num_visible_surfaces_pixels: 0,
 			current_frame_visible_polygons: Vec::with_capacity(map.polygons.len()),
 			mip_bias: 0.0,
+			inline_models_index: InlineModelsIndex::new(map.clone()),
 			current_sky: None,
 			visibility_calculator: MapVisibilityCalculator::new(map.clone()),
 			shadows_maps_renderer: DepthRenderer::new(map.clone()),
@@ -155,7 +157,6 @@ impl Renderer
 		&mut self,
 		surface_info: &system_window::SurfaceInfo,
 		frame_info: &FrameInfo,
-		inline_models_index: &InlineModelsIndex,
 	)
 	{
 		let performance_counters_ptr = self.performance_counters.clone();
@@ -210,6 +211,8 @@ impl Renderer
 			&mut performance_counters.visible_leafs_search,
 		);
 
+		self.inline_models_index.position_models(&frame_info.submodel_entities);
+
 		run_with_measure(
 			|| {
 				self.dynamic_models_index.position_models(&frame_info.model_entities);
@@ -221,7 +224,7 @@ impl Renderer
 
 		run_with_measure(
 			|| {
-				self.prepare_polygons_surfaces(&frame_info.camera_matrices, inline_models_index);
+				self.prepare_polygons_surfaces(&frame_info.camera_matrices);
 				self.allocate_surfaces_pixels::<ColorT>();
 
 				// TODO - avoid allocation.
@@ -241,7 +244,6 @@ impl Renderer
 		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
 		frame_info: &FrameInfo,
-		inline_models_index: &InlineModelsIndex,
 		debug_stats_printer: &mut DebugStatsPrinter,
 	)
 	{
@@ -269,7 +271,6 @@ impl Renderer
 					surface_info,
 					&frame_info.camera_matrices,
 					&frame_info.skybox_angles,
-					inline_models_index,
 					&frame_info.model_entities,
 					root_node,
 				)
@@ -279,19 +280,13 @@ impl Renderer
 
 		if debug_stats_printer.show_debug_stats()
 		{
-			self.print_debug_stats(
-				frame_info,
-				inline_models_index,
-				debug_stats_printer,
-				&performance_counters,
-			);
+			self.print_debug_stats(frame_info, debug_stats_printer, &performance_counters);
 		}
 	}
 
 	fn print_debug_stats(
 		&mut self,
 		frame_info: &FrameInfo,
-		inline_models_index: &InlineModelsIndex,
 		debug_stats_printer: &mut DebugStatsPrinter,
 		performance_counters: &RendererPerformanceCounters,
 	)
@@ -307,7 +302,7 @@ impl Renderer
 				.is_some()
 			{
 				num_visible_leafs += 1;
-				num_visible_submodels_parts += inline_models_index.get_leaf_models(leaf_index as u32).len();
+				num_visible_submodels_parts += self.inline_models_index.get_leaf_models(leaf_index as u32).len();
 				num_visible_meshes_parts += self.dynamic_models_index.get_leaf_models(leaf_index as u32).len();
 			}
 		}
@@ -525,7 +520,6 @@ impl Renderer
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
 		skybox_angles: &EulerAnglesF,
-		inline_models_index: &InlineModelsIndex,
 		models: &[ModelEntity],
 		root_node: u32,
 	)
@@ -570,7 +564,6 @@ impl Renderer
 				&mut rasterizer,
 				camera_matrices,
 				&viewport_clipping_polygon,
-				inline_models_index,
 				models,
 				root_node,
 			);
@@ -640,7 +633,6 @@ impl Renderer
 					&mut rasterizer,
 					camera_matrices,
 					&viewport_clipping_polygon,
-					inline_models_index,
 					models,
 					root_node,
 				);
@@ -660,7 +652,7 @@ impl Renderer
 		}
 	}
 
-	fn prepare_polygons_surfaces(&mut self, camera_matrices: &CameraMatrices, inline_models_index: &InlineModelsIndex)
+	fn prepare_polygons_surfaces(&mut self, camera_matrices: &CameraMatrices)
 	{
 		self.current_frame_visible_polygons.clear();
 
@@ -693,7 +685,7 @@ impl Renderer
 		for model_index in 0 .. self.map.submodels.len()
 		{
 			let mut bounds: Option<ClippingPolygon> = None;
-			for &leaf_index in inline_models_index.get_model_leafs(model_index as u32)
+			for &leaf_index in self.inline_models_index.get_model_leafs(model_index as u32)
 			{
 				if let Some(leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf_index)
 				{
@@ -719,7 +711,14 @@ impl Renderer
 
 			let submodel = &self.map.submodels[model_index];
 
-			let model_matrix = inline_models_index.get_model_matrix(model_index as u32);
+			let model_matrix = if let Some(m) = self.inline_models_index.get_model_matrix(model_index as u32)
+			{
+				m
+			}
+			else
+			{
+				continue;
+			};
 			let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
 			let model_matrices = CameraMatrices {
 				view_matrix: camera_matrices.view_matrix * model_matrix,
@@ -1273,7 +1272,6 @@ impl Renderer
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		camera_matrices: &CameraMatrices,
 		viewport_clipping_polygon: &ClippingPolygon,
-		inline_models_index: &InlineModelsIndex,
 		models: &[ModelEntity],
 		current_index: u32,
 	)
@@ -1286,14 +1284,7 @@ impl Renderer
 				leaf_bounds.intersect(viewport_clipping_polygon);
 				if leaf_bounds.is_valid_and_non_empty()
 				{
-					self.draw_leaf(
-						rasterizer,
-						camera_matrices,
-						&leaf_bounds,
-						inline_models_index,
-						models,
-						leaf,
-					);
+					self.draw_leaf(rasterizer, camera_matrices, &leaf_bounds, models, leaf);
 				}
 			}
 		}
@@ -1312,7 +1303,6 @@ impl Renderer
 					rasterizer,
 					camera_matrices,
 					viewport_clipping_polygon,
-					inline_models_index,
 					models,
 					node.children[(i ^ mask) as usize],
 				);
@@ -1325,7 +1315,6 @@ impl Renderer
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		camera_matrices: &CameraMatrices,
 		bounds: &ClippingPolygon,
-		inline_models_index: &InlineModelsIndex,
 		models: &[ModelEntity],
 		leaf_index: u32,
 	)
@@ -1360,7 +1349,7 @@ impl Renderer
 
 		// Draw contents of leaf - submodels and triangle models.
 
-		let leaf_submodels = inline_models_index.get_leaf_models(leaf_index);
+		let leaf_submodels = self.inline_models_index.get_leaf_models(leaf_index);
 		let leaf_dynamic_models = self.dynamic_models_index.get_leaf_models(leaf_index);
 		if leaf_submodels.is_empty() && leaf_dynamic_models.is_empty()
 		{
@@ -1451,17 +1440,19 @@ impl Renderer
 		if leaf_submodels.len() == 1 && leaf_dynamic_models.len() == 0
 		{
 			// TODO - cache matrices?
-			let model_matrix = inline_models_index.get_model_matrix(leaf_submodels[0] as u32);
-			let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
-			let planes_matrix = camera_matrices.planes_matrix * model_matrix_inverse;
+			if let Some(model_matrix) = self.inline_models_index.get_model_matrix(leaf_submodels[0] as u32)
+			{
+				let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
+				let planes_matrix = camera_matrices.planes_matrix * model_matrix_inverse;
 
-			self.draw_submodel_in_leaf(
-				rasterizer,
-				&planes_matrix,
-				&clip_planes,
-				&leaf_clip_planes[.. num_clip_planes],
-				leaf_submodels[0],
-			);
+				self.draw_submodel_in_leaf(
+					rasterizer,
+					&planes_matrix,
+					&clip_planes,
+					&leaf_clip_planes[.. num_clip_planes],
+					leaf_submodels[0],
+				);
+			}
 			return;
 		}
 		if leaf_submodels.len() == 0 && leaf_dynamic_models.len() == 1
@@ -1488,21 +1479,23 @@ impl Renderer
 
 		for (&model_index, model_for_sorting) in leaf_submodels.iter().zip(models_for_sorting.iter_mut())
 		{
-			let bbox = inline_models_index.get_model_bbox_for_ordering(model_index);
-			let model_matrix = inline_models_index.get_model_matrix(model_index as u32);
-			let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
+			let bbox = self.inline_models_index.get_model_bbox_for_ordering(model_index);
+			if let Some(model_matrix) = self.inline_models_index.get_model_matrix(model_index as u32)
+			{
+				let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
 
-			*model_for_sorting = (
-				model_index,
-				draw_ordering::project_bbox(
-					&bbox,
-					&CameraMatrices {
-						view_matrix: camera_matrices.view_matrix * model_matrix,
-						planes_matrix: camera_matrices.planes_matrix * model_matrix_inverse,
-						position: camera_matrices.position,
-					},
-				),
-			);
+				*model_for_sorting = (
+					model_index,
+					draw_ordering::project_bbox(
+						&bbox,
+						&CameraMatrices {
+							view_matrix: camera_matrices.view_matrix * model_matrix,
+							planes_matrix: camera_matrices.planes_matrix * model_matrix_inverse,
+							position: camera_matrices.position,
+						},
+					),
+				);
+			}
 		}
 		let mut num_models = std::cmp::min(leaf_submodels.len(), MAX_SUBMODELS_IN_LEAF);
 
@@ -1560,16 +1553,18 @@ impl Renderer
 			else
 			{
 				// TODO - cache matrices?
-				let model_matrix = inline_models_index.get_model_matrix(*submodel_index as u32);
-				let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
-				let planes_matrix = camera_matrices.planes_matrix * model_matrix_inverse;
-				self.draw_submodel_in_leaf(
-					rasterizer,
-					&planes_matrix,
-					&clip_planes,
-					&leaf_clip_planes[.. num_clip_planes],
-					*submodel_index,
-				);
+				if let Some(model_matrix) = self.inline_models_index.get_model_matrix(*submodel_index as u32)
+				{
+					let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
+					let planes_matrix = camera_matrices.planes_matrix * model_matrix_inverse;
+					self.draw_submodel_in_leaf(
+						rasterizer,
+						&planes_matrix,
+						&clip_planes,
+						&leaf_clip_planes[.. num_clip_planes],
+						*submodel_index,
+					);
+				}
 			}
 		}
 	}

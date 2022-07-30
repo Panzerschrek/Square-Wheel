@@ -1,5 +1,6 @@
 use super::{commands_processor, commands_queue, console, frame_info::*, light::*, resources_manager::*};
-use common::{camera_controller, math_types::*, matrix::*, system_window};
+use common::{bsp_map_compact, camera_controller, math_types::*, matrix::*, system_window};
+use std::sync::Arc;
 
 pub struct Game
 {
@@ -8,6 +9,7 @@ pub struct Game
 	resources_manager: ResourcesManagerSharedPtr,
 	commands_queue: commands_queue::CommandsQueuePtr<Game>,
 	camera: camera_controller::CameraController,
+	submodels: Vec<SubmodelEntityOpt>,
 	test_lights: Vec<PointLight>,
 	test_models: Vec<ModelEntity>,
 	view_model: Option<ModelEntity>,
@@ -20,6 +22,7 @@ impl Game
 		commands_processor: commands_processor::CommandsProcessorPtr,
 		console: console::ConsoleSharedPtr,
 		resources_manager: ResourcesManagerSharedPtr,
+		map: Arc<bsp_map_compact::BSPMap>,
 	) -> Self
 	{
 		let commands_queue = commands_queue::CommandsQueue::new(vec![
@@ -40,12 +43,15 @@ impl Game
 			.unwrap()
 			.register_command_queue(commands_queue.clone() as commands_queue::CommandsQueueDynPtr);
 
+		let submodels = vec![None; map.submodels.len()];
+
 		Self {
 			commands_processor,
 			console,
 			resources_manager,
 			commands_queue,
 			camera: camera_controller::CameraController::new(),
+			submodels,
 			test_lights: Vec::new(),
 			test_models: Vec::new(),
 			view_model: None,
@@ -62,6 +68,23 @@ impl Game
 	{
 		self.process_commands();
 		self.game_time += time_delta_s;
+
+		for (index, submodel_opt) in self.submodels.iter_mut().enumerate()
+		{
+			let phase = index as f32;
+			*submodel_opt = Some(SubmodelEntity {
+				angle_z: Rad((0.0625 * self.game_time + phase).sin() * 0.25),
+				shift: 32.0 *
+					Vec3f::new(
+						(0.5 * self.game_time + phase).sin(),
+						(0.33 * self.game_time + phase).sin(),
+						(0.11111 * self.game_time + phase).sin(),
+					),
+			});
+		}
+
+		let hide_submodel_index = self.game_time as usize % self.submodels.len();
+		self.submodels[hide_submodel_index] = None;
 
 		for model in &mut self.test_models
 		{
@@ -101,6 +124,7 @@ impl Game
 
 		FrameInfo {
 			camera_matrices,
+			submodel_entities: self.submodels.clone(),
 			skybox_angles: EulerAnglesF::new(Rad(0.0), Rad(0.0), Rad(0.0)),
 			game_time_s: self.game_time,
 			lights: self.test_lights.clone(),
