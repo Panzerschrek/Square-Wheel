@@ -711,7 +711,14 @@ impl Renderer
 
 			let submodel = &self.map.submodels[model_index];
 
-			let model_matrix = self.inline_models_index.get_model_matrix(model_index as u32);
+			let model_matrix = if let Some(m) = self.inline_models_index.get_model_matrix(model_index as u32)
+			{
+				m
+			}
+			else
+			{
+				continue;
+			};
 			let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
 			let model_matrices = CameraMatrices {
 				view_matrix: camera_matrices.view_matrix * model_matrix,
@@ -1433,17 +1440,19 @@ impl Renderer
 		if leaf_submodels.len() == 1 && leaf_dynamic_models.len() == 0
 		{
 			// TODO - cache matrices?
-			let model_matrix = self.inline_models_index.get_model_matrix(leaf_submodels[0] as u32);
-			let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
-			let planes_matrix = camera_matrices.planes_matrix * model_matrix_inverse;
+			if let Some(model_matrix) = self.inline_models_index.get_model_matrix(leaf_submodels[0] as u32)
+			{
+				let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
+				let planes_matrix = camera_matrices.planes_matrix * model_matrix_inverse;
 
-			self.draw_submodel_in_leaf(
-				rasterizer,
-				&planes_matrix,
-				&clip_planes,
-				&leaf_clip_planes[.. num_clip_planes],
-				leaf_submodels[0],
-			);
+				self.draw_submodel_in_leaf(
+					rasterizer,
+					&planes_matrix,
+					&clip_planes,
+					&leaf_clip_planes[.. num_clip_planes],
+					leaf_submodels[0],
+				);
+			}
 			return;
 		}
 		if leaf_submodels.len() == 0 && leaf_dynamic_models.len() == 1
@@ -1471,20 +1480,22 @@ impl Renderer
 		for (&model_index, model_for_sorting) in leaf_submodels.iter().zip(models_for_sorting.iter_mut())
 		{
 			let bbox = self.inline_models_index.get_model_bbox_for_ordering(model_index);
-			let model_matrix = self.inline_models_index.get_model_matrix(model_index as u32);
-			let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
+			if let Some(model_matrix) = self.inline_models_index.get_model_matrix(model_index as u32)
+			{
+				let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
 
-			*model_for_sorting = (
-				model_index,
-				draw_ordering::project_bbox(
-					&bbox,
-					&CameraMatrices {
-						view_matrix: camera_matrices.view_matrix * model_matrix,
-						planes_matrix: camera_matrices.planes_matrix * model_matrix_inverse,
-						position: camera_matrices.position,
-					},
-				),
-			);
+				*model_for_sorting = (
+					model_index,
+					draw_ordering::project_bbox(
+						&bbox,
+						&CameraMatrices {
+							view_matrix: camera_matrices.view_matrix * model_matrix,
+							planes_matrix: camera_matrices.planes_matrix * model_matrix_inverse,
+							position: camera_matrices.position,
+						},
+					),
+				);
+			}
 		}
 		let mut num_models = std::cmp::min(leaf_submodels.len(), MAX_SUBMODELS_IN_LEAF);
 
@@ -1542,16 +1553,18 @@ impl Renderer
 			else
 			{
 				// TODO - cache matrices?
-				let model_matrix = self.inline_models_index.get_model_matrix(*submodel_index as u32);
-				let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
-				let planes_matrix = camera_matrices.planes_matrix * model_matrix_inverse;
-				self.draw_submodel_in_leaf(
-					rasterizer,
-					&planes_matrix,
-					&clip_planes,
-					&leaf_clip_planes[.. num_clip_planes],
-					*submodel_index,
-				);
+				if let Some(model_matrix) = self.inline_models_index.get_model_matrix(*submodel_index as u32)
+				{
+					let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
+					let planes_matrix = camera_matrices.planes_matrix * model_matrix_inverse;
+					self.draw_submodel_in_leaf(
+						rasterizer,
+						&planes_matrix,
+						&clip_planes,
+						&leaf_clip_planes[.. num_clip_planes],
+						*submodel_index,
+					);
+				}
 			}
 		}
 	}

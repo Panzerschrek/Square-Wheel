@@ -6,16 +6,17 @@ pub struct FrameInfo
 	pub camera_matrices: CameraMatrices,
 	pub game_time_s: f32,
 	// submodels mapped 1 to 1 to initial submodels.
-	pub submodel_entities: Vec<SubmodelEntity>,
+	pub submodel_entities: Vec<SubmodelEntityOpt>,
 	pub model_entities: Vec<ModelEntity>,
 	pub lights: Vec<PointLight>,
 	pub skybox_angles: EulerAnglesF,
 }
 
-#[derive(Clone)]
+pub type SubmodelEntityOpt = Option<SubmodelEntity>;
+
+#[derive(Copy, Clone, PartialEq)]
 pub struct SubmodelEntity
 {
-	// TODO - support submodels hiding?
 	pub shift: Vec3f,
 	pub angle_z: RadiansF,
 }

@@ -10,7 +10,7 @@ pub struct Game
 	commands_queue: commands_queue::CommandsQueuePtr<Game>,
 	map: Arc<bsp_map_compact::BSPMap>,
 	camera: camera_controller::CameraController,
-	submodels: Vec<SubmodelEntity>,
+	submodels: Vec<SubmodelEntityOpt>,
 	test_lights: Vec<PointLight>,
 	test_models: Vec<ModelEntity>,
 	view_model: Option<ModelEntity>,
@@ -45,10 +45,10 @@ impl Game
 			.register_command_queue(commands_queue.clone() as commands_queue::CommandsQueueDynPtr);
 
 		let submodels = vec![
-			SubmodelEntity {
+			Some(SubmodelEntity {
 				shift: Vec3f::zero(),
 				angle_z: Rad(0.0)
-			};
+			});
 			map.submodels.len()
 		];
 

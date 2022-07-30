@@ -20,10 +20,7 @@ struct ModelInfo
 {
 	leafs: Vec<u32>,
 	bbox: BBox,
-	shift: Vec3f,
-	// Rotation relative bbox center.
-	// TODO - support arbitrary rotation.
-	angle_z: RadiansF,
+	current_entity: SubmodelEntityOpt,
 }
 
 impl InlineModelsIndex
@@ -37,20 +34,14 @@ impl InlineModelsIndex
 		}
 	}
 
-	pub fn position_models(&mut self, submodels: &[SubmodelEntity])
+	pub fn position_models(&mut self, submodels: &[SubmodelEntityOpt])
 	{
 		for (index, submodel) in submodels.iter().enumerate()
 		{
-			self.reposition_model(index as u32, &submodel.shift, submodel.angle_z);
-		}
-	}
-
-	fn reposition_model(&mut self, model_index: u32, shift: &Vec3f, angle_z: RadiansF)
-	{
-		let model_info = &self.models_info[model_index as usize];
-		if model_info.shift != *shift || model_info.angle_z != angle_z
-		{
-			self.force_reposition_model(model_index, shift, angle_z);
+			if self.models_info[index as usize].current_entity != *submodel
+			{
+				self.force_reposition_model(index as u32, submodel);
+			}
 		}
 	}
 
@@ -79,17 +70,12 @@ impl InlineModelsIndex
 		bbox
 	}
 
-	pub fn get_model_matrix(&self, model_index: u32) -> Mat4f
+	pub fn get_model_matrix(&self, model_index: u32) -> Option<Mat4f>
 	{
-		let model_info = &self.models_info[model_index as usize];
-		let center = model_info.bbox.get_center();
-		Mat4f::from_translation(model_info.shift) *
-			Mat4f::from_translation(center) *
-			Mat4f::from_angle_z(model_info.angle_z) *
-			Mat4f::from_translation(-center)
+		get_model_matrix(&self.models_info[model_index as usize])
 	}
 
-	fn force_reposition_model(&mut self, model_index: u32, shift: &Vec3f, angle_z: RadiansF)
+	fn force_reposition_model(&mut self, model_index: u32, submodel_opt: &SubmodelEntityOpt)
 	{
 		// First, erase this model index from models list of all leafs where this model was before.
 		let model_info = &mut self.models_info[model_index as usize];
@@ -102,14 +88,20 @@ impl InlineModelsIndex
 		model_info.leafs.clear();
 
 		// Set new position.
-		model_info.shift = *shift;
-		model_info.angle_z = angle_z;
+		model_info.current_entity = *submodel_opt;
 
-		let bbox = model_info.bbox;
-		let transform_matrix = self.get_model_matrix(model_index);
+		let transform_matrix = if let Some(m) = get_model_matrix(model_info)
+		{
+			m
+		}
+		else
+		{
+			return;
+		};
 
 		// Calculate trasformed bounding box vertices.
-		let bbox_vertices = bbox
+		let bbox_vertices = model_info
+			.bbox
 			.get_corners_vertices()
 			.map(|v| (transform_matrix * v.extend(1.0)).truncate());
 
@@ -178,8 +170,24 @@ fn prepare_model_info(map: &bsp_map_compact::BSPMap, submodel: &bsp_map_compact:
 	ModelInfo {
 		leafs: Vec::new(),
 		bbox,
-		// Use impossible shift in order to reposition model on first attempt.
-		shift: Vec3f::new(1.0e24, 1.0e24, 1.0e24),
-		angle_z: Rad(0.0),
+		current_entity: None,
+	}
+}
+
+fn get_model_matrix(model_info: &ModelInfo) -> Option<Mat4f>
+{
+	if let Some(e) = &model_info.current_entity
+	{
+		let center = model_info.bbox.get_center();
+		Some(
+			Mat4f::from_translation(e.shift) *
+				Mat4f::from_translation(center) *
+				Mat4f::from_angle_z(e.angle_z) *
+				Mat4f::from_translation(-center),
+		)
+	}
+	else
+	{
+		None
 	}
 }
