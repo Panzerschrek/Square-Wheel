@@ -1,28 +1,20 @@
 use super::{bsp_map_compact, math_types::*};
 
-pub fn get_shadow_factor(from: &Vec3f, to: &Vec3f, map: &bsp_map_compact::BSPMap) -> f32
-{
-	// TODO - calculate proper shadow factor.
-	if can_see(from, to, map)
-	{
-		0.0
-	}
-	else
-	{
-		1.0
-	}
-}
-
 pub fn can_see(from: &Vec3f, to: &Vec3f, map: &bsp_map_compact::BSPMap) -> bool
 {
+	get_shadow_factor(from, to, map) > 0.0
+}
+
+pub fn get_shadow_factor(from: &Vec3f, to: &Vec3f, map: &bsp_map_compact::BSPMap) -> f32
+{
 	let root_node = (map.nodes.len() - 1) as u32;
-	can_see_r(from, to, root_node, map)
+	get_shadow_factor_r(from, to, root_node, map)
 	// TODO - check intersection with submodel polygons?
 }
 
 // Speed-up intersection calculation - recursively determine loction of check edge withing BSP tree.
 // Than check only leafs where edge is actually located.
-fn can_see_r(v0: &Vec3f, v1: &Vec3f, current_index: u32, map: &bsp_map_compact::BSPMap) -> bool
+fn get_shadow_factor_r(v0: &Vec3f, v1: &Vec3f, current_index: u32, map: &bsp_map_compact::BSPMap) -> f32
 {
 	if current_index >= bsp_map_compact::FIRST_LEAF_INDEX
 	{
@@ -32,10 +24,10 @@ fn can_see_r(v0: &Vec3f, v1: &Vec3f, current_index: u32, map: &bsp_map_compact::
 		{
 			if edge_intersects_with_polygon(v0, v1, (leaf.first_polygon + i) as usize, map)
 			{
-				return false;
+				return 0.0;
 			}
 		}
-		return true;
+		return 1.0;
 	}
 	else
 	{
@@ -44,11 +36,11 @@ fn can_see_r(v0: &Vec3f, v1: &Vec3f, current_index: u32, map: &bsp_map_compact::
 		let dist1 = v1.dot(node.plane.vec) - node.plane.dist;
 		if dist0 >= 0.0 && dist1 >= 0.0
 		{
-			return can_see_r(v0, v1, node.children[0], map);
+			return get_shadow_factor_r(v0, v1, node.children[0], map);
 		}
 		if dist0 <= 0.0 && dist1 <= 0.0
 		{
-			return can_see_r(v0, v1, node.children[1], map);
+			return get_shadow_factor_r(v0, v1, node.children[1], map);
 		}
 
 		// Split edge using BSP node plane.
@@ -57,7 +49,7 @@ fn can_see_r(v0: &Vec3f, v1: &Vec3f, current_index: u32, map: &bsp_map_compact::
 		if dist_sum.abs() < MIN_POSITIVE_VALUE
 		{
 			// Edge is almost on polygon plane.
-			return true;
+			return 1.0;
 		}
 		let k0 = dist0 / dist_sum;
 		let k1 = dist1 / dist_sum;
@@ -72,16 +64,20 @@ fn can_see_r(v0: &Vec3f, v1: &Vec3f, current_index: u32, map: &bsp_map_compact::
 		let intersection_pos_front = intersection_pos * (1.0 - eps) + v_back * eps;
 		let intersection_pos_back = intersection_pos * (1.0 - eps) + v_front * eps;
 
-		if !can_see_r(v_front, &intersection_pos_front, node.children[0], map)
+		let shadow_factor_front = get_shadow_factor_r(v_front, &intersection_pos_front, node.children[0], map);
+		if shadow_factor_front <= 0.0
 		{
-			return false;
-		}
-		if !can_see_r(&intersection_pos_back, v_back, node.children[1], map)
-		{
-			return false;
+			return 0.0;
 		}
 
-		return true;
+		let shadow_factor_back = get_shadow_factor_r(&intersection_pos_back, v_back, node.children[1], map);
+		if shadow_factor_back <= 0.0
+		{
+			return 0.0;
+		}
+
+		// Absorb light by pots sub-paths - front and back.
+		return shadow_factor_front * shadow_factor_back;
 	}
 }
 
