@@ -1,4 +1,38 @@
-use super::{bsp_map_compact, math_types::*};
+use super::{bsp_map_compact, material::*, math_types::*};
+
+pub type MaterialsOpacityTable = Vec<f32>;
+
+pub fn build_materials_opacity_table(map: &bsp_map_compact::BSPMap, materials: &MaterialsMap) -> MaterialsOpacityTable
+{
+	map.textures
+		.iter()
+		.map(|texture_name| get_texture_opacity(texture_name, materials))
+		.collect()
+}
+
+fn get_texture_opacity(texture_name: &bsp_map_compact::Texture, materials: &MaterialsMap) -> f32
+{
+	if let Some(material) = materials.get(bsp_map_compact::get_texture_string(texture_name))
+	{
+		if material.shadow
+		{
+			match material.blending_mode
+			{
+				BlendingMode::None => 0.0,
+				BlendingMode::Average => 0.5,
+				BlendingMode::Additive => 1.0,
+			}
+		}
+		else
+		{
+			1.0
+		}
+	}
+	else
+	{
+		0.0
+	}
+}
 
 pub fn can_see(from: &Vec3f, to: &Vec3f, map: &bsp_map_compact::BSPMap) -> bool
 {

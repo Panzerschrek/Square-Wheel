@@ -45,6 +45,8 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 
 	let visibility_matrix = pvs::calculate_visibility_matrix(&map);
 
+	let opacity_table = build_materials_opacity_table(map, materials);
+
 	build_primary_lightmaps(
 		sample_grid_size,
 		&lights_by_leaf,

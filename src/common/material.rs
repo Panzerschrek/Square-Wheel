@@ -38,6 +38,11 @@ pub struct Material
 	#[serde(default = "default_true")]
 	pub blocks_view: bool,
 
+	/// Polygons with this material cast shadows.
+	/// This flag is used during light calculations.
+	#[serde(default = "default_true")]
+	pub shadow: bool,
+
 	/// If true - polygon is affected by light and has lightmap.
 	#[serde(default = "default_true")]
 	pub light: bool,
@@ -117,6 +122,7 @@ impl Default for Material
 			bsp: true,
 			draw: true,
 			blocks_view: true,
+			shadow: true,
 			light: true,
 			emissive_light: [0.0, 0.0, 0.0],
 			blending_mode: BlendingMode::None,
