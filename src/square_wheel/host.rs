@@ -422,6 +422,7 @@ impl Host
 					self.commands_processor.clone(),
 					self.console.clone(),
 					self.resources_manager.clone(),
+					map.clone(),
 				),
 				renderer: renderer::Renderer::new(self.resources_manager.clone(), self.app_config.clone(), map.clone()),
 				inline_models_index: inline_models_index::InlineModelsIndex::new(map),

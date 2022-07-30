@@ -1,5 +1,6 @@
 use super::{commands_processor, commands_queue, console, frame_info::*, light::*, resources_manager::*};
-use common::{camera_controller, math_types::*, matrix::*, system_window};
+use common::{bsp_map_compact, camera_controller, math_types::*, matrix::*, system_window};
+use std::sync::Arc;
 
 pub struct Game
 {
@@ -7,6 +8,7 @@ pub struct Game
 	console: console::ConsoleSharedPtr,
 	resources_manager: ResourcesManagerSharedPtr,
 	commands_queue: commands_queue::CommandsQueuePtr<Game>,
+	map: Arc<bsp_map_compact::BSPMap>,
 	camera: camera_controller::CameraController,
 	test_lights: Vec<PointLight>,
 	test_models: Vec<ModelEntity>,
@@ -20,6 +22,7 @@ impl Game
 		commands_processor: commands_processor::CommandsProcessorPtr,
 		console: console::ConsoleSharedPtr,
 		resources_manager: ResourcesManagerSharedPtr,
+		map: Arc<bsp_map_compact::BSPMap>,
 	) -> Self
 	{
 		let commands_queue = commands_queue::CommandsQueue::new(vec![
@@ -45,6 +48,7 @@ impl Game
 			console,
 			resources_manager,
 			commands_queue,
+			map,
 			camera: camera_controller::CameraController::new(),
 			test_lights: Vec::new(),
 			test_models: Vec::new(),
