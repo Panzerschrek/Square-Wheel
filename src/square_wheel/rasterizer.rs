@@ -756,6 +756,31 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		vertices: &[TrianglePointProjected; 3],
 		texture_info: &TextureInfo,
 		texture_data: &[TextureColorT],
+		blending_mode: BlendingMode,
+	)
+	{
+		match blending_mode
+		{
+			BlendingMode::None =>
+			{
+				self.fill_triangle_impl::<TextureColorT, BLENDING_MODE_NONE>(vertices, texture_info, texture_data)
+			},
+			BlendingMode::Average =>
+			{
+				self.fill_triangle_impl::<TextureColorT, BLENDING_MODE_AVERAGE>(vertices, texture_info, texture_data)
+			},
+			BlendingMode::Additive =>
+			{
+				self.fill_triangle_impl::<TextureColorT, BLENDING_MODE_ADDITIVE>(vertices, texture_info, texture_data)
+			},
+		}
+	}
+
+	pub fn fill_triangle_impl<TextureColorT: AbstractColor, const BLENDING_MODE: usize>(
+		&mut self,
+		vertices: &[TrianglePointProjected; 3],
+		texture_info: &TextureInfo,
+		texture_data: &[TextureColorT],
 	)
 	{
 		// Sort triangle vertices.
@@ -846,7 +871,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				d_light_dx[i] = fixed16_div(long_edge_light_in_middle[i] - middle_vertex.light[i], middle_dx);
 			}
 
-			self.fill_triangle_part(
+			self.fill_triangle_part::<TextureColorT, BLENDING_MODE>(
 				lower_vertex.y,
 				middle_vertex.y,
 				PolygonSide {
@@ -866,7 +891,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				texture_info,
 				texture_data,
 			);
-			self.fill_triangle_part(
+			self.fill_triangle_part::<TextureColorT, BLENDING_MODE>(
 				middle_vertex.y,
 				upper_vertex.y,
 				PolygonSide {
@@ -913,7 +938,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				d_light_dx[i] = fixed16_div(middle_vertex.light[i] - long_edge_light_in_middle[i], middle_dx);
 			}
 
-			self.fill_triangle_part(
+			self.fill_triangle_part::<TextureColorT, BLENDING_MODE>(
 				lower_vertex.y,
 				middle_vertex.y,
 				PolygonSide {
@@ -933,7 +958,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				texture_info,
 				texture_data,
 			);
-			self.fill_triangle_part(
+			self.fill_triangle_part::<TextureColorT, BLENDING_MODE>(
 				middle_vertex.y,
 				upper_vertex.y,
 				PolygonSide {
@@ -956,7 +981,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		}
 	}
 
-	fn fill_triangle_part<TextureColorT: AbstractColor>(
+	fn fill_triangle_part<TextureColorT: AbstractColor, const BLENDING_MODE: usize>(
 		&mut self,
 		y_start: Fixed16,
 		y_end: Fixed16,
@@ -1055,7 +1080,20 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					let texel_vec = texel.into();
 					let texel_vec_lighted = ColorVecI::shift_right::<16>(&ColorVecI::mul(&texel_vec, &line_light));
 
-					*dst_pixel = texel_vec_lighted.into();
+					let texel_converted = texel_vec_lighted.into();
+					if BLENDING_MODE == BLENDING_MODE_NONE
+					{
+						*dst_pixel = texel_converted;
+					}
+					else if BLENDING_MODE == BLENDING_MODE_AVERAGE
+					{
+						*dst_pixel = ColorT::average(*dst_pixel, texel_converted);
+					}
+					else if BLENDING_MODE == BLENDING_MODE_ADDITIVE
+					{
+						*dst_pixel = ColorT::saturated_sum(*dst_pixel, texel_converted);
+					}
+
 					for i in 0 .. 2
 					{
 						line_tc[i] += d_line_tc[i];

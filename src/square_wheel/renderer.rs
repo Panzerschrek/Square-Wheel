@@ -1709,6 +1709,9 @@ impl Renderer
 
 		let model = &models[visible_dynamic_mesh.entity_index as usize];
 
+		// TODO - maybe specialize inner loop for each blending mode?
+		let blending_mode = model.blending_mode;
+
 		// Find clip planes that affect this model.
 		// TODO - use uninitialized memory.
 		let mut clip_planes_3d = [Plane {
@@ -1839,6 +1842,7 @@ impl Renderer
 					&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
 					&texture_info,
 					texture_data,
+					blending_mode,
 				);
 			} // for subtriangles
 		} // For triangles

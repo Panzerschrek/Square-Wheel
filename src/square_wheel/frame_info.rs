@@ -1,5 +1,5 @@
 use super::{light::*, resources_manager::*, triangle_model::*};
-use common::{bbox::*, image::*, math_types::*, matrix::*};
+use common::{bbox::*, image::*, material, math_types::*, matrix::*};
 
 pub struct FrameInfo
 {
@@ -29,6 +29,7 @@ pub struct ModelEntity
 	pub animation: AnimationPoint,
 	pub model: SharedResourcePtr<TriangleModel>,
 	pub texture: SharedResourcePtr<Image>,
+	pub blending_mode: material::BlendingMode,
 
 	// Weapon or thing in player's hands.
 	// Draw it always and after any other models.

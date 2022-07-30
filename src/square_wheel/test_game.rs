@@ -1,5 +1,5 @@
 use super::{commands_processor, commands_queue, console, frame_info::*, light::*, resources_manager::*};
-use common::{bsp_map_compact, camera_controller, math_types::*, matrix::*, system_window};
+use common::{bsp_map_compact, camera_controller, material, math_types::*, matrix::*, system_window};
 use std::sync::Arc;
 
 pub struct Game
@@ -258,6 +258,7 @@ impl Game
 			},
 			model,
 			texture,
+			blending_mode: material::BlendingMode::None,
 			is_view_model: false,
 			ordering_custom_bbox: None,
 		});
@@ -289,6 +290,7 @@ impl Game
 			},
 			model,
 			texture,
+			blending_mode: material::BlendingMode::Average,
 			is_view_model: true,
 			ordering_custom_bbox: None,
 		});
