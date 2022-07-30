@@ -26,7 +26,6 @@ struct ModelInfo
 	angle_z: RadiansF,
 }
 
-#[allow(dead_code)]
 impl InlineModelsIndex
 {
 	pub fn new(map: Arc<bsp_map_compact::BSPMap>) -> Self
@@ -65,11 +64,6 @@ impl InlineModelsIndex
 		&self.models_info[model_index as usize].leafs
 	}
 
-	pub fn get_model_bbox_initial(&self, model_index: u32) -> &BBox
-	{
-		&self.models_info[model_index as usize].bbox
-	}
-
 	pub fn get_model_bbox_for_ordering(&self, model_index: u32) -> BBox
 	{
 		// Reduce slightly bbox of inline models that is used for ordering to fix some glitches in cases with touching models.
@@ -83,11 +77,6 @@ impl InlineModelsIndex
 		bbox.max.z = (bbox.max.z - eps).max(center.z);
 		bbox.min.z = (bbox.min.z + eps).min(center.z);
 		bbox
-	}
-
-	pub fn get_num_models(&self) -> usize
-	{
-		self.models_info.len()
 	}
 
 	pub fn get_model_matrix(&self, model_index: u32) -> Mat4f
@@ -189,7 +178,8 @@ fn prepare_model_info(map: &bsp_map_compact::BSPMap, submodel: &bsp_map_compact:
 	ModelInfo {
 		leafs: Vec::new(),
 		bbox,
-		shift: Vec3f::zero(),
+		// Use impossible shift in order to reposition model on first attempt.
+		shift: Vec3f::new(1.0e24, 1.0e24, 1.0e24),
 		angle_z: Rad(0.0),
 	}
 }
