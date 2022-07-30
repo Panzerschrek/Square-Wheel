@@ -5,9 +5,17 @@ pub struct FrameInfo
 {
 	pub camera_matrices: CameraMatrices,
 	pub game_time_s: f32,
+	pub submodel_entities: Vec<SubmodelEntity>,
 	pub model_entities: Vec<ModelEntity>,
 	pub lights: Vec<PointLight>,
 	pub skybox_angles: EulerAnglesF,
+}
+
+#[derive(Clone)]
+pub struct SubmodelEntity
+{
+	pub shift: Vec3f,
+	pub angle_z: f32,
 }
 
 #[derive(Clone)]

@@ -10,6 +10,7 @@ pub struct Game
 	commands_queue: commands_queue::CommandsQueuePtr<Game>,
 	map: Arc<bsp_map_compact::BSPMap>,
 	camera: camera_controller::CameraController,
+	submodels: Vec<SubmodelEntity>,
 	test_lights: Vec<PointLight>,
 	test_models: Vec<ModelEntity>,
 	view_model: Option<ModelEntity>,
@@ -43,6 +44,14 @@ impl Game
 			.unwrap()
 			.register_command_queue(commands_queue.clone() as commands_queue::CommandsQueueDynPtr);
 
+		let submodels = vec![
+			SubmodelEntity {
+				shift: Vec3f::zero(),
+				angle_z: 0.0
+			};
+			map.submodels.len()
+		];
+
 		Self {
 			commands_processor,
 			console,
@@ -50,6 +59,7 @@ impl Game
 			commands_queue,
 			map,
 			camera: camera_controller::CameraController::new(),
+			submodels,
 			test_lights: Vec::new(),
 			test_models: Vec::new(),
 			view_model: None,
@@ -105,6 +115,7 @@ impl Game
 
 		FrameInfo {
 			camera_matrices,
+			submodel_entities: self.submodels.clone(),
 			skybox_angles: EulerAnglesF::new(Rad(0.0), Rad(0.0), Rad(0.0)),
 			game_time_s: self.game_time,
 			lights: self.test_lights.clone(),
