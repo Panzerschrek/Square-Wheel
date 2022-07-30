@@ -1,5 +1,18 @@
 use super::{bsp_map_compact, math_types::*};
 
+pub fn get_shadow_factor(from: &Vec3f, to: &Vec3f, map: &bsp_map_compact::BSPMap) -> f32
+{
+	// TODO - calculate proper shadow factor.
+	if can_see(from, to, map)
+	{
+		0.0
+	}
+	else
+	{
+		1.0
+	}
+}
+
 pub fn can_see(from: &Vec3f, to: &Vec3f, map: &bsp_map_compact::BSPMap) -> bool
 {
 	let root_node = (map.nodes.len() - 1) as u32;

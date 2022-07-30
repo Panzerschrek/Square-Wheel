@@ -561,13 +561,14 @@ fn build_primary_lightmap(
 						continue;
 					}
 
-					if !can_see(&light.pos, &pos, map)
+					let shadow_factor = get_shadow_factor(&light.pos, &pos, map);
+					if shadow_factor <= 0.0
 					{
 						// In shadow.
 						continue;
 					}
 
-					let light_scale = angle_cos / vec_to_light_len2;
+					let light_scale = shadow_factor * angle_cos / vec_to_light_len2;
 					let color_scaled = [
 						light.color[0] * light_scale,
 						light.color[1] * light_scale,
@@ -819,13 +820,14 @@ fn build_polygon_secondary_lightmap(
 							continue;
 						}
 
-						if !can_see(&sample.pos, &pos, map)
+						let shadow_factor = get_shadow_factor(&sample.pos, &pos, map);
+						if shadow_factor <= 0.0
 						{
 							// In shadow.
 							continue;
 						}
 
-						let light_scale = angle_cos * angle_cos_src / vec_to_light_len2.max(min_dist2);
+						let light_scale = shadow_factor * angle_cos * angle_cos_src / vec_to_light_len2.max(min_dist2);
 						let color_scaled = [
 							sample.color[0] * light_scale,
 							sample.color[1] * light_scale,
@@ -991,14 +993,15 @@ fn build_polygon_diretional_lightmap(
 						continue;
 					}
 
-					if !can_see(&primay_light.pos, &pos, map)
+					let shadow_factor = get_shadow_factor(&primay_light.pos, &pos, map);
+					if shadow_factor <= 0.0
 					{
 						// In shadow.
 						continue;
 					}
 
 					// Do not use agle cos because we add light into light hemisphere.
-					let light_scale = multi_sampling_scale / vec_to_light_len2;
+					let light_scale = shadow_factor * multi_sampling_scale / vec_to_light_len2;
 					let color_scaled = [
 						primay_light.color[0] * light_scale,
 						primay_light.color[1] * light_scale,
@@ -1072,7 +1075,8 @@ fn build_polygon_diretional_lightmap(
 								continue;
 							}
 
-							if !can_see(&sample.pos, &pos, map)
+							let shadow_factor = get_shadow_factor(&sample.pos, &pos, map);
+							if shadow_factor <= 0.0
 							{
 								// In shadow.
 								continue;
@@ -1082,7 +1086,7 @@ fn build_polygon_diretional_lightmap(
 
 							let vec_to_light_len2_clamped = vec_to_light_len2.max(min_dist2);
 
-							let light_scale = angle_cos_src / vec_to_light_len2_clamped;
+							let light_scale = shadow_factor * angle_cos_src / vec_to_light_len2_clamped;
 							let color_scaled = [
 								sample.color[0] * light_scale,
 								sample.color[1] * light_scale,
@@ -1731,14 +1735,15 @@ fn calculate_light_for_grid_point(
 			let vec_to_light = primay_light.pos - pos;
 			let vec_to_light_len2 = vec_to_light.magnitude2().max(min_light_square_dist);
 
-			if !can_see(&primay_light.pos, &pos, map)
+			let shadow_factor = get_shadow_factor(&primay_light.pos, &pos, map);
+			if shadow_factor <= 0.0
 			{
 				// In shadow.
 				continue;
 			}
 
 			// Do not use agle cos because we add light into light sphere.
-			let light_scale = 1.0 / vec_to_light_len2;
+			let light_scale = shadow_factor / vec_to_light_len2;
 			out_light_cube.add_light_sample(
 				&vec_to_light,
 				&[
@@ -1788,7 +1793,8 @@ fn calculate_light_for_grid_point(
 						continue;
 					}
 
-					if !can_see(&sample.pos, &pos, map)
+					let shadow_factor = get_shadow_factor(&sample.pos, &pos, map);
+					if shadow_factor <= 0.0
 					{
 						// In shadow.
 						continue;
@@ -1797,7 +1803,7 @@ fn calculate_light_for_grid_point(
 					// Do not use agle cos because we add light into light sphere.
 					let vec_to_light_len2_clamped = vec_to_light_len2.max(min_dist2);
 
-					let light_scale = angle_cos_src / vec_to_light_len2_clamped;
+					let light_scale = shadow_factor * angle_cos_src / vec_to_light_len2_clamped;
 					out_light_cube.add_light_sample(
 						&vec_to_light,
 						&[
