@@ -160,7 +160,17 @@ mod fast_math_impl
 
 		pub fn from_color_f32x3(c: &[f32; 3]) -> Self
 		{
+			Self::from_color_f32x3_with_zero(c)
+		}
+
+		pub fn from_color_f32x3_with_zero(c: &[f32; 3]) -> Self
+		{
 			unsafe { Self(_mm_set_ps(0.0, c[0], c[1], c[2])) }
+		}
+
+		pub fn from_color_f32x3_with_one(c: &[f32; 3]) -> Self
+		{
+			unsafe { Self(_mm_set_ps(1.0, c[0], c[1], c[2])) }
 		}
 
 		pub fn into_color_f32x3(&self) -> [f32; 3]
@@ -438,7 +448,17 @@ mod fast_math_impl
 
 		pub fn from_color_f32x3(c: &[f32; 3]) -> Self
 		{
+			Self::from_color_f32x3_with_zero(c)
+		}
+
+		pub fn from_color_f32x3_with_zero(c: &[f32; 3]) -> Self
+		{
 			Self([c[2], c[1], c[0], 0.0])
+		}
+
+		pub fn from_color_f32x3_with_one(c: &[f32; 3]) -> Self
+		{
+			Self([c[2], c[1], c[0], 1.0])
 		}
 
 		pub fn into_color_f32x3(&self) -> [f32; 3]
