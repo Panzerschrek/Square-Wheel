@@ -11,6 +11,7 @@ pub mod fixed_math;
 pub mod image;
 pub mod light_cube;
 pub mod light_hemisphere;
+pub mod light_trace;
 pub mod lightmap;
 pub mod lightmaps_builder;
 pub mod map_file_common;

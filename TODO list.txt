@@ -28,8 +28,7 @@ Renderer:
 * Decals
 
 Lightmapper:
-* Polygons without shadows
-* Semitransparent objects shadows
+* Colored shadows
 * Shadows from dynamic objects (configurable)
 
 Map compiler:

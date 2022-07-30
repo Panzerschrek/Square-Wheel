@@ -1,6 +1,6 @@
 use super::{
-	bsp_map_compact, image, light_cube::*, light_hemisphere::*, lightmap::*, map_file_common, material, math_types::*,
-	pvs, shared_mut_slice::*,
+	bsp_map_compact, image, light_cube::*, light_hemisphere::*, light_trace::*, lightmap::*, map_file_common, material,
+	math_types::*, pvs, shared_mut_slice::*,
 };
 use rayon::prelude::*;
 use std::{io::Write, sync::atomic};
@@ -45,10 +45,13 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 
 	let visibility_matrix = pvs::calculate_visibility_matrix(&map);
 
+	let opacity_table = build_materials_opacity_table(map, materials);
+
 	build_primary_lightmaps(
 		sample_grid_size,
 		&lights_by_leaf,
 		map,
+		&opacity_table,
 		&visibility_matrix,
 		&mut primary_lightmaps_data,
 	);
@@ -60,13 +63,14 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	if settings.build_emissive_surfaces_light
 	{
 		emissive_light_sources =
-			create_emissive_surfaces_light_sources(&emissive_light, map, primary_lightmaps_data.len());
+			create_emissive_surfaces_light_sources(&emissive_light, map, &opacity_table, primary_lightmaps_data.len());
 
 		let mut emissive_surfaces_lightmaps_data = vec![[0.0, 0.0, 0.0]; primary_lightmaps_data.len()];
 
 		build_secondary_lightmaps(
 			&emissive_light_sources,
 			map,
+			&opacity_table,
 			&visibility_matrix,
 			&mut emissive_surfaces_lightmaps_data,
 		);
@@ -90,13 +94,15 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		for _pass_num in 1 .. settings.num_passes.min(8)
 		{
 			let prev_pass_lightmap = passes_lightmaps.last().unwrap();
-			let secondary_light_sources = create_secondary_light_sources(&materials_albedo, map, &prev_pass_lightmap);
+			let secondary_light_sources =
+				create_secondary_light_sources(&materials_albedo, map, &opacity_table, &prev_pass_lightmap);
 
 			let mut secondary_lightmaps_data = vec![[0.0, 0.0, 0.0]; prev_pass_lightmap.len()];
 
 			build_secondary_lightmaps(
 				&secondary_light_sources,
 				map,
+				&opacity_table,
 				&visibility_matrix,
 				&mut secondary_lightmaps_data,
 			);
@@ -135,7 +141,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	// Build directional lightmaps and light grid using initial lights and secondary light sources based on combined lightmap.
 	let secondary_light_sources = if settings.save_secondary_light
 	{
-		create_secondary_light_sources(&materials_albedo, map, &map.lightmaps_data)
+		create_secondary_light_sources(&materials_albedo, map, &opacity_table, &map.lightmaps_data)
 	}
 	else
 	{
@@ -160,6 +166,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 			&secondary_light_sources,
 			&emissive_light_sources,
 			map,
+			&opacity_table,
 			&visibility_matrix,
 			&mut directional_lightmaps_data,
 		);
@@ -179,6 +186,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		&secondary_light_sources,
 		&emissive_light_sources,
 		map,
+		&opacity_table,
 		&visibility_matrix,
 	);
 	let (light_grid_columns, light_grid_samples) = compress_light_grid(map, &light_grid_uncompressed);
@@ -433,6 +441,7 @@ fn build_primary_lightmaps(
 	sample_grid_size: u32,
 	lights: &LightsByLeaf,
 	map: &bsp_map_compact::BSPMap,
+	opacity_table: &MaterialsOpacityTable,
 	visibility_matrix: &pvs::VisibilityMatrix,
 	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
 )
@@ -461,6 +470,7 @@ fn build_primary_lightmaps(
 				&visible_lights_list,
 				polygon,
 				map,
+				opacity_table,
 				lightmaps_data_unshared,
 			);
 
@@ -488,6 +498,7 @@ fn build_primary_lightmaps(
 				&visible_lights_list,
 				polygon,
 				map,
+				opacity_table,
 				lightmaps_data_unshared,
 			);
 
@@ -501,6 +512,7 @@ fn build_primary_lightmap(
 	lights: &[PointLight],
 	polygon: &bsp_map_compact::Polygon,
 	map: &bsp_map_compact::BSPMap,
+	opacity_table: &MaterialsOpacityTable,
 	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
 )
 {
@@ -548,7 +560,13 @@ fn build_primary_lightmap(
 			// This allow us to get (reltively) soft shadows.
 			for &sample_shift in &sample_grid[.. num_sample_grid_samples]
 			{
-				let pos = correct_sample_position(map, &(texel_pos + sample_shift), &lightmap_basis, &polygon_center);
+				let pos = correct_sample_position(
+					map,
+					opacity_table,
+					&(texel_pos + sample_shift),
+					&lightmap_basis,
+					&polygon_center,
+				);
 				for light in lights
 				{
 					let vec_to_light = light.pos - pos;
@@ -561,13 +579,14 @@ fn build_primary_lightmap(
 						continue;
 					}
 
-					if !can_see(&light.pos, &pos, map)
+					let shadow_factor = get_shadow_factor(&light.pos, &pos, map, opacity_table);
+					if shadow_factor <= 0.0
 					{
 						// In shadow.
 						continue;
 					}
 
-					let light_scale = angle_cos / vec_to_light_len2;
+					let light_scale = shadow_factor * angle_cos / vec_to_light_len2;
 					let color_scaled = [
 						light.color[0] * light_scale,
 						light.color[1] * light_scale,
@@ -588,6 +607,7 @@ fn build_primary_lightmap(
 fn build_secondary_lightmaps(
 	lights: &[SecondaryLightSource],
 	map: &bsp_map_compact::BSPMap,
+	opacity_table: &MaterialsOpacityTable,
 	visibility_matrix: &pvs::VisibilityMatrix,
 	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
 )
@@ -609,7 +629,14 @@ fn build_secondary_lightmaps(
 				// No lightmap for this polygon.
 				continue;
 			}
-			build_polygon_secondary_lightmap(lights, polygon_index, map, &visible_leafs_list, lightmaps_data_unshared);
+			build_polygon_secondary_lightmap(
+				lights,
+				polygon_index,
+				map,
+				opacity_table,
+				&visible_leafs_list,
+				lightmaps_data_unshared,
+			);
 
 			progress_tracker.process_polygon(&map.polygons[polygon_index]);
 		} // for leaf polygons.
@@ -628,7 +655,14 @@ fn build_secondary_lightmaps(
 				// No lightmap for this polygon.
 				continue;
 			}
-			build_polygon_secondary_lightmap(lights, polygon_index, map, &visible_leafs_list, lightmaps_data_unshared);
+			build_polygon_secondary_lightmap(
+				lights,
+				polygon_index,
+				map,
+				opacity_table,
+				&visible_leafs_list,
+				lightmaps_data_unshared,
+			);
 
 			progress_tracker.process_polygon(&map.polygons[polygon_index]);
 		} // for submodel polygons.
@@ -746,6 +780,7 @@ fn build_polygon_secondary_lightmap(
 	lights: &[SecondaryLightSource],
 	polygon_index: usize,
 	map: &bsp_map_compact::BSPMap,
+	opacity_table: &MaterialsOpacityTable,
 	visible_leafs: &[u32], // Leafs visible for this polygon.
 	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
 )
@@ -772,7 +807,13 @@ fn build_polygon_secondary_lightmap(
 			let pos_initial = start_pos_v + (u as f32) * lightmap_basis.u_vec;
 
 			let pos_sihfted_towards_center = pre_correct_secondary_light_sample_position(&pos_initial, &polygon_center);
-			let pos = correct_sample_position(map, &pos_sihfted_towards_center, &lightmap_basis, &polygon_center);
+			let pos = correct_sample_position(
+				map,
+				opacity_table,
+				&pos_sihfted_towards_center,
+				&lightmap_basis,
+				&polygon_center,
+			);
 
 			// Calculate light only from polygons in visible leafs.
 			for &leaf_index in visible_leafs
@@ -819,13 +860,14 @@ fn build_polygon_secondary_lightmap(
 							continue;
 						}
 
-						if !can_see(&sample.pos, &pos, map)
+						let shadow_factor = get_shadow_factor(&sample.pos, &pos, map, opacity_table);
+						if shadow_factor <= 0.0
 						{
 							// In shadow.
 							continue;
 						}
 
-						let light_scale = angle_cos * angle_cos_src / vec_to_light_len2.max(min_dist2);
+						let light_scale = shadow_factor * angle_cos * angle_cos_src / vec_to_light_len2.max(min_dist2);
 						let color_scaled = [
 							sample.color[0] * light_scale,
 							sample.color[1] * light_scale,
@@ -850,6 +892,7 @@ fn build_directional_lightmaps(
 	secondary_lights: &[SecondaryLightSource],
 	emissive_lights: &[SecondaryLightSource],
 	map: &bsp_map_compact::BSPMap,
+	opacity_table: &MaterialsOpacityTable,
 	visibility_matrix: &pvs::VisibilityMatrix,
 	lightmaps_data: &mut [bsp_map_compact::DirectionalLightmapElement],
 )
@@ -879,6 +922,7 @@ fn build_directional_lightmaps(
 				emissive_lights,
 				polygon_index,
 				map,
+				opacity_table,
 				&visible_leafs_list,
 				lightmaps_data_unshared,
 			);
@@ -908,6 +952,7 @@ fn build_directional_lightmaps(
 				emissive_lights,
 				polygon_index,
 				map,
+				opacity_table,
 				&visible_leafs_list,
 				lightmaps_data_unshared,
 			);
@@ -924,6 +969,7 @@ fn build_polygon_diretional_lightmap(
 	emissive_lights: &[SecondaryLightSource],
 	polygon_index: usize,
 	map: &bsp_map_compact::BSPMap,
+	opacity_table: &MaterialsOpacityTable,
 	visible_leafs: &[u32], // Leafs visible for this polygon.
 	lightmaps_data: &mut [bsp_map_compact::DirectionalLightmapElement],
 )
@@ -978,7 +1024,13 @@ fn build_polygon_diretional_lightmap(
 			// This allow us to get (reltively) soft shadows.
 			for &sample_shift in &sample_grid[.. num_sample_grid_samples]
 			{
-				let pos = correct_sample_position(map, &(texel_pos + sample_shift), &lightmap_basis, &polygon_center);
+				let pos = correct_sample_position(
+					map,
+					opacity_table,
+					&(texel_pos + sample_shift),
+					&lightmap_basis,
+					&polygon_center,
+				);
 
 				for primay_light in primary_lights
 				{
@@ -991,14 +1043,15 @@ fn build_polygon_diretional_lightmap(
 						continue;
 					}
 
-					if !can_see(&primay_light.pos, &pos, map)
+					let shadow_factor = get_shadow_factor(&primay_light.pos, &pos, map, opacity_table);
+					if shadow_factor <= 0.0
 					{
 						// In shadow.
 						continue;
 					}
 
 					// Do not use agle cos because we add light into light hemisphere.
-					let light_scale = multi_sampling_scale / vec_to_light_len2;
+					let light_scale = shadow_factor * multi_sampling_scale / vec_to_light_len2;
 					let color_scaled = [
 						primay_light.color[0] * light_scale,
 						primay_light.color[1] * light_scale,
@@ -1017,7 +1070,13 @@ fn build_polygon_diretional_lightmap(
 			} // For primary light sample shifts.
 
 			let pos_sihfted_towards_center = pre_correct_secondary_light_sample_position(&texel_pos, &polygon_center);
-			let pos = correct_sample_position(map, &pos_sihfted_towards_center, &lightmap_basis, &polygon_center);
+			let pos = correct_sample_position(
+				map,
+				opacity_table,
+				&pos_sihfted_towards_center,
+				&lightmap_basis,
+				&polygon_center,
+			);
 
 			// Calculate light only from polygons in visible leafs.
 			for light_set in [secondary_lights, emissive_lights]
@@ -1072,7 +1131,8 @@ fn build_polygon_diretional_lightmap(
 								continue;
 							}
 
-							if !can_see(&sample.pos, &pos, map)
+							let shadow_factor = get_shadow_factor(&sample.pos, &pos, map, opacity_table);
+							if shadow_factor <= 0.0
 							{
 								// In shadow.
 								continue;
@@ -1082,7 +1142,7 @@ fn build_polygon_diretional_lightmap(
 
 							let vec_to_light_len2_clamped = vec_to_light_len2.max(min_dist2);
 
-							let light_scale = angle_cos_src / vec_to_light_len2_clamped;
+							let light_scale = shadow_factor * angle_cos_src / vec_to_light_len2_clamped;
 							let color_scaled = [
 								sample.color[0] * light_scale,
 								sample.color[1] * light_scale,
@@ -1177,118 +1237,6 @@ fn get_polygon_center(map: &bsp_map_compact::BSPMap, polygon: &bsp_map_compact::
 	polygon_vertices_average / (polygon.num_vertices as f32)
 }
 
-fn can_see(from: &Vec3f, to: &Vec3f, map: &bsp_map_compact::BSPMap) -> bool
-{
-	let root_node = (map.nodes.len() - 1) as u32;
-	can_see_r(from, to, root_node, map)
-	// TODO - check intersection with submodel polygons?
-}
-
-// Speed-up intersection calculation - recursively determine loction of check edge withing BSP tree.
-// Than check only leafs where edge is actually located.
-fn can_see_r(v0: &Vec3f, v1: &Vec3f, current_index: u32, map: &bsp_map_compact::BSPMap) -> bool
-{
-	if current_index >= bsp_map_compact::FIRST_LEAF_INDEX
-	{
-		let leaf_index = current_index - bsp_map_compact::FIRST_LEAF_INDEX;
-		let leaf = &map.leafs[leaf_index as usize];
-		for i in 0 .. leaf.num_polygons
-		{
-			if edge_intersects_with_polygon(v0, v1, (leaf.first_polygon + i) as usize, map)
-			{
-				return false;
-			}
-		}
-		return true;
-	}
-	else
-	{
-		let node = &map.nodes[current_index as usize];
-		let dist0 = v0.dot(node.plane.vec) - node.plane.dist;
-		let dist1 = v1.dot(node.plane.vec) - node.plane.dist;
-		if dist0 >= 0.0 && dist1 >= 0.0
-		{
-			return can_see_r(v0, v1, node.children[0], map);
-		}
-		if dist0 <= 0.0 && dist1 <= 0.0
-		{
-			return can_see_r(v0, v1, node.children[1], map);
-		}
-
-		// Split edge using BSP node plane.
-
-		let dist_sum = dist1 - dist0;
-		if dist_sum.abs() < MIN_POSITIVE_VALUE
-		{
-			// Edge is almost on polygon plane.
-			return true;
-		}
-		let k0 = dist0 / dist_sum;
-		let k1 = dist1 / dist_sum;
-		let intersection_pos = v0 * k1 - v1 * k0;
-
-		let (v_front, v_back) = if dist0 > 0.0 { (v0, v1) } else { (v1, v0) };
-
-		// HACK!
-		// There is some problems with intersection detection if intersection polygon plane is same as BSP plane.
-		// So, extend edge a little bit behind splitter plane.
-		let eps = 1.0 / 1024.0;
-		let intersection_pos_front = intersection_pos * (1.0 - eps) + v_back * eps;
-		let intersection_pos_back = intersection_pos * (1.0 - eps) + v_front * eps;
-
-		if !can_see_r(v_front, &intersection_pos_front, node.children[0], map)
-		{
-			return false;
-		}
-		if !can_see_r(&intersection_pos_back, v_back, node.children[1], map)
-		{
-			return false;
-		}
-
-		return true;
-	}
-}
-
-fn edge_intersects_with_polygon(v0: &Vec3f, v1: &Vec3f, polygon_index: usize, map: &bsp_map_compact::BSPMap) -> bool
-{
-	let polygon = &map.polygons[polygon_index];
-	let plane = &polygon.plane;
-
-	let dist0 = v0.dot(plane.vec) - plane.dist;
-	let dist1 = v1.dot(plane.vec) - plane.dist;
-	if dist0.signum() == dist1.signum()
-	{
-		// Edge is located at one side of polygon plane.
-		return false;
-	}
-	let dist_sum = dist1 - dist0;
-	if dist_sum.abs() < MIN_POSITIVE_VALUE
-	{
-		// Edge is almost on polygon plane.
-		return false;
-	}
-	let k0 = dist0 / dist_sum;
-	let k1 = dist1 / dist_sum;
-	let intersection_pos = v0 * k1 - v1 * k0;
-
-	// TODO - extend polygon just a bit, to prevent light leakage between adjusted polygons.
-	for i in 0 .. polygon.num_vertices
-	{
-		let v = map.vertices[(polygon.first_vertex + i) as usize];
-		let next_v = map.vertices[(polygon.first_vertex + (i + 1) % polygon.num_vertices) as usize];
-		let edge_vec = next_v - v;
-		let vec_to_instersection_pos = intersection_pos - v;
-		let cross = vec_to_instersection_pos.cross(edge_vec);
-		let normal_dot = cross.dot(plane.vec);
-		if normal_dot < 0.0
-		{
-			return false;
-		}
-	}
-
-	true
-}
-
 pub type SecondaryLightSources = Vec<SecondaryLightSource>;
 
 pub struct SecondaryLightSource
@@ -1313,6 +1261,7 @@ pub struct SecondaryLightSourceSample
 pub fn create_secondary_light_sources(
 	materials_albedo: &[MaterialAlbedo],
 	map: &bsp_map_compact::BSPMap,
+	opacity_table: &MaterialsOpacityTable,
 	primary_lightmaps_data: &LightmapsData,
 ) -> SecondaryLightSources
 {
@@ -1335,6 +1284,7 @@ pub fn create_secondary_light_sources(
 			create_secondary_light_source(
 				materials_albedo,
 				map,
+				opacity_table,
 				primary_lightmaps_data,
 				polygon,
 				&mut sample_raster_data,
@@ -1350,6 +1300,7 @@ pub fn create_secondary_light_sources(
 fn create_emissive_surfaces_light_sources(
 	materials_emissive_light: &[[f32; 3]],
 	map: &bsp_map_compact::BSPMap,
+	opacity_table: &MaterialsOpacityTable,
 	lightmap_data_size: usize,
 ) -> SecondaryLightSources
 {
@@ -1377,6 +1328,7 @@ fn create_emissive_surfaces_light_sources(
 			create_secondary_light_source(
 				materials_emissive_light,
 				map,
+				opacity_table,
 				&all_ones_lightmap,
 				polygon,
 				&mut sample_raster_data,
@@ -1394,6 +1346,7 @@ type SampleRasterData = Vec<[f32; 3]>;
 fn create_secondary_light_source(
 	materials_albedo: &[MaterialAlbedo],
 	map: &bsp_map_compact::BSPMap,
+	opacity_table: &MaterialsOpacityTable,
 	primary_lightmaps_data: &LightmapsData,
 	polygon: &bsp_map_compact::Polygon,
 	sample_raster_data: &mut SampleRasterData,
@@ -1553,7 +1506,13 @@ fn create_secondary_light_source(
 				}
 
 				let pos = start_pos_v + ((u as f32) + 0.5) * cur_u_vec;
-				let pos_corrected = correct_sample_position(map, &pos, &lightmap_basis, &polygon_center_normal_shifted);
+				let pos_corrected = correct_sample_position(
+					map,
+					opacity_table,
+					&pos,
+					&lightmap_basis,
+					&polygon_center_normal_shifted,
+				);
 
 				samples.push(SecondaryLightSourceSample {
 					pos: pos_corrected,
@@ -1632,6 +1591,7 @@ fn calculate_light_grid(
 	secondary_lights: &[SecondaryLightSource],
 	emissive_lights: &[SecondaryLightSource],
 	map: &bsp_map_compact::BSPMap,
+	opacity_table: &MaterialsOpacityTable,
 	visibility_matrix: &pvs::VisibilityMatrix,
 ) -> LightGridUncompressed
 {
@@ -1697,6 +1657,7 @@ fn calculate_light_grid(
 						secondary_lights,
 						emissive_lights,
 						map,
+						opacity_table,
 						visibility_matrix,
 						min_light_square_dist,
 						&mut light_cube,
@@ -1821,6 +1782,7 @@ fn calculate_light_for_grid_point(
 	secondary_lights: &[SecondaryLightSource],
 	emissive_lights: &[SecondaryLightSource],
 	map: &bsp_map_compact::BSPMap,
+	opacity_table: &MaterialsOpacityTable,
 	visibility_matrix: &pvs::VisibilityMatrix,
 	min_light_square_dist: f32,
 	out_light_cube: &mut LightCube,
@@ -1843,14 +1805,15 @@ fn calculate_light_for_grid_point(
 			let vec_to_light = primay_light.pos - pos;
 			let vec_to_light_len2 = vec_to_light.magnitude2().max(min_light_square_dist);
 
-			if !can_see(&primay_light.pos, &pos, map)
+			let shadow_factor = get_shadow_factor(&primay_light.pos, &pos, map, opacity_table);
+			if shadow_factor <= 0.0
 			{
 				// In shadow.
 				continue;
 			}
 
 			// Do not use agle cos because we add light into light sphere.
-			let light_scale = 1.0 / vec_to_light_len2;
+			let light_scale = shadow_factor / vec_to_light_len2;
 			out_light_cube.add_light_sample(
 				&vec_to_light,
 				&[
@@ -1900,7 +1863,8 @@ fn calculate_light_for_grid_point(
 						continue;
 					}
 
-					if !can_see(&sample.pos, &pos, map)
+					let shadow_factor = get_shadow_factor(&sample.pos, &pos, map, opacity_table);
+					if shadow_factor <= 0.0
 					{
 						// In shadow.
 						continue;
@@ -1909,7 +1873,7 @@ fn calculate_light_for_grid_point(
 					// Do not use agle cos because we add light into light sphere.
 					let vec_to_light_len2_clamped = vec_to_light_len2.max(min_dist2);
 
-					let light_scale = angle_cos_src / vec_to_light_len2_clamped;
+					let light_scale = shadow_factor * angle_cos_src / vec_to_light_len2_clamped;
 					out_light_cube.add_light_sample(
 						&vec_to_light,
 						&[
@@ -2043,13 +2007,14 @@ fn pre_correct_secondary_light_sample_position(pos_initial: &Vec3f, polygon_cent
 
 fn correct_sample_position(
 	map: &bsp_map_compact::BSPMap,
+	opacity_table: &MaterialsOpacityTable,
 	pos: &Vec3f,
 	lightmap_basis: &LightmapBasis,
 	polygon_center: &Vec3f,
 ) -> Vec3f
 {
 	// Can see from sample point to polygon center - return initial sample point.
-	if can_see(pos, polygon_center, map)
+	if can_see(pos, polygon_center, map, opacity_table)
 	{
 		return *pos;
 	}
@@ -2074,7 +2039,7 @@ fn correct_sample_position(
 	for shift in SHIFT_VECS
 	{
 		let pos_corrected = pos + lightmap_basis.u_vec * shift[0] + lightmap_basis.v_vec * shift[1];
-		if can_see(&pos_corrected, polygon_center, map)
+		if can_see(&pos_corrected, polygon_center, map, opacity_table)
 		{
 			return pos_corrected;
 		}
@@ -2089,7 +2054,7 @@ fn correct_sample_position(
 		let vec_to_center_len = vec_to_center.magnitude().max(MIN_POSITIVE_VALUE);
 		let vec_to_center_normalized = vec_to_center / vec_to_center_len;
 		pos_corrected += vec_to_center_normalized * max_basis_vec_len.min(vec_to_center_len);
-		if can_see(&pos_corrected, polygon_center, map)
+		if can_see(&pos_corrected, polygon_center, map, opacity_table)
 		{
 			return pos_corrected;
 		}

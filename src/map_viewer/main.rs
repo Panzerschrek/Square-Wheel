@@ -2,8 +2,8 @@ mod debug_rasterizer;
 mod debug_renderer;
 
 use common::{
-	bsp_builder, bsp_map_compact_conversion, bsp_map_save_load, lightmaps_builder, map_file_q1, map_polygonizer,
-	material, matrix::*, system_window,
+	bsp_builder, bsp_map_compact_conversion, bsp_map_save_load, light_trace, lightmaps_builder, map_file_q1,
+	map_polygonizer, material, matrix::*, system_window,
 };
 use sdl2::{event::Event, keyboard::Keycode};
 use std::{path::PathBuf, time::Duration};
@@ -116,6 +116,8 @@ pub fn main()
 	{
 		if let Some(map_compact) = &mut map_bsp_compact_opt
 		{
+			let opacity_table = light_trace::build_materials_opacity_table(map_compact, &materials);
+
 			let materials_albedo = vec![lightmaps_builder::DEFAULT_ALBEDO; map_compact.textures.len()];
 			let mut lightmaps_data = lightmaps_builder::allocate_lightmaps(&materials, map_compact);
 			for l in &mut lightmaps_data
@@ -125,6 +127,7 @@ pub fn main()
 			secondary_ligt_sources = Some(lightmaps_builder::create_secondary_light_sources(
 				&materials_albedo,
 				map_compact,
+				&opacity_table,
 				&lightmaps_data,
 			));
 		}
