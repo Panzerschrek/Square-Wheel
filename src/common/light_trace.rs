@@ -46,7 +46,7 @@ pub fn get_shadow_factor(
 	opacity_table: &MaterialsOpacityTable,
 ) -> f32
 {
-	let root_node = (map.nodes.len() - 1) as u32;
+	let root_node = bsp_map_compact::get_root_node_index(map);
 	get_shadow_factor_r(from, to, root_node, map, opacity_table)
 	// TODO - check intersection with submodel polygons?
 }

@@ -255,8 +255,7 @@ pub fn get_submodel_bbox(map: &BSPMap, submodel: &Submodel) -> BBox
 
 pub fn get_leaf_for_point(map: &BSPMap, point: &Vec3f) -> u32
 {
-	let root_node = (map.nodes.len() - 1) as u32;
-	let mut index = root_node;
+	let mut index = get_root_node_index(map);
 	loop
 	{
 		if index >= FIRST_LEAF_INDEX
@@ -274,4 +273,9 @@ pub fn get_leaf_for_point(map: &BSPMap, point: &Vec3f) -> u32
 			node.children[1]
 		};
 	}
+}
+
+pub fn get_root_node_index(map: &BSPMap) -> u32
+{
+	(map.nodes.len() - 1) as u32
 }

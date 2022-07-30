@@ -52,7 +52,7 @@ impl MapVisibilityCalculator
 	pub fn update_visibility(&mut self, camera_matrices: &CameraMatrices, frame_bounds: &ClippingPolygon)
 	{
 		self.current_frame.next();
-		let root_node = (self.map.nodes.len() - 1) as u32;
+		let root_node = bsp_map_compact::get_root_node_index(&self.map);
 		let current_leaf = self.find_current_leaf(root_node, &camera_matrices.planes_matrix);
 		self.mark_reachable_leafs_iterative(current_leaf, camera_matrices, &frame_bounds);
 

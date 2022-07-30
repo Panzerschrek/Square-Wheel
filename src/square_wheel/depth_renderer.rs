@@ -25,7 +25,7 @@ impl DepthRenderer
 	pub fn draw_map(&mut self, pixels: &mut [f32], width: u32, height: u32, camera_matrices: &CameraMatrices)
 	{
 		let mut rasterizer = DepthRasterizer::new(pixels, width, height);
-		let root_node = (self.map.nodes.len() - 1) as u32;
+		let root_node = bsp_map_compact::get_root_node_index(&self.map);
 
 		// TODO - before preparing frame try to shift camera a little bit away from all planes of BSP nodes before current leaf.
 		// This is needed to fix possible z_near clipping of current leaf portals.

@@ -108,7 +108,7 @@ impl InlineModelsIndex
 			.map(|v| (transform_matrix * v.extend(1.0)).truncate());
 
 		// Place model in leafs.
-		let root_node = (self.map.nodes.len() - 1) as u32;
+		let root_node = bsp_map_compact::get_root_node_index(&self.map);
 		self.position_model_r(model_index, &bbox_vertices, root_node);
 	}
 

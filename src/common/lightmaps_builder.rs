@@ -712,7 +712,7 @@ fn get_visible_leafs_for_submodel(
 	let bbox_vertices = bbox.get_corners_vertices();
 
 	let mut submodel_leafs_list = Vec::new();
-	let root_node = (map.nodes.len() - 1) as u32;
+	let root_node = bsp_map_compact::get_root_node_index(map);
 	collect_submodel_leafs_r(map, &bbox_vertices, root_node, &mut submodel_leafs_list);
 
 	// Know which leafs are visible for submodel's leafs.

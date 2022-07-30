@@ -265,14 +265,12 @@ impl Renderer
 
 		run_with_measure(
 			|| {
-				let root_node = (self.map.nodes.len() - 1) as u32;
 				self.perform_rasterization(
 					pixels,
 					surface_info,
 					&frame_info.camera_matrices,
 					&frame_info.skybox_angles,
 					&frame_info.model_entities,
-					root_node,
 				)
 			},
 			&mut performance_counters.rasterization,
@@ -521,9 +519,10 @@ impl Renderer
 		camera_matrices: &CameraMatrices,
 		skybox_angles: &EulerAnglesF,
 		models: &[ModelEntity],
-		root_node: u32,
 	)
 	{
+		let root_node = bsp_map_compact::get_root_node_index(&self.map);
+
 		let screen_rect = rect_splitting::Rect {
 			min: Vec2f::new(0.0, 0.0),
 			max: Vec2f::new(surface_info.width as f32, surface_info.height as f32),
