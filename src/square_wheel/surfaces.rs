@@ -596,7 +596,8 @@ fn build_surface_impl_6_static_params<
 					total_light_albedo_modulated = ColorVec::scalar_mul(&constant_component, one_minus_specular_k);
 					total_light_direct = ColorVec::scalar_mul(&constant_component, specular_k);
 
-					// TODO - fix alpha for specular.
+					// Set alpha component to one to preserve alpha.
+					total_light_albedo_modulated.insert::<3>(1.0);
 
 					if let Some(directional_component) = LightmapElementOpsT::get_directional_component(&l_mixed)
 					{

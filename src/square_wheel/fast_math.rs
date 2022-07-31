@@ -214,6 +214,36 @@ mod fast_math_impl
 		{
 			unsafe { Self(_mm_div_ps(self.0, other.0)) }
 		}
+
+		pub fn insert<const INDEX: i32>(&mut self, scalar: f32)
+		{
+			unsafe {
+				let scalar_vec = _mm_broadcastss_ps(_mm_set1_ps(scalar));
+				match INDEX
+				{
+					0 =>
+					{
+						self.0 = _mm_blend_ps(self.0, scalar_vec, 1 << 0);
+					},
+					1 =>
+					{
+						self.0 = _mm_blend_ps(self.0, scalar_vec, 1 << 1);
+					},
+					2 =>
+					{
+						self.0 = _mm_blend_ps(self.0, scalar_vec, 1 << 2);
+					},
+					3 =>
+					{
+						self.0 = _mm_blend_ps(self.0, scalar_vec, 1 << 3);
+					},
+					_ =>
+					{
+						panic!("wrong index!")
+					},
+				}
+			}
+		}
 	} // impl ColorVec
 
 	impl From<ColorVecI> for ColorVec
@@ -539,6 +569,11 @@ mod fast_math_impl
 				self.0[2] / other.0[2],
 				self.0[3] / other.0[3],
 			])
+		}
+
+		pub fn insert<const INDEX: i32>(&mut self, scalar: f32)
+		{
+			self.0[INDEX as usize] = scalar;
 		}
 	} // impl ColorVec
 
