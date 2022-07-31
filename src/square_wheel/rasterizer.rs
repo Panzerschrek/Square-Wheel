@@ -1362,8 +1362,7 @@ fn write_into_framebuffer<ColorT: AbstractColor, const BLENDING_MODE: usize>(dst
 	}
 	else if BLENDING_MODE == BLENDING_MODE_ALPHA_BLEND
 	{
-		// TODO - optimize this, use premultiplied alpha.
-		*dst_pixel = ColorT::alpha_blend(*dst_pixel, texel);
+		*dst_pixel = ColorT::premultiplied_alpha_blend(*dst_pixel, texel);
 	}
 }
 

@@ -319,6 +319,11 @@ mod fast_math_impl
 			unsafe { Self(_mm_mullo_epi32(self.0, _mm_set_epi32(scalar, scalar, scalar, scalar))) }
 		}
 
+		pub fn shift_left<const COUNT: i32>(&self) -> Self
+		{
+			unsafe { Self(_mm_slli_epi32(self.0, COUNT)) }
+		}
+
 		pub fn shift_right<const COUNT: i32>(&self) -> Self
 		{
 			unsafe { Self(_mm_srai_epi32(self.0, COUNT)) }
@@ -647,6 +652,16 @@ mod fast_math_impl
 			for i in 0 .. 4
 			{
 				res[i] = self.0[i] * scalar
+			}
+			Self(res)
+		}
+
+		pub fn shift_left<const COUNT: i32>(&self) -> Self
+		{
+			let mut res = [0; 4];
+			for i in 0 .. 4
+			{
+				res[i] = self.0[i] << COUNT
 			}
 			Self(res)
 		}

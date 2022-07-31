@@ -1,5 +1,5 @@
 use super::{abstract_color::*, fast_math::*};
-use common::{color::*, image, math_types::*};
+use common::{color::*, image, material::*, math_types::*};
 
 // MAX_MIP must be not greater, than LIGHTMAP_SCALE_LOG2
 pub const MAX_MIP: usize = 3;
@@ -91,6 +91,7 @@ pub fn make_texture(
 	roughness: f32,
 	mut roughness_map: Option<image::Image>,
 	is_metal: bool,
+	blending_mode: BlendingMode,
 ) -> Texture
 {
 	let mut result = Texture {
@@ -150,6 +151,25 @@ pub fn make_texture(
 		.min(1.0);
 
 		dst.packed_normal_roughness = PackedNormalRoughness::pack(&normal, roughness);
+	}
+
+	if blending_mode == BlendingMode::AlphaBlend
+	{
+		// Premultiply color by alpha and invert alpha in order to speed-up result blending.
+		for pixel in &mut result.pixels
+		{
+			let alpha = pixel.diffuse.get_raw() >> 24;
+			let rgb = pixel.diffuse.get_rgb();
+
+			let rgb_scaled = [
+				((rgb[0] as u32) * alpha / 255) as u8,
+				((rgb[1] as u32) * alpha / 255) as u8,
+				((rgb[2] as u32) * alpha / 255) as u8,
+			];
+
+			let alpha_inverted = (255 - alpha) as u8;
+			pixel.diffuse = Color32::from_rgba(rgb_scaled[0], rgb_scaled[1], rgb_scaled[2], alpha_inverted);
+		}
 	}
 
 	result

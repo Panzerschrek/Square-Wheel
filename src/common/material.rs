@@ -65,7 +65,7 @@ pub struct Material
 	pub skybox: Option<SkyboxParams>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
 pub enum BlendingMode
 {
 	None,
