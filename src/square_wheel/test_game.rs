@@ -69,22 +69,29 @@ impl Game
 		self.process_commands();
 		self.game_time += time_delta_s;
 
-		for (index, submodel_opt) in self.submodels.iter_mut().enumerate()
+		let test_animate_submodels = false;
+		if test_animate_submodels
 		{
-			let phase = index as f32;
-			*submodel_opt = Some(SubmodelEntity {
-				angle_z: Rad((0.0625 * self.game_time + phase).sin() * 0.25),
-				shift: 32.0 *
-					Vec3f::new(
-						(0.5 * self.game_time + phase).sin(),
-						(0.33 * self.game_time + phase).sin(),
-						(0.11111 * self.game_time + phase).sin(),
-					),
-			});
-		}
+			for (index, submodel_opt) in self.submodels.iter_mut().enumerate()
+			{
+				let phase = index as f32;
+				*submodel_opt = Some(SubmodelEntity {
+					angle_z: Rad((0.0625 * self.game_time + phase).sin() * 0.25),
+					shift: 32.0 *
+						Vec3f::new(
+							(0.5 * self.game_time + phase).sin(),
+							(0.33 * self.game_time + phase).sin(),
+							(0.11111 * self.game_time + phase).sin(),
+						),
+				});
+			}
 
-		let hide_submodel_index = self.game_time as usize % self.submodels.len();
-		self.submodels[hide_submodel_index] = None;
+			if !self.submodels.is_empty()
+			{
+				let hide_submodel_index = self.game_time as usize % self.submodels.len();
+				self.submodels[hide_submodel_index] = None;
+			}
+		}
 
 		for model in &mut self.test_models
 		{
