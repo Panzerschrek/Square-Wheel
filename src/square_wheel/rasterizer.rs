@@ -19,6 +19,7 @@ const BLENDING_MODE_NONE: usize = 0;
 const BLENDING_MODE_AVERAGE: usize = 1;
 const BLENDING_MODE_ADDITIVE: usize = 2;
 const BLENDING_MODE_ALPHA_TEST: usize = 3;
+const BLENDING_MODE_ALPHA_BLEND: usize = 4;
 
 pub struct Rasterizer<'a, ColorT: AbstractColor>
 {
@@ -124,6 +125,14 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				),
 			BlendingMode::AlphaTest => self
 				.fill_polygon_impl_2_static_params::<TEXTURE_COORDINATES_INTERPOLATION_MODE, BLENDING_MODE_ALPHA_TEST>(
+					vertices,
+					depth_equation,
+					tex_coord_equation,
+					texture_info,
+					texture_data,
+				),
+			BlendingMode::AlphaBlend => self
+				.fill_polygon_impl_2_static_params::<TEXTURE_COORDINATES_INTERPOLATION_MODE, BLENDING_MODE_ALPHA_BLEND>(
 					vertices,
 					depth_equation,
 					tex_coord_equation,
@@ -753,6 +762,11 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			{
 				self.fill_triangle_impl::<TextureColorT, BLENDING_MODE_ALPHA_TEST>(vertices, texture_info, texture_data)
 			},
+			BlendingMode::AlphaBlend => self.fill_triangle_impl::<TextureColorT, BLENDING_MODE_ALPHA_BLEND>(
+				vertices,
+				texture_info,
+				texture_data,
+			),
 		}
 	}
 
@@ -1081,6 +1095,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 							*dst_pixel = texel_converted;
 						}
 					}
+					// TODO - support alpha-blend
 
 					for i in 0 .. 2
 					{
@@ -1344,6 +1359,11 @@ fn write_into_framebuffer<ColorT: AbstractColor, const BLENDING_MODE: usize>(dst
 		{
 			*dst_pixel = texel;
 		}
+	}
+	else if BLENDING_MODE == BLENDING_MODE_ALPHA_BLEND
+	{
+		// TODO - optimize this, use premultiplied alpha.
+		*dst_pixel = ColorT::alpha_blend(*dst_pixel, texel);
 	}
 }
 

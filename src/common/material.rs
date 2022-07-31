@@ -72,6 +72,7 @@ pub enum BlendingMode
 	Average,
 	Additive,
 	AlphaTest,
+	AlphaBlend,
 }
 
 impl Default for BlendingMode
