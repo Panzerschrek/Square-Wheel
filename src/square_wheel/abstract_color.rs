@@ -6,7 +6,7 @@ pub trait AbstractColor: Default + Copy + Send + Sync + From<ColorVec> + From<Co
 	fn average(a: Self, b: Self) -> Self;
 	fn saturated_sum(a: Self, b: Self) -> Self;
 	fn get_alpha(self) -> i32;
-	fn premultiplied_alpha_blend(dst: Self, src: Self) -> Self;
+	fn alpha_blend(dst: Self, src: Self) -> Self;
 	fn test_alpha(self) -> bool;
 }
 
@@ -27,15 +27,15 @@ impl AbstractColor for Color32
 		(self.get_raw() >> 24) as i32
 	}
 
-	fn premultiplied_alpha_blend(dst: Self, src: Self) -> Self
+	fn alpha_blend(dst: Self, src: Self) -> Self
 	{
-		let inverted_alpha = (src.get_raw() >> 24) as i32;
+		let alpha = src.get_alpha();
 		let dst_vec: ColorVecI = dst.into();
 		let src_vec: ColorVecI = src.into();
-		ColorVecI::add(
-			&ColorVecI::shift_right::<8>(&ColorVecI::mul_scalar(&dst_vec, inverted_alpha)),
-			&src_vec,
-		)
+		ColorVecI::shift_right::<8>(&ColorVecI::add(
+			&ColorVecI::mul_scalar(&dst_vec, 255 - alpha),
+			&ColorVecI::mul_scalar(&src_vec, alpha),
+		))
 		.into()
 	}
 
@@ -87,15 +87,15 @@ impl AbstractColor for Color64
 		(self.get_raw() >> 48) as i32
 	}
 
-	fn premultiplied_alpha_blend(dst: Self, src: Self) -> Self
+	fn alpha_blend(dst: Self, src: Self) -> Self
 	{
-		let inverted_alpha = (src.get_raw() >> 48) as i32;
+		let alpha = src.get_alpha();
 		let dst_vec: ColorVecI = dst.into();
 		let src_vec: ColorVecI = src.into();
-		ColorVecI::add(
-			&ColorVecI::shift_right::<8>(&ColorVecI::mul_scalar(&dst_vec, inverted_alpha)),
-			&src_vec,
-		)
+		ColorVecI::shift_right::<8>(&ColorVecI::add(
+			&ColorVecI::mul_scalar(&dst_vec, 255 - alpha),
+			&ColorVecI::mul_scalar(&src_vec, alpha),
+		))
 		.into()
 	}
 

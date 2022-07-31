@@ -301,14 +301,7 @@ fn load_texture(material: &Material, textures_path: &str) -> TextureWithMips
 		None
 	};
 
-	let mip0 = make_texture(
-		diffuse,
-		normals,
-		material.roughness,
-		roughness_map,
-		material.is_metal,
-		material.blending_mode,
-	);
+	let mip0 = make_texture(diffuse, normals, material.roughness, roughness_map, material.is_metal);
 
 	build_texture_mips(mip0)
 }
