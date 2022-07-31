@@ -1012,7 +1012,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			light_left[i] = light_start_left[i] + fixed16_mul(y_start_delta, d_light_left[i]);
 		}
 
-		let d_light_dx_vec = ColorVecI::from_color_i32x3_with_zero(&d_light_dx);
+		let d_light_dx_vec = ColorVecI::from_color_i32x3(&d_light_dx);
 
 		for y_int in y_start_int .. y_end_int
 		{
@@ -1047,7 +1047,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					};
 				}
 
-				let mut line_light = ColorVecI::from_color_i32x3_with_one(&[
+				let mut line_light = ColorVecI::from_color_i32x3(&[
 					light_left[0] + fixed16_mul(x_start_delta, d_light_dx[0]),
 					light_left[1] + fixed16_mul(x_start_delta, d_light_dx[1]),
 					light_left[2] + fixed16_mul(x_start_delta, d_light_dx[2]),
@@ -1074,28 +1074,37 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					let texel_vec = texel.into();
 					let texel_vec_lighted = ColorVecI::shift_right::<16>(&ColorVecI::mul(&texel_vec, &line_light));
 
-					let texel_converted = texel_vec_lighted.into();
 					// TODO - fix this, remove unnecessary conversions of ColorVecI
 					if BLENDING_MODE == BLENDING_MODE_NONE
 					{
-						*dst_pixel = texel_converted;
+						*dst_pixel = texel_vec_lighted.into();
 					}
 					else if BLENDING_MODE == BLENDING_MODE_AVERAGE
 					{
-						*dst_pixel = ColorT::average(*dst_pixel, texel_converted);
+						*dst_pixel = ColorT::average(*dst_pixel, texel_vec_lighted.into());
 					}
 					else if BLENDING_MODE == BLENDING_MODE_ADDITIVE
 					{
-						*dst_pixel = ColorT::saturated_sum(*dst_pixel, texel_converted);
+						*dst_pixel = ColorT::saturated_sum(*dst_pixel, texel_vec_lighted.into());
 					}
 					else if BLENDING_MODE == BLENDING_MODE_ALPHA_TEST
 					{
+						let texel_converted: ColorT = texel_vec_lighted.into();
 						if texel_converted.test_alpha()
 						{
 							*dst_pixel = texel_converted;
 						}
 					}
-					// TODO - support alpha-blend
+					else if BLENDING_MODE == BLENDING_MODE_ALPHA_BLEND
+					{
+						let alpha = texel.get_alpha();
+						let dst_vec: ColorVecI = (*dst_pixel).into();
+						let blend_result = ColorVecI::shift_right::<8>(&ColorVecI::add(
+							&ColorVecI::mul_scalar(&dst_vec, 255 - alpha),
+							&ColorVecI::mul_scalar(&texel_vec_lighted, alpha),
+						));
+						*dst_pixel = blend_result.into();
+					}
 
 					for i in 0 .. 2
 					{

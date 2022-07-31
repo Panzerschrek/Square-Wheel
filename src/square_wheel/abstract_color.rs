@@ -5,6 +5,7 @@ pub trait AbstractColor: Default + Copy + Send + Sync + From<ColorVec> + From<Co
 {
 	fn average(a: Self, b: Self) -> Self;
 	fn saturated_sum(a: Self, b: Self) -> Self;
+	fn get_alpha(self) -> i32;
 	fn premultiplied_alpha_blend(dst: Self, src: Self) -> Self;
 	fn test_alpha(self) -> bool;
 }
@@ -19,6 +20,11 @@ impl AbstractColor for Color32
 	fn saturated_sum(a: Self, b: Self) -> Self
 	{
 		color32_saturated_sum(a, b)
+	}
+
+	fn get_alpha(self) -> i32
+	{
+		(self.get_raw() >> 24) as i32
 	}
 
 	fn premultiplied_alpha_blend(dst: Self, src: Self) -> Self
@@ -74,6 +80,11 @@ impl AbstractColor for Color64
 	fn saturated_sum(a: Self, b: Self) -> Self
 	{
 		color64_saturated_sum(a, b)
+	}
+
+	fn get_alpha(self) -> i32
+	{
+		(self.get_raw() >> 48) as i32
 	}
 
 	fn premultiplied_alpha_blend(dst: Self, src: Self) -> Self
