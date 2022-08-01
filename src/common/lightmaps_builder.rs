@@ -1365,7 +1365,14 @@ fn create_secondary_light_source(
 
 	// Use constant albedo for whole polygon.
 	// TODO - maybe perform per-pixel albedo fetch?
-	let polygon_albedo = materials_albedo[polygon.texture as usize];
+	let mut polygon_albedo = materials_albedo[polygon.texture as usize];
+
+	// Make samples of semitransparent materials darker.
+	let albedo_opacity_scaler = 1.0 - opacity_table[polygon.texture as usize];
+	for i in 0 .. 3
+	{
+		polygon_albedo[i] *= albedo_opacity_scaler;
+	}
 
 	const SAMPLE_RASTER_SHIFT: u32 = 3;
 	const SAMPLE_RASTER_SIZE: u32 = 1 << SAMPLE_RASTER_SHIFT;
