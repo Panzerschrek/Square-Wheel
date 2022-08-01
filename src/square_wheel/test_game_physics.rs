@@ -70,6 +70,38 @@ impl TestGamePhysics
 		handle
 	}
 
+	pub fn add_self_propelled_object(&mut self, position: &Vec3f, width: f32, heigt: f32) -> ObjectHandle
+	{
+		// TODO - maybe tune physics and disable CCD?
+		let mut body = r3d::RigidBodyBuilder::dynamic()
+			.translation(r3d::Vector::new(position.x, position.y, position.z))
+			.ccd_enabled(true)
+			.linear_damping(4.0)
+			.angular_damping(4.0)
+			.build();
+
+		body.lock_rotations(true, true);
+
+		let mut collider = r3d::ColliderBuilder::capsule_z((heigt - width) * 0.5, width * 0.5)
+			.restitution(0.5)
+			.friction(0.5)
+			.build();
+
+		collider.set_mass(1.0);
+
+		let handle = self.rigid_body_set.insert(body);
+		self.collider_set
+			.insert_with_parent(collider, handle, &mut self.rigid_body_set);
+
+		handle
+	}
+
+	pub fn apply_impulse_to_self_propelled_object(&mut self, handle: ObjectHandle, impulse: &Vec3f)
+	{
+		let body = &mut self.rigid_body_set[handle];
+		body.apply_impulse(r3d::Vector::new(impulse.x, impulse.y, impulse.z), true);
+	}
+
 	pub fn remove_object(&mut self, handle: ObjectHandle)
 	{
 		self.rigid_body_set.remove(

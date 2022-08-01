@@ -1,7 +1,10 @@
 use super::{
 	commands_processor, commands_queue, console, frame_info::*, light::*, resources_manager::*, test_game_physics,
 };
-use common::{bsp_map_compact, camera_controller, material, math_types::*, matrix::*, system_window};
+use common::{
+	bsp_map_compact, camera_controller::*, camera_rotation_controller::*, material, math_types::*, matrix::*,
+	system_window,
+};
 use std::sync::Arc;
 
 pub struct Game
@@ -11,7 +14,7 @@ pub struct Game
 	resources_manager: ResourcesManagerSharedPtr,
 	commands_queue: commands_queue::CommandsQueuePtr<Game>,
 	physics: test_game_physics::TestGamePhysics,
-	camera: camera_controller::CameraController,
+	player_controller: PlayerController,
 	submodels: Vec<SubmodelEntityOpt>,
 	test_lights: Vec<PointLight>,
 	test_models: Vec<PhysicsTestModel>,
@@ -39,6 +42,7 @@ impl Game
 			("reset_test_models", Game::command_reset_test_models),
 			("set_view_model", Game::command_set_view_model),
 			("reset_view_model", Game::command_reset_view_model),
+			("noclip", Game::command_noclip),
 		]);
 
 		commands_processor
@@ -53,7 +57,7 @@ impl Game
 			console,
 			resources_manager,
 			commands_queue,
-			camera: camera_controller::CameraController::new(),
+			player_controller: PlayerController::NoclipController(CameraController::new()),
 			physics: test_game_physics::TestGamePhysics::new(map),
 			submodels,
 			test_lights: Vec::new(),
@@ -65,7 +69,52 @@ impl Game
 
 	pub fn process_input(&mut self, keyboard_state: &system_window::KeyboardState, time_delta_s: f32)
 	{
-		self.camera.update(keyboard_state, time_delta_s);
+		match &mut self.player_controller
+		{
+			PlayerController::NoclipController(camera_controller) =>
+			{
+				camera_controller.update(keyboard_state, time_delta_s)
+			},
+			PlayerController::PhysicsController(physics_controller) =>
+			{
+				physics_controller
+					.rotation_controller
+					.update(keyboard_state, time_delta_s);
+
+				let azimuth = physics_controller.rotation_controller.get_angles().0;
+				let forward_vector = Vec3f::new(-(azimuth.sin()), azimuth.cos(), 0.0);
+				let left_vector = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0);
+				let mut move_vector = Vec3f::new(0.0, 0.0, 0.0);
+				let impulse = 2048.0;
+
+				use sdl2::keyboard::Scancode;
+				if keyboard_state.contains(&Scancode::W)
+				{
+					move_vector += forward_vector;
+				}
+				if keyboard_state.contains(&Scancode::S)
+				{
+					move_vector -= forward_vector;
+				}
+				if keyboard_state.contains(&Scancode::D)
+				{
+					move_vector += left_vector;
+				}
+				if keyboard_state.contains(&Scancode::A)
+				{
+					move_vector -= left_vector;
+				}
+
+				let move_vector_length = move_vector.magnitude();
+				if move_vector_length > 0.0
+				{
+					move_vector = move_vector * (time_delta_s * impulse / move_vector_length);
+				}
+
+				self.physics
+					.apply_impulse_to_self_propelled_object(physics_controller.phys_handle, &move_vector);
+			},
+		}
 	}
 
 	pub fn update(&mut self, time_delta_s: f32)
@@ -116,10 +165,12 @@ impl Game
 
 	pub fn get_frame_info(&self, surface_info: &system_window::SurfaceInfo) -> FrameInfo
 	{
+		let (pos, angles) = self.get_camera_location();
+
 		let fov = std::f32::consts::PI * 0.375;
 		let camera_matrices = build_view_matrix_with_full_rotation(
-			self.camera.get_pos(),
-			self.camera.get_euler_angles(),
+			pos,
+			angles,
 			fov,
 			surface_info.width as f32,
 			surface_info.height as f32,
@@ -132,15 +183,16 @@ impl Game
 			.collect::<Vec<_>>();
 		if let Some(mut view_model) = self.view_model.clone()
 		{
-			let azimuth = self.camera.get_angles().0;
+			let azimuth = self.get_camera_angles().0;
 
 			// TODO - use also camera elevation.
 			let shift_vec_front = Vec3f::new(-azimuth.sin(), azimuth.cos(), 0.0) * 16.0;
 			let shift_vec_left = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0) * 8.0;
 			let shift_vec_down = Vec3f::new(0.0, 0.0, -1.0) * 10.0;
 
-			view_model.position = self.camera.get_pos() + shift_vec_front + shift_vec_left + shift_vec_down;
-			view_model.angles = self.camera.get_euler_angles();
+			let (pos, angles) = self.get_camera_location();
+			view_model.position = pos + shift_vec_front + shift_vec_left + shift_vec_down;
+			view_model.angles = angles;
 			model_entities.push(view_model);
 		}
 
@@ -154,6 +206,47 @@ impl Game
 		}
 	}
 
+	fn get_camera_location(&self) -> (Vec3f, EulerAnglesF)
+	{
+		match &self.player_controller
+		{
+			PlayerController::NoclipController(camera_controller) =>
+			{
+				(camera_controller.get_pos(), camera_controller.get_euler_angles())
+			},
+			PlayerController::PhysicsController(physics_controller) => (
+				self.physics.get_object_location(physics_controller.phys_handle).0,
+				physics_controller.rotation_controller.get_euler_angles(),
+			),
+		}
+	}
+
+	fn get_camera_angles(&self) -> (f32, f32, f32)
+	{
+		match &self.player_controller
+		{
+			PlayerController::NoclipController(camera_controller) => camera_controller.get_angles(),
+			PlayerController::PhysicsController(physics_controller) =>
+			{
+				physics_controller.rotation_controller.get_angles()
+			},
+		}
+	}
+
+	fn set_camera_angles(&mut self, azimuth: f32, elevation: f32, roll: f32)
+	{
+		match &mut self.player_controller
+		{
+			PlayerController::NoclipController(camera_controller) =>
+			{
+				camera_controller.set_angles(azimuth, elevation, roll)
+			},
+			PlayerController::PhysicsController(physics_controller) => physics_controller
+				.rotation_controller
+				.set_angles(azimuth, elevation, roll),
+		}
+	}
+
 	fn process_commands(&mut self)
 	{
 		let queue_ptr_copy = self.commands_queue.clone();
@@ -162,7 +255,7 @@ impl Game
 
 	fn command_get_pos(&mut self, _args: commands_queue::CommandArgs)
 	{
-		let pos = self.camera.get_pos();
+		let pos = self.get_camera_location().0;
 		self.console
 			.lock()
 			.unwrap()
@@ -179,7 +272,18 @@ impl Game
 
 		if let (Ok(x), Ok(y), Ok(z)) = (args[0].parse::<f32>(), args[1].parse::<f32>(), args[2].parse::<f32>())
 		{
-			self.camera.set_pos(&Vec3f::new(x, y, z));
+			let pos = Vec3f::new(x, y, z);
+			match &mut self.player_controller
+			{
+				PlayerController::NoclipController(camera_controller) =>
+				{
+					camera_controller.set_pos(&pos);
+				},
+				PlayerController::PhysicsController(physics_controller) =>
+				{
+					// TODO
+				},
+			}
 		}
 		else
 		{
@@ -192,7 +296,7 @@ impl Game
 
 	fn command_get_angles(&mut self, _args: commands_queue::CommandArgs)
 	{
-		let angles = self.camera.get_angles();
+		let angles = self.get_camera_angles();
 		self.console
 			.lock()
 			.unwrap()
@@ -220,7 +324,7 @@ impl Game
 
 		if let (Ok(azimuth), Ok(elevation)) = (azimuth, elevation)
 		{
-			self.camera.set_angles(azimuth, elevation, roll);
+			self.set_camera_angles(azimuth, elevation, roll);
 		}
 		else
 		{
@@ -242,7 +346,7 @@ impl Game
 		if let (Ok(r), Ok(g), Ok(b)) = (args[0].parse::<f32>(), args[1].parse::<f32>(), args[2].parse::<f32>())
 		{
 			self.test_lights.push(PointLight {
-				pos: self.camera.get_pos(),
+				pos: self.get_camera_location().0,
 				color: [r * 1024.0, g * 1024.0, b * 1024.0],
 			});
 		}
@@ -271,8 +375,7 @@ impl Game
 		let model = self.resources_manager.lock().unwrap().get_model(&args[0]);
 		let texture = self.resources_manager.lock().unwrap().get_image(&args[1]);
 
-		let pos = self.camera.get_pos();
-		let angles = self.camera.get_euler_angles();
+		let (pos, angles) = self.get_camera_location();
 		let bbox = model.frames_info[0].bbox;
 
 		self.test_models.push(PhysicsTestModel {
@@ -333,6 +436,39 @@ impl Game
 	{
 		self.view_model = None;
 	}
+
+	fn command_noclip(&mut self, _args: commands_queue::CommandArgs)
+	{
+		let (pos, _) = self.get_camera_location();
+		let angles = self.get_camera_angles();
+
+		if let PlayerController::PhysicsController(physics_controller) = &self.player_controller
+		{
+			self.physics.remove_object(physics_controller.phys_handle);
+
+			let mut camera_controller = CameraController::new();
+			camera_controller.set_pos(&pos);
+			camera_controller.set_angles(angles.0, angles.1, angles.2);
+
+			self.player_controller = PlayerController::NoclipController(camera_controller);
+
+			self.console.lock().unwrap().add_text("Noclip ON".to_string());
+		}
+		else
+		{
+			let mut rotation_controller = CameraRotationController::new();
+			rotation_controller.set_angles(angles.0, angles.1, angles.2);
+
+			let controller = PlayerPhysicsController {
+				phys_handle: self.physics.add_self_propelled_object(&pos, 60.0, 120.0),
+				rotation_controller,
+			};
+
+			self.player_controller = PlayerController::PhysicsController(controller);
+
+			self.console.lock().unwrap().add_text("Noclip OFF".to_string());
+		}
+	}
 }
 
 impl Drop for Game
@@ -351,4 +487,16 @@ struct PhysicsTestModel
 {
 	phys_handle: test_game_physics::ObjectHandle,
 	draw_entity: ModelEntity,
+}
+
+enum PlayerController
+{
+	NoclipController(CameraController),
+	PhysicsController(PlayerPhysicsController),
+}
+
+struct PlayerPhysicsController
+{
+	rotation_controller: CameraRotationController,
+	phys_handle: test_game_physics::ObjectHandle,
 }
