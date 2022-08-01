@@ -48,11 +48,14 @@ impl CameraController
 
 	pub fn get_euler_angles(&self) -> EulerAnglesF
 	{
-		EulerAnglesF::new(
-			self.roll,
-			-self.elevation,
-			self.azimuth + Rad(std::f32::consts::PI * 0.5),
-		)
+		// Find proper angles by constructing inverse Euler angles and calculation of inverse transformation (for quaternions).
+		let angles_initial = EulerAnglesF::new(
+			-self.roll,
+			self.elevation,
+			-self.azimuth - Rad(std::f32::consts::PI * 0.5),
+		);
+		let quat = QuaternionF::from(angles_initial);
+		EulerAnglesF::from(quat.conjugate() / quat.magnitude2())
 	}
 
 	pub fn set_angles(&mut self, azimuth: f32, elevation: f32, roll: f32)
