@@ -50,7 +50,7 @@ impl TestGamePhysics
 		// TODO - maybe tune physics and disable CCD?
 		let body = r3d::RigidBodyBuilder::dynamic()
 			.translation(r3d::Vector::new(position.x, position.y, position.z))
-			.rotation(r3d::AngVector::new(rotation.x.0, rotation.y.0, rotation.z.0))
+			.rotation(euler_angles_to_ang_vector(rotation))
 			.ccd_enabled(true)
 			.build();
 
@@ -154,4 +154,18 @@ fn make_map_collider(map: &bsp_map_compact::BSPMap) -> r3d::Collider
 	// TODO - ignore submodels polygons and polygons without collisions.
 
 	r3d::ColliderBuilder::trimesh(vertices, indices).build()
+}
+
+// Convert Euler angles to normalized rotation axis scaled by angle.
+fn euler_angles_to_ang_vector(angles: &EulerAnglesF) -> r3d::AngVector<r3d::Real>
+{
+	let quat = QuaternionF::from(*angles);
+	let quat_v_magnitude = quat.v.magnitude();
+	let axis = quat.v / quat_v_magnitude;
+
+	let angle = 2.0 * quat_v_magnitude.atan2(quat.s);
+
+	let axis_angle_scaled = axis * angle;
+
+	r3d::AngVector::new(axis_angle_scaled.x, axis_angle_scaled.y, axis_angle_scaled.z)
 }

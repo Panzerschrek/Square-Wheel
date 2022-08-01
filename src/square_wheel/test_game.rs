@@ -278,8 +278,8 @@ impl Game
 		self.test_models.push(PhysicsTestModel {
 			phys_handle: self.physics.add_object(&pos, &angles, &bbox),
 			draw_entity: ModelEntity {
-				position: self.camera.get_pos(),
-				angles: self.camera.get_euler_angles(),
+				position: pos,
+				angles: angles,
 				animation: AnimationPoint {
 					frames: [0, 0],
 					lerp: 0.0,
