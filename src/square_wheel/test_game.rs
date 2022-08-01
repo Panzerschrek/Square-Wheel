@@ -1,5 +1,5 @@
 use super::{
-	commands_processor, commands_queue, console, frame_info::*, light::*, resources_manager::*, test_game_physics::*,
+	commands_processor, commands_queue, console, frame_info::*, light::*, resources_manager::*, test_game_physics,
 };
 use common::{bsp_map_compact, camera_controller, material, math_types::*, matrix::*, system_window};
 use std::sync::Arc;
@@ -10,11 +10,11 @@ pub struct Game
 	console: console::ConsoleSharedPtr,
 	resources_manager: ResourcesManagerSharedPtr,
 	commands_queue: commands_queue::CommandsQueuePtr<Game>,
-	physics: TestGamePhysics,
+	physics: test_game_physics::TestGamePhysics,
 	camera: camera_controller::CameraController,
 	submodels: Vec<SubmodelEntityOpt>,
 	test_lights: Vec<PointLight>,
-	test_models: Vec<ModelEntity>,
+	test_models: Vec<PhysicsTestModel>,
 	view_model: Option<ModelEntity>,
 	game_time: f32,
 }
@@ -54,7 +54,7 @@ impl Game
 			resources_manager,
 			commands_queue,
 			camera: camera_controller::CameraController::new(),
-			physics: TestGamePhysics::new(),
+			physics: test_game_physics::TestGamePhysics::new(),
 			submodels,
 			test_lights: Vec::new(),
 			test_models: Vec::new(),
@@ -101,11 +101,12 @@ impl Game
 
 		for model in &mut self.test_models
 		{
-			let num_frames = model.model.frames_info.len() as u32;
+			let num_frames = model.draw_entity.model.frames_info.len() as u32;
 			let frame_f = self.game_time * 10.0;
-			model.animation.frames[0] = (frame_f as u32) % num_frames;
-			model.animation.frames[1] = (frame_f as u32 + 1) % num_frames;
-			model.animation.lerp = 1.0 - frame_f.fract();
+			model.draw_entity.animation.frames[0] = (frame_f as u32) % num_frames;
+			model.draw_entity.animation.frames[1] = (frame_f as u32 + 1) % num_frames;
+			model.draw_entity.animation.lerp = 1.0 - frame_f.fract();
+			model.draw_entity.position = self.physics.get_object_position(model.phys_handle);
 		}
 	}
 
@@ -120,7 +121,11 @@ impl Game
 			surface_info.height as f32,
 		);
 
-		let mut model_entities = self.test_models.clone();
+		let mut model_entities = self
+			.test_models
+			.iter()
+			.map(|e| e.draw_entity.clone())
+			.collect::<Vec<_>>();
 		if let Some(mut view_model) = self.view_model.clone()
 		{
 			let azimuth = self.camera.get_azimuth();
@@ -262,23 +267,32 @@ impl Game
 		let model = self.resources_manager.lock().unwrap().get_model(&args[0]);
 		let texture = self.resources_manager.lock().unwrap().get_image(&args[1]);
 
-		self.test_models.push(ModelEntity {
-			position: self.camera.get_pos(),
-			angles: self.camera.get_euler_angles(),
-			animation: AnimationPoint {
-				frames: [0, 0],
-				lerp: 0.0,
+		let pos = self.camera.get_pos();
+
+		self.test_models.push(PhysicsTestModel {
+			phys_handle: self.physics.add_object(&pos),
+			draw_entity: ModelEntity {
+				position: self.camera.get_pos(),
+				angles: self.camera.get_euler_angles(),
+				animation: AnimationPoint {
+					frames: [0, 0],
+					lerp: 0.0,
+				},
+				model,
+				texture,
+				blending_mode: material::BlendingMode::None,
+				is_view_model: false,
+				ordering_custom_bbox: None,
 			},
-			model,
-			texture,
-			blending_mode: material::BlendingMode::None,
-			is_view_model: false,
-			ordering_custom_bbox: None,
 		});
 	}
 
 	fn command_reset_test_models(&mut self, _args: commands_queue::CommandArgs)
 	{
+		for model in &self.test_models
+		{
+			self.physics.remove_object(model.phys_handle);
+		}
 		self.test_models.clear();
 	}
 
@@ -325,4 +339,10 @@ impl Drop for Game
 			.unwrap()
 			.remove_command_queue(&(self.commands_queue.clone() as commands_queue::CommandsQueueDynPtr));
 	}
+}
+
+struct PhysicsTestModel
+{
+	phys_handle: test_game_physics::ObjectHandle,
+	draw_entity: ModelEntity,
 }

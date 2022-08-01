@@ -1,3 +1,4 @@
+use common::math_types::*;
 use rapier3d::prelude as r3d;
 
 pub struct TestGamePhysics
@@ -14,28 +15,19 @@ pub struct TestGamePhysics
 	ccd_solver: r3d::CCDSolver,
 	physics_hooks: (),
 	event_handler: (),
-
-	ball_body_handle: r3d::RigidBodyHandle,
 }
+
+pub type ObjectHandle = r3d::RigidBodyHandle;
 
 impl TestGamePhysics
 {
 	pub fn new() -> Self
 	{
-		let mut rigid_body_set = r3d::RigidBodySet::new();
+		let rigid_body_set = r3d::RigidBodySet::new();
 		let mut collider_set = r3d::ColliderSet::new();
 
 		// Static geometry.
-		collider_set.insert(r3d::ColliderBuilder::cuboid(100.0, 100.0, 10.0).build());
-
-		// TODO - enable continuous collision detection to prevent tunnelling.
-
-		let ball_rigid_body = r3d::RigidBodyBuilder::dynamic()
-			.translation(r3d::Vector::new(0.0, 0.0, 200.0))
-			.build();
-		let ball_collider = r3d::ColliderBuilder::ball(0.5).restitution(0.7).build();
-		let ball_body_handle = rigid_body_set.insert(ball_rigid_body);
-		collider_set.insert_with_parent(ball_collider, ball_body_handle, &mut rigid_body_set);
+		collider_set.insert(r3d::ColliderBuilder::cuboid(64000.0, 64000.0, 10.0).build());
 
 		Self {
 			rigid_body_set,
@@ -49,32 +41,70 @@ impl TestGamePhysics
 			ccd_solver: r3d::CCDSolver::new(),
 			physics_hooks: (),
 			event_handler: (),
-			ball_body_handle,
 		}
+	}
+
+	pub fn add_object(&mut self, position: &Vec3f) -> ObjectHandle
+	{
+		// TODO - maybe tune physics and disable CCD?
+		let ball_rigid_body = r3d::RigidBodyBuilder::dynamic()
+			.translation(r3d::Vector::new(position.x, position.y, position.z))
+			.ccd_enabled(true)
+			.build();
+		let collider = r3d::ColliderBuilder::ball(0.5).restitution(0.7).build();
+		let handle = self.rigid_body_set.insert(ball_rigid_body);
+		self.collider_set
+			.insert_with_parent(collider, handle, &mut self.rigid_body_set);
+
+		handle
+	}
+
+	pub fn remove_object(&mut self, handle: ObjectHandle)
+	{
+		self.rigid_body_set.remove(
+			handle,
+			&mut self.island_manager,
+			&mut self.collider_set,
+			&mut self.impulse_joint_set,
+			&mut self.multibody_joint_set,
+			true,
+		);
+	}
+
+	pub fn get_object_position(&self, handle: ObjectHandle) -> Vec3f
+	{
+		let translation = self.rigid_body_set[handle].translation();
+		Vec3f::new(translation.x, translation.y, translation.z)
 	}
 
 	pub fn update(&mut self, time_delta_s: f32)
 	{
-		let gravity = r3d::Vector::new(0.0, 0.0, -9.81);
-		let mut integration_parameters = r3d::IntegrationParameters::default();
-		integration_parameters.dt = time_delta_s;
+		// Perform several physics steps in case of low FPS.
+		let max_dt = 1.0 / 30.0;
+		let mut cur_step_time = 0.0;
+		while cur_step_time < time_delta_s
+		{
+			let cur_dt = (time_delta_s - cur_step_time).min(max_dt);
+			cur_step_time += max_dt;
 
-		self.physics_pipeline.step(
-			&gravity,
-			&integration_parameters,
-			&mut self.island_manager,
-			&mut self.broad_phase,
-			&mut self.narrow_phase,
-			&mut self.rigid_body_set,
-			&mut self.collider_set,
-			&mut self.impulse_joint_set,
-			&mut self.multibody_joint_set,
-			&mut self.ccd_solver,
-			&self.physics_hooks,
-			&self.event_handler,
-		);
+			let gravity = r3d::Vector::new(0.0, 0.0, -9.81);
+			let mut integration_parameters = r3d::IntegrationParameters::default();
+			integration_parameters.dt = cur_dt;
 
-		let ball_body = &self.rigid_body_set[self.ball_body_handle];
-		println!("Ball altitude: {}", ball_body.translation().z);
+			self.physics_pipeline.step(
+				&gravity,
+				&integration_parameters,
+				&mut self.island_manager,
+				&mut self.broad_phase,
+				&mut self.narrow_phase,
+				&mut self.rigid_body_set,
+				&mut self.collider_set,
+				&mut self.impulse_joint_set,
+				&mut self.multibody_joint_set,
+				&mut self.ccd_solver,
+				&self.physics_hooks,
+				&self.event_handler,
+			);
+		}
 	}
 }
