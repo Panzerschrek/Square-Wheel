@@ -132,7 +132,7 @@ impl Game
 			.collect::<Vec<_>>();
 		if let Some(mut view_model) = self.view_model.clone()
 		{
-			let azimuth = self.camera.get_azimuth();
+			let azimuth = self.camera.get_angles().0;
 
 			// TODO - use also camera elevation.
 			let shift_vec_front = Vec3f::new(-azimuth.sin(), azimuth.cos(), 0.0) * 16.0;
