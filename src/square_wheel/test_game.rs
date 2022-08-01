@@ -1,4 +1,6 @@
-use super::{commands_processor, commands_queue, console, frame_info::*, light::*, resources_manager::*};
+use super::{
+	commands_processor, commands_queue, console, frame_info::*, light::*, resources_manager::*, test_game_physics::*,
+};
 use common::{bsp_map_compact, camera_controller, material, math_types::*, matrix::*, system_window};
 use std::sync::Arc;
 
@@ -8,6 +10,7 @@ pub struct Game
 	console: console::ConsoleSharedPtr,
 	resources_manager: ResourcesManagerSharedPtr,
 	commands_queue: commands_queue::CommandsQueuePtr<Game>,
+	physics: TestGamePhysics,
 	camera: camera_controller::CameraController,
 	submodels: Vec<SubmodelEntityOpt>,
 	test_lights: Vec<PointLight>,
@@ -51,6 +54,7 @@ impl Game
 			resources_manager,
 			commands_queue,
 			camera: camera_controller::CameraController::new(),
+			physics: TestGamePhysics::new(),
 			submodels,
 			test_lights: Vec::new(),
 			test_models: Vec::new(),
@@ -67,7 +71,9 @@ impl Game
 	pub fn update(&mut self, time_delta_s: f32)
 	{
 		self.process_commands();
+
 		self.game_time += time_delta_s;
+		self.physics.update(time_delta_s);
 
 		let test_animate_submodels = false;
 		if test_animate_submodels
