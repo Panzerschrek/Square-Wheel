@@ -35,9 +35,8 @@ pub fn build_view_matrix_with_full_rotation(
 	viewport_height: f32,
 ) -> CameraMatrices
 {
-	let rotate_z = Mat4f::from_angle_z(-angles.z);
-	let rotate_y = Mat4f::from_angle_y(-angles.y);
-	let rotate_x = Mat4f::from_angle_x(-angles.x);
+	// For rotation matrix transpose is equivalent to inverse.
+	let rotate = Mat4f::from(angles).transpose();
 
 	let mut basis_change = Mat4f::identity();
 	basis_change.x.x = 0.0;
@@ -47,13 +46,7 @@ pub fn build_view_matrix_with_full_rotation(
 	basis_change.y.x = -1.0;
 	basis_change.z.y = -1.0;
 
-	complete_view_matrix(
-		position,
-		&(basis_change * rotate_x * rotate_y * rotate_z),
-		fov,
-		viewport_width,
-		viewport_height,
-	)
+	complete_view_matrix(position, &(basis_change * rotate), fov, viewport_width, viewport_height)
 }
 
 pub fn complete_view_matrix(
@@ -98,11 +91,7 @@ pub fn complete_view_matrix(
 
 pub fn get_object_matrix(position: Vec3f, angles: EulerAnglesF) -> Mat4f
 {
-	// HACK! We multiply matrices by vectors (use inverse order). So, we need to use iverse rotation order for Euler angles.
-	let rotate_x = Mat4f::from_angle_x(angles.x);
-	let rotate_y = Mat4f::from_angle_y(angles.y);
-	let rotate_z = Mat4f::from_angle_z(angles.z);
-	let rotate = rotate_z * rotate_y * rotate_x;
+	let rotate = Mat4f::from(angles);
 
 	let translate = Mat4f::from_translation(position);
 	translate * rotate
