@@ -59,7 +59,8 @@ impl TestGamePhysics
 
 		let collider = r3d::ColliderBuilder::cuboid(bbox_half_size.x, bbox_half_size.y, bbox_half_size.z)
 			.translation(r3d::Vector::new(bbox_center.x, bbox_center.y, bbox_center.z))
-			.restitution(0.7)
+			.restitution(0.5)
+			.friction(0.5)
 			.build();
 
 		let handle = self.rigid_body_set.insert(body);
@@ -100,6 +101,8 @@ impl TestGamePhysics
 
 	pub fn update(&mut self, time_delta_s: f32)
 	{
+		let gravity = r3d::Vector::new(0.0, 0.0, -627.84);
+
 		// Perform several physics steps in case of low FPS.
 		let max_dt = 1.0 / 30.0;
 		let mut cur_step_time = 0.0;
@@ -108,7 +111,6 @@ impl TestGamePhysics
 			let cur_dt = (time_delta_s - cur_step_time).min(max_dt);
 			cur_step_time += max_dt;
 
-			let gravity = r3d::Vector::new(0.0, 0.0, -9.81);
 			let mut integration_parameters = r3d::IntegrationParameters::default();
 			integration_parameters.dt = cur_dt;
 
