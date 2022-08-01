@@ -1,4 +1,4 @@
-use common::{bsp_map_compact, math_types::*};
+use common::{bbox::*, bsp_map_compact, math_types::*};
 use rapier3d::prelude as r3d;
 use std::sync::Arc;
 
@@ -45,15 +45,24 @@ impl TestGamePhysics
 		}
 	}
 
-	pub fn add_object(&mut self, position: &Vec3f) -> ObjectHandle
+	pub fn add_object(&mut self, position: &Vec3f, rotation: &EulerAnglesF, bbox: &BBox) -> ObjectHandle
 	{
 		// TODO - maybe tune physics and disable CCD?
-		let ball_rigid_body = r3d::RigidBodyBuilder::dynamic()
+		let body = r3d::RigidBodyBuilder::dynamic()
 			.translation(r3d::Vector::new(position.x, position.y, position.z))
+			.rotation(r3d::AngVector::new(rotation.x.0, rotation.y.0, rotation.z.0))
 			.ccd_enabled(true)
 			.build();
-		let collider = r3d::ColliderBuilder::ball(0.5).restitution(0.7).build();
-		let handle = self.rigid_body_set.insert(ball_rigid_body);
+
+		let bbox_half_size = bbox.get_size() * 0.5;
+		let bbox_center = bbox.get_center();
+
+		let collider = r3d::ColliderBuilder::cuboid(bbox_half_size.x, bbox_half_size.y, bbox_half_size.z)
+			.translation(r3d::Vector::new(bbox_center.x, bbox_center.y, bbox_center.z))
+			.restitution(0.7)
+			.build();
+
+		let handle = self.rigid_body_set.insert(body);
 		self.collider_set
 			.insert_with_parent(collider, handle, &mut self.rigid_body_set);
 
@@ -72,10 +81,21 @@ impl TestGamePhysics
 		);
 	}
 
-	pub fn get_object_position(&self, handle: ObjectHandle) -> Vec3f
+	pub fn get_object_location(&self, handle: ObjectHandle) -> (Vec3f, EulerAnglesF)
 	{
-		let translation = self.rigid_body_set[handle].translation();
-		Vec3f::new(translation.x, translation.y, translation.z)
+		let body = &self.rigid_body_set[handle];
+		let position = body.position();
+		let translation = position.translation;
+		let rotation = position.rotation;
+		let rotation_xyzw = rotation.coords;
+
+		(
+			Vec3f::new(translation.x, translation.y, translation.z),
+			EulerAnglesF::from(QuaternionF::from_sv(
+				rotation_xyzw[3],
+				Vec3f::new(rotation_xyzw[0], rotation_xyzw[1], rotation_xyzw[2]),
+			)),
+		)
 	}
 
 	pub fn update(&mut self, time_delta_s: f32)

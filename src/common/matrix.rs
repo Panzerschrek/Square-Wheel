@@ -99,10 +99,12 @@ pub fn complete_view_matrix(
 pub fn get_object_matrix(position: Vec3f, angles: EulerAnglesF) -> Mat4f
 {
 	// HACK! We multiply matrices by vectors (use inverse order). So, we need to use iverse rotation order for Euler angles.
-	let rotate_x = Mat4f::from_angle_x(angles.x);
-	let rotate_y = Mat4f::from_angle_y(angles.y);
-	let rotate_z = Mat4f::from_angle_z(angles.z);
-	let rotate = rotate_z * rotate_y * rotate_x;
+	// TODO - fix this mess!
+	// let rotate_x = Mat4f::from_angle_x(angles.x);
+	// let rotate_y = Mat4f::from_angle_y(angles.y);
+	// let rotate_z = Mat4f::from_angle_z(angles.z);
+	// let rotate = rotate_z * rotate_y * rotate_x;
+	let rotate = Mat4f::from(angles);
 
 	let translate = Mat4f::from_translation(position);
 	translate * rotate

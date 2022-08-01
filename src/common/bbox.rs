@@ -55,6 +55,11 @@ impl BBox
 		(self.min + self.max) * 0.5
 	}
 
+	pub fn get_size(&self) -> Vec3f
+	{
+		self.max - self.min
+	}
+
 	pub fn get_corners_vertices(&self) -> [Vec3f; 8]
 	{
 		[

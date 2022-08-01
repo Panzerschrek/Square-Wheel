@@ -106,7 +106,11 @@ impl Game
 			model.draw_entity.animation.frames[0] = (frame_f as u32) % num_frames;
 			model.draw_entity.animation.frames[1] = (frame_f as u32 + 1) % num_frames;
 			model.draw_entity.animation.lerp = 1.0 - frame_f.fract();
-			model.draw_entity.position = self.physics.get_object_position(model.phys_handle);
+
+			let location = self.physics.get_object_location(model.phys_handle);
+
+			model.draw_entity.position = location.0;
+			model.draw_entity.angles = location.1;
 		}
 	}
 
@@ -268,9 +272,11 @@ impl Game
 		let texture = self.resources_manager.lock().unwrap().get_image(&args[1]);
 
 		let pos = self.camera.get_pos();
+		let angles = self.camera.get_euler_angles();
+		let bbox = model.frames_info[0].bbox;
 
 		self.test_models.push(PhysicsTestModel {
-			phys_handle: self.physics.add_object(&pos),
+			phys_handle: self.physics.add_object(&pos, &angles, &bbox),
 			draw_entity: ModelEntity {
 				position: self.camera.get_pos(),
 				angles: self.camera.get_euler_angles(),
