@@ -4,7 +4,6 @@ Please, keep it in actual state.
 General:
 * Detail objects (static, but not in BSP)
 * Built-in triangle models (embedded into BSP tree)
-* Alpha-test
 * More consistent file errors handling
 * Avoid usage of "unwrap"
 
@@ -13,9 +12,6 @@ Engine:
 * Anmation files as separate resources (share animations between different models).
 
 Renderer:
-* 3/4 and 1/4 rasterization blending
-* Optimizations/fixes of triangle models rasterization
-* Rasterization microoptimizations
 * HDR skyboxes
 * Animated textures (with N frames)
 * Models rendering improvements - avoid splitting models into pieces for each BSP tree leaf in some cases
