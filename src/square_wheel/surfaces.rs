@@ -530,7 +530,7 @@ fn build_surface_impl_6_static_params<
 				if SPECULAR_TYPE == SPECULAR_TYPE_NONE
 				{
 					total_light_albedo_modulated =
-						ColorVec::from_color_f32x3(&LightmapElementOpsT::get_constant_component(&l_mixed));
+						ColorVec::from_color_f32x3_with_one(&LightmapElementOpsT::get_constant_component(&l_mixed));
 					if let Some(directional_component) = LightmapElementOpsT::get_directional_component(&l_mixed)
 					{
 						let dot = if USE_NORMAL_MAP
@@ -595,6 +595,9 @@ fn build_surface_impl_6_static_params<
 
 					total_light_albedo_modulated = ColorVec::scalar_mul(&constant_component, one_minus_specular_k);
 					total_light_direct = ColorVec::scalar_mul(&constant_component, specular_k);
+
+					// Set alpha component to one to preserve alpha.
+					total_light_albedo_modulated.insert::<3>(1.0);
 
 					if let Some(directional_component) = LightmapElementOpsT::get_directional_component(&l_mixed)
 					{

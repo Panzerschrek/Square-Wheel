@@ -18,6 +18,8 @@ pub use common::material::BlendingMode;
 const BLENDING_MODE_NONE: usize = 0;
 const BLENDING_MODE_AVERAGE: usize = 1;
 const BLENDING_MODE_ADDITIVE: usize = 2;
+const BLENDING_MODE_ALPHA_TEST: usize = 3;
+const BLENDING_MODE_ALPHA_BLEND: usize = 4;
 
 pub struct Rasterizer<'a, ColorT: AbstractColor>
 {
@@ -115,6 +117,22 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				),
 			BlendingMode::Additive => self
 				.fill_polygon_impl_2_static_params::<TEXTURE_COORDINATES_INTERPOLATION_MODE, BLENDING_MODE_ADDITIVE>(
+					vertices,
+					depth_equation,
+					tex_coord_equation,
+					texture_info,
+					texture_data,
+				),
+			BlendingMode::AlphaTest => self
+				.fill_polygon_impl_2_static_params::<TEXTURE_COORDINATES_INTERPOLATION_MODE, BLENDING_MODE_ALPHA_TEST>(
+					vertices,
+					depth_equation,
+					tex_coord_equation,
+					texture_info,
+					texture_data,
+				),
+			BlendingMode::AlphaBlend => self
+				.fill_polygon_impl_2_static_params::<TEXTURE_COORDINATES_INTERPOLATION_MODE, BLENDING_MODE_ALPHA_BLEND>(
 					vertices,
 					depth_equation,
 					tex_coord_equation,
@@ -427,18 +445,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					debug_assert!(pix_tc[1] <= texture_size_minus_one[1] as u32);
 					let texel_address = (pix_tc[0] + pix_tc[1] * texture_width) as usize;
 					let texel = unchecked_texture_fetch(texture_data, texel_address);
-					if BLENDING_MODE == BLENDING_MODE_NONE
-					{
-						*dst_pixel = texel;
-					}
-					else if BLENDING_MODE == BLENDING_MODE_AVERAGE
-					{
-						*dst_pixel = ColorT::average(*dst_pixel, texel);
-					}
-					else if BLENDING_MODE == BLENDING_MODE_ADDITIVE
-					{
-						*dst_pixel = ColorT::saturated_sum(*dst_pixel, texel);
-					}
+					write_into_framebuffer::<ColorT, BLENDING_MODE>(dst_pixel, texel);
 
 					span_inv_z += span_d_inv_z;
 					span_tc[0] += span_d_tc[0];
@@ -566,18 +573,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 
 					let texel_address = ((tc_int[0] as u32) + (tc_int[1] as u32) * texture_width) as usize;
 					let texel = unchecked_texture_fetch(texture_data, texel_address);
-					if BLENDING_MODE == BLENDING_MODE_NONE
-					{
-						*dst_pixel = texel;
-					}
-					else if BLENDING_MODE == BLENDING_MODE_AVERAGE
-					{
-						*dst_pixel = ColorT::average(*dst_pixel, texel);
-					}
-					else if BLENDING_MODE == BLENDING_MODE_ADDITIVE
-					{
-						*dst_pixel = ColorT::saturated_sum(*dst_pixel, texel);
-					}
+					write_into_framebuffer::<ColorT, BLENDING_MODE>(dst_pixel, texel);
 
 					span_tc[0] += span_d_tc[0];
 					span_tc[1] += span_d_tc[1];
@@ -724,18 +720,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					debug_assert!(tc_int[1] < texture_info.size[1] as i32);
 					let texel_address = (tc_int[0] + tc_int[1] * texture_info.size[0]) as usize;
 					let texel = unchecked_texture_fetch(texture_data, texel_address);
-					if BLENDING_MODE == BLENDING_MODE_NONE
-					{
-						*dst_pixel = texel;
-					}
-					else if BLENDING_MODE == BLENDING_MODE_AVERAGE
-					{
-						*dst_pixel = ColorT::average(*dst_pixel, texel);
-					}
-					else if BLENDING_MODE == BLENDING_MODE_ADDITIVE
-					{
-						*dst_pixel = ColorT::saturated_sum(*dst_pixel, texel);
-					}
+					write_into_framebuffer::<ColorT, BLENDING_MODE>(dst_pixel, texel);
 
 					tc[0] += d_tc[0];
 					tc[1] += d_tc[1];
@@ -773,6 +758,15 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			{
 				self.fill_triangle_impl::<TextureColorT, BLENDING_MODE_ADDITIVE>(vertices, texture_info, texture_data)
 			},
+			BlendingMode::AlphaTest =>
+			{
+				self.fill_triangle_impl::<TextureColorT, BLENDING_MODE_ALPHA_TEST>(vertices, texture_info, texture_data)
+			},
+			BlendingMode::AlphaBlend => self.fill_triangle_impl::<TextureColorT, BLENDING_MODE_ALPHA_BLEND>(
+				vertices,
+				texture_info,
+				texture_data,
+			),
 		}
 	}
 
@@ -1080,18 +1074,36 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					let texel_vec = texel.into();
 					let texel_vec_lighted = ColorVecI::shift_right::<16>(&ColorVecI::mul(&texel_vec, &line_light));
 
-					let texel_converted = texel_vec_lighted.into();
+					// TODO - fix this, remove unnecessary conversions of ColorVecI
 					if BLENDING_MODE == BLENDING_MODE_NONE
 					{
-						*dst_pixel = texel_converted;
+						*dst_pixel = texel_vec_lighted.into();
 					}
 					else if BLENDING_MODE == BLENDING_MODE_AVERAGE
 					{
-						*dst_pixel = ColorT::average(*dst_pixel, texel_converted);
+						*dst_pixel = ColorT::average(*dst_pixel, texel_vec_lighted.into());
 					}
 					else if BLENDING_MODE == BLENDING_MODE_ADDITIVE
 					{
-						*dst_pixel = ColorT::saturated_sum(*dst_pixel, texel_converted);
+						*dst_pixel = ColorT::saturated_sum(*dst_pixel, texel_vec_lighted.into());
+					}
+					else if BLENDING_MODE == BLENDING_MODE_ALPHA_TEST
+					{
+						let texel_converted: ColorT = texel_vec_lighted.into();
+						if texel_converted.test_alpha()
+						{
+							*dst_pixel = texel_converted;
+						}
+					}
+					else if BLENDING_MODE == BLENDING_MODE_ALPHA_BLEND
+					{
+						let alpha = texel.get_alpha();
+						let dst_vec: ColorVecI = (*dst_pixel).into();
+						let blend_result = ColorVecI::shift_right::<8>(&ColorVecI::add(
+							&ColorVecI::mul_scalar(&dst_vec, 255 - alpha),
+							&ColorVecI::mul_scalar(&texel_vec_lighted, alpha),
+						));
+						*dst_pixel = blend_result.into();
 					}
 
 					for i in 0 .. 2
@@ -1334,6 +1346,33 @@ struct PolygonSide
 {
 	x_start: Fixed16,
 	dx_dy: Fixed16,
+}
+
+fn write_into_framebuffer<ColorT: AbstractColor, const BLENDING_MODE: usize>(dst_pixel: &mut ColorT, texel: ColorT)
+{
+	if BLENDING_MODE == BLENDING_MODE_NONE
+	{
+		*dst_pixel = texel;
+	}
+	else if BLENDING_MODE == BLENDING_MODE_AVERAGE
+	{
+		*dst_pixel = ColorT::average(*dst_pixel, texel);
+	}
+	else if BLENDING_MODE == BLENDING_MODE_ADDITIVE
+	{
+		*dst_pixel = ColorT::saturated_sum(*dst_pixel, texel);
+	}
+	else if BLENDING_MODE == BLENDING_MODE_ALPHA_TEST
+	{
+		if texel.test_alpha()
+		{
+			*dst_pixel = texel;
+		}
+	}
+	else if BLENDING_MODE == BLENDING_MODE_ALPHA_BLEND
+	{
+		*dst_pixel = ColorT::alpha_blend(*dst_pixel, texel);
+	}
 }
 
 // We do not care if "y" is zero, because there is no difference between "panic!" and hardware exceptions.

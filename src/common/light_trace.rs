@@ -21,6 +21,9 @@ fn get_texture_opacity(texture_name: &bsp_map_compact::Texture, materials: &Mate
 				BlendingMode::None => 0.0,
 				BlendingMode::Average => 0.5,
 				BlendingMode::Additive => 1.0,
+				// TODO - maybe calculate average opacity in case of alpha-dependent blending?
+				BlendingMode::AlphaTest => 0.5,
+				BlendingMode::AlphaBlend => 0.5,
 			}
 		}
 		else

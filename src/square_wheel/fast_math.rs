@@ -160,7 +160,17 @@ mod fast_math_impl
 
 		pub fn from_color_f32x3(c: &[f32; 3]) -> Self
 		{
+			Self::from_color_f32x3_with_zero(c)
+		}
+
+		pub fn from_color_f32x3_with_zero(c: &[f32; 3]) -> Self
+		{
 			unsafe { Self(_mm_set_ps(0.0, c[0], c[1], c[2])) }
+		}
+
+		pub fn from_color_f32x3_with_one(c: &[f32; 3]) -> Self
+		{
+			unsafe { Self(_mm_set_ps(1.0, c[0], c[1], c[2])) }
 		}
 
 		pub fn into_color_f32x3(&self) -> [f32; 3]
@@ -204,6 +214,36 @@ mod fast_math_impl
 		{
 			unsafe { Self(_mm_div_ps(self.0, other.0)) }
 		}
+
+		pub fn insert<const INDEX: i32>(&mut self, scalar: f32)
+		{
+			unsafe {
+				let scalar_vec = _mm_broadcastss_ps(_mm_set1_ps(scalar));
+				match INDEX
+				{
+					0 =>
+					{
+						self.0 = _mm_blend_ps(self.0, scalar_vec, 1 << 0);
+					},
+					1 =>
+					{
+						self.0 = _mm_blend_ps(self.0, scalar_vec, 1 << 1);
+					},
+					2 =>
+					{
+						self.0 = _mm_blend_ps(self.0, scalar_vec, 1 << 2);
+					},
+					3 =>
+					{
+						self.0 = _mm_blend_ps(self.0, scalar_vec, 1 << 3);
+					},
+					_ =>
+					{
+						panic!("wrong index!")
+					},
+				}
+			}
+		}
 	} // impl ColorVec
 
 	impl From<ColorVecI> for ColorVec
@@ -232,7 +272,17 @@ mod fast_math_impl
 
 		pub fn from_color_i32x3(c: &[i32; 3]) -> Self
 		{
+			Self::from_color_i32x3_with_zero(c)
+		}
+
+		pub fn from_color_i32x3_with_zero(c: &[i32; 3]) -> Self
+		{
 			unsafe { Self(_mm_set_epi32(0, c[0], c[1], c[2])) }
+		}
+
+		pub fn from_color_i32x3_with_one(c: &[i32; 3]) -> Self
+		{
+			unsafe { Self(_mm_set_epi32(1, c[0], c[1], c[2])) }
 		}
 
 		pub fn from_color_f32x3(c: &[f32; 3]) -> Self
@@ -297,6 +347,11 @@ mod fast_math_impl
 		pub fn mul_scalar(&self, scalar: i32) -> Self
 		{
 			unsafe { Self(_mm_mullo_epi32(self.0, _mm_set_epi32(scalar, scalar, scalar, scalar))) }
+		}
+
+		pub fn shift_left<const COUNT: i32>(&self) -> Self
+		{
+			unsafe { Self(_mm_slli_epi32(self.0, COUNT)) }
 		}
 
 		pub fn shift_right<const COUNT: i32>(&self) -> Self
@@ -438,7 +493,17 @@ mod fast_math_impl
 
 		pub fn from_color_f32x3(c: &[f32; 3]) -> Self
 		{
+			Self::from_color_f32x3_with_zero(c)
+		}
+
+		pub fn from_color_f32x3_with_zero(c: &[f32; 3]) -> Self
+		{
 			Self([c[2], c[1], c[0], 0.0])
+		}
+
+		pub fn from_color_f32x3_with_one(c: &[f32; 3]) -> Self
+		{
+			Self([c[2], c[1], c[0], 1.0])
 		}
 
 		pub fn into_color_f32x3(&self) -> [f32; 3]
@@ -505,6 +570,11 @@ mod fast_math_impl
 				self.0[3] / other.0[3],
 			])
 		}
+
+		pub fn insert<const INDEX: i32>(&mut self, scalar: f32)
+		{
+			self.0[INDEX as usize] = scalar;
+		}
 	} // impl ColorVec
 
 	impl From<ColorVecI> for ColorVec
@@ -533,7 +603,17 @@ mod fast_math_impl
 
 		pub fn from_color_i32x3(c: &[i32; 3]) -> Self
 		{
+			Self::from_color_i32x3_with_zero(c)
+		}
+
+		pub fn from_color_i32x3_with_zero(c: &[i32; 3]) -> Self
+		{
 			Self([c[2], c[1], c[0], 0])
+		}
+
+		pub fn from_color_i32x3_with_one(c: &[i32; 3]) -> Self
+		{
+			Self([c[2], c[1], c[0], 1])
 		}
 
 		pub fn from_color_f32x3(c: &[f32; 3]) -> Self
@@ -607,6 +687,16 @@ mod fast_math_impl
 			for i in 0 .. 4
 			{
 				res[i] = self.0[i] * scalar
+			}
+			Self(res)
+		}
+
+		pub fn shift_left<const COUNT: i32>(&self) -> Self
+		{
+			let mut res = [0; 4];
+			for i in 0 .. 4
+			{
+				res[i] = self.0[i] << COUNT
 			}
 			Self(res)
 		}
