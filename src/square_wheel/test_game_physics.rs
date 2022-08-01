@@ -1,5 +1,6 @@
-use common::math_types::*;
+use common::{bsp_map_compact, math_types::*};
 use rapier3d::prelude as r3d;
+use std::sync::Arc;
 
 pub struct TestGamePhysics
 {
@@ -21,13 +22,13 @@ pub type ObjectHandle = r3d::RigidBodyHandle;
 
 impl TestGamePhysics
 {
-	pub fn new() -> Self
+	pub fn new(map: Arc<bsp_map_compact::BSPMap>) -> Self
 	{
 		let rigid_body_set = r3d::RigidBodySet::new();
 		let mut collider_set = r3d::ColliderSet::new();
 
 		// Static geometry.
-		collider_set.insert(r3d::ColliderBuilder::cuboid(64000.0, 64000.0, 10.0).build());
+		collider_set.insert(make_map_collider(&map));
 
 		Self {
 			rigid_body_set,
@@ -107,4 +108,30 @@ impl TestGamePhysics
 			);
 		}
 	}
+}
+
+fn make_map_collider(map: &bsp_map_compact::BSPMap) -> r3d::Collider
+{
+	let vertices = map
+		.vertices
+		.iter()
+		.map(|v| r3d::Point::new(v.x, v.y, v.z))
+		.collect::<Vec<_>>();
+
+	let mut indices = Vec::new();
+	for polygon in &map.polygons
+	{
+		for i in 0 .. polygon.num_vertices - 2
+		{
+			indices.push([
+				polygon.first_vertex + 0,
+				polygon.first_vertex + i + 1,
+				polygon.first_vertex + i + 2,
+			]);
+		}
+	}
+
+	// TODO - ignore submodels polygons and polygons without collisions.
+
+	r3d::ColliderBuilder::trimesh(vertices, indices).build()
 }

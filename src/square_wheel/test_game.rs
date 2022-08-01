@@ -54,7 +54,7 @@ impl Game
 			resources_manager,
 			commands_queue,
 			camera: camera_controller::CameraController::new(),
-			physics: test_game_physics::TestGamePhysics::new(),
+			physics: test_game_physics::TestGamePhysics::new(map),
 			submodels,
 			test_lights: Vec::new(),
 			test_models: Vec::new(),
