@@ -218,19 +218,21 @@ fn make_map_collider(map: &bsp_map_compact::BSPMap) -> r3d::Collider
 		.collect::<Vec<_>>();
 
 	let mut indices = Vec::new();
-	for polygon in &map.polygons
+	for leaf in &map.leafs
 	{
-		for i in 0 .. polygon.num_vertices - 2
+		for polygon in &map.polygons[leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize]
 		{
-			indices.push([
-				polygon.first_vertex + 0,
-				polygon.first_vertex + i + 1,
-				polygon.first_vertex + i + 2,
-			]);
+			// TODO - ignore polygons without collisions.
+			for i in 0 .. polygon.num_vertices - 2
+			{
+				indices.push([
+					polygon.first_vertex + 0,
+					polygon.first_vertex + i + 1,
+					polygon.first_vertex + i + 2,
+				]);
+			}
 		}
 	}
-
-	// TODO - ignore submodels polygons and polygons without collisions.
 
 	r3d::ColliderBuilder::trimesh(vertices, indices).build()
 }
