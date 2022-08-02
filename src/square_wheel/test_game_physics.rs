@@ -276,6 +276,11 @@ fn euler_angles_to_ang_vector(angles: &EulerAnglesF) -> r3d::AngVector<r3d::Real
 {
 	let quat = QuaternionF::from(*angles);
 	let quat_v_magnitude = quat.v.magnitude();
+	if quat_v_magnitude == 0.0
+	{
+		return r3d::AngVector::new(0.0, 0.0, 0.0);
+	}
+
 	let axis = quat.v / quat_v_magnitude;
 
 	let angle = 2.0 * quat_v_magnitude.atan2(quat.s);
