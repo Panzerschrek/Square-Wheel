@@ -85,7 +85,7 @@ impl Game
 				let forward_vector = Vec3f::new(-(azimuth.sin()), azimuth.cos(), 0.0);
 				let left_vector = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0);
 				let mut move_vector = Vec3f::new(0.0, 0.0, 0.0);
-				let impulse = 2048.0;
+				let acceleration = 1536.0;
 
 				use sdl2::keyboard::Scancode;
 				if keyboard_state.contains(&Scancode::W)
@@ -108,11 +108,11 @@ impl Game
 				let move_vector_length = move_vector.magnitude();
 				if move_vector_length > 0.0
 				{
-					move_vector = move_vector * (time_delta_s * impulse / move_vector_length);
+					move_vector = move_vector * (time_delta_s * acceleration / move_vector_length);
 				}
 
 				self.physics
-					.apply_impulse_to_self_propelled_object(physics_controller.phys_handle, &move_vector);
+					.add_object_velocity(physics_controller.phys_handle, &move_vector);
 			},
 		}
 	}
@@ -460,7 +460,7 @@ impl Game
 			rotation_controller.set_angles(angles.0, angles.1, angles.2);
 
 			let controller = PlayerPhysicsController {
-				phys_handle: self.physics.add_self_propelled_object(&pos, 60.0, 120.0),
+				phys_handle: self.physics.add_character_object(&pos, 60.0, 120.0),
 				rotation_controller,
 			};
 

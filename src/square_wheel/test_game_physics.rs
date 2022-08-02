@@ -70,27 +70,22 @@ impl TestGamePhysics
 		handle
 	}
 
-	pub fn add_self_propelled_object(&mut self, position: &Vec3f, width: f32, heigt: f32) -> ObjectHandle
+	pub fn add_character_object(&mut self, position: &Vec3f, width: f32, heigt: f32) -> ObjectHandle
 	{
 		// TODO - maybe tune physics and disable CCD?
-		let mut body = r3d::RigidBodyBuilder::dynamic()
+		let body = r3d::RigidBodyBuilder::dynamic()
 			.translation(r3d::Vector::new(position.x, position.y, position.z))
 			.ccd_enabled(true)
-			.linear_damping(4.0)
-			.angular_damping(4.0)
+			.linear_damping(2.0)
+			.lock_rotations()
 			.build();
 
-		body.lock_rotations(true, true);
-
-		let mut collider = r3d::ColliderBuilder::capsule_z((heigt - width) * 0.5, width * 0.5)
-			.restitution(0.5)
-			.friction(0.5)
+		let collider = r3d::ColliderBuilder::capsule_z((heigt - width) * 0.5, width * 0.5)
+			.restitution(0.6)
+			.friction(0.8)
+			.active_hooks(r3d::ActiveHooks::MODIFY_SOLVER_CONTACTS)
+			.user_data(STAIRS_HACK_USER_DATA)
 			.build();
-
-		collider.set_mass(1.0);
-
-		collider.set_active_hooks(r3d::ActiveHooks::MODIFY_SOLVER_CONTACTS);
-		collider.user_data = STAIRS_HACK_USER_DATA;
 
 		let handle = self.rigid_body_set.insert(body);
 		self.collider_set
@@ -99,9 +94,10 @@ impl TestGamePhysics
 		handle
 	}
 
-	pub fn apply_impulse_to_self_propelled_object(&mut self, handle: ObjectHandle, impulse: &Vec3f)
+	pub fn add_object_velocity(&mut self, handle: ObjectHandle, velocity: &Vec3f)
 	{
 		let body = &mut self.rigid_body_set[handle];
+		let impulse = velocity * body.mass();
 		body.apply_impulse(r3d::Vector::new(impulse.x, impulse.y, impulse.z), true);
 	}
 
@@ -224,7 +220,7 @@ impl r3d::PhysicsHooks for PhysicsHooks
 {
 	fn modify_solver_contacts(&self, context: &mut r3d::ContactModificationContext)
 	{
-		// For stairs hacks collider modify contact point normal in order to avoid slowing-down while climbing stairs.
+		// For colliders with stairs hack modify contact point normal in order to avoid slowing-down while climbing stairs.
 		let collider1 = &context.colliders[context.collider1];
 		if collider1.user_data == STAIRS_HACK_USER_DATA
 		{
