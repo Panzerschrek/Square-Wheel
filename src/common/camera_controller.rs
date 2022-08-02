@@ -32,9 +32,9 @@ impl CameraController
 		self.rotation_controller.get_angles()
 	}
 
-	pub fn get_euler_angles(&self) -> EulerAnglesF
+	pub fn get_rotation(&self) -> QuaternionF
 	{
-		self.rotation_controller.get_euler_angles()
+		self.rotation_controller.get_rotation()
 	}
 
 	pub fn set_angles(&mut self, azimuth: f32, elevation: f32, roll: f32)

@@ -9,7 +9,7 @@ pub struct FrameInfo
 	pub submodel_entities: Vec<SubmodelEntityOpt>,
 	pub model_entities: Vec<ModelEntity>,
 	pub lights: Vec<PointLight>,
-	pub skybox_angles: EulerAnglesF,
+	pub skybox_rotation: QuaternionF,
 }
 
 pub type SubmodelEntityOpt = Option<SubmodelEntity>;
@@ -25,7 +25,7 @@ pub struct SubmodelEntity
 pub struct ModelEntity
 {
 	pub position: Vec3f,
-	pub angles: EulerAnglesF,
+	pub rotation: QuaternionF,
 	pub animation: AnimationPoint,
 	pub model: SharedResourcePtr<TriangleModel>,
 	pub texture: SharedResourcePtr<Image>,

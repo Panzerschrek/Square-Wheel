@@ -193,7 +193,7 @@ impl Game
 			let location = self.physics.get_object_location(model.phys_handle);
 
 			model.draw_entity.position = location.0;
-			model.draw_entity.angles = location.1;
+			model.draw_entity.rotation = location.1;
 		}
 	}
 
@@ -224,9 +224,9 @@ impl Game
 			let shift_vec_left = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0) * 8.0;
 			let shift_vec_down = Vec3f::new(0.0, 0.0, -1.0) * 10.0;
 
-			let (pos, angles) = self.get_camera_location();
+			let (pos, rotation) = self.get_camera_location();
 			view_model.position = pos + shift_vec_front + shift_vec_left + shift_vec_down;
-			view_model.angles = angles;
+			view_model.rotation = rotation;
 			model_entities.push(view_model);
 		}
 
@@ -239,24 +239,24 @@ impl Game
 		FrameInfo {
 			camera_matrices,
 			submodel_entities,
-			skybox_angles: EulerAnglesF::new(Rad(0.0), Rad(0.0), Rad(0.0)),
+			skybox_rotation: QuaternionF::zero(),
 			game_time_s: self.game_time,
 			lights: self.test_lights.clone(),
 			model_entities,
 		}
 	}
 
-	fn get_camera_location(&self) -> (Vec3f, EulerAnglesF)
+	fn get_camera_location(&self) -> (Vec3f, QuaternionF)
 	{
 		match &self.player_controller
 		{
 			PlayerController::NoclipController(camera_controller) =>
 			{
-				(camera_controller.get_pos(), camera_controller.get_euler_angles())
+				(camera_controller.get_pos(), camera_controller.get_rotation())
 			},
 			PlayerController::PhysicsController(physics_controller) => (
 				self.physics.get_object_location(physics_controller.phys_handle).0,
-				physics_controller.rotation_controller.get_euler_angles(),
+				physics_controller.rotation_controller.get_rotation(),
 			),
 		}
 	}
@@ -415,14 +415,14 @@ impl Game
 		let model = self.resources_manager.lock().unwrap().get_model(&args[0]);
 		let texture = self.resources_manager.lock().unwrap().get_image(&args[1]);
 
-		let (pos, angles) = self.get_camera_location();
+		let (pos, rotation) = self.get_camera_location();
 		let bbox = model.frames_info[0].bbox;
 
 		self.test_models.push(PhysicsTestModel {
-			phys_handle: self.physics.add_object(&pos, &angles, &bbox),
+			phys_handle: self.physics.add_object(&pos, &rotation, &bbox),
 			draw_entity: ModelEntity {
 				position: pos,
-				angles: angles,
+				rotation: rotation,
 				animation: AnimationPoint {
 					frames: [0, 0],
 					lerp: 0.0,
@@ -459,7 +459,7 @@ impl Game
 
 		self.view_model = Some(ModelEntity {
 			position: Vec3f::zero(),
-			angles: EulerAnglesF::new(Rad(0.0), Rad(0.0), Rad(0.0)),
+			rotation: QuaternionF::zero(),
 			animation: AnimationPoint {
 				frames: [0, 0],
 				lerp: 0.0,

@@ -177,7 +177,7 @@ pub fn main()
 				},
 				&build_view_matrix_with_full_rotation(
 					camera_controller.get_pos(),
-					camera_controller.get_euler_angles(),
+					camera_controller.get_rotation(),
 					std::f32::consts::PI * 0.375,
 					surface_info.width as f32,
 					surface_info.height as f32,

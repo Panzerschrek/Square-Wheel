@@ -48,12 +48,12 @@ impl TestGamePhysics
 		}
 	}
 
-	pub fn add_object(&mut self, position: &Vec3f, rotation: &EulerAnglesF, bbox: &BBox) -> ObjectHandle
+	pub fn add_object(&mut self, position: &Vec3f, rotation: &QuaternionF, bbox: &BBox) -> ObjectHandle
 	{
 		// TODO - maybe tune physics and disable CCD?
 		let body = r3d::RigidBodyBuilder::dynamic()
 			.translation(r3d::Vector::new(position.x, position.y, position.z))
-			.rotation(euler_angles_to_ang_vector(rotation))
+			.rotation(quaternion_to_ang_vector(rotation))
 			.ccd_enabled(true)
 			.build();
 
@@ -193,7 +193,7 @@ impl TestGamePhysics
 		);
 	}
 
-	pub fn get_object_location(&self, handle: ObjectHandle) -> (Vec3f, EulerAnglesF)
+	pub fn get_object_location(&self, handle: ObjectHandle) -> (Vec3f, QuaternionF)
 	{
 		let body = &self.rigid_body_set[handle];
 		let position = body.position();
@@ -203,10 +203,10 @@ impl TestGamePhysics
 
 		(
 			Vec3f::new(translation.x, translation.y, translation.z),
-			EulerAnglesF::from(QuaternionF::from_sv(
+			QuaternionF::from_sv(
 				rotation_xyzw[3],
 				Vec3f::new(rotation_xyzw[0], rotation_xyzw[1], rotation_xyzw[2]),
-			)),
+			),
 		)
 	}
 
@@ -271,10 +271,9 @@ fn make_map_collider(map: &bsp_map_compact::BSPMap) -> r3d::Collider
 	r3d::ColliderBuilder::trimesh(vertices, indices).build()
 }
 
-// Convert Euler angles to normalized rotation axis scaled by angle.
-fn euler_angles_to_ang_vector(angles: &EulerAnglesF) -> r3d::AngVector<r3d::Real>
+// Convert quaternion to normalized rotation axis scaled by angle.
+fn quaternion_to_ang_vector(quat: &QuaternionF) -> r3d::AngVector<r3d::Real>
 {
-	let quat = QuaternionF::from(*angles);
 	let quat_v_magnitude = quat.v.magnitude();
 	if quat_v_magnitude == 0.0
 	{
