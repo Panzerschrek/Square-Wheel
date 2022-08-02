@@ -30,6 +30,7 @@ mod resources_manager_config;
 mod shadow_map;
 mod surfaces;
 mod test_game;
+mod test_game_physics;
 mod text_printer;
 mod textures;
 mod ticks_counter;

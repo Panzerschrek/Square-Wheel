@@ -269,7 +269,7 @@ impl Renderer
 					pixels,
 					surface_info,
 					&frame_info.camera_matrices,
-					&frame_info.skybox_angles,
+					&frame_info.skybox_rotation,
 					&frame_info.model_entities,
 				)
 			},
@@ -457,7 +457,7 @@ impl Renderer
 			let model = &models[visible_dynamic_mesh.entity_index as usize];
 			let animation = &model.animation;
 
-			let model_matrix = get_object_matrix(model.position, model.angles);
+			let model_matrix = get_object_matrix(model.position, model.rotation);
 			let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
 
 			let final_matrix = camera_matrices.view_matrix * model_matrix;
@@ -517,7 +517,7 @@ impl Renderer
 		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
 		camera_matrices: &CameraMatrices,
-		skybox_angles: &EulerAnglesF,
+		skybox_rotation: &QuaternionF,
 		models: &[ModelEntity],
 	)
 	{
@@ -554,7 +554,7 @@ impl Renderer
 				self.draw_skybox(
 					&mut rasterizer,
 					camera_matrices,
-					skybox_angles,
+					skybox_rotation,
 					&viewport_clipping_polygon,
 				);
 			}
@@ -572,7 +572,7 @@ impl Renderer
 				self.draw_skybox(
 					&mut rasterizer,
 					camera_matrices,
-					skybox_angles,
+					skybox_rotation,
 					&viewport_clipping_polygon,
 				);
 			}
@@ -623,7 +623,7 @@ impl Renderer
 					self.draw_skybox(
 						&mut rasterizer,
 						camera_matrices,
-						skybox_angles,
+						skybox_rotation,
 						&viewport_clipping_polygon,
 					);
 				}
@@ -641,7 +641,7 @@ impl Renderer
 					self.draw_skybox(
 						&mut rasterizer,
 						camera_matrices,
-						skybox_angles,
+						skybox_rotation,
 						&viewport_clipping_polygon,
 					);
 				}
@@ -1111,7 +1111,7 @@ impl Renderer
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		camera_matrices: &CameraMatrices,
-		skybox_angles: &EulerAnglesF,
+		skybox_rotation: &QuaternionF,
 		viewport_clipping_polygon: &ClippingPolygon,
 	)
 	{
@@ -1167,7 +1167,7 @@ impl Renderer
 			([1, 5, 7, 3], -Vec3f::unit_z(), Vec3f::unit_x(), Vec3f::unit_y()),
 		];
 
-		let skybox_matrix = get_object_matrix(camera_matrices.position, *skybox_angles);
+		let skybox_matrix = get_object_matrix(camera_matrices.position, *skybox_rotation);
 		let skybox_matrix_inverse = skybox_matrix.transpose().invert().unwrap();
 		let skybox_view_matrix = camera_matrices.view_matrix * skybox_matrix;
 		let skybox_planes_matrix = camera_matrices.planes_matrix * skybox_matrix_inverse;

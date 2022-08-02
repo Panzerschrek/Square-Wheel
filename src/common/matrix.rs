@@ -20,7 +20,7 @@ pub fn build_view_matrix(
 {
 	build_view_matrix_with_full_rotation(
 		position,
-		EulerAnglesF::new(Rad(0.0), -elevation, azimuth + Rad(std::f32::consts::PI * 0.5)),
+		QuaternionF::from_angle_z(azimuth + Rad(std::f32::consts::PI * 0.5)) * QuaternionF::from_angle_x(-elevation),
 		fov,
 		viewport_width,
 		viewport_height,
@@ -29,14 +29,14 @@ pub fn build_view_matrix(
 
 pub fn build_view_matrix_with_full_rotation(
 	position: Vec3f,
-	angles: EulerAnglesF,
+	rotation: QuaternionF,
 	fov: f32,
 	viewport_width: f32,
 	viewport_height: f32,
 ) -> CameraMatrices
 {
 	// For rotation matrix transpose is equivalent to inverse.
-	let rotate = Mat4f::from(angles).transpose();
+	let rotate = Mat4f::from(rotation).transpose();
 
 	let mut basis_change = Mat4f::identity();
 	basis_change.x.x = 0.0;
@@ -89,9 +89,9 @@ pub fn complete_view_matrix(
 	}
 }
 
-pub fn get_object_matrix(position: Vec3f, angles: EulerAnglesF) -> Mat4f
+pub fn get_object_matrix(position: Vec3f, rotation: QuaternionF) -> Mat4f
 {
-	let rotate = Mat4f::from(angles);
+	let rotate = Mat4f::from(rotation);
 
 	let translate = Mat4f::from_translation(position);
 	translate * rotate

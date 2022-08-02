@@ -1,3 +1,6 @@
 [submodule "iqm"]
 	path = iqm
 	url = https://github.com/lsalzman/iqm.git
+[submodule "rapier"]
+	path = rapier
+	url = https://github.com/dimforge/rapier.git

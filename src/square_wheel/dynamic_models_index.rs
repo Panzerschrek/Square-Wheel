@@ -67,7 +67,7 @@ impl DynamicModelsIndex
 	{
 		// Calculate current bounding box.
 		let bbox = get_current_triangle_model_bbox(&model.model, &model.animation);
-		let transform_matrix = get_object_matrix(model.position, model.angles);
+		let transform_matrix = get_object_matrix(model.position, model.rotation);
 
 		let bbox_vertices = bbox
 			.get_corners_vertices()

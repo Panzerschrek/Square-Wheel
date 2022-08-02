@@ -227,8 +227,11 @@ impl Host
 			self.config.fullscreen_mode = 0.0;
 		}
 
+		// Limit time delta if engine works very slow (in debug mode).
+		const MAX_TIME_DELTA: f32 = 0.1;
+
 		let cur_time = std::time::Instant::now();
-		let time_delta_s = (cur_time - self.prev_time).as_secs_f32();
+		let time_delta_s = (cur_time - self.prev_time).as_secs_f32().min(MAX_TIME_DELTA);
 		self.prev_time = cur_time;
 
 		self.frame_duration_counter.add_value(time_delta_s);
