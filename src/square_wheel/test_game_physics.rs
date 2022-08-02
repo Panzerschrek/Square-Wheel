@@ -112,7 +112,7 @@ impl TestGamePhysics
 			.restitution(0.0)
 			.friction(0.95)
 			.active_hooks(r3d::ActiveHooks::MODIFY_SOLVER_CONTACTS)
-			.user_data(STAIRS_HACK_USER_DATA)
+			.user_data(CHARACTER_USER_DATA)
 			.build();
 
 		let handle = self.rigid_body_set.insert(body);
@@ -295,7 +295,7 @@ impl PhysicsHooks
 	}
 }
 
-const STAIRS_HACK_USER_DATA: u128 = 42;
+const CHARACTER_USER_DATA: u128 = 42;
 const STAIRS_HACK_NORMAL_Z: f32 = 0.3;
 
 impl r3d::PhysicsHooks for PhysicsHooks
@@ -304,7 +304,7 @@ impl r3d::PhysicsHooks for PhysicsHooks
 	{
 		// For colliders with stairs hack modify contact point normal in order to avoid slowing-down while climbing stairs.
 		let collider1 = &context.colliders[context.collider1];
-		if collider1.user_data == STAIRS_HACK_USER_DATA
+		if collider1.user_data == CHARACTER_USER_DATA
 		{
 			if context.normal.z < -STAIRS_HACK_NORMAL_Z
 			{
@@ -313,11 +313,21 @@ impl r3d::PhysicsHooks for PhysicsHooks
 		}
 
 		let collider2 = &context.colliders[context.collider2];
-		if collider2.user_data == STAIRS_HACK_USER_DATA
+		if collider2.user_data == CHARACTER_USER_DATA
 		{
 			if context.normal.z > STAIRS_HACK_NORMAL_Z
 			{
 				*context.normal = r3d::Vector::new(0.0, 0.0, 1.0);
+			}
+		}
+
+		// Modify also friction to disable walls friction.
+		if collider1.user_data == CHARACTER_USER_DATA || collider2.user_data == CHARACTER_USER_DATA
+		{
+			let fiction_scale = context.normal.z.abs();
+			for contact in context.solver_contacts.iter_mut()
+			{
+				contact.friction *= fiction_scale;
 			}
 		}
 	}
