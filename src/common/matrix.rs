@@ -20,7 +20,7 @@ pub fn build_view_matrix(
 {
 	build_view_matrix_with_full_rotation(
 		position,
-		QuaternionF::from_angle_z(azimuth + Rad(std::f32::consts::PI * 0.5)) * QuaternionF::from_angle_x(-elevation),
+		QuaternionF::from_angle_z(azimuth + Rad(std::f32::consts::PI * 0.5)) * QuaternionF::from_angle_y(-elevation),
 		fov,
 		viewport_width,
 		viewport_height,
