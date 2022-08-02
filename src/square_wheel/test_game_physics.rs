@@ -94,9 +94,9 @@ impl TestGamePhysics
 		handle
 	}
 
-	pub fn get_object_velocity(&mut self, handle: ObjectHandle) -> Vec3f
+	pub fn get_object_velocity(&self, handle: ObjectHandle) -> Vec3f
 	{
-		let body = &mut self.rigid_body_set[handle];
+		let body = &self.rigid_body_set[handle];
 		let velocity = body.linvel();
 		Vec3f::new(velocity.x, velocity.y, velocity.z)
 	}
@@ -106,6 +106,12 @@ impl TestGamePhysics
 		let body = &mut self.rigid_body_set[handle];
 		let impulse = velocity * body.mass();
 		body.apply_impulse(r3d::Vector::new(impulse.x, impulse.y, impulse.z), true);
+	}
+
+	pub fn teleport_object(&mut self, handle: ObjectHandle, position: &Vec3f)
+	{
+		let body = &mut self.rigid_body_set[handle];
+		body.set_translation(r3d::Vector::new(position.x, position.y, position.z), true)
 	}
 
 	pub fn is_object_on_ground(&self, handle: ObjectHandle) -> bool

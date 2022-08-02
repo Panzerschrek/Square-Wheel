@@ -312,7 +312,7 @@ impl Game
 				},
 				PlayerController::PhysicsController(physics_controller) =>
 				{
-					// TODO
+					self.physics.teleport_object(physics_controller.phys_handle, &pos);
 				},
 			}
 		}
