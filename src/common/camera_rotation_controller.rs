@@ -36,19 +36,11 @@ impl CameraRotationController
 
 	pub fn get_rotation(&self) -> QuaternionF
 	{
-		// Find proper angles by constructing inverse Euler angles and calculation of inverse transformation (for quaternions).
-		let angles_initial = EulerAnglesF::new(
-			-self.roll,
-			self.elevation,
-			-self.azimuth - Rad(std::f32::consts::PI * 0.5),
-		);
-		let quat = QuaternionF::from(angles_initial);
-		let magnitude2 = quat.magnitude2();
-		if magnitude2 == 0.0
-		{
-			return QuaternionF::zero();
-		}
-		quat.conjugate() / magnitude2
+		let rotate_x = QuaternionF::from_angle_x(self.roll);
+		let rotate_y = QuaternionF::from_angle_y(-self.elevation);
+		let rotate_z = QuaternionF::from_angle_z(self.azimuth + Rad(std::f32::consts::PI * 0.5));
+
+		rotate_z * rotate_y * rotate_x
 	}
 
 	pub fn set_angles(&mut self, azimuth: f32, elevation: f32, roll: f32)
