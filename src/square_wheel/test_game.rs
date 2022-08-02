@@ -15,7 +15,7 @@ pub struct Game
 	commands_queue: commands_queue::CommandsQueuePtr<Game>,
 	physics: test_game_physics::TestGamePhysics,
 	player_controller: PlayerController,
-	submodels: Vec<SubmodelEntityOpt>,
+	submodels: Vec<Option<PhysicsTestSubmodel>>,
 	test_lights: Vec<PointLight>,
 	test_models: Vec<PhysicsTestModel>,
 	view_model: Option<ModelEntity>,
@@ -155,27 +155,30 @@ impl Game
 		self.game_time += time_delta_s;
 		self.physics.update(time_delta_s);
 
-		let test_animate_submodels = false;
-		if test_animate_submodels
+		for (index, submodel_opt) in self.submodels.iter_mut().enumerate()
 		{
-			for (index, submodel_opt) in self.submodels.iter_mut().enumerate()
-			{
-				let phase = index as f32;
-				*submodel_opt = Some(SubmodelEntity {
-					angle_z: Rad((0.0625 * self.game_time + phase).sin() * 0.25),
-					shift: 32.0 *
-						Vec3f::new(
-							(0.5 * self.game_time + phase).sin(),
-							(0.33 * self.game_time + phase).sin(),
-							(0.11111 * self.game_time + phase).sin(),
-						),
-				});
-			}
+			let phase = index as f32;
+			let shift = 32.0 *
+				Vec3f::new(
+					(0.5 * self.game_time + phase).sin(),
+					(0.33 * self.game_time + phase).sin(),
+					(0.11111 * self.game_time + phase).sin(),
+				);
 
-			if !self.submodels.is_empty()
+			if let Some(submodel) = submodel_opt
 			{
-				let hide_submodel_index = self.game_time as usize % self.submodels.len();
-				self.submodels[hide_submodel_index] = None;
+				self.physics.set_kinematic_object_position(submodel.phys_handle, &shift);
+				submodel.draw_entity.shift = self.physics.get_object_location(submodel.phys_handle).0;
+			}
+			else
+			{
+				*submodel_opt = Some(PhysicsTestSubmodel {
+					phys_handle: self.physics.add_submodel_object(index, &shift),
+					draw_entity: SubmodelEntity {
+						angle_z: Rad(0.0),
+						shift,
+					},
+				});
 			}
 		}
 
@@ -227,9 +230,15 @@ impl Game
 			model_entities.push(view_model);
 		}
 
+		let submodel_entities = self
+			.submodels
+			.iter()
+			.map(|s| s.map(|s| s.draw_entity.clone()))
+			.collect();
+
 		FrameInfo {
 			camera_matrices,
-			submodel_entities: self.submodels.clone(),
+			submodel_entities,
 			skybox_angles: EulerAnglesF::new(Rad(0.0), Rad(0.0), Rad(0.0)),
 			game_time_s: self.game_time,
 			lights: self.test_lights.clone(),
@@ -518,6 +527,13 @@ struct PhysicsTestModel
 {
 	phys_handle: test_game_physics::ObjectHandle,
 	draw_entity: ModelEntity,
+}
+
+#[derive(Clone, Copy)]
+struct PhysicsTestSubmodel
+{
+	phys_handle: test_game_physics::ObjectHandle,
+	draw_entity: SubmodelEntity,
 }
 
 enum PlayerController

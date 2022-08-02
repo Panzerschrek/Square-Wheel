@@ -4,6 +4,8 @@ use std::sync::Arc;
 
 pub struct TestGamePhysics
 {
+	map: Arc<bsp_map_compact::BSPMap>,
+
 	rigid_body_set: r3d::RigidBodySet,
 	collider_set: r3d::ColliderSet,
 
@@ -31,6 +33,7 @@ impl TestGamePhysics
 		collider_set.insert(make_map_collider(&map));
 
 		Self {
+			map,
 			rigid_body_set,
 			collider_set,
 			physics_pipeline: r3d::PhysicsPipeline::new(),
@@ -61,6 +64,31 @@ impl TestGamePhysics
 			.translation(r3d::Vector::new(bbox_center.x, bbox_center.y, bbox_center.z))
 			.restitution(0.5)
 			.friction(0.5)
+			.build();
+
+		let handle = self.rigid_body_set.insert(body);
+		self.collider_set
+			.insert_with_parent(collider, handle, &mut self.rigid_body_set);
+
+		handle
+	}
+
+	pub fn add_submodel_object(&mut self, submodel_index: usize, shift: &Vec3f) -> ObjectHandle
+	{
+		let submodel = &self.map.submodels[submodel_index];
+		let bbox = bsp_map_compact::get_submodel_bbox(&self.map, submodel);
+
+		let body = r3d::RigidBodyBuilder::kinematic_position_based()
+			.translation(r3d::Vector::new(shift.x, shift.y, shift.z))
+			.ccd_enabled(true)
+			.build();
+
+		let bbox_half_size = bbox.get_size() * 0.5;
+		let bbox_center = bbox.get_center();
+
+		let collider = r3d::ColliderBuilder::cuboid(bbox_half_size.x, bbox_half_size.y, bbox_half_size.z)
+			.translation(r3d::Vector::new(bbox_center.x, bbox_center.y, bbox_center.z))
+			.restitution(0.0)
 			.build();
 
 		let handle = self.rigid_body_set.insert(body);
@@ -112,6 +140,12 @@ impl TestGamePhysics
 	{
 		let body = &mut self.rigid_body_set[handle];
 		body.set_translation(r3d::Vector::new(position.x, position.y, position.z), true)
+	}
+
+	pub fn set_kinematic_object_position(&mut self, handle: ObjectHandle, position: &Vec3f)
+	{
+		let body = &mut self.rigid_body_set[handle];
+		body.set_next_kinematic_translation(r3d::Vector::new(position.x, position.y, position.z))
 	}
 
 	pub fn is_object_on_ground(&self, handle: ObjectHandle) -> bool
