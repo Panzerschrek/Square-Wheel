@@ -14,7 +14,7 @@ pub struct TestGamePhysics
 	impulse_joint_set: r3d::ImpulseJointSet,
 	multibody_joint_set: r3d::MultibodyJointSet,
 	ccd_solver: r3d::CCDSolver,
-	physics_hooks: (),
+	hooks: PhysicsHooks,
 	event_handler: (),
 }
 
@@ -40,7 +40,7 @@ impl TestGamePhysics
 			impulse_joint_set: r3d::ImpulseJointSet::new(),
 			multibody_joint_set: r3d::MultibodyJointSet::new(),
 			ccd_solver: r3d::CCDSolver::new(),
-			physics_hooks: (),
+			hooks: PhysicsHooks::new(),
 			event_handler: (),
 		}
 	}
@@ -88,6 +88,9 @@ impl TestGamePhysics
 			.build();
 
 		collider.set_mass(1.0);
+
+		collider.set_active_hooks(r3d::ActiveHooks::MODIFY_SOLVER_CONTACTS);
+		collider.user_data = STAIRS_HACK_USER_DATA;
 
 		let handle = self.rigid_body_set.insert(body);
 		self.collider_set
@@ -157,7 +160,7 @@ impl TestGamePhysics
 				&mut self.impulse_joint_set,
 				&mut self.multibody_joint_set,
 				&mut self.ccd_solver,
-				&self.physics_hooks,
+				&self.hooks,
 				&self.event_handler,
 			);
 		}
@@ -202,4 +205,42 @@ fn euler_angles_to_ang_vector(angles: &EulerAnglesF) -> r3d::AngVector<r3d::Real
 	let axis_angle_scaled = axis * angle;
 
 	r3d::AngVector::new(axis_angle_scaled.x, axis_angle_scaled.y, axis_angle_scaled.z)
+}
+
+struct PhysicsHooks {}
+
+impl PhysicsHooks
+{
+	fn new() -> Self
+	{
+		Self {}
+	}
+}
+
+const STAIRS_HACK_USER_DATA: u128 = 42;
+const STAIRS_HACK_NORMAL_Z: f32 = 0.3;
+
+impl r3d::PhysicsHooks for PhysicsHooks
+{
+	fn modify_solver_contacts(&self, context: &mut r3d::ContactModificationContext)
+	{
+		// For stairs hacks collider modify contact point normal in order to avoid slowing-down while climbing stairs.
+		let collider1 = &context.colliders[context.collider1];
+		if collider1.user_data == STAIRS_HACK_USER_DATA
+		{
+			if context.normal.z < -STAIRS_HACK_NORMAL_Z
+			{
+				*context.normal = r3d::Vector::new(0.0, 0.0, -1.0);
+			}
+		}
+
+		let collider2 = &context.colliders[context.collider2];
+		if collider2.user_data == STAIRS_HACK_USER_DATA
+		{
+			if context.normal.z > STAIRS_HACK_NORMAL_Z
+			{
+				*context.normal = r3d::Vector::new(0.0, 0.0, 1.0);
+			}
+		}
+	}
 }
