@@ -94,11 +94,51 @@ impl TestGamePhysics
 		handle
 	}
 
+	pub fn get_object_velocity(&mut self, handle: ObjectHandle) -> Vec3f
+	{
+		let body = &mut self.rigid_body_set[handle];
+		let velocity = body.linvel();
+		Vec3f::new(velocity.x, velocity.y, velocity.z)
+	}
+
 	pub fn add_object_velocity(&mut self, handle: ObjectHandle, velocity: &Vec3f)
 	{
 		let body = &mut self.rigid_body_set[handle];
 		let impulse = velocity * body.mass();
 		body.apply_impulse(r3d::Vector::new(impulse.x, impulse.y, impulse.z), true);
+	}
+
+	pub fn is_object_on_ground(&self, handle: ObjectHandle) -> bool
+	{
+		let body = &self.rigid_body_set[handle];
+		for &collider in body.colliders()
+		{
+			for contact in self.narrow_phase.contacts_with(collider)
+			{
+				if contact.collider1 == collider
+				{
+					for manifold in &contact.manifolds
+					{
+						if manifold.data.normal.z < -0.8
+						{
+							return true;
+						}
+					}
+				}
+				if contact.collider2 == collider
+				{
+					for manifold in &contact.manifolds
+					{
+						if manifold.data.normal.z > 0.8
+						{
+							return true;
+						}
+					}
+				}
+			}
+		}
+
+		false
 	}
 
 	pub fn remove_object(&mut self, handle: ObjectHandle)

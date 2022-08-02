@@ -111,6 +111,15 @@ impl Game
 					move_vector = move_vector * (time_delta_s * acceleration / move_vector_length);
 				}
 
+				// TODO - limit maximum velocity.
+
+				let on_ground = self.physics.is_object_on_ground(physics_controller.phys_handle);
+				let cur_velocity = self.physics.get_object_velocity(physics_controller.phys_handle);
+				if keyboard_state.contains(&Scancode::Space) && on_ground && cur_velocity.z <= 1.0
+				{
+					move_vector.z = 384.0;
+				}
+
 				self.physics
 					.add_object_velocity(physics_controller.phys_handle, &move_vector);
 			},
