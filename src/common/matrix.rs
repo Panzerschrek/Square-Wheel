@@ -35,8 +35,7 @@ pub fn build_view_matrix_with_full_rotation(
 	viewport_height: f32,
 ) -> CameraMatrices
 {
-	// For rotation matrix transpose is equivalent to inverse.
-	let rotate = Mat4f::from(rotation).transpose();
+	let rotate = Mat4f::from(rotation.conjugate());
 
 	let mut basis_change = Mat4f::identity();
 	basis_change.x.x = 0.0;
