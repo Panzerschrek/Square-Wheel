@@ -76,13 +76,13 @@ impl TestGamePhysics
 		let body = r3d::RigidBodyBuilder::dynamic()
 			.translation(r3d::Vector::new(position.x, position.y, position.z))
 			.ccd_enabled(true)
-			.linear_damping(2.0)
+			.linear_damping(0.5)
 			.lock_rotations()
 			.build();
 
 		let collider = r3d::ColliderBuilder::capsule_z((heigt - width) * 0.5, width * 0.5)
-			.restitution(0.6)
-			.friction(0.8)
+			.restitution(0.0)
+			.friction(0.95)
 			.active_hooks(r3d::ActiveHooks::MODIFY_SOLVER_CONTACTS)
 			.user_data(STAIRS_HACK_USER_DATA)
 			.build();

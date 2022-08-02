@@ -85,7 +85,6 @@ impl Game
 				let forward_vector = Vec3f::new(-(azimuth.sin()), azimuth.cos(), 0.0);
 				let left_vector = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0);
 				let mut move_vector = Vec3f::new(0.0, 0.0, 0.0);
-				let acceleration = 1536.0;
 
 				use sdl2::keyboard::Scancode;
 				if keyboard_state.contains(&Scancode::W)
@@ -108,20 +107,43 @@ impl Game
 				let move_vector_length = move_vector.magnitude();
 				if move_vector_length > 0.0
 				{
-					move_vector = move_vector * (time_delta_s * acceleration / move_vector_length);
+					move_vector = move_vector / move_vector_length;
 				}
 
-				// TODO - limit maximum velocity.
+				let ground_acceleration = 2048.0;
+				let air_acceleration = 512.0;
+				let max_velocity = 400.0;
+				let jump_velocity_add = 256.0;
 
-				let on_ground = self.physics.is_object_on_ground(physics_controller.phys_handle);
 				let cur_velocity = self.physics.get_object_velocity(physics_controller.phys_handle);
+				let on_ground = self.physics.is_object_on_ground(physics_controller.phys_handle);
+
+				let acceleration: f32 = if on_ground
+				{
+					ground_acceleration
+				}
+				else
+				{
+					air_acceleration
+				};
+
+				let mut velocity_add = Vec3f::zero();
+
+				// Limit maximum velocity.
+				let velocity_projection_to_move_vector = move_vector.dot(cur_velocity);
+				if velocity_projection_to_move_vector < max_velocity
+				{
+					let max_can_add = max_velocity - velocity_projection_to_move_vector;
+					velocity_add = move_vector * (acceleration * time_delta_s).min(max_can_add);
+				}
+
 				if keyboard_state.contains(&Scancode::Space) && on_ground && cur_velocity.z <= 1.0
 				{
-					move_vector.z = 384.0;
+					velocity_add.z = jump_velocity_add;
 				}
 
 				self.physics
-					.add_object_velocity(physics_controller.phys_handle, &move_vector);
+					.add_object_velocity(physics_controller.phys_handle, &velocity_add);
 			},
 		}
 	}
