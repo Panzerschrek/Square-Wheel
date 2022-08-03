@@ -1709,6 +1709,16 @@ impl Renderer
 		visible_dynamic_mesh: &VisibleDynamicMeshInfo,
 	)
 	{
+		{
+			let mut mesh_clipping_polygon = visible_dynamic_mesh.clipping_polygon;
+			mesh_clipping_polygon.intersect(clipping_polygon);
+			if mesh_clipping_polygon.is_empty_or_invalid()
+			{
+				// This mesh is not visble in this leaf or for this screeen rect.
+				return;
+			}
+		}
+
 		let model = &models[visible_dynamic_mesh.entity_index as usize];
 
 		// TODO - maybe specialize inner loop for each blending mode?
