@@ -22,6 +22,7 @@ pub struct Host
 	resources_manager: ResourcesManagerSharedPtr,
 	active_map: Option<ActiveMap>,
 	prev_time: std::time::Instant,
+	prev_frame_end_time: std::time::Instant,
 	fps_counter: TicksCounter,
 	frame_duration_counter: PerformanceCounter,
 	quit_requested: bool,
@@ -104,6 +105,7 @@ impl Host
 			resources_manager: ResourcesManager::new(app_config, console),
 			active_map: None,
 			prev_time: cur_time,
+			prev_frame_end_time: cur_time,
 			fps_counter: TicksCounter::new(),
 			frame_duration_counter: PerformanceCounter::new(200),
 			quit_requested: false,
@@ -247,6 +249,7 @@ impl Host
 		let fps_counter = &mut self.fps_counter;
 		let max_fps = self.config.max_fps;
 		let frame_duration_counter = &self.frame_duration_counter;
+		let prev_frame_end_time = &mut self.prev_frame_end_time;
 
 		let mut frame_info = None;
 
@@ -298,17 +301,20 @@ impl Host
 			}
 		};
 
-		let limit_fps_func = || {
+		let mut limit_fps_func = || {
 			if max_fps > 0.0
 			{
+				let now = std::time::Instant::now();
+				let frame_duration_s = (now - *prev_frame_end_time).as_secs_f32();
 				let min_frame_time = 1.0 / max_fps;
-				if time_delta_s < min_frame_time
+				if frame_duration_s < min_frame_time
 				{
 					std::thread::sleep(Duration::from_secs_f32(
-						((min_frame_time - time_delta_s) * 1000.0).floor() / 1000.0,
+						((min_frame_time - frame_duration_s) * 1000.0).floor() / 1000.0,
 					));
 				}
 			}
+			*prev_frame_end_time = std::time::Instant::now();
 		};
 
 		if parallel_swap_buffers
