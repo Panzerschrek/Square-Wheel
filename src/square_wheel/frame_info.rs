@@ -17,8 +17,9 @@ pub type SubmodelEntityOpt = Option<SubmodelEntity>;
 #[derive(Copy, Clone, PartialEq)]
 pub struct SubmodelEntity
 {
-	pub shift: Vec3f,
-	pub angle_z: RadiansF,
+	// Position of Bbox center.
+	pub position: Vec3f,
+	pub rotation: QuaternionF,
 }
 
 #[derive(Clone)]

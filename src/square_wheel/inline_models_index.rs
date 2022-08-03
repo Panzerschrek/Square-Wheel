@@ -181,12 +181,7 @@ fn get_model_matrix(model_info: &ModelInfo) -> Option<Mat4f>
 	if let Some(e) = &model_info.current_entity
 	{
 		let center = model_info.bbox.get_center();
-		Some(
-			Mat4f::from_translation(e.shift) *
-				Mat4f::from_translation(center) *
-				Mat4f::from_angle_z(e.angle_z) *
-				Mat4f::from_translation(-center),
-		)
+		Some(Mat4f::from_translation(e.position) * Mat4f::from(e.rotation) * Mat4f::from_translation(-center))
 	}
 	else
 	{

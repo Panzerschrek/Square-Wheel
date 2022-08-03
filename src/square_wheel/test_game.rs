@@ -13,6 +13,7 @@ pub struct Game
 	console: console::ConsoleSharedPtr,
 	resources_manager: ResourcesManagerSharedPtr,
 	commands_queue: commands_queue::CommandsQueuePtr<Game>,
+	map: Arc<bsp_map_compact::BSPMap>,
 	physics: test_game_physics::TestGamePhysics,
 	player_controller: PlayerController,
 	submodels: Vec<Option<PhysicsTestSubmodel>>,
@@ -57,8 +58,9 @@ impl Game
 			console,
 			resources_manager,
 			commands_queue,
-			player_controller: PlayerController::NoclipController(CameraController::new()),
+			map: map.clone(),
 			physics: test_game_physics::TestGamePhysics::new(map),
+			player_controller: PlayerController::NoclipController(CameraController::new()),
 			submodels,
 			test_lights: Vec::new(),
 			test_models: Vec::new(),
@@ -165,20 +167,29 @@ impl Game
 					(0.11111 * self.game_time + phase).sin(),
 				);
 
-			if let Some(submodel) = submodel_opt
+			if submodel_opt.is_none()
 			{
-				self.physics.set_kinematic_object_position(submodel.phys_handle, &shift);
-				submodel.draw_entity.shift = self.physics.get_object_location(submodel.phys_handle).0;
-			}
-			else
-			{
+				let rotation = QuaternionF::zero();
 				*submodel_opt = Some(PhysicsTestSubmodel {
-					phys_handle: self.physics.add_submodel_object(index, &shift),
+					phys_handle: self.physics.add_submodel_object(index, &shift, &rotation),
 					draw_entity: SubmodelEntity {
-						angle_z: Rad(0.0),
-						shift,
+						rotation,
+						position: Vec3f::zero(),
 					},
 				});
+			}
+
+			if let Some(submodel) = submodel_opt
+			{
+				let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
+				let bbox_center = bbox.get_center();
+
+				self.physics
+					.set_kinematic_object_position(submodel.phys_handle, &(bbox_center + shift));
+				let (position, rotation) = self.physics.get_object_location(submodel.phys_handle);
+
+				submodel.draw_entity.position = position;
+				submodel.draw_entity.rotation = rotation;
 			}
 		}
 

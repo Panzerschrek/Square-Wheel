@@ -73,21 +73,23 @@ impl TestGamePhysics
 		handle
 	}
 
-	pub fn add_submodel_object(&mut self, submodel_index: usize, shift: &Vec3f) -> ObjectHandle
+	pub fn add_submodel_object(&mut self, submodel_index: usize, shift: &Vec3f, rotation: &QuaternionF)
+		-> ObjectHandle
 	{
 		let submodel = &self.map.submodels[submodel_index];
 		let bbox = bsp_map_compact::get_submodel_bbox(&self.map, submodel);
-
-		let body = r3d::RigidBodyBuilder::kinematic_position_based()
-			.translation(r3d::Vector::new(shift.x, shift.y, shift.z))
-			.ccd_enabled(true)
-			.build();
-
 		let bbox_half_size = bbox.get_size() * 0.5;
 		let bbox_center = bbox.get_center();
 
+		let position = shift + bbox_center;
+
+		let body = r3d::RigidBodyBuilder::kinematic_position_based()
+			.translation(r3d::Vector::new(position.x, position.y, position.z))
+			.rotation(quaternion_to_ang_vector(rotation))
+			.ccd_enabled(true)
+			.build();
+
 		let collider = r3d::ColliderBuilder::cuboid(bbox_half_size.x, bbox_half_size.y, bbox_half_size.z)
-			.translation(r3d::Vector::new(bbox_center.x, bbox_center.y, bbox_center.z))
 			.restitution(0.0)
 			.build();
 
