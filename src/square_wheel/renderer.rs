@@ -393,9 +393,7 @@ impl Renderer
 				Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w)
 			});
 
-			// Initial clipping polygon for model bbox.
-			let model_bbox_clipping_polygon = if let Some(c) =
-				calculate_triangle_model_screen_polygon(&bbox_vertices_transformed)
+			let clipping_polygon = if let Some(c) = calculate_triangle_model_screen_polygon(&bbox_vertices_transformed)
 			{
 				c
 			}
@@ -405,38 +403,25 @@ impl Renderer
 				continue;
 			};
 
-			// Clipping polygon, combined from intersections of initial model clipping polygon with clipping polygons of all visible leafs, where this model is located.
-			let mut model_all_leafs_clipping_polygon: Option<ClippingPolygon> = None;
-
+			let mut visible = model.is_view_model;
 			for leaf_index in self.dynamic_models_index.get_model_leafs(entity_index)
 			{
 				if let Some(mut leaf_clipping_polygon) =
 					self.visibility_calculator.get_current_frame_leaf_bounds(*leaf_index)
 				{
-					leaf_clipping_polygon.intersect(&model_bbox_clipping_polygon);
+					leaf_clipping_polygon.intersect(&clipping_polygon);
 					if leaf_clipping_polygon.is_valid_and_non_empty()
 					{
-						if let Some(c) = &mut model_all_leafs_clipping_polygon
-						{
-							c.extend(&leaf_clipping_polygon);
-						}
-						else
-						{
-							model_all_leafs_clipping_polygon = Some(leaf_clipping_polygon);
-						}
+						visible = true;
+						break;
 					}
 				}
 			}
 
-			let model_all_leafs_clipping_polygon = if let Some(c) = model_all_leafs_clipping_polygon
+			if !visible
 			{
-				c
-			}
-			else
-			{
-				// Model is located inside invisible part(s) of leaf(s).
 				continue;
-			};
+			}
 
 			dynamic_model_info.first_visible_mesh = self.visible_dynamic_meshes_list.len() as u32;
 
@@ -455,7 +440,7 @@ impl Renderer
 					triangles_offset,
 					num_visible_triangles: 0, // set later
 					bbox_vertices_transformed,
-					clipping_polygon: model_all_leafs_clipping_polygon,
+					clipping_polygon,
 					model_matrix,
 					camera_matrices: model_camera_matrices,
 				});
@@ -1115,8 +1100,6 @@ impl Renderer
 		models: &[ModelEntity],
 	)
 	{
-		let clip_planes = viewport_clipping_polygon.get_clip_planes();
-
 		for (dynamic_model_index, model) in models.iter().enumerate()
 		{
 			if !model.is_view_model
@@ -1128,7 +1111,7 @@ impl Renderer
 			{
 				self.draw_mesh(
 					rasterizer,
-					&clip_planes,
+					&viewport_clipping_polygon,
 					&[], // No 3d clip planes.
 					models,
 					&self.visible_dynamic_meshes_list[visible_mesh_index as usize],
@@ -1491,7 +1474,7 @@ impl Renderer
 			{
 				self.draw_mesh(
 					rasterizer,
-					&clip_planes,
+					&bounds,
 					&leaf_clip_planes[.. num_clip_planes],
 					models,
 					&self.visible_dynamic_meshes_list[visible_mesh_index as usize],
@@ -1573,7 +1556,7 @@ impl Renderer
 				let visible_mesh_index = *submodel_index - DYNAMIC_MESH_INDEX_ADD;
 				self.draw_mesh(
 					rasterizer,
-					&clip_planes,
+					bounds,
 					&leaf_clip_planes[.. num_clip_planes],
 					models,
 					&self.visible_dynamic_meshes_list[visible_mesh_index as usize],
@@ -1720,23 +1703,12 @@ impl Renderer
 	fn draw_mesh<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
-		clip_planes: &ClippingPolygonPlanes,
+		clipping_polygon: &ClippingPolygon,
 		leaf_clip_planes: &[Plane],
 		models: &[ModelEntity],
 		visible_dynamic_mesh: &VisibleDynamicMeshInfo,
 	)
 	{
-		// let bbox_vertices = visible_dynamic_mesh.bbox_vertices_transformed.map(|v| ModelVertex3d{ pos: v, tc: Vec2f::zero()} );
-		// let bbox_triangles =
-		// [
-		// [0, 3, 1 ], [ 0, 1, 2 ],
-		// [ 4, 6, 7 ], [ 4, 7, 5 ],
-		// [ 0, 1, 5 ], [ 0, 5, 4 ],
-		// [ 2, 3, 7 ], [2, 7, 6 ],
-		// [ 1, 3, 7 ], [ 1, 7, 5] ,
-		// [ 0, 2, 6], [ 0, 6, 4],
-		// ];
-
 		let model = &models[visible_dynamic_mesh.entity_index as usize];
 
 		// TODO - maybe specialize inner loop for each blending mode?
@@ -1778,6 +1750,24 @@ impl Renderer
 			{
 				clip_planes_3d[num_clip_planes_3d] = *clip_plane;
 				num_clip_planes_3d += 1;
+			}
+		}
+
+		// Find 2d clip planes that affect this model.
+		// Use only box clip planes to reduce number of checks.
+		// TODO - use uninitialized memory.
+		let mut clip_planes_2d = [Vec3f::zero(); 4];
+		let mut num_clip_planes_2d = 0;
+		for (mesh_plane, cur_plane) in visible_dynamic_mesh
+			.clipping_polygon
+			.get_box_clip_planes()
+			.iter()
+			.zip(clipping_polygon.get_box_clip_planes().iter())
+		{
+			if cur_plane.z > mesh_plane.z
+			{
+				clip_planes_2d[num_clip_planes_2d] = *cur_plane;
+				num_clip_planes_2d += 1;
 			}
 		}
 
@@ -1837,8 +1827,7 @@ impl Renderer
 				};
 			}
 
-			// TODO - use only required clip planes.
-			for clip_plane in clip_planes
+			for clip_plane in &clip_planes_2d[.. num_clip_planes_2d]
 			{
 				num_vertices = clip_2d_model_polygon(&vp_src[.. num_vertices], clip_plane, vp_dst);
 				if num_vertices < 3
