@@ -1,5 +1,5 @@
 use super::{fast_math::*, frame_info::*, triangle_model::*};
-use common::{bbox::*, bsp_map_compact, clipping::*, math_types::*, plane::*};
+use common::{bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, plane::*};
 
 pub fn animate_and_transform_triangle_mesh_vertices(
 	model: &TriangleModel,
@@ -190,6 +190,73 @@ pub fn get_current_triangle_model_bbox(model: &TriangleModel, animation: &Animat
 	bbox
 }
 
+pub fn calculate_triangle_model_screen_polygon(model_bbox_vertices_transformed: &[Vec3f; 8])
+	-> Option<ClippingPolygon>
+{
+	let mut clipping_polyogn: Option<ClippingPolygon> = None;
+	let mut num_front_vertices = 0;
+	for v in model_bbox_vertices_transformed
+	{
+		if v.z > 0.0
+		{
+			num_front_vertices += 1;
+
+			let point = v.truncate() / v.z;
+			if let Some(clipping_polyogn) = &mut clipping_polyogn
+			{
+				clipping_polyogn.extend_with_point(&point);
+			}
+			else
+			{
+				clipping_polyogn = Some(ClippingPolygon::from_point(&point))
+			}
+		}
+	}
+
+	if num_front_vertices == 8 || num_front_vertices == 0
+	{
+		// Simple case - all bbox vertices are on one side of projection plane.
+		return clipping_polyogn;
+	}
+
+	let mut clipping_polyogn = if let Some(p) = clipping_polyogn
+	{
+		p
+	}
+	else
+	{
+		return None;
+	};
+
+	// Perform z_near clipping of all possible edges between bbox vertices.
+	const Z_NEAR: f32 = 1.0 / 4096.0;
+
+	for i in 0 .. 7
+	{
+		let v_i = &model_bbox_vertices_transformed[i];
+		for j in i + 1 .. 8
+		{
+			let v_j = &model_bbox_vertices_transformed[j];
+
+			if v_i.z <= Z_NEAR && v_j.z <= Z_NEAR
+			{
+				continue;
+			}
+			if v_i.z >= Z_NEAR && v_j.z >= Z_NEAR
+			{
+				continue;
+			}
+
+			// This edge is splitted by z_near plane. Clp edge and use intersection point to extend clipping polygon.
+			let v = get_line_z_intersection(v_i, v_j, Z_NEAR);
+			let point = v.truncate() / v.z;
+			clipping_polyogn.extend_with_point(&point);
+		}
+	}
+
+	Some(clipping_polyogn)
+}
+
 pub fn reject_triangle_model_back_faces(
 	transformed_vertices: &[ModelVertex3d],
 	triangles: &[Triangle],
@@ -231,7 +298,7 @@ pub fn sort_model_triangles(transformed_vertices: &[ModelVertex3d], triangles: &
 	});
 }
 
-pub fn get_triangle_plane(transformed_vertices: &[ModelVertex3d], triangle: &Triangle) -> Plane
+fn get_triangle_plane(transformed_vertices: &[ModelVertex3d], triangle: &Triangle) -> Plane
 {
 	let v0 = triangle_vertex_debug_checked_fetch(transformed_vertices, triangle[0]);
 	let v1 = triangle_vertex_debug_checked_fetch(transformed_vertices, triangle[1]);

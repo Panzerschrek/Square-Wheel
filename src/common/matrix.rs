@@ -1,5 +1,6 @@
 use super::math_types::*;
 
+#[derive(Copy, Clone)]
 pub struct CameraMatrices
 {
 	pub position: Vec3f,

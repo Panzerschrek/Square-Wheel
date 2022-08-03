@@ -12,6 +12,7 @@ pub struct ClippingPolygon
 }
 
 pub type ClippingPolygonPlanes = [Vec3f; 8];
+pub type ClippingPolygonBoxPlanes = [Vec3f; 4];
 
 #[allow(dead_code)]
 impl ClippingPolygon
@@ -129,6 +130,14 @@ impl ClippingPolygon
 		self.x_minus_y.scale_relative_center(scale);
 	}
 
+	pub fn increase(&mut self, delta: f32)
+	{
+		self.x.increase(delta);
+		self.y.increase(delta);
+		self.x_plus_y.increase(delta);
+		self.x_minus_y.increase(delta);
+	}
+
 	pub fn get_clip_planes(&self) -> ClippingPolygonPlanes
 	{
 		[
@@ -140,6 +149,16 @@ impl ClippingPolygon
 			Vec3f::new(1.0, 1.0, self.x_plus_y.min),
 			Vec3f::new(-1.0, 1.0, -self.x_minus_y.max),
 			Vec3f::new(1.0, -1.0, self.x_minus_y.min),
+		]
+	}
+
+	pub fn get_box_clip_planes(&self) -> ClippingPolygonBoxPlanes
+	{
+		[
+			Vec3f::new(-1.0, 0.0, -self.x.max),
+			Vec3f::new(1.0, 0.0, self.x.min),
+			Vec3f::new(0.0, -1.0, -self.y.max),
+			Vec3f::new(0.0, 1.0, self.y.min),
 		]
 	}
 }
@@ -211,5 +230,11 @@ impl ClipAxis
 		let half_size_scaled = (self.max - self.min) * 0.5 * scale;
 		self.min = center - half_size_scaled;
 		self.max = center + half_size_scaled;
+	}
+
+	fn increase(&mut self, delta: f32)
+	{
+		self.min -= delta;
+		self.max += delta;
 	}
 }
