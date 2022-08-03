@@ -31,8 +31,8 @@ pub struct PostprocessorConfig
 	#[serde(default = "default_one")]
 	pub bloom_sigma: f32,
 
-	#[serde(default = "default_one")]
-	pub bloom_buffer_scale_log2: f32,
+	#[serde(default = "default_bloom_buffer_scale_log2")]
+	pub bloom_buffer_scale_log2: u32,
 
 	#[serde(default = "default_bloom_scale")]
 	pub bloom_scale: f32,
@@ -60,6 +60,11 @@ impl PostprocessorConfig
 fn default_one() -> f32
 {
 	1.0
+}
+
+fn default_bloom_buffer_scale_log2() -> u32
+{
+	1
 }
 
 fn default_zero_level_brightness() -> f32

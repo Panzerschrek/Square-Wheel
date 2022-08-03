@@ -718,13 +718,10 @@ impl Postprocessor
 	// Returns bloom buffer scale and average color.
 	fn perform_bloom(&mut self) -> (usize, ColorVec)
 	{
-		let bloom_buffer_scale = self
-			.config
-			.bloom_buffer_scale_log2
-			.ceil()
-			.max(MIN_BLOOM_BUFFER_SCALE_LOG2 as f32)
-			.min(MAX_BLOOM_BUFFER_SCALE_LOG2 as f32)
-			.exp2() as usize;
+		let bloom_buffer_scale = 1 <<
+			(self.config.bloom_buffer_scale_log2 as usize)
+				.max(MIN_BLOOM_BUFFER_SCALE_LOG2)
+				.min(MAX_BLOOM_BUFFER_SCALE_LOG2);
 
 		self.bloom_buffer_size = [
 			self.hdr_buffer_size[0] / bloom_buffer_scale,
@@ -947,8 +944,8 @@ impl Postprocessor
 		self.config.bloom_buffer_scale_log2 = self
 			.config
 			.bloom_buffer_scale_log2
-			.max(MIN_BLOOM_BUFFER_SCALE_LOG2 as f32)
-			.min(MAX_BLOOM_BUFFER_SCALE_LOG2 as f32);
+			.max(MIN_BLOOM_BUFFER_SCALE_LOG2 as u32)
+			.min(MAX_BLOOM_BUFFER_SCALE_LOG2 as u32);
 		self.config.bloom_scale = self.config.bloom_scale.max(1.0 / 16.0).min(1.0 / 2.0);
 
 		self.config.update_app_config(&self.app_config);

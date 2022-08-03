@@ -7,9 +7,8 @@ pub struct HostConfig
 	#[serde(default = "max_fps_default")]
 	pub max_fps: f32,
 
-	// Use "f32" because of problems with "JSON" serialization.
 	#[serde(default)]
-	pub num_threads: f32,
+	pub num_threads: u32,
 
 	#[serde(default)]
 	pub show_debug_stats: bool,
@@ -18,7 +17,7 @@ pub struct HostConfig
 	pub parallel_swap_buffers: bool,
 
 	#[serde(default)]
-	pub fullscreen_mode: f32,
+	pub fullscreen_mode: u32,
 }
 
 impl HostConfig

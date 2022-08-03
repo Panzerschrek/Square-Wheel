@@ -64,7 +64,7 @@ impl Host
 			if num_threads > num_threads_max
 			{
 				num_threads = num_threads_max;
-				host_config.num_threads = num_threads_max as f32;
+				host_config.num_threads = num_threads_max as u32;
 			}
 			println!("Initialize thread pool with {} threads", num_threads);
 			rayon::ThreadPoolBuilder::new()
@@ -213,21 +213,21 @@ impl Host
 		self.process_commands();
 		self.synchronize_config();
 
-		if self.config.fullscreen_mode == 0.0
+		if self.config.fullscreen_mode == 0
 		{
 			self.window.set_windowed();
 		}
-		else if self.config.fullscreen_mode == 1.0
+		else if self.config.fullscreen_mode == 1
 		{
 			self.window.set_fullscreen_desktop();
 		}
-		else if self.config.fullscreen_mode == 2.0
+		else if self.config.fullscreen_mode == 2
 		{
 			self.window.set_fullscreen();
 		}
 		else
 		{
-			self.config.fullscreen_mode = 0.0;
+			self.config.fullscreen_mode = 0;
 		}
 
 		// Limit time delta if engine works very slow (in debug mode).

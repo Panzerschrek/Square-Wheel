@@ -165,7 +165,29 @@ impl CommandsProcessor
 		{
 			*cur_value = serde_json::Value::from(arg.clone());
 		}
-		else if cur_value.is_number()
+		else if cur_value.is_u64()
+		{
+			if let Ok(num) = arg.parse::<u64>()
+			{
+				*cur_value = serde_json::Value::from(num);
+			}
+			else
+			{
+				return format!("Failed to parse u64");
+			}
+		}
+		else if cur_value.is_i64()
+		{
+			if let Ok(num) = arg.parse::<i64>()
+			{
+				*cur_value = serde_json::Value::from(num);
+			}
+			else
+			{
+				return format!("Failed to parse i64");
+			}
+		}
+		else if cur_value.is_f64()
 		{
 			if let Ok(num) = arg.parse::<f64>()
 			{
@@ -173,7 +195,7 @@ impl CommandsProcessor
 			}
 			else
 			{
-				return format!("Failed to parse number");
+				return format!("Failed to parse f64");
 			}
 		}
 		else if cur_value.is_boolean()
