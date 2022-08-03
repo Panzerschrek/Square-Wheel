@@ -412,8 +412,9 @@ impl Game
 			return;
 		}
 
-		let model = self.resources_manager.lock().unwrap().get_model(&args[0]);
-		let texture = self.resources_manager.lock().unwrap().get_image(&args[1]);
+		let mut r = self.resources_manager.lock().unwrap();
+		let model = r.get_model(&args[0]);
+		let texture = r.get_image(&args[1]);
 
 		let (pos, rotation) = self.get_camera_location();
 		let bbox = model.frames_info[0].bbox;
@@ -454,8 +455,9 @@ impl Game
 			return;
 		}
 
-		let model = self.resources_manager.lock().unwrap().get_model(&args[0]);
-		let texture = self.resources_manager.lock().unwrap().get_image(&args[1]);
+		let mut r = self.resources_manager.lock().unwrap();
+		let model = r.get_model(&args[0]);
+		let texture = r.get_image(&args[1]);
 
 		self.view_model = Some(ModelEntity {
 			position: Vec3f::zero(),

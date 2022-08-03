@@ -130,6 +130,7 @@ impl Host
 	{
 		// Remember if ` was pressed to avoid using it as input for console.
 		let mut has_backquote = false;
+		let mut console = self.console.lock().unwrap();
 		for event in self.window.get_events()
 		{
 			match event
@@ -142,9 +143,9 @@ impl Host
 				{
 					if keycode == Some(Keycode::Escape)
 					{
-						if self.console.lock().unwrap().is_active()
+						if console.is_active()
 						{
-							self.console.lock().unwrap().toggle();
+							console.toggle();
 						}
 						else
 						{
@@ -154,21 +155,21 @@ impl Host
 					if keycode == Some(Keycode::Backquote)
 					{
 						has_backquote = true;
-						self.console.lock().unwrap().toggle();
+						console.toggle();
 					}
-					if self.console.lock().unwrap().is_active()
+					if console.is_active()
 					{
 						if let Some(k) = keycode
 						{
-							self.console.lock().unwrap().process_key_press(k);
+							console.process_key_press(k);
 						}
 					}
 				},
 				Event::TextInput { text, .. } =>
 				{
-					if self.console.lock().unwrap().is_active() && !has_backquote
+					if console.is_active() && !has_backquote
 					{
-						self.console.lock().unwrap().process_text_input(&text);
+						console.process_text_input(&text);
 					}
 				},
 				_ =>

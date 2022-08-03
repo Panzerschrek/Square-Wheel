@@ -132,9 +132,10 @@ impl CommandsProcessor
 		// First, process commands.
 		for queue in &self.commands_queues
 		{
-			if queue.lock().unwrap().has_handler(&c)
+			let mut queue_locked = queue.lock().unwrap();
+			if queue_locked.has_handler(&c)
 			{
-				queue.lock().unwrap().add_invocation(&c, args);
+				queue_locked.add_invocation(&c, args);
 				return String::new();
 			}
 		}
