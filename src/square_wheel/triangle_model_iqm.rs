@@ -68,12 +68,23 @@ pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleMode
 
 	let frame_bones = create_frames(&mut file, &header, &joints, &poses)?;
 
-	let frames_info = bounds
+	let mut frames_info: Vec<_> = bounds
 		.iter()
 		.map(|b| TriangleModelFrameInfo {
 			bbox: BBox::from_min_max(Vec3f::from(b.bbmins), Vec3f::from(b.bbmaxs)),
 		})
 		.collect();
+
+	// Create at least one frame for non-animated models.
+	if frames_info.is_empty()
+	{
+		let mut bbox = BBox::from_point(&vertices[0].position);
+		for v in &vertices
+		{
+			bbox.extend_with_point(&v.position);
+		}
+		frames_info = vec![TriangleModelFrameInfo { bbox }];
+	}
 
 	let triangles_transformed = triangles
 		.iter()
