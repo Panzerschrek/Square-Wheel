@@ -1790,91 +1790,117 @@ impl Renderer
 
 		let texture_data = &texture.pixels;
 
-		let mut vertices_clipped0 = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
-		let mut vertices_clipped1 = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
-		let mut vertices_projected0 = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
-		let mut vertices_projected1 = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
-		let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
-
 		let vertices_combined = &self.dynamic_meshes_vertices[visible_dynamic_mesh.vertices_offset ..];
-
 		let triangles = &self.dynamic_meshes_triangles[visible_dynamic_mesh.triangles_offset ..
 			visible_dynamic_mesh.triangles_offset + visible_dynamic_mesh.num_visible_triangles];
-		for triangle in triangles
+
+		if num_clip_planes_3d == 0 && num_clip_planes_2d == 0
 		{
-			let mut vc_src = &mut vertices_clipped0;
-			let mut vc_dst = &mut vertices_clipped1;
-
-			for (&index, dst_vertex) in triangle.iter().zip(vc_src.iter_mut())
+			// Special case - perform no clipping at all, just draw source triangles.
+			for triangle in triangles
 			{
-				*dst_vertex = triangle_vertex_debug_checked_fetch(vertices_combined, index);
+				let vertices_projected = triangle.map(|index| {
+					let v = triangle_vertex_debug_checked_fetch(vertices_combined, index);
+					let point = v.pos.truncate() / v.pos.z;
+					TrianglePointProjected {
+						x: f32_to_fixed16(point.x),
+						y: f32_to_fixed16(point.y),
+						tc: [f32_to_fixed16(v.tc.x), f32_to_fixed16(v.tc.y)],
+						light: [
+							f32_to_fixed16(v.light[0]),
+							f32_to_fixed16(v.light[1]),
+							f32_to_fixed16(v.light[2]),
+						],
+					}
+				});
+
+				rasterizer.fill_triangle(&vertices_projected, &texture_info, texture_data, blending_mode);
 			}
+		}
+		else
+		{
+			let mut vertices_clipped0 = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
+			let mut vertices_clipped1 = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
+			let mut vertices_projected0 = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
+			let mut vertices_projected1 = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
+			let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
 
-			let mut num_vertices = 3;
-			for clip_plane in &clip_planes_3d[.. num_clip_planes_3d]
+			for triangle in triangles
 			{
-				num_vertices = clip_3d_model_polygon_by_plane(&vc_src[.. num_vertices], clip_plane, vc_dst);
+				let mut vc_src = &mut vertices_clipped0;
+				let mut vc_dst = &mut vertices_clipped1;
+
+				for (&index, dst_vertex) in triangle.iter().zip(vc_src.iter_mut())
+				{
+					*dst_vertex = triangle_vertex_debug_checked_fetch(vertices_combined, index);
+				}
+
+				let mut num_vertices = 3;
+				for clip_plane in &clip_planes_3d[.. num_clip_planes_3d]
+				{
+					num_vertices = clip_3d_model_polygon_by_plane(&vc_src[.. num_vertices], clip_plane, vc_dst);
+					if num_vertices < 3
+					{
+						break;
+					}
+					std::mem::swap(&mut vc_src, &mut vc_dst);
+				}
 				if num_vertices < 3
 				{
-					break;
+					continue;
 				}
-				std::mem::swap(&mut vc_src, &mut vc_dst);
-			}
-			if num_vertices < 3
-			{
-				continue;
-			}
 
-			let mut vp_src = &mut vertices_projected0;
-			let mut vp_dst = &mut vertices_projected1;
+				let mut vp_src = &mut vertices_projected0;
+				let mut vp_dst = &mut vertices_projected1;
 
-			for (src, dst) in vc_src[.. num_vertices].iter().zip(vp_src.iter_mut())
-			{
-				*dst = ModelVertex2d {
-					pos: src.pos.truncate() / src.pos.z,
-					tc: src.tc,
-					light: src.light,
-				};
-			}
+				for (src, dst) in vc_src[.. num_vertices].iter().zip(vp_src.iter_mut())
+				{
+					*dst = ModelVertex2d {
+						pos: src.pos.truncate() / src.pos.z,
+						tc: src.tc,
+						light: src.light,
+					};
+				}
 
-			for clip_plane in &clip_planes_2d[.. num_clip_planes_2d]
-			{
-				num_vertices = clip_2d_model_polygon(&vp_src[.. num_vertices], clip_plane, vp_dst);
+				for clip_plane in &clip_planes_2d[.. num_clip_planes_2d]
+				{
+					num_vertices = clip_2d_model_polygon(&vp_src[.. num_vertices], clip_plane, vp_dst);
+					if num_vertices < 3
+					{
+						break;
+					}
+					std::mem::swap(&mut vp_src, &mut vp_dst);
+				}
 				if num_vertices < 3
 				{
-					break;
+					continue;
 				}
-				std::mem::swap(&mut vp_src, &mut vp_dst);
-			}
-			if num_vertices < 3
-			{
-				continue;
-			}
 
-			for (src, dst) in vp_src[.. num_vertices].iter().zip(vertices_fixed.iter_mut())
-			{
-				*dst = TrianglePointProjected {
-					x: f32_to_fixed16(src.pos.x),
-					y: f32_to_fixed16(src.pos.y),
-					tc: [f32_to_fixed16(src.tc.x), f32_to_fixed16(src.tc.y)],
-					light: [
-						f32_to_fixed16(src.light[0]),
-						f32_to_fixed16(src.light[1]),
-						f32_to_fixed16(src.light[2]),
-					],
-				};
-			}
+				for (src, dst) in vp_src[.. num_vertices].iter().zip(vertices_fixed.iter_mut())
+				{
+					*dst = TrianglePointProjected {
+						x: f32_to_fixed16(src.pos.x),
+						y: f32_to_fixed16(src.pos.y),
+						tc: [f32_to_fixed16(src.tc.x), f32_to_fixed16(src.tc.y)],
+						light: [
+							f32_to_fixed16(src.light[0]),
+							f32_to_fixed16(src.light[1]),
+							f32_to_fixed16(src.light[2]),
+						],
+					};
+				}
 
-			for t in 0 .. num_vertices - 2
-			{
-				rasterizer.fill_triangle(
-					&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
-					&texture_info,
-					texture_data,
-					blending_mode,
-				);
-			} // for subtriangles
-		} // For triangles
+				for t in 0 .. num_vertices - 2
+				{
+					rasterizer.fill_triangle(
+						&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
+						&texture_info,
+						texture_data,
+						blending_mode,
+					);
+				} // for subtriangles
+			} // For triangles
+		}
 	}
 
 	fn get_polygon_surface_data<ColorT>(&self, polygon_data: &DrawPolygonData) -> &[ColorT]
