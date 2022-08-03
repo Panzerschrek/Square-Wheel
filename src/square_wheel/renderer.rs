@@ -104,6 +104,8 @@ struct VisibleDynamicMeshInfo
 	triangles_offset: usize,
 	num_visible_triangles: usize,
 	bbox_vertices_transformed: [Vec3f; 8],
+	clipping_polygon: ClippingPolygon,
+	model_matrix: Mat4f,
 	camera_matrices: CameraMatrices,
 }
 
@@ -216,8 +218,8 @@ impl Renderer
 		run_with_measure(
 			|| {
 				self.dynamic_models_index.position_models(&frame_info.model_entities);
-				self.prepare_dynamic_models(&frame_info.model_entities);
-				self.build_dynamic_models_buffers(&frame_info.camera_matrices, &frame_info.model_entities);
+				self.prepare_dynamic_models(&frame_info.camera_matrices, &frame_info.model_entities);
+				self.build_dynamic_models_buffers(&frame_info.model_entities);
 			},
 			&mut performance_counters.triangle_models_preparation,
 		);
@@ -362,7 +364,7 @@ impl Renderer
 	}
 
 	// Call this after visible leafs search.
-	fn prepare_dynamic_models(&mut self, models: &[ModelEntity])
+	fn prepare_dynamic_models(&mut self, camera_matrices: &CameraMatrices, models: &[ModelEntity])
 	{
 		self.visible_dynamic_meshes_list.clear();
 
@@ -377,27 +379,72 @@ impl Renderer
 			.zip(self.dynamic_model_to_dynamic_meshes_index.iter_mut())
 			.enumerate()
 		{
-			let mut visible = model.is_view_model;
+			dynamic_model_info.first_visible_mesh = 0;
+			dynamic_model_info.num_visible_meshes = 0;
+
+			// Calculate matrices.
+			let model_matrix = get_object_matrix(model.position, model.rotation);
+			let model_view_matrix = camera_matrices.view_matrix * model_matrix;
+
+			// Transform bbox.
+			let bbox = get_current_triangle_model_bbox(&model.model, &model.animation);
+			let bbox_vertices_transformed = bbox.get_corners_vertices().map(|pos| {
+				let pos_transformed = model_view_matrix * pos.extend(1.0);
+				Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w)
+			});
+
+			// Initial clipping polygon for model bbox.
+			let model_bbox_clipping_polygon = if let Some(c) =
+				calculate_triangle_model_screen_polygon(&bbox_vertices_transformed)
+			{
+				c
+			}
+			else
+			{
+				// Model is behind camera plane.
+				continue;
+			};
+
+			// Clipping polygon, combined from intersections of initial model clipping polygon with clipping polygons of all visible leafs, where this model is located.
+			let mut model_all_leafs_clipping_polygon: Option<ClippingPolygon> = None;
+
 			for leaf_index in self.dynamic_models_index.get_model_leafs(entity_index)
 			{
-				if self
-					.visibility_calculator
-					.get_current_frame_leaf_bounds(*leaf_index)
-					.is_some()
+				if let Some(mut leaf_clipping_polygon) =
+					self.visibility_calculator.get_current_frame_leaf_bounds(*leaf_index)
 				{
-					visible = true;
-					break;
+					leaf_clipping_polygon.intersect(&model_bbox_clipping_polygon);
+					if leaf_clipping_polygon.is_valid_and_non_empty()
+					{
+						if let Some(c) = &mut model_all_leafs_clipping_polygon
+						{
+							c.extend(&leaf_clipping_polygon);
+						}
+						else
+						{
+							model_all_leafs_clipping_polygon = Some(leaf_clipping_polygon);
+						}
+					}
 				}
 			}
 
-			if !visible
+			let model_all_leafs_clipping_polygon = if let Some(c) = model_all_leafs_clipping_polygon
 			{
-				dynamic_model_info.first_visible_mesh = 0;
-				dynamic_model_info.num_visible_meshes = 0;
-				continue;
+				c
 			}
+			else
+			{
+				// Model is located inside invisible part(s) of leaf(s).
+				continue;
+			};
 
 			dynamic_model_info.first_visible_mesh = self.visible_dynamic_meshes_list.len() as u32;
+
+			let model_camera_matrices = CameraMatrices {
+				view_matrix: model_view_matrix,
+				planes_matrix: camera_matrices.planes_matrix * model_matrix.transpose().invert().unwrap(),
+				position: Vec3f::zero(),
+			};
 
 			for (mesh_index, mesh) in model.model.meshes.iter().enumerate()
 			{
@@ -406,13 +453,11 @@ impl Renderer
 					mesh_index: mesh_index as u32,
 					vertices_offset,
 					triangles_offset,
-					num_visible_triangles: 0,                      // set later
-					bbox_vertices_transformed: [Vec3f::zero(); 8], // set later
-					camera_matrices: CameraMatrices {
-						view_matrix: Mat4f::zero(),
-						planes_matrix: Mat4f::zero(),
-						position: Vec3f::zero(),
-					}, // Set later
+					num_visible_triangles: 0, // set later
+					bbox_vertices_transformed,
+					clipping_polygon: model_all_leafs_clipping_polygon,
+					model_matrix,
+					camera_matrices: model_camera_matrices,
 				});
 
 				let num_vertices = match &mesh.vertex_data
@@ -445,7 +490,7 @@ impl Renderer
 		}
 	}
 
-	fn build_dynamic_models_buffers(&mut self, camera_matrices: &CameraMatrices, models: &[ModelEntity])
+	fn build_dynamic_models_buffers(&mut self, models: &[ModelEntity])
 	{
 		// It is safe to share vertices and triangle buffers since each mesh uses its own region.
 		let dst_vertices_shared = SharedMutSlice::new(&mut self.dynamic_meshes_vertices);
@@ -456,21 +501,6 @@ impl Renderer
 		let func = |visible_dynamic_mesh: &mut VisibleDynamicMeshInfo| {
 			let model = &models[visible_dynamic_mesh.entity_index as usize];
 			let animation = &model.animation;
-
-			let model_matrix = get_object_matrix(model.position, model.rotation);
-			let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
-
-			let final_matrix = camera_matrices.view_matrix * model_matrix;
-
-			visible_dynamic_mesh.camera_matrices.view_matrix = final_matrix;
-			visible_dynamic_mesh.camera_matrices.planes_matrix = camera_matrices.planes_matrix * model_matrix_inverse;
-
-			// Transform bbox.
-			let bbox = get_current_triangle_model_bbox(&model.model, animation);
-			visible_dynamic_mesh.bbox_vertices_transformed = bbox.get_corners_vertices().map(|pos| {
-				let pos_transformed = final_matrix * pos.extend(1.0);
-				Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w)
-			});
 
 			let texture = &model.texture;
 			let mesh = &model.model.meshes[visible_dynamic_mesh.mesh_index as usize];
@@ -483,8 +513,8 @@ impl Renderer
 				mesh,
 				animation,
 				&fetch_light_from_grid(map, &model.position),
-				&model_matrix,
-				&final_matrix,
+				&visible_dynamic_mesh.model_matrix,
+				&visible_dynamic_mesh.camera_matrices.view_matrix,
 				&Vec2f::new(texture.size[0] as f32, texture.size[1] as f32),
 				&model.model.tc_shift,
 				dst_mesh_vertices,
