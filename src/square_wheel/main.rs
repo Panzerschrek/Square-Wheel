@@ -12,6 +12,7 @@ mod dynamic_models_index;
 mod fast_math;
 mod frame_info;
 mod frame_number;
+mod game_interface;
 mod host;
 mod host_config;
 mod inline_models_index;

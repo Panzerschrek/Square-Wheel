@@ -1,5 +1,5 @@
 use super::{
-	commands_processor, commands_queue, config, console, debug_stats_printer::*, host_config::*,
+	commands_processor, commands_queue, config, console, debug_stats_printer::*, game_interface::*, host_config::*,
 	performance_counter::*, postprocessor::*, renderer, resources_manager::*, test_game, text_printer,
 	ticks_counter::*,
 };
@@ -30,7 +30,7 @@ pub struct Host
 
 struct ActiveMap
 {
-	game: test_game::Game,
+	game: Box<dyn GameInterface>,
 	renderer: renderer::Renderer,
 	debug_stats_printer: DebugStatsPrinter,
 }
@@ -421,12 +421,12 @@ impl Host
 		if let Some(map) = map_opt
 		{
 			self.active_map = Some(ActiveMap {
-				game: test_game::Game::new(
+				game: Box::new(test_game::Game::new(
 					self.commands_processor.clone(),
 					self.console.clone(),
 					self.resources_manager.clone(),
 					map.clone(),
-				),
+				)),
 				renderer: renderer::Renderer::new(self.resources_manager.clone(), self.app_config.clone(), map.clone()),
 				debug_stats_printer: DebugStatsPrinter::new(self.config.show_debug_stats),
 			});

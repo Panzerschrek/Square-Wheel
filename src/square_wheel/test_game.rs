@@ -1,5 +1,6 @@
 use super::{
-	commands_processor, commands_queue, console, frame_info::*, light::*, resources_manager::*, test_game_physics,
+	commands_processor, commands_queue, console, frame_info::*, game_interface::*, light::*, resources_manager::*,
+	test_game_physics,
 };
 use common::{
 	bsp_map_compact, camera_controller::*, camera_rotation_controller::*, material, math_types::*, matrix::*,
@@ -66,201 +67,6 @@ impl Game
 			test_models: Vec::new(),
 			view_model: None,
 			game_time: 0.0,
-		}
-	}
-
-	pub fn process_input(&mut self, keyboard_state: &system_window::KeyboardState, time_delta_s: f32)
-	{
-		match &mut self.player_controller
-		{
-			PlayerController::NoclipController(camera_controller) =>
-			{
-				camera_controller.update(keyboard_state, time_delta_s)
-			},
-			PlayerController::PhysicsController {
-				rotation_controller,
-				phys_handle,
-			} =>
-			{
-				rotation_controller.update(keyboard_state, time_delta_s);
-
-				let azimuth = rotation_controller.get_angles().0;
-				let forward_vector = Vec3f::new(-(azimuth.sin()), azimuth.cos(), 0.0);
-				let left_vector = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0);
-				let mut move_vector = Vec3f::new(0.0, 0.0, 0.0);
-
-				use sdl2::keyboard::Scancode;
-				if keyboard_state.contains(&Scancode::W)
-				{
-					move_vector += forward_vector;
-				}
-				if keyboard_state.contains(&Scancode::S)
-				{
-					move_vector -= forward_vector;
-				}
-				if keyboard_state.contains(&Scancode::D)
-				{
-					move_vector += left_vector;
-				}
-				if keyboard_state.contains(&Scancode::A)
-				{
-					move_vector -= left_vector;
-				}
-
-				let move_vector_length = move_vector.magnitude();
-				if move_vector_length > 0.0
-				{
-					move_vector = move_vector / move_vector_length;
-				}
-
-				let ground_acceleration = 2048.0;
-				let air_acceleration = 512.0;
-				let max_velocity = 400.0;
-				let jump_velocity_add = 256.0;
-
-				let cur_velocity = self.physics.get_object_velocity(*phys_handle);
-				let on_ground = self.physics.is_object_on_ground(*phys_handle);
-
-				let acceleration: f32 = if on_ground
-				{
-					ground_acceleration
-				}
-				else
-				{
-					air_acceleration
-				};
-
-				let mut velocity_add = Vec3f::zero();
-
-				// Limit maximum velocity.
-				let velocity_projection_to_move_vector = move_vector.dot(cur_velocity);
-				if velocity_projection_to_move_vector < max_velocity
-				{
-					let max_can_add = max_velocity - velocity_projection_to_move_vector;
-					velocity_add = move_vector * (acceleration * time_delta_s).min(max_can_add);
-				}
-
-				if keyboard_state.contains(&Scancode::Space) && on_ground && cur_velocity.z <= 1.0
-				{
-					velocity_add.z = jump_velocity_add;
-				}
-
-				self.physics.add_object_velocity(*phys_handle, &velocity_add);
-			},
-		}
-	}
-
-	pub fn update(&mut self, time_delta_s: f32)
-	{
-		self.process_commands();
-
-		self.game_time += time_delta_s;
-		self.physics.update(time_delta_s);
-
-		for (index, submodel_opt) in self.submodels.iter_mut().enumerate()
-		{
-			let phase = index as f32;
-			let shift = 32.0 *
-				Vec3f::new(
-					(0.5 * self.game_time + phase).sin(),
-					(0.33 * self.game_time + phase).sin(),
-					(0.11111 * self.game_time + phase).sin(),
-				);
-
-			if submodel_opt.is_none()
-			{
-				let rotation = QuaternionF::zero();
-				*submodel_opt = Some(PhysicsTestSubmodel {
-					phys_handle: self.physics.add_submodel_object(index, &shift, &rotation),
-					draw_entity: SubmodelEntity {
-						rotation,
-						position: Vec3f::zero(),
-					},
-				});
-			}
-
-			if let Some(submodel) = submodel_opt
-			{
-				let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
-				let bbox_center = bbox.get_center();
-
-				self.physics
-					.set_kinematic_object_position(submodel.phys_handle, &(bbox_center + shift));
-				let (position, rotation) = self.physics.get_object_location(submodel.phys_handle);
-
-				submodel.draw_entity.position = position;
-				submodel.draw_entity.rotation = rotation;
-			}
-		}
-
-		for model in &mut self.test_models
-		{
-			let num_frames = model.draw_entity.model.frames_info.len() as u32;
-			let frame_f = self.game_time * 10.0;
-			model.draw_entity.animation.frames[0] = (frame_f as u32) % num_frames;
-			model.draw_entity.animation.frames[1] = (frame_f as u32 + 1) % num_frames;
-			model.draw_entity.animation.lerp = 1.0 - frame_f.fract();
-
-			let location = self.physics.get_object_location(model.phys_handle);
-
-			model.draw_entity.position = location.0;
-			model.draw_entity.rotation = location.1;
-		}
-	}
-
-	pub fn get_frame_info(&self, surface_info: &system_window::SurfaceInfo) -> FrameInfo
-	{
-		let (pos, angles) = self.get_camera_location();
-
-		let fov = std::f32::consts::PI * 0.375;
-		let camera_matrices = build_view_matrix_with_full_rotation(
-			pos,
-			angles,
-			fov,
-			surface_info.width as f32,
-			surface_info.height as f32,
-		);
-
-		let mut model_entities = self
-			.test_models
-			.iter()
-			.map(|e| e.draw_entity.clone())
-			.collect::<Vec<_>>();
-		if let Some(mut view_model) = self.view_model.clone()
-		{
-			let azimuth = self.get_camera_angles().0;
-
-			// TODO - use also camera elevation.
-			let shift_vec_front = Vec3f::new(-azimuth.sin(), azimuth.cos(), 0.0) * 16.0;
-			let shift_vec_left = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0) * 8.0;
-			let shift_vec_down = Vec3f::new(0.0, 0.0, -1.0) * 10.0;
-
-			let (pos, rotation) = self.get_camera_location();
-			view_model.position = pos + shift_vec_front + shift_vec_left + shift_vec_down;
-			view_model.rotation = rotation;
-
-			view_model.lighting = ModelLighting::AdvancedLight {
-				position: pos, // Use camera position to fetch light.
-				grid_light_scale: 1.0,
-				light_add: [0.1, 0.1, 0.1],
-			};
-
-			model_entities.push(view_model);
-		}
-
-		let submodel_entities = self
-			.submodels
-			.iter()
-			.map(|s| s.map(|s| s.draw_entity.clone()))
-			.collect();
-
-		FrameInfo {
-			camera_matrices,
-			submodel_entities,
-			skybox_rotation: QuaternionF::zero(),
-			game_time_s: self.game_time,
-			lights: self.test_lights.clone(),
-			model_entities,
 		}
 	}
 
@@ -529,6 +335,204 @@ impl Game
 			};
 
 			self.console.lock().unwrap().add_text("Noclip OFF".to_string());
+		}
+	}
+}
+
+impl GameInterface for Game
+{
+	fn process_input(&mut self, keyboard_state: &system_window::KeyboardState, time_delta_s: f32)
+	{
+		match &mut self.player_controller
+		{
+			PlayerController::NoclipController(camera_controller) =>
+			{
+				camera_controller.update(keyboard_state, time_delta_s)
+			},
+			PlayerController::PhysicsController {
+				rotation_controller,
+				phys_handle,
+			} =>
+			{
+				rotation_controller.update(keyboard_state, time_delta_s);
+
+				let azimuth = rotation_controller.get_angles().0;
+				let forward_vector = Vec3f::new(-(azimuth.sin()), azimuth.cos(), 0.0);
+				let left_vector = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0);
+				let mut move_vector = Vec3f::new(0.0, 0.0, 0.0);
+
+				use sdl2::keyboard::Scancode;
+				if keyboard_state.contains(&Scancode::W)
+				{
+					move_vector += forward_vector;
+				}
+				if keyboard_state.contains(&Scancode::S)
+				{
+					move_vector -= forward_vector;
+				}
+				if keyboard_state.contains(&Scancode::D)
+				{
+					move_vector += left_vector;
+				}
+				if keyboard_state.contains(&Scancode::A)
+				{
+					move_vector -= left_vector;
+				}
+
+				let move_vector_length = move_vector.magnitude();
+				if move_vector_length > 0.0
+				{
+					move_vector = move_vector / move_vector_length;
+				}
+
+				let ground_acceleration = 2048.0;
+				let air_acceleration = 512.0;
+				let max_velocity = 400.0;
+				let jump_velocity_add = 256.0;
+
+				let cur_velocity = self.physics.get_object_velocity(*phys_handle);
+				let on_ground = self.physics.is_object_on_ground(*phys_handle);
+
+				let acceleration: f32 = if on_ground
+				{
+					ground_acceleration
+				}
+				else
+				{
+					air_acceleration
+				};
+
+				let mut velocity_add = Vec3f::zero();
+
+				// Limit maximum velocity.
+				let velocity_projection_to_move_vector = move_vector.dot(cur_velocity);
+				if velocity_projection_to_move_vector < max_velocity
+				{
+					let max_can_add = max_velocity - velocity_projection_to_move_vector;
+					velocity_add = move_vector * (acceleration * time_delta_s).min(max_can_add);
+				}
+
+				if keyboard_state.contains(&Scancode::Space) && on_ground && cur_velocity.z <= 1.0
+				{
+					velocity_add.z = jump_velocity_add;
+				}
+
+				self.physics.add_object_velocity(*phys_handle, &velocity_add);
+			},
+		}
+	}
+
+	fn update(&mut self, time_delta_s: f32)
+	{
+		self.process_commands();
+
+		self.game_time += time_delta_s;
+		self.physics.update(time_delta_s);
+
+		for (index, submodel_opt) in self.submodels.iter_mut().enumerate()
+		{
+			let phase = index as f32;
+			let shift = 32.0 *
+				Vec3f::new(
+					(0.5 * self.game_time + phase).sin(),
+					(0.33 * self.game_time + phase).sin(),
+					(0.11111 * self.game_time + phase).sin(),
+				);
+
+			if submodel_opt.is_none()
+			{
+				let rotation = QuaternionF::zero();
+				*submodel_opt = Some(PhysicsTestSubmodel {
+					phys_handle: self.physics.add_submodel_object(index, &shift, &rotation),
+					draw_entity: SubmodelEntity {
+						rotation,
+						position: Vec3f::zero(),
+					},
+				});
+			}
+
+			if let Some(submodel) = submodel_opt
+			{
+				let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
+				let bbox_center = bbox.get_center();
+
+				self.physics
+					.set_kinematic_object_position(submodel.phys_handle, &(bbox_center + shift));
+				let (position, rotation) = self.physics.get_object_location(submodel.phys_handle);
+
+				submodel.draw_entity.position = position;
+				submodel.draw_entity.rotation = rotation;
+			}
+		}
+
+		for model in &mut self.test_models
+		{
+			let num_frames = model.draw_entity.model.frames_info.len() as u32;
+			let frame_f = self.game_time * 10.0;
+			model.draw_entity.animation.frames[0] = (frame_f as u32) % num_frames;
+			model.draw_entity.animation.frames[1] = (frame_f as u32 + 1) % num_frames;
+			model.draw_entity.animation.lerp = 1.0 - frame_f.fract();
+
+			let location = self.physics.get_object_location(model.phys_handle);
+
+			model.draw_entity.position = location.0;
+			model.draw_entity.rotation = location.1;
+		}
+	}
+
+	fn get_frame_info(&self, surface_info: &system_window::SurfaceInfo) -> FrameInfo
+	{
+		let (pos, angles) = self.get_camera_location();
+
+		let fov = std::f32::consts::PI * 0.375;
+		let camera_matrices = build_view_matrix_with_full_rotation(
+			pos,
+			angles,
+			fov,
+			surface_info.width as f32,
+			surface_info.height as f32,
+		);
+
+		let mut model_entities = self
+			.test_models
+			.iter()
+			.map(|e| e.draw_entity.clone())
+			.collect::<Vec<_>>();
+		if let Some(mut view_model) = self.view_model.clone()
+		{
+			let azimuth = self.get_camera_angles().0;
+
+			// TODO - use also camera elevation.
+			let shift_vec_front = Vec3f::new(-azimuth.sin(), azimuth.cos(), 0.0) * 16.0;
+			let shift_vec_left = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0) * 8.0;
+			let shift_vec_down = Vec3f::new(0.0, 0.0, -1.0) * 10.0;
+
+			let (pos, rotation) = self.get_camera_location();
+			view_model.position = pos + shift_vec_front + shift_vec_left + shift_vec_down;
+			view_model.rotation = rotation;
+
+			view_model.lighting = ModelLighting::AdvancedLight {
+				position: pos, // Use camera position to fetch light.
+				grid_light_scale: 1.0,
+				light_add: [0.1, 0.1, 0.1],
+			};
+
+			model_entities.push(view_model);
+		}
+
+		let submodel_entities = self
+			.submodels
+			.iter()
+			.map(|s| s.map(|s| s.draw_entity.clone()))
+			.collect();
+
+		FrameInfo {
+			camera_matrices,
+			submodel_entities,
+			skybox_rotation: QuaternionF::zero(),
+			game_time_s: self.game_time,
+			lights: self.test_lights.clone(),
+			model_entities,
 		}
 	}
 }
