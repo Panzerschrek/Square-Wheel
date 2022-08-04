@@ -176,10 +176,10 @@ fn load_md3_mesh(
 		material_name,
 		triangles,
 		num_frames: src_mesh.num_frames,
-		vertex_data: VertexData::VertexAnimated(VertexAnimatedVertexData {
+		vertex_data: VertexData::VertexAnimated {
 			constant: vertex_data_constant,
 			variable: vertex_data_variable,
-		}),
+		},
 	}))
 }
 

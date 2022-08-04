@@ -317,7 +317,7 @@ impl Renderer
 				.meshes[visible_dynamic_mesh.mesh_index as usize]
 				.vertex_data
 			{
-				VertexData::VertexAnimated(va) => va.constant.len(),
+				VertexData::VertexAnimated { constant, .. } => constant.len(),
 				VertexData::SkeletonAnimated(v) => v.len(),
 			};
 		}
@@ -447,7 +447,7 @@ impl Renderer
 
 				let num_vertices = match &mesh.vertex_data
 				{
-					VertexData::VertexAnimated(va) => va.constant.len(),
+					VertexData::VertexAnimated { constant, .. } => constant.len(),
 					VertexData::SkeletonAnimated(v) => v.len(),
 				};
 

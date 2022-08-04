@@ -77,13 +77,14 @@ impl Game
 			{
 				camera_controller.update(keyboard_state, time_delta_s)
 			},
-			PlayerController::PhysicsController(physics_controller) =>
+			PlayerController::PhysicsController {
+				rotation_controller,
+				phys_handle,
+			} =>
 			{
-				physics_controller
-					.rotation_controller
-					.update(keyboard_state, time_delta_s);
+				rotation_controller.update(keyboard_state, time_delta_s);
 
-				let azimuth = physics_controller.rotation_controller.get_angles().0;
+				let azimuth = rotation_controller.get_angles().0;
 				let forward_vector = Vec3f::new(-(azimuth.sin()), azimuth.cos(), 0.0);
 				let left_vector = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0);
 				let mut move_vector = Vec3f::new(0.0, 0.0, 0.0);
@@ -117,8 +118,8 @@ impl Game
 				let max_velocity = 400.0;
 				let jump_velocity_add = 256.0;
 
-				let cur_velocity = self.physics.get_object_velocity(physics_controller.phys_handle);
-				let on_ground = self.physics.is_object_on_ground(physics_controller.phys_handle);
+				let cur_velocity = self.physics.get_object_velocity(*phys_handle);
+				let on_ground = self.physics.is_object_on_ground(*phys_handle);
 
 				let acceleration: f32 = if on_ground
 				{
@@ -144,8 +145,7 @@ impl Game
 					velocity_add.z = jump_velocity_add;
 				}
 
-				self.physics
-					.add_object_velocity(physics_controller.phys_handle, &velocity_add);
+				self.physics.add_object_velocity(*phys_handle, &velocity_add);
 			},
 		}
 	}
@@ -272,9 +272,12 @@ impl Game
 			{
 				(camera_controller.get_pos(), camera_controller.get_rotation())
 			},
-			PlayerController::PhysicsController(physics_controller) => (
-				self.physics.get_object_location(physics_controller.phys_handle).0,
-				physics_controller.rotation_controller.get_rotation(),
+			PlayerController::PhysicsController {
+				rotation_controller,
+				phys_handle,
+			} => (
+				self.physics.get_object_location(*phys_handle).0,
+				rotation_controller.get_rotation(),
 			),
 		}
 	}
@@ -284,10 +287,9 @@ impl Game
 		match &self.player_controller
 		{
 			PlayerController::NoclipController(camera_controller) => camera_controller.get_angles(),
-			PlayerController::PhysicsController(physics_controller) =>
-			{
-				physics_controller.rotation_controller.get_angles()
-			},
+			PlayerController::PhysicsController {
+				rotation_controller, ..
+			} => rotation_controller.get_angles(),
 		}
 	}
 
@@ -299,9 +301,9 @@ impl Game
 			{
 				camera_controller.set_angles(azimuth, elevation, roll)
 			},
-			PlayerController::PhysicsController(physics_controller) => physics_controller
-				.rotation_controller
-				.set_angles(azimuth, elevation, roll),
+			PlayerController::PhysicsController {
+				rotation_controller, ..
+			} => rotation_controller.set_angles(azimuth, elevation, roll),
 		}
 	}
 
@@ -337,9 +339,9 @@ impl Game
 				{
 					camera_controller.set_pos(&pos);
 				},
-				PlayerController::PhysicsController(physics_controller) =>
+				PlayerController::PhysicsController { phys_handle, .. } =>
 				{
-					self.physics.teleport_object(physics_controller.phys_handle, &pos);
+					self.physics.teleport_object(*phys_handle, &pos);
 				},
 			}
 		}
@@ -504,9 +506,9 @@ impl Game
 		let (pos, _) = self.get_camera_location();
 		let angles = self.get_camera_angles();
 
-		if let PlayerController::PhysicsController(physics_controller) = &self.player_controller
+		if let PlayerController::PhysicsController { phys_handle, .. } = &self.player_controller
 		{
-			self.physics.remove_object(physics_controller.phys_handle);
+			self.physics.remove_object(*phys_handle);
 
 			let mut camera_controller = CameraController::new();
 			camera_controller.set_pos(&pos);
@@ -521,12 +523,10 @@ impl Game
 			let mut rotation_controller = CameraRotationController::new();
 			rotation_controller.set_angles(angles.0, angles.1, angles.2);
 
-			let controller = PlayerPhysicsController {
+			self.player_controller = PlayerController::PhysicsController {
 				phys_handle: self.physics.add_character_object(&pos, 60.0, 120.0),
 				rotation_controller,
 			};
-
-			self.player_controller = PlayerController::PhysicsController(controller);
 
 			self.console.lock().unwrap().add_text("Noclip OFF".to_string());
 		}
@@ -561,11 +561,9 @@ struct PhysicsTestSubmodel
 enum PlayerController
 {
 	NoclipController(CameraController),
-	PhysicsController(PlayerPhysicsController),
-}
-
-struct PlayerPhysicsController
-{
-	rotation_controller: CameraRotationController,
-	phys_handle: test_game_physics::ObjectHandle,
+	PhysicsController
+	{
+		rotation_controller: CameraRotationController,
+		phys_handle: test_game_physics::ObjectHandle,
+	},
 }

@@ -55,15 +55,13 @@ pub type VertexIndex = u16;
 
 pub enum VertexData
 {
-	VertexAnimated(VertexAnimatedVertexData),
+	VertexAnimated
+	{
+		constant: Vec<VertexAnimatedVertexConstant>,
+		// size = number of vertices * number of frames.
+		variable: Vec<VertexAnimatedVertexVariable>,
+	},
 	SkeletonAnimated(Vec<SkeletonAnimatedVertex>),
-}
-
-pub struct VertexAnimatedVertexData
-{
-	pub constant: Vec<VertexAnimatedVertexConstant>,
-	// size = number of vertices * number of frames.
-	pub variable: Vec<VertexAnimatedVertexVariable>,
 }
 
 #[derive(Copy, Clone)]

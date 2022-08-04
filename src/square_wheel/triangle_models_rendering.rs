@@ -24,10 +24,10 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 
 	match &mesh.vertex_data
 	{
-		VertexData::VertexAnimated(va) =>
+		VertexData::VertexAnimated { constant, variable } =>
 		{
-			let frame_vertex_data0 = &va.variable[frame0 * va.constant.len() .. (frame0 + 1) * va.constant.len()];
-			let frame_vertex_data1 = &va.variable[frame1 * va.constant.len() .. (frame1 + 1) * va.constant.len()];
+			let frame_vertex_data0 = &variable[frame0 * constant.len() .. (frame0 + 1) * constant.len()];
+			let frame_vertex_data1 = &variable[frame1 * constant.len() .. (frame1 + 1) * constant.len()];
 
 			if perform_lerp
 			{
@@ -35,7 +35,7 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 				for (((v_v0, v_v1), v_c), dst_v) in frame_vertex_data0
 					.iter()
 					.zip(frame_vertex_data1)
-					.zip(va.constant.iter())
+					.zip(constant.iter())
 					.zip(dst_vertices.iter_mut())
 				{
 					let position_lerped = v_v0.position * lerp0 + v_v1.position * lerp1;
@@ -62,7 +62,7 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 				};
 				for ((v_v, v_c), dst_v) in frame_vertex_data
 					.iter()
-					.zip(va.constant.iter())
+					.zip(constant.iter())
 					.zip(dst_vertices.iter_mut())
 				{
 					let pos_transformed = model_view_matrix * v_v.position.extend(1.0);
