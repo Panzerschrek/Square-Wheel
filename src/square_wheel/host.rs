@@ -1,7 +1,6 @@
 use super::{
 	commands_processor, commands_queue, config, console, debug_stats_printer::*, game_interface::*, host_config::*,
-	performance_counter::*, postprocessor::*, renderer, resources_manager::*, test_game, text_printer,
-	ticks_counter::*,
+	performance_counter::*, postprocessor::*, renderer, resources_manager::*, text_printer, ticks_counter::*,
 };
 use common::{color::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
@@ -20,6 +19,7 @@ pub struct Host
 	window: system_window::SystemWindow,
 	postprocessor: Postprocessor,
 	resources_manager: ResourcesManagerSharedPtr,
+	game_creation_function: GameCreationFunction,
 	active_map: Option<ActiveMap>,
 	prev_time: std::time::Instant,
 	prev_frame_end_time: std::time::Instant,
@@ -37,7 +37,11 @@ struct ActiveMap
 
 impl Host
 {
-	pub fn new(config_file_path: std::path::PathBuf, startup_commands: Vec<String>) -> Self
+	pub fn new(
+		config_file_path: std::path::PathBuf,
+		startup_commands: Vec<String>,
+		game_creation_function: GameCreationFunction,
+	) -> Self
 	{
 		println!("Loading config from file \"{:?}\"", config_file_path);
 		let config_json = if let Some(json) = config::load(&config_file_path)
@@ -103,6 +107,7 @@ impl Host
 			window: system_window::SystemWindow::new(),
 			postprocessor: Postprocessor::new(app_config.clone()),
 			resources_manager: ResourcesManager::new(app_config, console),
+			game_creation_function,
 			active_map: None,
 			prev_time: cur_time,
 			prev_frame_end_time: cur_time,
@@ -420,13 +425,14 @@ impl Host
 		let map_opt = self.resources_manager.lock().unwrap().get_map(&args[0]);
 		if let Some(map) = map_opt
 		{
+			let game_creation_function = self.game_creation_function;
 			self.active_map = Some(ActiveMap {
-				game: Box::new(test_game::Game::new(
+				game: game_creation_function(
 					self.commands_processor.clone(),
 					self.console.clone(),
 					self.resources_manager.clone(),
 					map.clone(),
-				)),
+				),
 				renderer: renderer::Renderer::new(self.resources_manager.clone(), self.app_config.clone(), map.clone()),
 				debug_stats_printer: DebugStatsPrinter::new(self.config.show_debug_stats),
 			});

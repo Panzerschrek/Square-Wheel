@@ -60,7 +60,11 @@ struct Opt
 pub fn main()
 {
 	let opt = Opt::from_args();
-	let mut h = host::Host::new(opt.config.unwrap_or_else(|| PathBuf::from("config.json")), opt.exec);
+	let mut h = host::Host::new(
+		opt.config.unwrap_or_else(|| PathBuf::from("config.json")),
+		opt.exec,
+		|a, b, c, d| Box::new(test_game::Game::new(a, b, c, d)),
+	);
 	loop
 	{
 		if !h.process_frame()
