@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "squar_wheel", about = "SquareWheel engine.")]
+#[structopt(name = "square_wheel", about = "SquareWheel engine.")]
 struct Opt
 {
 	/// Optional command to execute on start.

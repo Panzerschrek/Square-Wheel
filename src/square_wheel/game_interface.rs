@@ -13,5 +13,7 @@ pub trait GameInterface: Send + Sync
 	fn get_frame_info(&self, surface_info: &system_window::SurfaceInfo) -> FrameInfo;
 }
 
+pub type GameInterfacePtr = Box<dyn GameInterface>;
+
 pub type GameCreationFunction =
-	fn(CommandsProcessorPtr, ConsoleSharedPtr, ResourcesManagerSharedPtr, Arc<BSPMap>) -> Box<dyn GameInterface>;
+	fn(CommandsProcessorPtr, ConsoleSharedPtr, ResourcesManagerSharedPtr, Arc<BSPMap>) -> GameInterfacePtr;

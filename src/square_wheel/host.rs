@@ -30,7 +30,7 @@ pub struct Host
 
 struct ActiveMap
 {
-	game: Box<dyn GameInterface>,
+	game: GameInterfacePtr,
 	renderer: renderer::Renderer,
 	debug_stats_printer: DebugStatsPrinter,
 }
