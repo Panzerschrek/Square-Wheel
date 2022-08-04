@@ -238,6 +238,10 @@ impl Game
 			let (pos, rotation) = self.get_camera_location();
 			view_model.position = pos + shift_vec_front + shift_vec_left + shift_vec_down;
 			view_model.rotation = rotation;
+			if let ModelLighting::AdvancedLight { position, .. } = &mut view_model.lighting
+			{
+				*position = pos;
+			}
 			model_entities.push(view_model);
 		}
 
@@ -484,6 +488,7 @@ impl Game
 			lighting: ModelLighting::AdvancedLight {
 				grid_light_scale: 1.0,
 				light_add: [0.1, 0.1, 0.1],
+				position: Vec3f::zero(),
 			},
 			is_view_model: true,
 			ordering_custom_bbox: None,

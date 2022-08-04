@@ -62,7 +62,12 @@ pub enum ModelLighting
 	// Complex case - use combination of light grid and constant color.
 	AdvancedLight
 	{
+		// Scale of light, fetched frm light grid.
 		grid_light_scale: f32,
+		// Constant light, added to vale, fetched from light grid.
 		light_add: [f32; 3],
+		// World space position used for light grid fetch.
+		// May be different from model position (for various reasons),
+		position: Vec3f,
 	},
 }

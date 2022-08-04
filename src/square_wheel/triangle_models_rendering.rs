@@ -334,6 +334,7 @@ pub fn get_model_light(map: &bsp_map_compact::BSPMap, model: &ModelEntity) -> bs
 		ModelLighting::AdvancedLight {
 			grid_light_scale,
 			light_add,
+			position,
 		} =>
 		{
 			let mut result = bsp_map_compact::LightGridElement {
@@ -344,7 +345,7 @@ pub fn get_model_light(map: &bsp_map_compact::BSPMap, model: &ModelEntity) -> bs
 
 			if grid_light_scale > 0.0
 			{
-				let grid_light = fetch_light_from_grid(map, &model.position);
+				let grid_light = fetch_light_from_grid(map, &position);
 				for i in 0 .. 6
 				{
 					for j in 0 .. 3
