@@ -1,5 +1,5 @@
 use super::frame_info::*;
-use common::{bbox::*, bsp_map_compact, math_types::*};
+use crate::common::{bbox::*, bsp_map_compact, math_types::*};
 use std::sync::Arc;
 
 pub struct InlineModelsIndex

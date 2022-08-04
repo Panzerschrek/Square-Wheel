@@ -5,7 +5,7 @@ pub use fast_math_impl::*;
 #[cfg(all(target_arch = "x86_64", target_feature = "sse4.1"))]
 mod fast_math_impl
 {
-	use common::color::*;
+	use crate::common::color::*;
 	use core::arch::x86_64::*;
 
 	// Relative erorr <= 1.5 * 2^(-12)
@@ -365,7 +365,7 @@ mod fast_math_impl
 mod fast_math_impl
 {
 	use super::*;
-	use common::color::*;
+	use crate::common::color::*;
 
 	pub fn inv_sqrt_fast(x: f32) -> f32
 	{

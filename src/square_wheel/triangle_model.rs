@@ -1,4 +1,4 @@
-use common::{bbox::*, math_types::*};
+use crate::common::{bbox::*, math_types::*};
 
 pub struct TriangleModel
 {

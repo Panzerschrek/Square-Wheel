@@ -1,5 +1,5 @@
 use super::fast_math::*;
-use common::color::*;
+use crate::common::color::*;
 
 pub trait AbstractColor: Default + Copy + Send + Sync + From<ColorVec> + From<ColorVecI> + Into<ColorVecI>
 {

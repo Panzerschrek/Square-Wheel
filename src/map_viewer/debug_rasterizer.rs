@@ -1,4 +1,4 @@
-use common::{color::*, fixed_math::*, system_window};
+use square_wheel_lib::common::{color::*, fixed_math::*, system_window};
 
 pub struct DebugRasterizer<'a>
 {

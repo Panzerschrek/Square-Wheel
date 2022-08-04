@@ -1,5 +1,5 @@
 use super::{light::*, resources_manager::*, triangle_model::*};
-use common::{bbox::*, image::*, material, math_types::*, matrix::*};
+use crate::common::{bbox::*, image::*, material, math_types::*, matrix::*};
 
 pub struct FrameInfo
 {

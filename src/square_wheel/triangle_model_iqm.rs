@@ -1,5 +1,5 @@
 use super::{triangle_model::*, triangle_model_loading::*};
-use common::{bbox::*, math_types::*};
+use crate::common::{bbox::*, math_types::*};
 use std::io::{Read, Seek};
 
 pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleModel>, std::io::Error>

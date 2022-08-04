@@ -2,7 +2,7 @@ use super::{
 	commands_processor, commands_queue, config, console, debug_stats_printer::*, game_interface::*, host_config::*,
 	performance_counter::*, postprocessor::*, renderer, resources_manager::*, text_printer, ticks_counter::*,
 };
-use common::{color::*, system_window};
+use crate::common::{color::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
 use std::time::Duration;
 

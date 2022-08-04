@@ -1,5 +1,5 @@
 use super::{frame_info::*, triangle_models_rendering::*};
-use common::{bsp_map_compact, math_types::*, matrix::*};
+use crate::common::{bsp_map_compact, math_types::*, matrix::*};
 use std::sync::Arc;
 
 pub struct DynamicModelsIndex

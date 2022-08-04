@@ -1,5 +1,5 @@
 use super::{abstract_color::*, fast_math::*};
-use common::{fixed_math::*, system_window};
+use crate::common::{fixed_math::*, system_window};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum TetureCoordinatesInterpolationMode
@@ -13,7 +13,7 @@ const TEXTURE_COORDINATES_INTERPOLATION_MODE_FULL_PERSPECTIVE: usize = 0;
 const TEXTURE_COORDINATES_INTERPOLATION_MODE_LINE_Z_CORRECTION: usize = 1;
 const TEXTURE_COORDINATES_INTERPOLATION_MODE_FULL_AFFINE: usize = 2;
 
-pub use common::material::BlendingMode;
+pub use crate::common::material::BlendingMode;
 
 const BLENDING_MODE_NONE: usize = 0;
 const BLENDING_MODE_AVERAGE: usize = 1;

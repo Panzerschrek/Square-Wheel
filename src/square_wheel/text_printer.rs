@@ -1,4 +1,4 @@
-use common::{color::*, system_window};
+use crate::common::{color::*, system_window};
 
 // Simple function for printing of helper texts (console, debug messages, etc.).
 // Supports only ASCII symbols.

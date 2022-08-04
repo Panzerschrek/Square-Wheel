@@ -3,7 +3,7 @@ use super::{
 	rasterizer::*,
 	renderer::{project_and_clip_polygon, MAX_VERTICES},
 };
-use common::{bsp_map_compact, clipping_polygon::*, fixed_math::*, math_types::*, matrix::*};
+use crate::common::{bsp_map_compact, clipping_polygon::*, fixed_math::*, math_types::*, matrix::*};
 use std::sync::Arc;
 
 pub struct DepthRenderer

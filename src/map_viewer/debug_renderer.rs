@@ -1,5 +1,5 @@
 use super::debug_rasterizer::*;
-use common::{
+use square_wheel_lib::common::{
 	bsp_builder, bsp_map_compact, clipping::*, color::*, fixed_math::*, lightmap, lightmaps_builder, map_file_q1,
 	map_polygonizer, math_types::*, matrix::*, plane::*, system_window,
 };

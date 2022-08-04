@@ -1,5 +1,5 @@
-use common::{bbox::*, bsp_map_compact, math_types::*};
 use rapier3d::prelude as r3d;
+use square_wheel_lib::common::{bbox::*, bsp_map_compact, math_types::*};
 use std::sync::Arc;
 
 pub struct TestGamePhysics

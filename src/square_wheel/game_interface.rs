@@ -1,8 +1,8 @@
 use super::frame_info::*;
-use common::system_window;
+use crate::common::system_window;
 
 use super::{commands_processor::*, console::*, resources_manager::*};
-use common::bsp_map_compact::*;
+use crate::common::bsp_map_compact::*;
 use std::sync::Arc;
 
 pub trait GameInterface: Send + Sync

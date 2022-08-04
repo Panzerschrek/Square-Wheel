@@ -1,4 +1,4 @@
-use common::{bsp_map_save_load, image, lightmaps_builder, material};
+use square_wheel_lib::common::{bsp_map_save_load, image, lightmaps_builder, material};
 use std::path::PathBuf;
 use structopt::StructOpt;
 

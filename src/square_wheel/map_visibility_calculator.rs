@@ -1,5 +1,5 @@
 use super::frame_number::*;
-use common::{bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, matrix::*};
+use crate::common::{bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, matrix::*};
 use std::sync::Arc;
 
 pub struct MapVisibilityCalculator

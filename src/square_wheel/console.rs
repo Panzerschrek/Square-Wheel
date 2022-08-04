@@ -1,5 +1,5 @@
 use super::{commands_processor, text_printer};
-use common::{color::*, system_window};
+use crate::common::{color::*, system_window};
 use sdl2::keyboard::Keycode;
 use std::{
 	collections::VecDeque,

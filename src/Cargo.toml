@@ -22,11 +22,10 @@ structopt = "0.3"
 
 rapier3d = { path = "../rapier/crates/rapier3d" }
 
-
-# Library with common code.
+# Engine library.
 [lib]
-name = "common"
-path = "common/lib.rs"
+name = "square_wheel_lib"
+path = "lib.rs"
 
 # Map compiler executable.
 [[bin]]
@@ -43,7 +42,7 @@ path = "lightmapper/main.rs"
 name = "map_viewer"
 path = "map_viewer/main.rs"
 
-# Engine itself.
+# Test game.
 [[bin]]
 name = "square_wheel"
-path = "square_wheel/main.rs"
+path = "test_game/main.rs"

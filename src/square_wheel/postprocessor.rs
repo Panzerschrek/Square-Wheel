@@ -1,5 +1,5 @@
 use super::{config, debug_stats_printer::*, fast_math::*, performance_counter::*, postprocessor_config::*};
-use common::{color::*, shared_mut_slice::*, system_window};
+use crate::common::{color::*, shared_mut_slice::*, system_window};
 use rayon::prelude::*;
 
 pub struct Postprocessor

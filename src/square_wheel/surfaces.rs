@@ -1,5 +1,5 @@
 use super::{abstract_color::*, fast_math::*, light::*, shadow_map::*, textures};
-use common::{bsp_map_compact, lightmap, math_types::*, plane::*};
+use crate::common::{bsp_map_compact, lightmap, math_types::*, plane::*};
 
 pub type LightWithShadowMap<'a, 'b> = (&'a PointLight, &'b CubeShadowMap);
 

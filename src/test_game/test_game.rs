@@ -2,7 +2,7 @@ use super::{
 	commands_processor, commands_queue, console, frame_info::*, game_interface::*, light::*, resources_manager::*,
 	test_game_physics,
 };
-use common::{
+use square_wheel_lib::common::{
 	bsp_map_compact, camera_controller::*, camera_rotation_controller::*, material, math_types::*, matrix::*,
 	system_window,
 };
