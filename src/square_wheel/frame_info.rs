@@ -31,6 +31,7 @@ pub struct ModelEntity
 	pub model: SharedResourcePtr<TriangleModel>,
 	pub texture: SharedResourcePtr<Image>,
 	pub blending_mode: material::BlendingMode,
+	pub lighting: ModelLighting,
 
 	// Weapon or thing in player's hands.
 	// Draw it always and after any other models.
@@ -48,4 +49,20 @@ pub struct AnimationPoint
 {
 	pub frames: [u32; 2],
 	pub lerp: f32,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Copy)]
+pub enum ModelLighting
+{
+	// Use just light from grid
+	Default,
+	// Use just constant light.
+	ConstantLight([f32; 3]),
+	// Complex case - use combination of light grid and constant color.
+	AdvancedLight
+	{
+		grid_light_scale: f32,
+		light_add: [f32; 3],
+	},
 }

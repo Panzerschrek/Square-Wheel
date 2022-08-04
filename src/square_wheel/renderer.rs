@@ -497,7 +497,7 @@ impl Renderer
 				&model.model,
 				mesh,
 				animation,
-				&fetch_light_from_grid(map, &model.position),
+				&get_model_light(map, &model),
 				&visible_dynamic_mesh.model_matrix,
 				&visible_dynamic_mesh.camera_matrices.view_matrix,
 				&Vec2f::new(texture.size[0] as f32, texture.size[1] as f32),

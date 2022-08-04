@@ -442,6 +442,7 @@ impl Game
 				model,
 				texture,
 				blending_mode: material::BlendingMode::None,
+				lighting: ModelLighting::Default,
 				is_view_model: false,
 				ordering_custom_bbox: None,
 			},
@@ -480,6 +481,10 @@ impl Game
 			model,
 			texture,
 			blending_mode: material::BlendingMode::Average,
+			lighting: ModelLighting::AdvancedLight {
+				grid_light_scale: 1.0,
+				light_add: [0.1, 0.1, 0.1],
+			},
 			is_view_model: true,
 			ordering_custom_bbox: None,
 		});

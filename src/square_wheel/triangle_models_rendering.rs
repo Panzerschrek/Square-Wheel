@@ -321,7 +321,47 @@ pub fn triangle_vertex_debug_checked_fetch<VertexT: Copy>(vertices: &[VertexT], 
 	}
 }
 
-pub fn fetch_light_from_grid(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> bsp_map_compact::LightGridElement
+pub fn get_model_light(map: &bsp_map_compact::BSPMap, model: &ModelEntity) -> bsp_map_compact::LightGridElement
+{
+	match model.lighting
+	{
+		ModelLighting::Default => fetch_light_from_grid(map, &model.position),
+		ModelLighting::ConstantLight(l) => bsp_map_compact::LightGridElement {
+			light_cube: [l; 6],
+			light_direction_vector_scaled: Vec3f::zero(),
+			directional_light_color: [0.0; 3],
+		},
+		ModelLighting::AdvancedLight {
+			grid_light_scale,
+			light_add,
+		} =>
+		{
+			let mut result = bsp_map_compact::LightGridElement {
+				light_cube: [light_add; 6],
+				light_direction_vector_scaled: Vec3f::zero(),
+				directional_light_color: [0.0; 3],
+			};
+
+			if grid_light_scale > 0.0
+			{
+				let grid_light = fetch_light_from_grid(map, &model.position);
+				for i in 0 .. 6
+				{
+					for j in 0 .. 3
+					{
+						result.light_cube[i][j] += grid_light_scale * grid_light.light_cube[i][j];
+					}
+				}
+				result.light_direction_vector_scaled = grid_light_scale * grid_light.light_direction_vector_scaled;
+				result.directional_light_color = grid_light.directional_light_color;
+			}
+
+			result
+		},
+	}
+}
+
+fn fetch_light_from_grid(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> bsp_map_compact::LightGridElement
 {
 	let zero_light = bsp_map_compact::LightGridElement::default();
 
