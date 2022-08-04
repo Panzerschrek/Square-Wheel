@@ -497,7 +497,7 @@ impl Renderer
 				&model.model,
 				mesh,
 				animation,
-				&fetch_light_from_grid(map, &model.position),
+				&get_model_light(map, &model),
 				&visible_dynamic_mesh.model_matrix,
 				&visible_dynamic_mesh.camera_matrices.view_matrix,
 				&Vec2f::new(texture.size[0] as f32, texture.size[1] as f32),
@@ -1955,126 +1955,6 @@ impl Renderer
 			self.config_is_durty = true;
 		}
 	}
-}
-
-fn fetch_light_from_grid(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> bsp_map_compact::LightGridElement
-{
-	let zero_light = bsp_map_compact::LightGridElement::default();
-
-	let light_grid_header = &map.light_grid_header;
-	if light_grid_header.grid_size[0] == 0 ||
-		light_grid_header.grid_size[1] == 0 ||
-		light_grid_header.grid_size[2] == 0 ||
-		light_grid_header.grid_cell_size[0] == 0.0 ||
-		light_grid_header.grid_cell_size[1] == 0.0 ||
-		light_grid_header.grid_cell_size[2] == 0.0 ||
-		map.light_grid_samples.is_empty() ||
-		map.light_grid_columns.is_empty()
-	{
-		return zero_light;
-	}
-
-	let grid_pos = (pos - Vec3f::from(light_grid_header.grid_start))
-		.div_element_wise(Vec3f::from(light_grid_header.grid_cell_size));
-
-	let grid_pos_i = [
-		grid_pos.x.floor() as i32,
-		grid_pos.y.floor() as i32,
-		grid_pos.z.floor() as i32,
-	];
-
-	// Perform linear interpolation of light grid values.
-	// We need to read 8 values in order to do this.
-	// Ignore non-existing values and absolute zero values and perform result renormalization.
-	let mut total_light = bsp_map_compact::LightGridElement::default();
-	let mut total_factor = 0.0;
-	for dx in 0 ..= 1
-	{
-		let x = grid_pos_i[0] + dx;
-		if x < 0 || x >= (light_grid_header.grid_size[0] as i32)
-		{
-			continue;
-		}
-		let factor_x = 1.0 - (grid_pos.x - (x as f32)).abs();
-
-		for dy in 0 ..= 1
-		{
-			let y = grid_pos_i[1] + dy;
-			if y < 0 || y >= (light_grid_header.grid_size[1] as i32)
-			{
-				continue;
-			}
-
-			let column = map.light_grid_columns[((x as u32) + (y as u32) * light_grid_header.grid_size[0]) as usize];
-			if column.num_samples == 0
-			{
-				continue;
-			}
-
-			let factor_y = 1.0 - (grid_pos.y - (y as f32)).abs();
-
-			for dz in 0 ..= 1
-			{
-				let z = grid_pos_i[2] + dz;
-				if z < 0 || z >= (light_grid_header.grid_size[2] as i32)
-				{
-					continue;
-				}
-
-				if (z as u32) < column.start_z || (z as u32) >= column.start_z + column.num_samples
-				{
-					continue;
-				}
-
-				let sample_address_in_column = (z as u32) - column.start_z;
-				let sample_value = map.light_grid_samples[(column.first_sample + sample_address_in_column) as usize];
-				if sample_value == zero_light
-				{
-					continue;
-				}
-
-				let factor_z = 1.0 - (grid_pos.z - (z as f32)).abs();
-
-				let cur_sample_factor = factor_x * factor_y * factor_z;
-				for i in 0 .. 3
-				{
-					for cube_side in 0 .. 6
-					{
-						total_light.light_cube[cube_side][i] +=
-							sample_value.light_cube[cube_side][i] * cur_sample_factor;
-					}
-					total_light.directional_light_color[i] +=
-						sample_value.directional_light_color[i] * cur_sample_factor;
-				}
-				// TODO - maybe use different approach to interpolate this vector?
-				total_light.light_direction_vector_scaled +=
-					sample_value.light_direction_vector_scaled * cur_sample_factor;
-
-				total_factor += cur_sample_factor;
-			} // for dz
-		} // for dy
-	} // for dx
-
-	if total_factor <= 0.0
-	{
-		return zero_light;
-	}
-	if total_factor < 0.995
-	{
-		// Perform normalization in case if same sample points were rejected.
-		let inv_total_factor = 1.0 / total_factor;
-		for i in 0 .. 3
-		{
-			for cube_side in 0 .. 6
-			{
-				total_light.light_cube[cube_side][i] *= inv_total_factor;
-			}
-			total_light.directional_light_color[i] *= inv_total_factor;
-		}
-		total_light.light_direction_vector_scaled *= inv_total_factor;
-	}
-
-	total_light
 }
 
 fn draw_background<ColorT: Copy + Send + Sync>(pixels: &mut [ColorT], color: ColorT)
