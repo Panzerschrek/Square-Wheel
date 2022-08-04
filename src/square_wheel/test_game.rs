@@ -238,10 +238,13 @@ impl Game
 			let (pos, rotation) = self.get_camera_location();
 			view_model.position = pos + shift_vec_front + shift_vec_left + shift_vec_down;
 			view_model.rotation = rotation;
-			if let ModelLighting::AdvancedLight { position, .. } = &mut view_model.lighting
-			{
-				*position = pos;
-			}
+
+			view_model.lighting = ModelLighting::AdvancedLight {
+				position: pos, // Use camera position to fetch light.
+				grid_light_scale: 1.0,
+				light_add: [0.1, 0.1, 0.1],
+			};
+
 			model_entities.push(view_model);
 		}
 
@@ -485,11 +488,7 @@ impl Game
 			model,
 			texture,
 			blending_mode: material::BlendingMode::Average,
-			lighting: ModelLighting::AdvancedLight {
-				grid_light_scale: 1.0,
-				light_add: [0.1, 0.1, 0.1],
-				position: Vec3f::zero(),
-			},
+			lighting: ModelLighting::Default,
 			is_view_model: true,
 			ordering_custom_bbox: None,
 		});
