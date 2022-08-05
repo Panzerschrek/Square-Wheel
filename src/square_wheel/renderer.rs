@@ -1344,18 +1344,11 @@ impl Renderer
 		{
 			for polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
 			{
-				let polygon = &self.map.polygons[polygon_index as usize];
-				let polygon_data = &self.polygons_data[polygon_index as usize];
-				if polygon_data.visible_frame != self.current_frame
-				{
-					continue;
-				}
-
 				self.draw_polygon_decals(
 					rasterizer,
 					&frame_info.camera_matrices,
 					&clip_planes,
-					polygon,
+					polygon_index,
 					&frame_info.decals,
 					leaf_decals,
 				);
@@ -1589,11 +1582,18 @@ impl Renderer
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		camera_matrices: &CameraMatrices,
 		clip_planes: &ClippingPolygonPlanes,
-		polygon: &bsp_map_compact::Polygon,
+		polygon_index: u32,
 		decals: &[Decal],
 		current_decals: &[ModelId],
 	)
 	{
+		let polygon = &self.map.polygons[polygon_index as usize];
+		let polygon_data = &self.polygons_data[polygon_index as usize];
+		if polygon_data.visible_frame != self.current_frame
+		{
+			return;
+		}
+
 		const CUBE_SIDES: [[f32; 3]; 6] = [
 			[-1.0, 0.0, 0.0],
 			[1.0, 0.0, 0.0],
@@ -1689,13 +1689,6 @@ impl Renderer
 			}
 
 			// Calculate texture coordinates equation.
-			let plane_transformed = camera_matrices.planes_matrix * polygon.plane.vec.extend(-polygon.plane.dist);
-			let plane_transformed_w = -plane_transformed.w;
-			let depth_equation = DepthEquation {
-				d_inv_z_dx: plane_transformed.x / plane_transformed_w,
-				d_inv_z_dy: plane_transformed.y / plane_transformed_w,
-				k: plane_transformed.z / plane_transformed_w,
-			};
 
 			let texture = &decal.texture;
 
@@ -1704,6 +1697,7 @@ impl Renderer
 				decal_planes_matrix * (Vec4f::new(0.0, -0.5, 0.0, 0.5) * (texture.size[0] as f32)),
 				decal_planes_matrix * (Vec4f::new(0.0, 0.0, 0.5, 0.5) * (texture.size[1] as f32)),
 			];
+			let depth_equation = polygon_data.depth_equation;
 			let tc_equation = TexCoordEquation {
 				d_tc_dx: [
 					tc_basis_transformed[0].x + tc_basis_transformed[0].w * depth_equation.d_inv_z_dx,
