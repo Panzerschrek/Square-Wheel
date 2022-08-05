@@ -270,15 +270,7 @@ impl Renderer
 		);
 
 		run_with_measure(
-			|| {
-				self.perform_rasterization(
-					pixels,
-					surface_info,
-					&frame_info.camera_matrices,
-					&frame_info.skybox_rotation,
-					&frame_info.model_entities,
-				)
-			},
+			|| self.perform_rasterization(pixels, surface_info, frame_info),
 			&mut performance_counters.rasterization,
 		);
 
@@ -535,9 +527,7 @@ impl Renderer
 		&self,
 		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
-		camera_matrices: &CameraMatrices,
-		skybox_rotation: &QuaternionF,
-		models: &[ModelEntity],
+		frame_info: &FrameInfo,
 	)
 	{
 		let root_node = bsp_map_compact::get_root_node_index(&self.map);
@@ -572,31 +562,25 @@ impl Renderer
 			{
 				self.draw_skybox(
 					&mut rasterizer,
-					camera_matrices,
-					skybox_rotation,
+					&frame_info.camera_matrices,
+					&frame_info.skybox_rotation,
 					&viewport_clipping_polygon,
 				);
 			}
 
-			self.draw_tree_r(
-				&mut rasterizer,
-				camera_matrices,
-				&viewport_clipping_polygon,
-				models,
-				root_node,
-			);
+			self.draw_tree_r(&mut rasterizer, frame_info, &viewport_clipping_polygon, root_node);
 
 			if self.config.invert_polygons_order
 			{
 				self.draw_skybox(
 					&mut rasterizer,
-					camera_matrices,
-					skybox_rotation,
+					&frame_info.camera_matrices,
+					&frame_info.skybox_rotation,
 					&viewport_clipping_polygon,
 				);
 			}
 
-			self.draw_view_models(&mut rasterizer, &viewport_clipping_polygon, models);
+			self.draw_view_models(&mut rasterizer, &viewport_clipping_polygon, &frame_info.model_entities);
 		}
 		else
 		{
@@ -641,31 +625,25 @@ impl Renderer
 				{
 					self.draw_skybox(
 						&mut rasterizer,
-						camera_matrices,
-						skybox_rotation,
+						&frame_info.camera_matrices,
+						&frame_info.skybox_rotation,
 						&viewport_clipping_polygon,
 					);
 				}
 
-				self.draw_tree_r(
-					&mut rasterizer,
-					camera_matrices,
-					&viewport_clipping_polygon,
-					models,
-					root_node,
-				);
+				self.draw_tree_r(&mut rasterizer, frame_info, &viewport_clipping_polygon, root_node);
 
 				if self.config.invert_polygons_order
 				{
 					self.draw_skybox(
 						&mut rasterizer,
-						camera_matrices,
-						skybox_rotation,
+						&frame_info.camera_matrices,
+						&frame_info.skybox_rotation,
 						&viewport_clipping_polygon,
 					);
 				}
 
-				self.draw_view_models(&mut rasterizer, &viewport_clipping_polygon, models);
+				self.draw_view_models(&mut rasterizer, &viewport_clipping_polygon, &frame_info.model_entities);
 			});
 		}
 	}
@@ -1286,9 +1264,8 @@ impl Renderer
 	fn draw_tree_r<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
-		camera_matrices: &CameraMatrices,
+		frame_info: &FrameInfo,
 		viewport_clipping_polygon: &ClippingPolygon,
-		models: &[ModelEntity],
 		current_index: u32,
 	)
 	{
@@ -1300,14 +1277,14 @@ impl Renderer
 				leaf_bounds.intersect(viewport_clipping_polygon);
 				if leaf_bounds.is_valid_and_non_empty()
 				{
-					self.draw_leaf(rasterizer, camera_matrices, &leaf_bounds, models, leaf);
+					self.draw_leaf(rasterizer, frame_info, &leaf_bounds, leaf);
 				}
 			}
 		}
 		else
 		{
 			let node = &self.map.nodes[current_index as usize];
-			let plane_transformed = camera_matrices.planes_matrix * node.plane.vec.extend(-node.plane.dist);
+			let plane_transformed = frame_info.camera_matrices.planes_matrix * node.plane.vec.extend(-node.plane.dist);
 			let mut mask = if plane_transformed.w >= 0.0 { 1 } else { 0 };
 			if self.config.invert_polygons_order
 			{
@@ -1317,9 +1294,8 @@ impl Renderer
 			{
 				self.draw_tree_r(
 					rasterizer,
-					camera_matrices,
+					frame_info,
 					viewport_clipping_polygon,
-					models,
 					node.children[(i ^ mask) as usize],
 				);
 			}
@@ -1329,9 +1305,8 @@ impl Renderer
 	fn draw_leaf<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
-		camera_matrices: &CameraMatrices,
+		frame_info: &FrameInfo,
 		bounds: &ClippingPolygon,
-		models: &[ModelEntity],
 		leaf_index: u32,
 	)
 	{
@@ -1361,6 +1336,30 @@ impl Renderer
 				self.get_polygon_surface_data(polygon_data),
 				self.materials_processor.get_material(polygon.texture).blending_mode,
 			);
+		}
+
+		// Draw decals after all leaf polygons.
+		let leaf_decals = self.decals_index.get_leaf_models(leaf_index);
+		if !leaf_decals.is_empty()
+		{
+			for polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
+			{
+				let polygon = &self.map.polygons[polygon_index as usize];
+				let polygon_data = &self.polygons_data[polygon_index as usize];
+				if polygon_data.visible_frame != self.current_frame
+				{
+					continue;
+				}
+
+				self.draw_polygon_decals(
+					rasterizer,
+					&frame_info.camera_matrices,
+					&clip_planes,
+					polygon,
+					&frame_info.decals,
+					leaf_decals,
+				);
+			}
 		}
 
 		// Draw contents of leaf - submodels and triangle models.
@@ -1445,7 +1444,7 @@ impl Renderer
 		// Also it's faster to transform only unique planes.
 		for plane in &mut leaf_clip_planes[.. num_clip_planes]
 		{
-			let plane_transformed_vec4 = camera_matrices.planes_matrix * plane.vec.extend(-plane.dist);
+			let plane_transformed_vec4 = frame_info.camera_matrices.planes_matrix * plane.vec.extend(-plane.dist);
 			*plane = Plane {
 				vec: plane_transformed_vec4.truncate(),
 				dist: -plane_transformed_vec4.w,
@@ -1459,7 +1458,7 @@ impl Renderer
 			if let Some(model_matrix) = self.inline_models_index.get_model_matrix(leaf_submodels[0] as u32)
 			{
 				let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
-				let planes_matrix = camera_matrices.planes_matrix * model_matrix_inverse;
+				let planes_matrix = frame_info.camera_matrices.planes_matrix * model_matrix_inverse;
 
 				self.draw_submodel_in_leaf(
 					rasterizer,
@@ -1480,7 +1479,7 @@ impl Renderer
 					rasterizer,
 					&bounds,
 					&leaf_clip_planes[.. num_clip_planes],
-					models,
+					&frame_info.model_entities,
 					&self.visible_dynamic_meshes_list[visible_mesh_index as usize],
 				);
 			}
@@ -1505,9 +1504,9 @@ impl Renderer
 					draw_ordering::project_bbox(
 						&bbox,
 						&CameraMatrices {
-							view_matrix: camera_matrices.view_matrix * model_matrix,
-							planes_matrix: camera_matrices.planes_matrix * model_matrix_inverse,
-							position: camera_matrices.position,
+							view_matrix: frame_info.camera_matrices.view_matrix * model_matrix,
+							planes_matrix: frame_info.camera_matrices.planes_matrix * model_matrix_inverse,
+							position: frame_info.camera_matrices.position,
 						},
 					),
 				);
@@ -1523,7 +1522,7 @@ impl Renderer
 				break;
 			}
 
-			let model = &models[*dynamic_model_index as usize];
+			let model = &frame_info.model_entities[*dynamic_model_index as usize];
 			let bbox = if let Some(bb) = model.ordering_custom_bbox
 			{
 				bb
@@ -1562,7 +1561,7 @@ impl Renderer
 					rasterizer,
 					bounds,
 					&leaf_clip_planes[.. num_clip_planes],
-					models,
+					&frame_info.model_entities,
 					&self.visible_dynamic_meshes_list[visible_mesh_index as usize],
 				);
 			}
@@ -1572,7 +1571,7 @@ impl Renderer
 				if let Some(model_matrix) = self.inline_models_index.get_model_matrix(*submodel_index as u32)
 				{
 					let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
-					let planes_matrix = camera_matrices.planes_matrix * model_matrix_inverse;
+					let planes_matrix = frame_info.camera_matrices.planes_matrix * model_matrix_inverse;
 					self.draw_submodel_in_leaf(
 						rasterizer,
 						&planes_matrix,
@@ -1583,6 +1582,144 @@ impl Renderer
 				}
 			}
 		}
+	}
+
+	fn draw_polygon_decals<'a, ColorT: AbstractColor>(
+		&self,
+		rasterizer: &mut Rasterizer<'a, ColorT>,
+		camera_matrices: &CameraMatrices,
+		clip_planes: &ClippingPolygonPlanes,
+		polygon: &bsp_map_compact::Polygon,
+		decals: &[Decal],
+		current_decals: &[ModelId],
+	)
+	{
+		const CUBE_SIDES: [[f32; 3]; 6] = [
+			[-1.0, 0.0, 0.0],
+			[1.0, 0.0, 0.0],
+			[0.0, -1.0, 0.0],
+			[0.0, 1.0, 0.0],
+			[0.0, 0.0, -1.0],
+			[0.0, 0.0, 1.0],
+		];
+
+		// TODO - use uninitialized memory.
+		let mut vertices_clipped0 = unsafe { std::mem::zeroed::<[Vec3f; MAX_VERTICES]>() };
+		let mut vertices_clipped1 = unsafe { std::mem::zeroed::<[Vec3f; MAX_VERTICES]>() };
+		let mut vertices_projected0 = unsafe { std::mem::zeroed::<[Vec2f; MAX_VERTICES]>() };
+		let mut vertices_projected1 = unsafe { std::mem::zeroed::<[Vec2f; MAX_VERTICES]>() };
+		let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
+
+		for &decal_index in current_decals
+		{
+			let decal = &decals[decal_index as usize];
+			let decal_matrix = get_object_matrix(decal.position, decal.rotation) *
+				Mat4f::from_nonuniform_scale(decal.scale.x, decal.scale.y, decal.scale.z);
+
+			let decal_planes_matrix = camera_matrices.planes_matrix * decal_matrix.transpose().invert().unwrap();
+
+			// Use polygon itself fot further clipping.
+			let src_vertices = &self.vertices_transformed
+				[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)];
+
+			let mut vc_src = &mut vertices_clipped0;
+			let mut vc_dst = &mut vertices_clipped1;
+
+			for (dst, src) in vc_src.iter_mut().zip(src_vertices.iter())
+			{
+				*dst = *src;
+			}
+
+			let mut num_vertices = vc_src.len().min(src_vertices.len());
+
+			// Clip polygon by all planes of transformed decal cube.
+			for cube_side_normal in CUBE_SIDES
+			{
+				let plane_vec = decal_planes_matrix * Vec3f::from(cube_side_normal).extend(1.0);
+				num_vertices = clip_3d_polygon_by_plane(
+					&vc_src[.. num_vertices],
+					&Plane {
+						vec: plane_vec.truncate(),
+						dist: -plane_vec.w,
+					},
+					vc_dst,
+				);
+				if num_vertices < 3
+				{
+					break;
+				}
+				std::mem::swap(&mut vc_src, &mut vc_dst);
+			}
+			if num_vertices < 3
+			{
+				continue;
+			}
+
+			// Perform z-near clpping.
+			num_vertices = clip_3d_polygon_by_z_plane(&vc_src[.. num_vertices], Z_NEAR, vc_dst);
+			if num_vertices < 3
+			{
+				continue;
+			}
+			std::mem::swap(&mut vc_src, &mut vc_dst);
+
+			// Project vertices.
+			let mut vp_src = &mut vertices_projected0;
+			let mut vp_dst = &mut vertices_projected1;
+
+			for (src, dst) in vc_src[.. num_vertices].iter().zip(vp_src.iter_mut())
+			{
+				*dst = src.truncate() / src.z;
+			}
+
+			// Perform 2d clipping.
+			// TODO - use only necessary planes.
+			for clip_plane in clip_planes
+			{
+				num_vertices = clip_2d_polygon(&vp_src[.. num_vertices], clip_plane, vp_dst);
+				if num_vertices < 3
+				{
+					break;
+				}
+				std::mem::swap(&mut vp_src, &mut vp_dst);
+			}
+			if num_vertices < 3
+			{
+				continue;
+			}
+
+			// Generate fixed vertices.
+			for (src, dst) in vp_src[.. num_vertices].iter().zip(vertices_fixed.iter_mut())
+			{
+				// TODO - set proper texture coordinates and light.
+				*dst = TrianglePointProjected {
+					x: f32_to_fixed16(src.x),
+					y: f32_to_fixed16(src.y),
+					tc: [f32_to_fixed16(0.0), f32_to_fixed16(0.0)],
+					light: [f32_to_fixed16(1.0), f32_to_fixed16(1.0), f32_to_fixed16(1.0)],
+				};
+			}
+
+			// Perform rasteriation of result triangles.
+			let texture = &decal.texture;
+
+			let texture_info = TextureInfo {
+				size: [texture.size[0] as i32, texture.size[1] as i32],
+			};
+
+			let texture_data = &texture.pixels;
+			let blending_mode = decal.blending_mode;
+
+			for t in 0 .. num_vertices - 2
+			{
+				rasterizer.fill_triangle(
+					&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
+					&texture_info,
+					texture_data,
+					blending_mode,
+				);
+			} // for triangles.
+		} // for decals.
 	}
 
 	fn draw_submodel_in_leaf<'a, ColorT: AbstractColor>(

@@ -34,7 +34,7 @@ impl DynamicModelsIndex
 		}
 	}
 
-	pub fn get_leaf_models(&self, leaf_index: u32) -> &[u32]
+	pub fn get_leaf_models(&self, leaf_index: u32) -> &[ModelId]
 	{
 		&self.leafs_info[leaf_index as usize].models
 	}
