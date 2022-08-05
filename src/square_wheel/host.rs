@@ -247,8 +247,6 @@ impl Host
 		let parallel_swap_buffers = self.config.parallel_swap_buffers;
 
 		let window = &mut self.window;
-		let keyboard_state = window.get_keyboard_state();
-
 		let postprocessor = &mut self.postprocessor;
 		let active_map = &mut self.active_map;
 		let console = self.console.clone();
@@ -256,6 +254,15 @@ impl Host
 		let max_fps = self.config.max_fps;
 		let frame_duration_counter = &self.frame_duration_counter;
 		let prev_frame_end_time = &mut self.prev_frame_end_time;
+
+		let keyboard_state = if !console.lock().unwrap().is_active()
+		{
+			window.get_keyboard_state()
+		}
+		else
+		{
+			system_window::KeyboardState::default()
+		};
 
 		let mut frame_info = None;
 
@@ -265,11 +272,7 @@ impl Host
 			if let Some(active_map) = active_map
 			{
 				// Process game logic.
-				if !console.lock().unwrap().is_active()
-				{
-					active_map.game.process_input(&keyboard_state, time_delta_s);
-				}
-				active_map.game.update(time_delta_s);
+				active_map.game.update(&keyboard_state, time_delta_s);
 
 				// Get frame info from game code.
 				frame_info = Some(active_map.game.get_frame_info(&surface_info_initial));

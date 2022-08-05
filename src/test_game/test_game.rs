@@ -341,8 +341,12 @@ impl Game
 
 impl GameInterface for Game
 {
-	fn process_input(&mut self, keyboard_state: &system_window::KeyboardState, time_delta_s: f32)
+	fn update(&mut self, keyboard_state: &system_window::KeyboardState, time_delta_s: f32)
 	{
+		self.process_commands();
+
+		self.game_time += time_delta_s;
+
 		match &mut self.player_controller
 		{
 			PlayerController::NoclipController(camera_controller) =>
@@ -420,14 +424,6 @@ impl GameInterface for Game
 				self.physics.add_object_velocity(*phys_handle, &velocity_add);
 			},
 		}
-	}
-
-	fn update(&mut self, time_delta_s: f32)
-	{
-		self.process_commands();
-
-		self.game_time += time_delta_s;
-		self.physics.update(time_delta_s);
 
 		for (index, submodel_opt) in self.submodels.iter_mut().enumerate()
 		{
@@ -478,6 +474,9 @@ impl GameInterface for Game
 			model.draw_entity.position = location.0;
 			model.draw_entity.rotation = location.1;
 		}
+
+		// Update physics only after settig params of externally-controlled physics objects - player, platforms, etc.
+		self.physics.update(time_delta_s);
 	}
 
 	fn get_frame_info(&self, surface_info: &system_window::SurfaceInfo) -> FrameInfo
