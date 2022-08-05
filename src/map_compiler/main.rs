@@ -1,4 +1,4 @@
-use common::{
+use square_wheel_lib::common::{
 	bsp_builder, bsp_map_compact, bsp_map_compact_conversion, bsp_map_save_load, image, map_file_q1, map_file_q4,
 	map_polygonizer, material,
 };

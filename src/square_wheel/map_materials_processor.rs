@@ -1,5 +1,5 @@
 use super::{abstract_color::*, fast_math::*, resources_manager::*, textures::*};
-use common::{bsp_map_compact, color::*, material::*};
+use crate::common::{bsp_map_compact, color::*, material::*};
 use std::{borrow::Borrow, collections::HashMap};
 
 pub struct MapMaterialsProcessor

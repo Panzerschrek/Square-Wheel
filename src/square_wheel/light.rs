@@ -1,4 +1,4 @@
-use common::math_types::*;
+use crate::common::math_types::*;
 
 #[derive(Copy, Clone)]
 pub struct PointLight

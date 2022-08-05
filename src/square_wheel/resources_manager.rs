@@ -2,7 +2,7 @@ use super::{
 	abstract_color::*, config, console::*, resources_manager_config::*, textures::*, triangle_model,
 	triangle_model_iqm, triangle_model_md3,
 };
-use common::{bbox::*, bsp_map_compact::*, bsp_map_save_load::*, color::*, image, material::*, math_types::*};
+use crate::common::{bbox::*, bsp_map_compact::*, bsp_map_save_load::*, color::*, image, material::*, math_types::*};
 use std::{
 	collections::HashMap,
 	path::PathBuf,

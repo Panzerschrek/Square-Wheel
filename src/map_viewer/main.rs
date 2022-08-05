@@ -1,11 +1,11 @@
 mod debug_rasterizer;
 mod debug_renderer;
 
-use common::{
-	bsp_builder, bsp_map_compact_conversion, bsp_map_save_load, light_trace, lightmaps_builder, map_file_q1,
-	map_polygonizer, material, matrix::*, system_window,
-};
 use sdl2::{event::Event, keyboard::Keycode};
+use square_wheel_lib::common::{
+	bsp_builder, bsp_map_compact_conversion, bsp_map_save_load, camera_controller, light_trace, lightmaps_builder,
+	map_file_q1, map_polygonizer, material, matrix::*, system_window,
+};
 use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
 
@@ -60,7 +60,7 @@ pub fn main()
 	let opt = Opt::from_args();
 
 	let mut window = system_window::SystemWindow::new();
-	let mut camera_controller = common::camera_controller::CameraController::new();
+	let mut camera_controller = camera_controller::CameraController::new();
 
 	let materials = material::MaterialsMap::new();
 

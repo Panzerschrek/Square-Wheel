@@ -1,5 +1,5 @@
 use super::{fast_math::*, frame_info::*, triangle_model::*};
-use common::{bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, plane::*};
+use crate::common::{bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, plane::*};
 
 pub fn animate_and_transform_triangle_mesh_vertices(
 	model: &TriangleModel,

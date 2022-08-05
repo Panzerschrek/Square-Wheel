@@ -1,9 +1,8 @@
 use super::{
-	commands_processor, commands_queue, config, console, debug_stats_printer::*, host_config::*,
-	performance_counter::*, postprocessor::*, renderer, resources_manager::*, test_game, text_printer,
-	ticks_counter::*,
+	commands_processor, commands_queue, config, console, debug_stats_printer::*, game_interface::*, host_config::*,
+	performance_counter::*, postprocessor::*, renderer, resources_manager::*, text_printer, ticks_counter::*,
 };
-use common::{color::*, system_window};
+use crate::common::{color::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
 use std::time::Duration;
 
@@ -20,6 +19,7 @@ pub struct Host
 	window: system_window::SystemWindow,
 	postprocessor: Postprocessor,
 	resources_manager: ResourcesManagerSharedPtr,
+	game_creation_function: GameCreationFunction,
 	active_map: Option<ActiveMap>,
 	prev_time: std::time::Instant,
 	prev_frame_end_time: std::time::Instant,
@@ -30,14 +30,18 @@ pub struct Host
 
 struct ActiveMap
 {
-	game: test_game::Game,
+	game: GameInterfacePtr,
 	renderer: renderer::Renderer,
 	debug_stats_printer: DebugStatsPrinter,
 }
 
 impl Host
 {
-	pub fn new(config_file_path: std::path::PathBuf, startup_commands: Vec<String>) -> Self
+	pub fn new(
+		config_file_path: std::path::PathBuf,
+		startup_commands: Vec<String>,
+		game_creation_function: GameCreationFunction,
+	) -> Self
 	{
 		println!("Loading config from file \"{:?}\"", config_file_path);
 		let config_json = if let Some(json) = config::load(&config_file_path)
@@ -103,6 +107,7 @@ impl Host
 			window: system_window::SystemWindow::new(),
 			postprocessor: Postprocessor::new(app_config.clone()),
 			resources_manager: ResourcesManager::new(app_config, console),
+			game_creation_function,
 			active_map: None,
 			prev_time: cur_time,
 			prev_frame_end_time: cur_time,
@@ -242,8 +247,6 @@ impl Host
 		let parallel_swap_buffers = self.config.parallel_swap_buffers;
 
 		let window = &mut self.window;
-		let keyboard_state = window.get_keyboard_state();
-
 		let postprocessor = &mut self.postprocessor;
 		let active_map = &mut self.active_map;
 		let console = self.console.clone();
@@ -251,6 +254,15 @@ impl Host
 		let max_fps = self.config.max_fps;
 		let frame_duration_counter = &self.frame_duration_counter;
 		let prev_frame_end_time = &mut self.prev_frame_end_time;
+
+		let keyboard_state = if !console.lock().unwrap().is_active()
+		{
+			window.get_keyboard_state()
+		}
+		else
+		{
+			system_window::KeyboardState::default()
+		};
 
 		let mut frame_info = None;
 
@@ -260,11 +272,7 @@ impl Host
 			if let Some(active_map) = active_map
 			{
 				// Process game logic.
-				if !console.lock().unwrap().is_active()
-				{
-					active_map.game.process_input(&keyboard_state, time_delta_s);
-				}
-				active_map.game.update(time_delta_s);
+				active_map.game.update(&keyboard_state, time_delta_s);
 
 				// Get frame info from game code.
 				frame_info = Some(active_map.game.get_frame_info(&surface_info_initial));
@@ -366,6 +374,8 @@ impl Host
 					);
 				}
 
+				active_map.game.draw_frame_overlay(pixels, surface_info);
+
 				active_map.debug_stats_printer.flush(pixels, surface_info);
 			}
 			else
@@ -420,8 +430,9 @@ impl Host
 		let map_opt = self.resources_manager.lock().unwrap().get_map(&args[0]);
 		if let Some(map) = map_opt
 		{
+			let game_creation_function = self.game_creation_function;
 			self.active_map = Some(ActiveMap {
-				game: test_game::Game::new(
+				game: game_creation_function(
 					self.commands_processor.clone(),
 					self.console.clone(),
 					self.resources_manager.clone(),

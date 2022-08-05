@@ -1,5 +1,5 @@
 use super::{abstract_color::*, fast_math::*};
-use common::{color::*, image, math_types::*};
+use crate::common::{color::*, image, math_types::*};
 
 // MAX_MIP must be not greater, than LIGHTMAP_SCALE_LOG2
 pub const MAX_MIP: usize = 3;

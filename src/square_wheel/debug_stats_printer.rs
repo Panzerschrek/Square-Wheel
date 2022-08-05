@@ -1,5 +1,5 @@
 use super::text_printer;
-use common::{color::*, system_window};
+use crate::common::{color::*, system_window};
 
 pub struct DebugStatsPrinter
 {

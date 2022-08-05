@@ -4,7 +4,7 @@ use super::{
 	map_visibility_calculator::*, performance_counter::*, rasterizer::*, rect_splitting, renderer_config::*,
 	resources_manager::*, shadow_map::*, surfaces::*, textures::*, triangle_model::*, triangle_models_rendering::*,
 };
-use common::{
+use crate::common::{
 	bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, material, math_types::*, matrix::*,
 	plane::*, shared_mut_slice::*, system_window,
 };

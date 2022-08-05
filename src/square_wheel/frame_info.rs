@@ -1,5 +1,5 @@
 use super::{light::*, resources_manager::*, triangle_model::*};
-use common::{bbox::*, image::*, material, math_types::*, matrix::*};
+use crate::common::{bbox::*, image::*, material, math_types::*, matrix::*};
 
 pub struct FrameInfo
 {
@@ -51,7 +51,6 @@ pub struct AnimationPoint
 	pub lerp: f32,
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub enum ModelLighting
 {
