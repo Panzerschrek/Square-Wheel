@@ -1695,7 +1695,7 @@ impl Renderer
 			// TODO - maybe use different basis?
 			let tc_basis_transformed = [
 				decal_planes_matrix * (Vec4f::new(0.0, -0.5, 0.0, 0.5) * (texture.size[0] as f32)),
-				decal_planes_matrix * (Vec4f::new(0.0, 0.0, 0.5, 0.5) * (texture.size[1] as f32)),
+				decal_planes_matrix * (Vec4f::new(0.0, 0.0, -0.5, 0.5) * (texture.size[1] as f32)),
 			];
 			let depth_equation = polygon_data.depth_equation;
 			let tc_equation = TexCoordEquation {
