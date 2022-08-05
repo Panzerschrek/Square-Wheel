@@ -1610,6 +1610,8 @@ impl Renderer
 		let mut vertices_projected1 = unsafe { std::mem::zeroed::<[Vec2f; MAX_VERTICES]>() };
 		let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
 
+		let view_matrix_inverse = camera_matrices.view_matrix.invert().unwrap();
+
 		for &decal_index in current_decals
 		{
 			let decal = &decals[decal_index as usize];
@@ -1718,6 +1720,10 @@ impl Renderer
 			{
 				let z =
 					1.0 / (depth_equation.d_inv_z_dx * src.x + depth_equation.d_inv_z_dy * src.y + depth_equation.k);
+
+				let pos_world_space = view_matrix_inverse * Vec4f::new(src.x * z, src.y * z, 1.0, z);
+				let light = get_polygon_lightap_light_at_polygon_point(&self.map, polygon, &pos_world_space.truncate());
+
 				*dst = TrianglePointProjected {
 					x: f32_to_fixed16(src.x),
 					y: f32_to_fixed16(src.y),
@@ -1730,7 +1736,11 @@ impl Renderer
 						),
 					],
 					// TODO - set proper light.
-					light: [f32_to_fixed16(1.0), f32_to_fixed16(1.0), f32_to_fixed16(1.0)],
+					light: [
+						f32_to_fixed16(light[0]),
+						f32_to_fixed16(light[1]),
+						f32_to_fixed16(light[2]),
+					],
 				};
 			}
 
@@ -2128,6 +2138,51 @@ impl Renderer
 			self.config_is_durty = true;
 		}
 	}
+}
+
+// TODO - use transformed tex_coord_equation instead?
+fn get_polygon_lightap_light_at_polygon_point(
+	map: &bsp_map_compact::BSPMap,
+	polygon: &bsp_map_compact::Polygon,
+	point: &Vec3f,
+) -> [f32; 3]
+{
+	if polygon.lightmap_data_offset == 0
+	{
+		// No lightmap.
+		return [0.0; 3];
+	}
+
+	// Use simple (non-diretional) lightmap.
+	let lightmaps_data = &map.lightmaps_data;
+	if lightmaps_data.is_empty()
+	{
+		return [0.0; 3];
+	}
+
+	let tc = Vec2f::new(
+		polygon.tex_coord_equation[0].vec.dot(*point) + polygon.tex_coord_equation[0].dist,
+		polygon.tex_coord_equation[1].vec.dot(*point) + polygon.tex_coord_equation[1].dist,
+	);
+
+	let lightmap_pos = tc / (lightmap::LIGHTMAP_SCALE as f32) -
+		Vec2f::new(
+			(polygon.tex_coord_min[0] >> lightmap::LIGHTMAP_SCALE_LOG2) as f32,
+			(polygon.tex_coord_min[1] >> lightmap::LIGHTMAP_SCALE_LOG2) as f32,
+		);
+
+	let lightmap_size = lightmap::get_polygon_lightmap_size(polygon);
+
+	let lightmap_pos_int = [
+		(lightmap_pos[0] as i32).max(0).min(lightmap_size[0] as i32 - 1),
+		(lightmap_pos[1] as i32).max(0).min(lightmap_size[1] as i32 - 1),
+	];
+
+	let polygon_lightmap_data = &lightmaps_data[polygon.lightmap_data_offset as usize ..];
+
+	// TODO - perform linear interpolation.
+
+	polygon_lightmap_data[(lightmap_pos_int[0] + lightmap_pos_int[1] * (lightmap_size[0] as i32)) as usize]
 }
 
 fn draw_background<ColorT: Copy + Send + Sync>(pixels: &mut [ColorT], color: ColorT)
