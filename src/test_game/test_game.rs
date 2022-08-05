@@ -532,6 +532,7 @@ impl GameInterface for Game
 			game_time_s: self.game_time,
 			lights: self.test_lights.clone(),
 			model_entities,
+			decals: Vec::new(),
 		}
 	}
 

@@ -37,6 +37,7 @@ pub struct Renderer
 	performance_counters: Arc<Mutex<RendererPerformanceCounters>>,
 	// TODO - maybe extract dynamic models-related stuff into separate class?
 	dynamic_models_index: DynamicModelsIndex,
+	decals_index: DynamicModelsIndex,
 	// Store transformed models vertices and triangles in separate buffer.
 	// This is needed to avoid transforming/sorting model's vertices/triangles in each BSP leaf where this model is located.
 	visible_dynamic_meshes_list: Vec<VisibleDynamicMeshInfo>,
@@ -147,7 +148,8 @@ impl Renderer
 			map: map.clone(),
 			materials_processor,
 			performance_counters: Arc::new(Mutex::new(RendererPerformanceCounters::new())),
-			dynamic_models_index: DynamicModelsIndex::new(map),
+			dynamic_models_index: DynamicModelsIndex::new(map.clone()),
+			decals_index: DynamicModelsIndex::new(map),
 			visible_dynamic_meshes_list: Vec::new(),
 			dynamic_model_to_dynamic_meshes_index: Vec::new(),
 			dynamic_meshes_vertices: Vec::new(),
@@ -223,6 +225,8 @@ impl Renderer
 			},
 			&mut performance_counters.triangle_models_preparation,
 		);
+
+		self.decals_index.position_decals(&frame_info.decals);
 
 		run_with_measure(
 			|| {
