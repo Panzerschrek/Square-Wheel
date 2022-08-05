@@ -20,6 +20,7 @@ pub struct Game
 	submodels: Vec<Option<PhysicsTestSubmodel>>,
 	test_lights: Vec<PointLight>,
 	test_models: Vec<PhysicsTestModel>,
+	test_decals: Vec<Decal>,
 	view_model: Option<ModelEntity>,
 	game_time: f32,
 }
@@ -42,6 +43,8 @@ impl Game
 			("reset_test_lights", Game::command_reset_test_lights),
 			("add_test_model", Game::command_add_test_model),
 			("reset_test_models", Game::command_reset_test_models),
+			("add_test_decal", Game::command_add_test_decal),
+			("reset_test_decals", Game::command_reset_test_decals),
 			("set_view_model", Game::command_set_view_model),
 			("reset_view_model", Game::command_reset_view_model),
 			("noclip", Game::command_noclip),
@@ -65,6 +68,7 @@ impl Game
 			submodels,
 			test_lights: Vec::new(),
 			test_models: Vec::new(),
+			test_decals: Vec::new(),
 			view_model: None,
 			game_time: 0.0,
 		}
@@ -271,6 +275,35 @@ impl Game
 			self.physics.remove_object(model.phys_handle);
 		}
 		self.test_models.clear();
+	}
+
+	fn command_add_test_decal(&mut self, args: commands_queue::CommandArgs)
+	{
+		if args.len() < 2
+		{
+			self.console.lock().unwrap().add_text("Expected 2 args".to_string());
+			return;
+		}
+
+		let texture = self.resources_manager.lock().unwrap().get_image(&args[0]);
+		let scale = args[1].parse::<f32>().unwrap_or(16.0);
+
+		let (position, rotation) = self.get_camera_location();
+
+		self.test_decals.push(Decal {
+			position,
+			rotation,
+			scale: Vec3f::new(scale, scale, scale),
+			texture,
+			blending_mode: material::BlendingMode::None,
+			lightmap_light_scale: 1.0,
+			light_add: [0.0; 3],
+		});
+	}
+
+	fn command_reset_test_decals(&mut self, _args: commands_queue::CommandArgs)
+	{
+		self.test_decals.clear();
 	}
 
 	fn command_set_view_model(&mut self, args: commands_queue::CommandArgs)
@@ -532,7 +565,7 @@ impl GameInterface for Game
 			game_time_s: self.game_time,
 			lights: self.test_lights.clone(),
 			model_entities,
-			decals: Vec::new(),
+			decals: self.test_decals.clone(),
 		}
 	}
 
