@@ -1610,8 +1610,6 @@ impl Renderer
 		let mut vertices_projected1 = unsafe { std::mem::zeroed::<[Vec2f; MAX_VERTICES]>() };
 		let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
 
-		let view_matrix_inverse = camera_matrices.view_matrix.invert().unwrap();
-
 		for &decal_index in current_decals
 		{
 			let decal = &decals[decal_index as usize];
@@ -1715,14 +1713,26 @@ impl Renderer
 				],
 			};
 
+			// Calculate basis of polygon texture coordinates. Use it later in order to perform lightmap fetches.
+			let tc_basis_transformed = [
+				camera_matrices.planes_matrix *
+					polygon.tex_coord_equation[0]
+						.vec
+						.extend(polygon.tex_coord_equation[0].dist),
+				camera_matrices.planes_matrix *
+					polygon.tex_coord_equation[1]
+						.vec
+						.extend(polygon.tex_coord_equation[1].dist),
+			];
+
 			// Generate fixed vertices.
 			for (src, dst) in vp_src[.. num_vertices].iter().zip(vertices_fixed.iter_mut())
 			{
 				let z =
 					1.0 / (depth_equation.d_inv_z_dx * src.x + depth_equation.d_inv_z_dy * src.y + depth_equation.k);
 
-				let pos_world_space = view_matrix_inverse * Vec4f::new(src.x * z, src.y * z, 1.0, z);
-				let light = get_polygon_lightap_light_at_polygon_point(&self.map, polygon, &pos_world_space.truncate());
+				let pos = (src * z).extend(z);
+				let light = get_polygon_lightap_light_at_polygon_point(&self.map, polygon, &tc_basis_transformed, &pos);
 
 				*dst = TrianglePointProjected {
 					x: f32_to_fixed16(src.x),
@@ -1735,7 +1745,6 @@ impl Renderer
 							z * (tc_equation.d_tc_dx[1] * src.x + tc_equation.d_tc_dy[1] * src.y + tc_equation.k[1]),
 						),
 					],
-					// TODO - set proper light.
 					light: [
 						f32_to_fixed16(light[0]),
 						f32_to_fixed16(light[1]),
@@ -2140,11 +2149,11 @@ impl Renderer
 	}
 }
 
-// TODO - use transformed tex_coord_equation instead?
 fn get_polygon_lightap_light_at_polygon_point(
 	map: &bsp_map_compact::BSPMap,
 	polygon: &bsp_map_compact::Polygon,
-	point: &Vec3f,
+	tc_basis_transformed: &[Vec4f; 2],
+	point_view_space: &Vec3f,
 ) -> [f32; 3]
 {
 	if polygon.lightmap_data_offset == 0
@@ -2160,10 +2169,10 @@ fn get_polygon_lightap_light_at_polygon_point(
 		return [0.0; 3];
 	}
 
-	let tc = Vec2f::new(
-		polygon.tex_coord_equation[0].vec.dot(*point) + polygon.tex_coord_equation[0].dist,
-		polygon.tex_coord_equation[1].vec.dot(*point) + polygon.tex_coord_equation[1].dist,
-	);
+	let polygon_lightmap_data = &lightmaps_data[polygon.lightmap_data_offset as usize ..];
+
+	let pos4 = point_view_space.extend(1.0);
+	let tc = Vec2f::new(pos4.dot(tc_basis_transformed[0]), pos4.dot(tc_basis_transformed[1]));
 
 	let lightmap_pos = tc / (lightmap::LIGHTMAP_SCALE as f32) -
 		Vec2f::new(
@@ -2171,18 +2180,53 @@ fn get_polygon_lightap_light_at_polygon_point(
 			(polygon.tex_coord_min[1] >> lightmap::LIGHTMAP_SCALE_LOG2) as f32,
 		);
 
+	let lightmap_pos_int = [lightmap_pos.x.floor() as i32, lightmap_pos.y.floor() as i32];
+
 	let lightmap_size = lightmap::get_polygon_lightmap_size(polygon);
 
-	let lightmap_pos_int = [
-		(lightmap_pos[0] as i32).max(0).min(lightmap_size[0] as i32 - 1),
-		(lightmap_pos[1] as i32).max(0).min(lightmap_size[1] as i32 - 1),
-	];
+	// Perform fetch with linear interpolation.
+	let mut total_light = [0.0; 3];
+	let mut total_factor = 0.0;
+	for dy in 0 ..= 1
+	{
+		let y = lightmap_pos_int[1] + dy;
+		if y < 0 || y >= lightmap_size[1] as i32
+		{
+			continue;
+		}
 
-	let polygon_lightmap_data = &lightmaps_data[polygon.lightmap_data_offset as usize ..];
+		let factor_y = 1.0 - (lightmap_pos.y - (y as f32)).abs();
+		for dx in 0 ..= 1
+		{
+			let x = lightmap_pos_int[0] + dx;
+			if x < 0 || x >= lightmap_size[0] as i32
+			{
+				continue;
+			}
 
-	// TODO - perform linear interpolation.
+			let factor_x = 1.0 - (lightmap_pos.x - (x as f32)).abs();
 
-	polygon_lightmap_data[(lightmap_pos_int[0] + lightmap_pos_int[1] * (lightmap_size[0] as i32)) as usize]
+			let lightmap_light = polygon_lightmap_data[(x + y * (lightmap_size[0] as i32)) as usize];
+			let cur_sample_factor = factor_x * factor_y;
+			for i in 0 .. 3
+			{
+				total_light[i] += cur_sample_factor * lightmap_light[i];
+			}
+			total_factor += cur_sample_factor;
+		}
+	}
+
+	if total_factor < 1.0
+	{
+		// Perform normalization in case if same sample points were rejected.
+		let inv_total_factor = 1.0 / total_factor;
+		for i in 0 .. 3
+		{
+			total_light[i] *= inv_total_factor;
+		}
+	}
+
+	total_light
 }
 
 fn draw_background<ColorT: Copy + Send + Sync>(pixels: &mut [ColorT], color: ColorT)
