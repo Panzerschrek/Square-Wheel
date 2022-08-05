@@ -51,7 +51,6 @@ pub struct AnimationPoint
 	pub lerp: f32,
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub enum ModelLighting
 {

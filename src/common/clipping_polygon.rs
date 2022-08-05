@@ -14,7 +14,6 @@ pub struct ClippingPolygon
 pub type ClippingPolygonPlanes = [Vec3f; 8];
 pub type ClippingPolygonBoxPlanes = [Vec3f; 4];
 
-#[allow(dead_code)]
 impl ClippingPolygon
 {
 	pub fn from_box(min_x: f32, min_y: f32, max_x: f32, max_y: f32) -> Self
