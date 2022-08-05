@@ -1713,26 +1713,46 @@ impl Renderer
 				],
 			};
 
-			// Calculate basis of polygon texture coordinates. Use it later in order to perform lightmap fetches.
-			let tc_basis_transformed = [
-				camera_matrices.planes_matrix *
-					polygon.tex_coord_equation[0]
-						.vec
-						.extend(polygon.tex_coord_equation[0].dist),
-				camera_matrices.planes_matrix *
-					polygon.tex_coord_equation[1]
-						.vec
-						.extend(polygon.tex_coord_equation[1].dist),
+			// Use projected polygon texture coordinates equation in order to get lightmap coordinates for given point.
+			let polygon_lightmap_coord_scale = ((1 << (polygon_data.mip)) as f32) / (lightmap::LIGHTMAP_SCALE as f32);
+			let polygon_lightmap_coord_shift = [
+				(polygon_data.surface_tc_min[0] as f32) * polygon_lightmap_coord_scale -
+					((polygon.tex_coord_min[0] >> lightmap::LIGHTMAP_SCALE_LOG2) as f32),
+				(polygon_data.surface_tc_min[1] as f32) * polygon_lightmap_coord_scale -
+					((polygon.tex_coord_min[1] >> lightmap::LIGHTMAP_SCALE_LOG2) as f32),
 			];
-
+			let polygon_lightmap_eqution = TexCoordEquation {
+				d_tc_dx: [
+					polygon_data.tex_coord_equation.d_tc_dx[0] * polygon_lightmap_coord_scale,
+					polygon_data.tex_coord_equation.d_tc_dx[1] * polygon_lightmap_coord_scale,
+				],
+				d_tc_dy: [
+					polygon_data.tex_coord_equation.d_tc_dy[0] * polygon_lightmap_coord_scale,
+					polygon_data.tex_coord_equation.d_tc_dy[1] * polygon_lightmap_coord_scale,
+				],
+				k: [
+					polygon_data.tex_coord_equation.k[0] * polygon_lightmap_coord_scale,
+					polygon_data.tex_coord_equation.k[1] * polygon_lightmap_coord_scale,
+				],
+			};
 			// Generate fixed vertices.
 			for (src, dst) in vp_src[.. num_vertices].iter().zip(vertices_fixed.iter_mut())
 			{
 				let z =
 					1.0 / (depth_equation.d_inv_z_dx * src.x + depth_equation.d_inv_z_dy * src.y + depth_equation.k);
 
-				let pos = (src * z).extend(z);
-				let light = get_polygon_lightap_light_at_polygon_point(&self.map, polygon, &tc_basis_transformed, &pos);
+				let lightmap_coord = Vec2f::new(
+					z * (polygon_lightmap_eqution.d_tc_dx[0] * src.x +
+						polygon_lightmap_eqution.d_tc_dy[0] * src.y +
+						polygon_lightmap_eqution.k[0]) +
+						polygon_lightmap_coord_shift[0],
+					z * (polygon_lightmap_eqution.d_tc_dx[1] * src.x +
+						polygon_lightmap_eqution.d_tc_dy[1] * src.y +
+						polygon_lightmap_eqution.k[1]) +
+						polygon_lightmap_coord_shift[1],
+				);
+
+				let light = get_polygon_lightap_light(&self.map, polygon, &lightmap_coord);
 
 				*dst = TrianglePointProjected {
 					x: f32_to_fixed16(src.x),
@@ -2149,11 +2169,10 @@ impl Renderer
 	}
 }
 
-fn get_polygon_lightap_light_at_polygon_point(
+fn get_polygon_lightap_light(
 	map: &bsp_map_compact::BSPMap,
 	polygon: &bsp_map_compact::Polygon,
-	tc_basis_transformed: &[Vec4f; 2],
-	point_view_space: &Vec3f,
+	lightmap_coord: &Vec2f,
 ) -> [f32; 3]
 {
 	if polygon.lightmap_data_offset == 0
@@ -2171,16 +2190,7 @@ fn get_polygon_lightap_light_at_polygon_point(
 
 	let polygon_lightmap_data = &lightmaps_data[polygon.lightmap_data_offset as usize ..];
 
-	let pos4 = point_view_space.extend(1.0);
-	let tc = Vec2f::new(pos4.dot(tc_basis_transformed[0]), pos4.dot(tc_basis_transformed[1]));
-
-	let lightmap_pos = tc / (lightmap::LIGHTMAP_SCALE as f32) -
-		Vec2f::new(
-			(polygon.tex_coord_min[0] >> lightmap::LIGHTMAP_SCALE_LOG2) as f32,
-			(polygon.tex_coord_min[1] >> lightmap::LIGHTMAP_SCALE_LOG2) as f32,
-		);
-
-	let lightmap_pos_int = [lightmap_pos.x.floor() as i32, lightmap_pos.y.floor() as i32];
+	let lightmap_coord_int = [lightmap_coord.x.floor() as i32, lightmap_coord.y.floor() as i32];
 
 	let lightmap_size = lightmap::get_polygon_lightmap_size(polygon);
 
@@ -2189,22 +2199,22 @@ fn get_polygon_lightap_light_at_polygon_point(
 	let mut total_factor = 0.0;
 	for dy in 0 ..= 1
 	{
-		let y = lightmap_pos_int[1] + dy;
+		let y = lightmap_coord_int[1] + dy;
 		if y < 0 || y >= lightmap_size[1] as i32
 		{
 			continue;
 		}
 
-		let factor_y = 1.0 - (lightmap_pos.y - (y as f32)).abs();
+		let factor_y = 1.0 - (lightmap_coord.y - (y as f32)).abs();
 		for dx in 0 ..= 1
 		{
-			let x = lightmap_pos_int[0] + dx;
+			let x = lightmap_coord_int[0] + dx;
 			if x < 0 || x >= lightmap_size[0] as i32
 			{
 				continue;
 			}
 
-			let factor_x = 1.0 - (lightmap_pos.x - (x as f32)).abs();
+			let factor_x = 1.0 - (lightmap_coord.x - (x as f32)).abs();
 
 			let lightmap_light = polygon_lightmap_data[(x + y * (lightmap_size[0] as i32)) as usize];
 			let cur_sample_factor = factor_x * factor_y;
