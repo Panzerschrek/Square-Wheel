@@ -1688,21 +1688,59 @@ impl Renderer
 				continue;
 			}
 
+			// Calculate texture coordinates equation.
+			let plane_transformed = camera_matrices.planes_matrix * polygon.plane.vec.extend(-polygon.plane.dist);
+			let plane_transformed_w = -plane_transformed.w;
+			let depth_equation = DepthEquation {
+				d_inv_z_dx: plane_transformed.x / plane_transformed_w,
+				d_inv_z_dy: plane_transformed.y / plane_transformed_w,
+				k: plane_transformed.z / plane_transformed_w,
+			};
+
+			let texture = &decal.texture;
+
+			// TODO - maybe use different basis?
+			let tc_basis_transformed = [
+				decal_planes_matrix * (Vec4f::new(0.0, -0.5, 0.0, 0.5) * (texture.size[0] as f32)),
+				decal_planes_matrix * (Vec4f::new(0.0, 0.0, 0.5, 0.5) * (texture.size[1] as f32)),
+			];
+			let tc_equation = TexCoordEquation {
+				d_tc_dx: [
+					tc_basis_transformed[0].x + tc_basis_transformed[0].w * depth_equation.d_inv_z_dx,
+					tc_basis_transformed[1].x + tc_basis_transformed[1].w * depth_equation.d_inv_z_dx,
+				],
+				d_tc_dy: [
+					tc_basis_transformed[0].y + tc_basis_transformed[0].w * depth_equation.d_inv_z_dy,
+					tc_basis_transformed[1].y + tc_basis_transformed[1].w * depth_equation.d_inv_z_dy,
+				],
+				k: [
+					tc_basis_transformed[0].z + tc_basis_transformed[0].w * depth_equation.k,
+					tc_basis_transformed[1].z + tc_basis_transformed[1].w * depth_equation.k,
+				],
+			};
+
 			// Generate fixed vertices.
 			for (src, dst) in vp_src[.. num_vertices].iter().zip(vertices_fixed.iter_mut())
 			{
-				// TODO - set proper texture coordinates and light.
+				let z =
+					1.0 / (depth_equation.d_inv_z_dx * src.x + depth_equation.d_inv_z_dy * src.y + depth_equation.k);
 				*dst = TrianglePointProjected {
 					x: f32_to_fixed16(src.x),
 					y: f32_to_fixed16(src.y),
-					tc: [f32_to_fixed16(0.0), f32_to_fixed16(0.0)],
+					tc: [
+						f32_to_fixed16(
+							z * (tc_equation.d_tc_dx[0] * src.x + tc_equation.d_tc_dy[0] * src.y + tc_equation.k[0]),
+						),
+						f32_to_fixed16(
+							z * (tc_equation.d_tc_dx[1] * src.x + tc_equation.d_tc_dy[1] * src.y + tc_equation.k[1]),
+						),
+					],
+					// TODO - set proper light.
 					light: [f32_to_fixed16(1.0), f32_to_fixed16(1.0), f32_to_fixed16(1.0)],
 				};
 			}
 
 			// Perform rasteriation of result triangles.
-			let texture = &decal.texture;
-
 			let texture_info = TextureInfo {
 				size: [texture.size[0] as i32, texture.size[1] as i32],
 			};
