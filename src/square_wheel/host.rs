@@ -371,6 +371,8 @@ impl Host
 					);
 				}
 
+				active_map.game.draw_frame_overlay(pixels, surface_info);
+
 				active_map.debug_stats_printer.flush(pixels, surface_info);
 			}
 			else

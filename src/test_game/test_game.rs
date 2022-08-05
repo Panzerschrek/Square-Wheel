@@ -3,7 +3,7 @@ use super::{
 	test_game_physics,
 };
 use square_wheel_lib::common::{
-	bsp_map_compact, camera_controller::*, camera_rotation_controller::*, material, math_types::*, matrix::*,
+	bsp_map_compact, camera_controller::*, camera_rotation_controller::*, color::*, material, math_types::*, matrix::*,
 	system_window,
 };
 use std::sync::Arc;
@@ -533,6 +533,31 @@ impl GameInterface for Game
 			game_time_s: self.game_time,
 			lights: self.test_lights.clone(),
 			model_entities,
+		}
+	}
+
+	fn draw_frame_overlay(&self, pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo)
+	{
+		let center_x = surface_info.width / 2;
+		let center_y = surface_info.height / 2;
+		let half_length = 12;
+		let half_width = 1;
+		for y in center_y - half_width ..= center_y + half_width
+		{
+			for x in center_x - half_length ..= center_x + half_length
+			{
+				let dst = &mut pixels[x + y * surface_info.pitch];
+				*dst = dst.get_inverted();
+			}
+		}
+
+		for y in center_y - half_length ..= center_y + half_length
+		{
+			for x in center_x - half_width ..= center_x + half_width
+			{
+				let dst = &mut pixels[x + y * surface_info.pitch];
+				*dst = dst.get_inverted();
+			}
 		}
 	}
 }
