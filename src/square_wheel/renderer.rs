@@ -1612,7 +1612,6 @@ impl Renderer
 		let mut vertices_clipped1 = unsafe { std::mem::zeroed::<[Vec3f; MAX_VERTICES]>() };
 		let mut vertices_projected0 = unsafe { std::mem::zeroed::<[Vec2f; MAX_VERTICES]>() };
 		let mut vertices_projected1 = unsafe { std::mem::zeroed::<[Vec2f; MAX_VERTICES]>() };
-		let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
 
 		for &decal_index in current_decals
 		{
@@ -1701,7 +1700,7 @@ impl Renderer
 				decal_planes_matrix * (Vec4f::new(0.0, -0.5, 0.0, 0.5) * (texture.size[0] as f32)),
 				decal_planes_matrix * (Vec4f::new(0.0, 0.0, -0.5, 0.5) * (texture.size[1] as f32)),
 			];
-			let depth_equation = polygon_data.depth_equation;
+			let depth_equation = &polygon_data.depth_equation;
 			let tc_equation = TexCoordEquation {
 				d_tc_dx: [
 					tc_basis_transformed[0].x + tc_basis_transformed[0].w * depth_equation.d_inv_z_dx,
@@ -1739,8 +1738,66 @@ impl Renderer
 					polygon_data.tex_coord_equation.k[1] * polygon_lightmap_coord_scale,
 				],
 			};
-			// Generate fixed vertices.
-			for (src, dst) in vp_src[.. num_vertices].iter().zip(vertices_fixed.iter_mut())
+
+			self.subdivide_and_draw_decal_poygon(
+				rasterizer,
+				decal,
+				polygon,
+				depth_equation,
+				&tc_equation,
+				&polygon_lightmap_eqution,
+				&polygon_lightmap_coord_shift,
+				&vp_src[.. num_vertices],
+				0,
+			);
+		} // for decals.
+	}
+
+	fn subdivide_and_draw_decal_poygon<'a, ColorT: AbstractColor>(
+		&self,
+		rasterizer: &mut Rasterizer<'a, ColorT>,
+		decal: &Decal,
+		polygon: &bsp_map_compact::Polygon,
+		depth_equation: &DepthEquation,
+		tc_equation: &TexCoordEquation,
+		polygon_lightmap_eqution: &TexCoordEquation,
+		polygon_lightmap_coord_shift: &[f32; 2],
+		points: &[Vec2f],
+		recursion_depth: usize,
+	)
+	{
+		// Recursive subdivide polygon into two pieces until affine texturing error is not acceptable or until recursion limit is not reached.
+
+		let point0 = &points[0];
+		let mut min_inv_z_point = point0;
+		let mut max_inv_z_point = point0;
+		let min_inv_z = point0.x * depth_equation.d_inv_z_dx + point0.y * depth_equation.d_inv_z_dy + depth_equation.k;
+		let max_inv_z = min_inv_z;
+		for point in &points[1 ..]
+		{
+			let inv_z = point.x * depth_equation.d_inv_z_dx + point.y * depth_equation.d_inv_z_dy + depth_equation.k;
+			if inv_z < min_inv_z
+			{
+				min_inv_z_point = point;
+			}
+			if inv_z > max_inv_z
+			{
+				max_inv_z_point = point;
+			}
+		}
+
+		// TODO - fix this function. It works badly.
+		if affine_texture_coordinates_interpolation_may_be_used(
+			depth_equation,
+			tc_equation,
+			min_inv_z_point,
+			max_inv_z_point,
+		) || recursion_depth > 8
+		{
+			// TODO - use uninitialized memory.
+			let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
+
+			for (src, dst) in points.iter().zip(vertices_fixed.iter_mut())
 			{
 				let z =
 					1.0 / (depth_equation.d_inv_z_dx * src.x + depth_equation.d_inv_z_dy * src.y + depth_equation.k);
@@ -1785,6 +1842,7 @@ impl Renderer
 			}
 
 			// Perform rasteriation of result triangles.
+			let texture = &decal.texture;
 			let texture_info = TextureInfo {
 				size: [texture.size[0] as i32, texture.size[1] as i32],
 			};
@@ -1792,7 +1850,7 @@ impl Renderer
 			let texture_data = &texture.pixels;
 			let blending_mode = decal.blending_mode;
 
-			for t in 0 .. num_vertices - 2
+			for t in 0 .. points.len() - 2
 			{
 				rasterizer.fill_triangle(
 					&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
@@ -1801,7 +1859,43 @@ impl Renderer
 					blending_mode,
 				);
 			} // for triangles.
-		} // for decals.
+		}
+		else
+		{
+			// Split polygon into two pieces, using clip plane with normal facing towards inv_z gradient.
+			let mut center = Vec2f::zero();
+			for point in points
+			{
+				center += *point;
+			}
+			center /= points.len() as f32;
+
+			// TODO - normalize it?
+			let clip_plane_normal = Vec2f::new(depth_equation.d_inv_z_dx, depth_equation.d_inv_z_dy);
+			let mut clip_plane = clip_plane_normal.extend(clip_plane_normal.dot(center));
+
+			// TODO - use uninitialized memory.
+			let mut vertices_clipped = unsafe { std::mem::zeroed::<[Vec2f; MAX_VERTICES]>() };
+			for _i in 0 .. 2
+			{
+				let num_vertices = clip_2d_polygon(points, &clip_plane, &mut vertices_clipped);
+				if num_vertices >= 3
+				{
+					self.subdivide_and_draw_decal_poygon(
+						rasterizer,
+						decal,
+						polygon,
+						depth_equation,
+						&tc_equation,
+						&polygon_lightmap_eqution,
+						&polygon_lightmap_coord_shift,
+						&vertices_clipped[.. num_vertices],
+						recursion_depth + 1,
+					);
+				}
+				clip_plane = -clip_plane;
+			}
+		}
 	}
 
 	fn draw_submodel_in_leaf<'a, ColorT: AbstractColor>(
