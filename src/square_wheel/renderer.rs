@@ -318,6 +318,28 @@ impl Renderer
 			};
 		}
 
+		let mut decals = 0;
+		let mut decals_leafs_parts = 0;
+		for i in 0 .. frame_info.decals.len()
+		{
+			let mut visible = false;
+			for leaf_index in self.decals_index.get_model_leafs(i)
+			{
+				if self
+					.visibility_calculator
+					.get_current_frame_leaf_bounds(*leaf_index)
+					.is_some()
+				{
+					decals_leafs_parts += 1;
+					visible = true;
+				}
+			}
+			if visible
+			{
+				decals += 1;
+			}
+		}
+
 		debug_stats_printer.add_line(format!(
 			"materials update: {:04.2}ms",
 			performance_counters.materials_update.get_average_value() * 1000.0
@@ -352,6 +374,7 @@ impl Renderer
 			triangles,
 			triangle_vertices
 		));
+		debug_stats_printer.add_line(format!("decals: {}, (parsts in leafs: {})", decals, decals_leafs_parts));
 		debug_stats_printer.add_line(format!(
 			"surfaces pixels: {}k",
 			(self.num_visible_surfaces_pixels + 1023) / 1024
