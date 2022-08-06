@@ -1614,12 +1614,13 @@ impl Renderer
 		current_decals: &[ModelId],
 	)
 	{
-		let polygon = &self.map.polygons[polygon_index as usize];
 		let polygon_data = &self.polygons_data[polygon_index as usize];
 		if polygon_data.visible_frame != self.current_frame
 		{
 			return;
 		}
+
+		let polygon = &self.map.polygons[polygon_index as usize];
 
 		const CUBE_SIDES: [[f32; 3]; 6] = [
 			[-1.0, 0.0, 0.0],
@@ -1978,14 +1979,17 @@ impl Renderer
 		{
 			self.draw_submodel_polygon(rasterizer, &clip_planes, leaf_clip_planes, polygon_index);
 
-			self.draw_polygon_decals(
-				rasterizer,
-				&frame_info.camera_matrices,
-				clip_planes,
-				polygon_index,
-				&frame_info.decals,
-				leaf_decals,
-			);
+			if !leaf_decals.is_empty()
+			{
+				self.draw_polygon_decals(
+					rasterizer,
+					&frame_info.camera_matrices,
+					clip_planes,
+					polygon_index,
+					&frame_info.decals,
+					leaf_decals,
+				);
+			}
 		}
 
 		if c_f < num_nodes
