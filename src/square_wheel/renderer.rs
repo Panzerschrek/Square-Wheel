@@ -1771,22 +1771,24 @@ impl Renderer
 		let point0 = &points[0];
 		let mut min_inv_z_point = point0;
 		let mut max_inv_z_point = point0;
-		let min_inv_z = point0.x * depth_equation.d_inv_z_dx + point0.y * depth_equation.d_inv_z_dy + depth_equation.k;
-		let max_inv_z = min_inv_z;
+		let mut min_inv_z =
+			point0.x * depth_equation.d_inv_z_dx + point0.y * depth_equation.d_inv_z_dy + depth_equation.k;
+		let mut max_inv_z = min_inv_z;
 		for point in &points[1 ..]
 		{
 			let inv_z = point.x * depth_equation.d_inv_z_dx + point.y * depth_equation.d_inv_z_dy + depth_equation.k;
 			if inv_z < min_inv_z
 			{
+				min_inv_z = inv_z;
 				min_inv_z_point = point;
 			}
 			if inv_z > max_inv_z
 			{
+				max_inv_z = inv_z;
 				max_inv_z_point = point;
 			}
 		}
 
-		// TODO - fix this function. It works badly.
 		if affine_texture_coordinates_interpolation_may_be_used(
 			depth_equation,
 			tc_equation,
