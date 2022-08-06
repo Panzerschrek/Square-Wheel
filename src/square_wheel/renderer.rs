@@ -1455,9 +1455,11 @@ impl Renderer
 
 				self.draw_submodel_in_leaf(
 					rasterizer,
+					frame_info,
 					&planes_matrix,
 					&clip_planes,
 					&leaf_clip_planes[.. num_clip_planes],
+					leaf_decals,
 					leaf_submodels[0],
 				);
 			}
@@ -1567,9 +1569,11 @@ impl Renderer
 					let planes_matrix = frame_info.camera_matrices.planes_matrix * model_matrix_inverse;
 					self.draw_submodel_in_leaf(
 						rasterizer,
+						frame_info,
 						&planes_matrix,
 						&clip_planes,
 						&leaf_clip_planes[.. num_clip_planes],
+						leaf_decals,
 						*submodel_index,
 					);
 				}
@@ -1803,18 +1807,22 @@ impl Renderer
 	fn draw_submodel_in_leaf<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
-		planes_matrix: &Mat4f,
+		frame_info: &FrameInfo,
+		submodel_planes_matrix: &Mat4f,
 		clip_planes: &ClippingPolygonPlanes,
 		leaf_clip_planes: &[Plane],
+		leaf_decals: &[ModelId],
 		submodel_index: u32,
 	)
 	{
 		let submodel = &self.map.submodels[submodel_index as usize];
 		self.draw_submodel_bsp_node_r(
 			rasterizer,
-			planes_matrix,
+			frame_info,
+			submodel_planes_matrix,
 			clip_planes,
 			leaf_clip_planes,
+			leaf_decals,
 			submodel.root_node,
 		);
 	}
@@ -1822,15 +1830,17 @@ impl Renderer
 	fn draw_submodel_bsp_node_r<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
-		planes_matrix: &Mat4f,
+		frame_info: &FrameInfo,
+		submodel_planes_matrix: &Mat4f,
 		clip_planes: &ClippingPolygonPlanes,
 		leaf_clip_planes: &[Plane],
+		leaf_decals: &[ModelId],
 		node_index: u32,
 	)
 	{
 		let &node = &self.map.submodels_bsp_nodes[node_index as usize];
 
-		let plane_transformed = planes_matrix * node.plane.vec.extend(-node.plane.dist);
+		let plane_transformed = submodel_planes_matrix * node.plane.vec.extend(-node.plane.dist);
 		let mut mask = if plane_transformed.w >= 0.0 { 1 } else { 0 };
 		if self.config.invert_polygons_order
 		{
@@ -1843,17 +1853,42 @@ impl Renderer
 		let num_nodes = self.map.submodels_bsp_nodes.len() as u32;
 		if c_b < num_nodes
 		{
-			self.draw_submodel_bsp_node_r(rasterizer, planes_matrix, clip_planes, leaf_clip_planes, c_b);
+			self.draw_submodel_bsp_node_r(
+				rasterizer,
+				frame_info,
+				submodel_planes_matrix,
+				clip_planes,
+				leaf_clip_planes,
+				leaf_decals,
+				c_b,
+			);
 		}
 
 		for polygon_index in node.first_polygon .. (node.first_polygon + node.num_polygons)
 		{
 			self.draw_submodel_polygon(rasterizer, &clip_planes, leaf_clip_planes, polygon_index);
+
+			self.draw_polygon_decals(
+				rasterizer,
+				&frame_info.camera_matrices,
+				clip_planes,
+				polygon_index,
+				&frame_info.decals,
+				leaf_decals,
+			);
 		}
 
 		if c_f < num_nodes
 		{
-			self.draw_submodel_bsp_node_r(rasterizer, planes_matrix, clip_planes, leaf_clip_planes, c_f);
+			self.draw_submodel_bsp_node_r(
+				rasterizer,
+				frame_info,
+				submodel_planes_matrix,
+				clip_planes,
+				leaf_clip_planes,
+				leaf_decals,
+				c_f,
+			);
 		}
 	}
 
