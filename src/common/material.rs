@@ -47,6 +47,10 @@ pub struct Material
 	#[serde(default = "default_true")]
 	pub light: bool,
 
+	/// If true - polygon will be affected by decals.
+	#[serde(default = "default_true")]
+	pub decals: bool,
+
 	/// RGB power of light for emissive materials.
 	/// Used during lightmaps preparation.
 	#[serde(default)]
@@ -126,6 +130,7 @@ impl Default for Material
 			blocks_view: true,
 			shadow: true,
 			light: true,
+			decals: true,
 			emissive_light: [0.0, 0.0, 0.0],
 			blending_mode: BlendingMode::None,
 			turb: None,

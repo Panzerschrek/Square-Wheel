@@ -1622,6 +1622,11 @@ impl Renderer
 
 		let polygon = &self.map.polygons[polygon_index as usize];
 
+		if !self.materials_processor.get_material(polygon.texture).decals
+		{
+			return;
+		}
+
 		const CUBE_SIDES: [[f32; 3]; 6] = [
 			[-1.0, 0.0, 0.0],
 			[1.0, 0.0, 0.0],
