@@ -1607,13 +1607,16 @@ impl Renderer
 			[0.0, 0.0, 1.0],
 		];
 
+		// TODO - maybe use different basis?
+		const DECAL_TEXTURE_BASIS: [[f32; 4]; 2] = [[0.0, -0.5, 0.0, 0.5], [0.0, 0.0, -0.5, 0.5]];
+
 		// TODO - use uninitialized memory.
 		let mut vertices_clipped0 = unsafe { std::mem::zeroed::<[Vec3f; MAX_VERTICES]>() };
 		let mut vertices_clipped1 = unsafe { std::mem::zeroed::<[Vec3f; MAX_VERTICES]>() };
 		let mut vertices_projected0 = unsafe { std::mem::zeroed::<[Vec2f; MAX_VERTICES]>() };
 		let mut vertices_projected1 = unsafe { std::mem::zeroed::<[Vec2f; MAX_VERTICES]>() };
 
-		for &decal_index in current_decals
+		'decals_loop: for &decal_index in current_decals
 		{
 			let decal = &decals[decal_index as usize];
 			let decal_matrix = get_object_matrix(decal.position, decal.rotation) *
@@ -1621,9 +1624,9 @@ impl Renderer
 
 			let decal_planes_matrix = camera_matrices.planes_matrix * decal_matrix.transpose().invert().unwrap();
 
-			// Use polygon itself fot further clipping.
+			// Use polygon itself for further clipping.
 			let src_vertices = &self.vertices_transformed
-				[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)];
+				[polygon.first_vertex as usize .. ((polygon.first_vertex + polygon.num_vertices) as usize)];
 
 			let mut vc_src = &mut vertices_clipped0;
 			let mut vc_dst = &mut vertices_clipped1;
@@ -1632,7 +1635,6 @@ impl Renderer
 			{
 				*dst = *src;
 			}
-
 			let mut num_vertices = vc_src.len().min(src_vertices.len());
 
 			// Clip polygon by all planes of transformed decal cube.
@@ -1649,13 +1651,9 @@ impl Renderer
 				);
 				if num_vertices < 3
 				{
-					break;
+					continue 'decals_loop;
 				}
 				std::mem::swap(&mut vc_src, &mut vc_dst);
-			}
-			if num_vertices < 3
-			{
-				continue;
 			}
 
 			// Perform z-near clpping.
@@ -1676,29 +1674,23 @@ impl Renderer
 			}
 
 			// Perform 2d clipping.
-			// TODO - use only necessary planes.
+			// TODO - use only necessary planes?
 			for clip_plane in clip_planes
 			{
 				num_vertices = clip_2d_polygon(&vp_src[.. num_vertices], clip_plane, vp_dst);
 				if num_vertices < 3
 				{
-					break;
+					continue 'decals_loop;
 				}
 				std::mem::swap(&mut vp_src, &mut vp_dst);
 			}
-			if num_vertices < 3
-			{
-				continue;
-			}
 
 			// Calculate texture coordinates equation.
-
 			let texture = &decal.texture;
 
-			// TODO - maybe use different basis?
 			let tc_basis_transformed = [
-				decal_planes_matrix * (Vec4f::new(0.0, -0.5, 0.0, 0.5) * (texture.size[0] as f32)),
-				decal_planes_matrix * (Vec4f::new(0.0, 0.0, -0.5, 0.5) * (texture.size[1] as f32)),
+				decal_planes_matrix * (Vec4f::from(DECAL_TEXTURE_BASIS[0]) * (texture.size[0] as f32)),
+				decal_planes_matrix * (Vec4f::from(DECAL_TEXTURE_BASIS[1]) * (texture.size[1] as f32)),
 			];
 			let depth_equation = &polygon_data.depth_equation;
 			let tc_equation = TexCoordEquation {
@@ -1716,7 +1708,7 @@ impl Renderer
 				],
 			};
 
-			// Use projected polygon texture coordinates equation in order to get lightmap coordinates for given point.
+			// Use projected polygon texture coordinates equation in order to get lightmap coordinates for decal points.
 			let polygon_lightmap_coord_scale = ((1 << (polygon_data.mip)) as f32) / (lightmap::LIGHTMAP_SCALE as f32);
 			let polygon_lightmap_coord_shift = [
 				(polygon_data.surface_tc_min[0] as f32) * polygon_lightmap_coord_scale -
@@ -1798,7 +1790,6 @@ impl Renderer
 		{
 			// TODO - use uninitialized memory.
 			let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
-
 			for (src, dst) in points.iter().zip(vertices_fixed.iter_mut())
 			{
 				let z =
