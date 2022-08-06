@@ -1741,18 +1741,25 @@ impl Renderer
 				let z =
 					1.0 / (depth_equation.d_inv_z_dx * src.x + depth_equation.d_inv_z_dy * src.y + depth_equation.k);
 
-				let lightmap_coord = Vec2f::new(
-					z * (polygon_lightmap_eqution.d_tc_dx[0] * src.x +
-						polygon_lightmap_eqution.d_tc_dy[0] * src.y +
-						polygon_lightmap_eqution.k[0]) +
-						polygon_lightmap_coord_shift[0],
-					z * (polygon_lightmap_eqution.d_tc_dx[1] * src.x +
-						polygon_lightmap_eqution.d_tc_dy[1] * src.y +
-						polygon_lightmap_eqution.k[1]) +
-						polygon_lightmap_coord_shift[1],
-				);
+				let mut light = decal.light_add;
+				if decal.lightmap_light_scale > 0.0
+				{
+					let lightmap_coord =
+						Vec2f::new(
+							z * (polygon_lightmap_eqution.d_tc_dx[0] * src.x +
+								polygon_lightmap_eqution.d_tc_dy[0] * src.y +
+								polygon_lightmap_eqution.k[0]) + polygon_lightmap_coord_shift[0],
+							z * (polygon_lightmap_eqution.d_tc_dx[1] * src.x +
+								polygon_lightmap_eqution.d_tc_dy[1] * src.y +
+								polygon_lightmap_eqution.k[1]) + polygon_lightmap_coord_shift[1],
+						);
 
-				let light = get_polygon_lightap_light(&self.map, polygon, &lightmap_coord);
+					let lightmap_light = get_polygon_lightap_light(&self.map, polygon, &lightmap_coord);
+					for i in 0 .. 3
+					{
+						light[i] += lightmap_light[i] * decal.lightmap_light_scale;
+					}
+				}
 
 				*dst = TrianglePointProjected {
 					x: f32_to_fixed16(src.x),
