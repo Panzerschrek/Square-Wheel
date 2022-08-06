@@ -142,5 +142,6 @@ impl DynamicModelsIndex
 		{
 			leafs_info.models.clear();
 		}
+		self.models_info.clear();
 	}
 }
