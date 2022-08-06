@@ -279,21 +279,36 @@ impl Game
 
 	fn command_add_test_decal(&mut self, args: commands_queue::CommandArgs)
 	{
-		if args.len() < 2
+		if args.len() < 1
 		{
-			self.console.lock().unwrap().add_text("Expected 2 args".to_string());
+			self.console
+				.lock()
+				.unwrap()
+				.add_text("Expected at least 1 arg".to_string());
 			return;
 		}
 
 		let texture = self.resources_manager.lock().unwrap().get_image(&args[0]);
-		let scale = args[1].parse::<f32>().unwrap_or(16.0);
+		let scale = if args.len() >= 2
+		{
+			args[1].parse::<f32>().unwrap_or(1.0)
+		}
+		else
+		{
+			1.0
+		};
+		let size = Vec3f::new(
+			texture.size[0].min(texture.size[1]) as f32,
+			texture.size[0] as f32,
+			texture.size[1] as f32,
+		) * (0.5 * scale);
 
 		let (position, rotation) = self.get_camera_location();
 
 		self.test_decals.push(Decal {
 			position,
 			rotation,
-			scale: Vec3f::new(scale, scale, scale),
+			scale: size,
 			texture,
 			blending_mode: material::BlendingMode::None,
 			lightmap_light_scale: 1.0,
