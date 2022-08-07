@@ -29,6 +29,11 @@ impl DepthEquation
 			k: plane_transformed.z / plane_transformed_w,
 		}
 	}
+
+	pub fn sample_point(&self, point: &Vec2f) -> f32
+	{
+		self.d_inv_z_dx * point.x + self.d_inv_z_dy * point.y + self.k
+	}
 }
 
 impl std::ops::Mul<f32> for DepthEquation

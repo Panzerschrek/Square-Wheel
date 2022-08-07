@@ -870,8 +870,7 @@ impl Renderer
 		for p in &vertices_2d[.. vertex_count]
 		{
 			// Limit inv_z in case of computational errors (if it is 0 or negative).
-			let inv_z =
-				(depth_equation.d_inv_z_dx * p.x + depth_equation.d_inv_z_dy * p.y + depth_equation.k).max(1.0 / max_z);
+			let inv_z = depth_equation.sample_point(p).max(1.0 / max_z);
 			let z = 1.0 / inv_z;
 			for i in 0 .. 2
 			{
@@ -1718,12 +1717,11 @@ impl Renderer
 		let point0 = &points[0];
 		let mut min_inv_z_point = point0;
 		let mut max_inv_z_point = point0;
-		let mut min_inv_z =
-			point0.x * depth_equation.d_inv_z_dx + point0.y * depth_equation.d_inv_z_dy + depth_equation.k;
+		let mut min_inv_z = depth_equation.sample_point(point0);
 		let mut max_inv_z = min_inv_z;
 		for point in &points[1 ..]
 		{
-			let inv_z = point.x * depth_equation.d_inv_z_dx + point.y * depth_equation.d_inv_z_dy + depth_equation.k;
+			let inv_z = depth_equation.sample_point(point);
 			if inv_z < min_inv_z
 			{
 				min_inv_z = inv_z;
@@ -1747,8 +1745,7 @@ impl Renderer
 			let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
 			for (src, dst) in points.iter().zip(vertices_fixed.iter_mut())
 			{
-				let z =
-					1.0 / (depth_equation.d_inv_z_dx * src.x + depth_equation.d_inv_z_dy * src.y + depth_equation.k);
+				let z = 1.0 / depth_equation.sample_point(src);
 
 				let mut light = decal.light_add;
 				if decal.lightmap_light_scale > 0.0
@@ -2375,7 +2372,7 @@ fn draw_polygon<'a, ColorT: AbstractColor>(
 	let mut max_inv_z_point = &vertices_2d[0];
 	for point in &vertices_2d[.. vertex_count]
 	{
-		let inv_z = point.x * depth_equation.d_inv_z_dx + point.y * depth_equation.d_inv_z_dy + depth_equation.k;
+		let inv_z = depth_equation.sample_point(point);
 		if inv_z < min_inv_z
 		{
 			min_inv_z = inv_z;
@@ -2499,14 +2496,8 @@ fn affine_texture_coordinates_interpolation_may_be_used(
 	let edge_vec_normalized = edge / edge_len;
 
 	let inv_z_clamp = 1.0 / ((1 << 20) as f32);
-	let min_point_inv_z = (depth_equation.d_inv_z_dx * min_inv_z_point.x +
-		depth_equation.d_inv_z_dy * min_inv_z_point.y +
-		depth_equation.k)
-		.max(inv_z_clamp);
-	let max_point_inv_z = (depth_equation.d_inv_z_dx * max_inv_z_point.x +
-		depth_equation.d_inv_z_dy * max_inv_z_point.y +
-		depth_equation.k)
-		.max(inv_z_clamp);
+	let min_point_inv_z = depth_equation.sample_point(min_inv_z_point).max(inv_z_clamp);
+	let max_point_inv_z = depth_equation.sample_point(max_inv_z_point).max(inv_z_clamp);
 
 	let depth_equation_projected_a =
 		Vec2f::new(depth_equation.d_inv_z_dx, depth_equation.d_inv_z_dy).dot(edge_vec_normalized);
@@ -2694,13 +2685,13 @@ fn calculate_mip(points: &[Vec2f], depth_equation: &DepthEquation, tc_equation: 
 
 	let mut mip_point = points[0];
 	let mut mip_point_inv_z = 0.0;
-	for &p in points
+	for p in points
 	{
-		let inv_z = depth_equation.d_inv_z_dx * p.x + depth_equation.d_inv_z_dy * p.y + depth_equation.k;
+		let inv_z = depth_equation.sample_point(p);
 		if inv_z > mip_point_inv_z
 		{
 			mip_point_inv_z = inv_z;
-			mip_point = p;
+			mip_point = *p;
 		}
 	}
 
