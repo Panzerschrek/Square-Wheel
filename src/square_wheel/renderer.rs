@@ -2204,7 +2204,7 @@ impl Renderer
 			let mut vertices_projected1 = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
 			let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
 
-			for triangle in triangles
+			'triangles_loop: for triangle in triangles
 			{
 				let mut vc_src = &mut vertices_clipped0;
 				let mut vc_dst = &mut vertices_clipped1;
@@ -2220,13 +2220,9 @@ impl Renderer
 					num_vertices = clip_3d_model_polygon_by_plane(&vc_src[.. num_vertices], clip_plane, vc_dst);
 					if num_vertices < 3
 					{
-						break;
+						continue 'triangles_loop;
 					}
 					std::mem::swap(&mut vc_src, &mut vc_dst);
-				}
-				if num_vertices < 3
-				{
-					continue;
 				}
 
 				let mut vp_src = &mut vertices_projected0;
@@ -2246,13 +2242,9 @@ impl Renderer
 					num_vertices = clip_2d_model_polygon(&vp_src[.. num_vertices], clip_plane, vp_dst);
 					if num_vertices < 3
 					{
-						break;
+						continue 'triangles_loop;
 					}
 					std::mem::swap(&mut vp_src, &mut vp_dst);
-				}
-				if num_vertices < 3
-				{
-					continue;
 				}
 
 				for (src, dst) in vp_src[.. num_vertices].iter().zip(vertices_fixed.iter_mut())
