@@ -539,7 +539,7 @@ impl Renderer
 			let model = &models[visible_dynamic_mesh.entity_index as usize];
 			let animation = &model.animation;
 
-			let texture = &model.texture;
+			let texture = &model.texture[0];
 			let mesh = &model.model.meshes[visible_dynamic_mesh.mesh_index as usize];
 
 			// Perform vertices transformation.
@@ -1632,7 +1632,7 @@ impl Renderer
 			}
 
 			// Calculate texture coordinates equation.
-			let texture = &decal.texture;
+			let texture = &decal.texture[0];
 
 			let tc_basis_transformed = [
 				decal_planes_matrix * (Vec4f::from(DECAL_TEXTURE_BASIS[0]) * (texture.size[0] as f32)),
@@ -1756,7 +1756,7 @@ impl Renderer
 			}
 
 			// Perform rasteriation of result triangles.
-			let texture = &decal.texture;
+			let texture = &decal.texture[0];
 			let texture_info = TextureInfo {
 				size: [texture.size[0] as i32, texture.size[1] as i32],
 			};
@@ -2048,7 +2048,7 @@ impl Renderer
 			}
 		}
 
-		let texture = &model.texture;
+		let texture = &model.texture[0];
 
 		// TODO - use individual texture for each mesh.
 		let texture_info = TextureInfo {
