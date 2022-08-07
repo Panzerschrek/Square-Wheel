@@ -1577,8 +1577,7 @@ impl Renderer
 		// TODO - use uninitialized memory.
 		let mut vertices_clipped0 = unsafe { std::mem::zeroed::<[Vec3f; MAX_VERTICES]>() };
 		let mut vertices_clipped1 = unsafe { std::mem::zeroed::<[Vec3f; MAX_VERTICES]>() };
-		let mut vertices_projected0 = unsafe { std::mem::zeroed::<[Vec2f; MAX_VERTICES]>() };
-		let mut vertices_projected1 = unsafe { std::mem::zeroed::<[Vec2f; MAX_VERTICES]>() };
+		let mut vertices_projected = unsafe { std::mem::zeroed::<[Vec2f; MAX_VERTICES]>() };
 
 		'decals_loop: for &decal_index in current_decals
 		{
@@ -1620,33 +1619,10 @@ impl Renderer
 				std::mem::swap(&mut vc_src, &mut vc_dst);
 			}
 
-			// Perform z-near clpping.
-			num_vertices = clip_3d_polygon_by_z_plane(&vc_src[.. num_vertices], Z_NEAR, vc_dst);
+			num_vertices = project_and_clip_polygon(clip_planes, &vc_src[.. num_vertices], &mut vertices_projected);
 			if num_vertices < 3
 			{
 				continue;
-			}
-			std::mem::swap(&mut vc_src, &mut vc_dst);
-
-			// Project vertices.
-			let mut vp_src = &mut vertices_projected0;
-			let mut vp_dst = &mut vertices_projected1;
-
-			for (src, dst) in vc_src[.. num_vertices].iter().zip(vp_src.iter_mut())
-			{
-				*dst = src.truncate() / src.z;
-			}
-
-			// Perform 2d clipping.
-			// TODO - use only necessary planes?
-			for clip_plane in clip_planes
-			{
-				num_vertices = clip_2d_polygon(&vp_src[.. num_vertices], clip_plane, vp_dst);
-				if num_vertices < 3
-				{
-					continue 'decals_loop;
-				}
-				std::mem::swap(&mut vp_src, &mut vp_dst);
 			}
 
 			// Calculate texture coordinates equation.
@@ -1680,7 +1656,7 @@ impl Renderer
 				&tc_equation,
 				&polygon_lightmap_eqution,
 				&polygon_lightmap_coord_shift,
-				&vp_src[.. num_vertices],
+				&vertices_projected[.. num_vertices],
 				0,
 			);
 		} // for decals.
