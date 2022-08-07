@@ -31,6 +31,7 @@ pub struct Renderer
 	current_frame_visible_polygons: Vec<u32>,
 	mip_bias: f32,
 	inline_models_index: InlineModelsIndex,
+	submodels_info: Vec<VisibleSubmodelInfo>,
 	// Material index and clipping polygon of current frame sky.
 	current_sky: Option<(u32, ClippingPolygon)>,
 	materials_processor: MapMaterialsProcessor,
@@ -97,6 +98,13 @@ struct DrawPolygonData
 	surface_tc_min: [i32; 2],
 }
 
+#[derive(Default, Copy, Clone)]
+struct VisibleSubmodelInfo
+{
+	// Calculate matrices once for frame and use them during polygons reparation, sorting and polygons ordering.
+	camera_matrices: Option<CameraMatrices>,
+}
+
 struct VisibleDynamicMeshInfo
 {
 	entity_index: u32,
@@ -142,6 +150,7 @@ impl Renderer
 			current_frame_visible_polygons: Vec::with_capacity(map.polygons.len()),
 			mip_bias: 0.0,
 			inline_models_index: InlineModelsIndex::new(map.clone()),
+			submodels_info: vec![VisibleSubmodelInfo::default(); map.submodels.len()],
 			current_sky: None,
 			visibility_calculator: MapVisibilityCalculator::new(map.clone()),
 			shadows_maps_renderer: DepthRenderer::new(map.clone()),
@@ -215,11 +224,10 @@ impl Renderer
 			&mut performance_counters.visible_leafs_search,
 		);
 
-		self.inline_models_index.position_models(&frame_info.submodel_entities);
+		self.prepare_submodels(&frame_info.camera_matrices, &frame_info.submodel_entities);
 
 		run_with_measure(
 			|| {
-				self.dynamic_models_index.position_models(&frame_info.model_entities);
 				self.prepare_dynamic_models(&frame_info.camera_matrices, &frame_info.model_entities);
 				self.build_dynamic_models_buffers(&frame_info.model_entities);
 			},
@@ -382,9 +390,34 @@ impl Renderer
 		debug_stats_printer.add_line(format!("mip bias: {}", self.mip_bias));
 	}
 
+	fn prepare_submodels(&mut self, camera_matrices: &CameraMatrices, submodels: &[SubmodelEntityOpt])
+	{
+		self.inline_models_index.position_models(submodels);
+
+		for (index, submodel_info) in self.submodels_info.iter_mut().enumerate()
+		{
+			submodel_info.camera_matrices = if let Some(model_matrix) =
+				self.inline_models_index.get_model_matrix(index as u32)
+			{
+				let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
+				Some(CameraMatrices {
+					view_matrix: camera_matrices.view_matrix * model_matrix,
+					planes_matrix: camera_matrices.planes_matrix * model_matrix_inverse,
+					position: camera_matrices.position,
+				})
+			}
+			else
+			{
+				None
+			};
+		}
+	}
+
 	// Call this after visible leafs search.
 	fn prepare_dynamic_models(&mut self, camera_matrices: &CameraMatrices, models: &[ModelEntity])
 	{
+		self.dynamic_models_index.position_models(models);
+
 		self.visible_dynamic_meshes_list.clear();
 
 		self.dynamic_model_to_dynamic_meshes_index
@@ -688,10 +721,19 @@ impl Renderer
 
 		// Prepare surfaces for submodels.
 		// Do this only for sumbodels located in visible leafs.
-		for model_index in 0 .. self.map.submodels.len()
+		for index in 0 .. self.map.submodels.len()
 		{
+			let submodel_camera_matrices = if let Some(m) = self.submodels_info[index].camera_matrices
+			{
+				m
+			}
+			else
+			{
+				continue;
+			};
+
 			let mut bounds: Option<ClippingPolygon> = None;
-			for &leaf_index in self.inline_models_index.get_model_leafs(model_index as u32)
+			for &leaf_index in self.inline_models_index.get_model_leafs(index as u32)
 			{
 				if let Some(leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf_index)
 				{
@@ -715,27 +757,11 @@ impl Renderer
 				continue;
 			};
 
-			let submodel = &self.map.submodels[model_index];
-
-			let model_matrix = if let Some(m) = self.inline_models_index.get_model_matrix(model_index as u32)
-			{
-				m
-			}
-			else
-			{
-				continue;
-			};
-			let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
-			let model_matrices = CameraMatrices {
-				view_matrix: camera_matrices.view_matrix * model_matrix,
-				planes_matrix: camera_matrices.planes_matrix * model_matrix_inverse,
-				position: camera_matrices.position,
-			};
-
+			let submodel = &self.map.submodels[index];
 			for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
 			{
 				self.prepare_polygon_surface(
-					&model_matrices,
+					&submodel_camera_matrices,
 					&clip_planes,
 					&mut surfaces_pixels_accumulated_offset,
 					polygon_index as usize,
@@ -1407,22 +1433,14 @@ impl Renderer
 		// Fast path for cases with single model, to avoid expensive sorting structures preparations.
 		if leaf_submodels.len() == 1 && leaf_dynamic_models.len() == 0
 		{
-			// TODO - cache matrices?
-			if let Some(model_matrix) = self.inline_models_index.get_model_matrix(leaf_submodels[0] as u32)
-			{
-				let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
-				let planes_matrix = frame_info.camera_matrices.planes_matrix * model_matrix_inverse;
-
-				self.draw_submodel_in_leaf(
-					rasterizer,
-					frame_info,
-					&planes_matrix,
-					&clip_planes,
-					used_leaf_clip_planes,
-					leaf_decals,
-					leaf_submodels[0],
-				);
-			}
+			self.draw_submodel_in_leaf(
+				rasterizer,
+				frame_info,
+				&clip_planes,
+				used_leaf_clip_planes,
+				leaf_decals,
+				leaf_submodels[0],
+			);
 			return;
 		}
 		if leaf_submodels.len() == 0 && leaf_dynamic_models.len() == 1
@@ -1449,20 +1467,13 @@ impl Renderer
 
 		for (&model_index, model_for_sorting) in leaf_submodels.iter().zip(models_for_sorting.iter_mut())
 		{
-			let bbox = self.inline_models_index.get_model_bbox_for_ordering(model_index);
-			if let Some(model_matrix) = self.inline_models_index.get_model_matrix(model_index as u32)
+			if let Some(submodel_camera_matrices) = &self.submodels_info[model_index as usize].camera_matrices
 			{
-				let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
-
 				*model_for_sorting = (
 					model_index,
 					draw_ordering::project_bbox(
-						&bbox,
-						&CameraMatrices {
-							view_matrix: frame_info.camera_matrices.view_matrix * model_matrix,
-							planes_matrix: frame_info.camera_matrices.planes_matrix * model_matrix_inverse,
-							position: frame_info.camera_matrices.position,
-						},
+						&self.inline_models_index.get_model_bbox_for_ordering(model_index),
+						&submodel_camera_matrices,
 					),
 				);
 			}
@@ -1522,21 +1533,14 @@ impl Renderer
 			}
 			else
 			{
-				// TODO - cache matrices?
-				if let Some(model_matrix) = self.inline_models_index.get_model_matrix(*submodel_index as u32)
-				{
-					let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
-					let planes_matrix = frame_info.camera_matrices.planes_matrix * model_matrix_inverse;
-					self.draw_submodel_in_leaf(
-						rasterizer,
-						frame_info,
-						&planes_matrix,
-						&clip_planes,
-						used_leaf_clip_planes,
-						leaf_decals,
-						*submodel_index,
-					);
-				}
+				self.draw_submodel_in_leaf(
+					rasterizer,
+					frame_info,
+					&clip_planes,
+					used_leaf_clip_planes,
+					leaf_decals,
+					*submodel_index,
+				);
 			}
 		}
 	}
@@ -1812,23 +1816,25 @@ impl Renderer
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		frame_info: &FrameInfo,
-		submodel_planes_matrix: &Mat4f,
 		clip_planes: &ClippingPolygonPlanes,
 		leaf_clip_planes: &[Plane],
 		leaf_decals: &[ModelId],
 		submodel_index: u32,
 	)
 	{
-		let submodel = &self.map.submodels[submodel_index as usize];
-		self.draw_submodel_bsp_node_r(
-			rasterizer,
-			frame_info,
-			submodel_planes_matrix,
-			clip_planes,
-			leaf_clip_planes,
-			leaf_decals,
-			submodel.root_node,
-		);
+		if let Some(submodel_camera_matrices) = &self.submodels_info[submodel_index as usize].camera_matrices
+		{
+			let submodel = &self.map.submodels[submodel_index as usize];
+			self.draw_submodel_bsp_node_r(
+				rasterizer,
+				frame_info,
+				&submodel_camera_matrices.planes_matrix,
+				clip_planes,
+				leaf_clip_planes,
+				leaf_decals,
+				submodel.root_node,
+			);
+		}
 	}
 
 	fn draw_submodel_bsp_node_r<'a, ColorT: AbstractColor>(
