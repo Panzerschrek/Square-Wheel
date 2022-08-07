@@ -1,6 +1,6 @@
 use super::{
 	abstract_color::*, config, debug_stats_printer::*, depth_renderer::*, draw_ordering, dynamic_models_index::*,
-	fast_math::*, frame_info::*, frame_number::*, inline_models_index::*, map_materials_processor::*,
+	equations::*, fast_math::*, frame_info::*, frame_number::*, inline_models_index::*, map_materials_processor::*,
 	map_visibility_calculator::*, performance_counter::*, rasterizer::*, rect_splitting, renderer_config::*,
 	resources_manager::*, shadow_map::*, surfaces::*, textures::*, triangle_model::*, triangle_models_rendering::*,
 };
@@ -836,12 +836,7 @@ impl Renderer
 			return;
 		}
 
-		let plane_transformed_w = -plane_transformed.w;
-		let depth_equation = DepthEquation {
-			d_inv_z_dx: plane_transformed.x / plane_transformed_w,
-			d_inv_z_dy: plane_transformed.y / plane_transformed_w,
-			k: plane_transformed.z / plane_transformed_w,
-		};
+		let depth_equation = DepthEquation::from_transformed_plane_equation(&plane_transformed);
 
 		let tex_coord_equation = &polygon.tex_coord_equation;
 
@@ -851,20 +846,10 @@ impl Renderer
 			camera_matrices.planes_matrix * tex_coord_equation[1].vec.extend(tex_coord_equation[1].dist),
 		];
 		// Equation projeted to polygon plane.
-		let tc_equation = TexCoordEquation {
-			d_tc_dx: [
-				tc_basis_transformed[0].x + tc_basis_transformed[0].w * depth_equation.d_inv_z_dx,
-				tc_basis_transformed[1].x + tc_basis_transformed[1].w * depth_equation.d_inv_z_dx,
-			],
-			d_tc_dy: [
-				tc_basis_transformed[0].y + tc_basis_transformed[0].w * depth_equation.d_inv_z_dy,
-				tc_basis_transformed[1].y + tc_basis_transformed[1].w * depth_equation.d_inv_z_dy,
-			],
-			k: [
-				tc_basis_transformed[0].z + tc_basis_transformed[0].w * depth_equation.k,
-				tc_basis_transformed[1].z + tc_basis_transformed[1].w * depth_equation.k,
-			],
-		};
+		let tc_equation = TexCoordEquation::from_depth_equation_and_transformed_tex_coord_equations(
+			&depth_equation,
+			&tc_basis_transformed,
+		);
 
 		let mip = calculate_mip(
 			&vertices_2d[.. vertex_count],
@@ -872,22 +857,8 @@ impl Renderer
 			&tc_equation,
 			self.mip_bias,
 		);
-		let tc_equation_scale = 1.0 / ((1 << mip) as f32);
 
-		let tc_equation_scaled = TexCoordEquation {
-			d_tc_dx: [
-				tc_equation.d_tc_dx[0] * tc_equation_scale,
-				tc_equation.d_tc_dx[1] * tc_equation_scale,
-			],
-			d_tc_dy: [
-				tc_equation.d_tc_dy[0] * tc_equation_scale,
-				tc_equation.d_tc_dy[1] * tc_equation_scale,
-			],
-			k: [
-				tc_equation.k[0] * tc_equation_scale,
-				tc_equation.k[1] * tc_equation_scale,
-			],
-		};
+		let tc_equation_scaled = tc_equation * (1.0 / ((1 << mip) as f32));
 
 		// Calculate minimum/maximum texture coordinates.
 		// Use clipped vertices for this.
@@ -1213,13 +1184,9 @@ impl Renderer
 				bbox_vertices_transformed[polygon.0[3]],
 			];
 
-			let plane_transformed = skybox_planes_matrix * polygon.1.extend(-side_plane_dist);
-			let plane_transformed_w = -plane_transformed.w;
-			let depth_equation = DepthEquation {
-				d_inv_z_dx: plane_transformed.x / plane_transformed_w,
-				d_inv_z_dy: plane_transformed.y / plane_transformed_w,
-				k: plane_transformed.z / plane_transformed_w,
-			};
+			let depth_equation = DepthEquation::from_transformed_plane_equation(
+				&(skybox_planes_matrix * polygon.1.extend(-side_plane_dist)),
+			);
 
 			let tc_equation_scale = side_textures[0].size as f32 * 0.5;
 
@@ -1229,20 +1196,10 @@ impl Renderer
 				skybox_planes_matrix * (polygon.3.extend(side_tc_shift) * tc_equation_scale),
 			];
 			// Equation projeted to polygon plane.
-			let tc_equation = TexCoordEquation {
-				d_tc_dx: [
-					tc_basis_transformed[0].x + tc_basis_transformed[0].w * depth_equation.d_inv_z_dx,
-					tc_basis_transformed[1].x + tc_basis_transformed[1].w * depth_equation.d_inv_z_dx,
-				],
-				d_tc_dy: [
-					tc_basis_transformed[0].y + tc_basis_transformed[0].w * depth_equation.d_inv_z_dy,
-					tc_basis_transformed[1].y + tc_basis_transformed[1].w * depth_equation.d_inv_z_dy,
-				],
-				k: [
-					tc_basis_transformed[0].z + tc_basis_transformed[0].w * depth_equation.k,
-					tc_basis_transformed[1].z + tc_basis_transformed[1].w * depth_equation.k,
-				],
-			};
+			let tc_equation = TexCoordEquation::from_depth_equation_and_transformed_tex_coord_equations(
+				&depth_equation,
+				&tc_basis_transformed,
+			);
 
 			let mip = {
 				let mut vertices_2d = [Vec2f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
@@ -1259,21 +1216,7 @@ impl Renderer
 				)
 			};
 
-			let tc_equation_scale = 1.0 / ((1 << mip) as f32);
-			let tc_equation_scaled = TexCoordEquation {
-				d_tc_dx: [
-					tc_equation.d_tc_dx[0] * tc_equation_scale,
-					tc_equation.d_tc_dx[1] * tc_equation_scale,
-				],
-				d_tc_dy: [
-					tc_equation.d_tc_dy[0] * tc_equation_scale,
-					tc_equation.d_tc_dy[1] * tc_equation_scale,
-				],
-				k: [
-					tc_equation.k[0] * tc_equation_scale,
-					tc_equation.k[1] * tc_equation_scale,
-				],
-			};
+			let tc_equation_scaled = tc_equation * (1.0 / ((1 << mip) as f32));
 
 			let side_texture = &side_textures[mip as usize];
 
@@ -1728,20 +1671,10 @@ impl Renderer
 				decal_planes_matrix * (Vec4f::from(DECAL_TEXTURE_BASIS[1]) * (texture.size[1] as f32)),
 			];
 			let depth_equation = &polygon_data.depth_equation;
-			let tc_equation = TexCoordEquation {
-				d_tc_dx: [
-					tc_basis_transformed[0].x + tc_basis_transformed[0].w * depth_equation.d_inv_z_dx,
-					tc_basis_transformed[1].x + tc_basis_transformed[1].w * depth_equation.d_inv_z_dx,
-				],
-				d_tc_dy: [
-					tc_basis_transformed[0].y + tc_basis_transformed[0].w * depth_equation.d_inv_z_dy,
-					tc_basis_transformed[1].y + tc_basis_transformed[1].w * depth_equation.d_inv_z_dy,
-				],
-				k: [
-					tc_basis_transformed[0].z + tc_basis_transformed[0].w * depth_equation.k,
-					tc_basis_transformed[1].z + tc_basis_transformed[1].w * depth_equation.k,
-				],
-			};
+			let tc_equation = TexCoordEquation::from_depth_equation_and_transformed_tex_coord_equations(
+				depth_equation,
+				&tc_basis_transformed,
+			);
 
 			// Use projected polygon texture coordinates equation in order to get lightmap coordinates for decal points.
 			let polygon_lightmap_coord_scale = ((1 << (polygon_data.mip)) as f32) / (lightmap::LIGHTMAP_SCALE as f32);
@@ -1751,20 +1684,7 @@ impl Renderer
 				(polygon_data.surface_tc_min[1] as f32) * polygon_lightmap_coord_scale -
 					((polygon.tex_coord_min[1] >> lightmap::LIGHTMAP_SCALE_LOG2) as f32),
 			];
-			let polygon_lightmap_eqution = TexCoordEquation {
-				d_tc_dx: [
-					polygon_data.tex_coord_equation.d_tc_dx[0] * polygon_lightmap_coord_scale,
-					polygon_data.tex_coord_equation.d_tc_dx[1] * polygon_lightmap_coord_scale,
-				],
-				d_tc_dy: [
-					polygon_data.tex_coord_equation.d_tc_dy[0] * polygon_lightmap_coord_scale,
-					polygon_data.tex_coord_equation.d_tc_dy[1] * polygon_lightmap_coord_scale,
-				],
-				k: [
-					polygon_data.tex_coord_equation.k[0] * polygon_lightmap_coord_scale,
-					polygon_data.tex_coord_equation.k[1] * polygon_lightmap_coord_scale,
-				],
-			};
+			let polygon_lightmap_eqution = polygon_data.tex_coord_equation * polygon_lightmap_coord_scale;
 
 			self.subdivide_and_draw_decal_poygon(
 				rasterizer,
@@ -2519,22 +2439,8 @@ fn draw_polygon<'a, ColorT: AbstractColor>(
 		// This is equivalent to moving far polygons closer to camera.
 		let z_scale = (-5.0 - max_inv_z.max(1.0 / ((1 << 20) as f32)).log2().ceil()).exp2();
 
-		let depth_equation_scaled = DepthEquation {
-			d_inv_z_dx: depth_equation.d_inv_z_dx * z_scale,
-			d_inv_z_dy: depth_equation.d_inv_z_dy * z_scale,
-			k: depth_equation.k * z_scale,
-		};
-		let tex_coord_equation_scaled = TexCoordEquation {
-			d_tc_dx: [
-				tex_coord_equation.d_tc_dx[0] * z_scale,
-				tex_coord_equation.d_tc_dx[1] * z_scale,
-			],
-			d_tc_dy: [
-				tex_coord_equation.d_tc_dy[0] * z_scale,
-				tex_coord_equation.d_tc_dy[1] * z_scale,
-			],
-			k: [tex_coord_equation.k[0] * z_scale, tex_coord_equation.k[1] * z_scale],
-		};
+		let depth_equation_scaled = *depth_equation * z_scale;
+		let tex_coord_equation_scaled = *tex_coord_equation * z_scale;
 
 		if line_z_corrected_texture_coordinates_interpolation_may_be_used(
 			depth_equation,

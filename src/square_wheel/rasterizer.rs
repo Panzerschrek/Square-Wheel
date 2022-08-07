@@ -1,4 +1,4 @@
-use super::{abstract_color::*, fast_math::*};
+use super::{abstract_color::*, equations::*, fast_math::*};
 use crate::common::{fixed_math::*, system_window};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -1319,22 +1319,6 @@ pub struct TrianglePointProjected
 	pub y: Fixed16,
 	pub tc: [Fixed16; 2],
 	pub light: [Fixed16; 3],
-}
-
-#[derive(Copy, Clone, Default)]
-pub struct DepthEquation
-{
-	pub d_inv_z_dx: f32,
-	pub d_inv_z_dy: f32,
-	pub k: f32,
-}
-
-#[derive(Copy, Clone, Default)]
-pub struct TexCoordEquation
-{
-	pub d_tc_dx: [f32; 2],
-	pub d_tc_dy: [f32; 2],
-	pub k: [f32; 2],
 }
 
 pub struct TextureInfo

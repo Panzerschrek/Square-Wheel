@@ -1,4 +1,5 @@
 use super::{
+	equations::*,
 	map_visibility_calculator::*,
 	rasterizer::*,
 	renderer::{project_and_clip_polygon, MAX_VERTICES},

@@ -9,6 +9,7 @@ pub mod debug_stats_printer;
 pub mod depth_renderer;
 pub mod draw_ordering;
 pub mod dynamic_models_index;
+pub mod equations;
 pub mod fast_math;
 pub mod frame_info;
 pub mod frame_number;
