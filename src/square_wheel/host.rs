@@ -427,11 +427,13 @@ impl Host
 		}
 		self.active_map = None;
 
+		let map_name = &args[0];
+
 		let map_loading_start_time = std::time::Instant::now();
 		self.console
 			.lock()
 			.unwrap()
-			.add_text(format!("Loading map {}", args[0]));
+			.add_text(format!("Loading map \"{}\"", map_name));
 
 		let map_opt = self.resources_manager.lock().unwrap().get_map(&args[0]);
 		if let Some(map) = map_opt
@@ -453,10 +455,10 @@ impl Host
 
 			let map_loading_end_time = std::time::Instant::now();
 			let loading_duration = (map_loading_end_time - map_loading_start_time).as_secs_f32();
-			self.console
-				.lock()
-				.unwrap()
-				.add_text(format!("Loading finished in {} seconds", loading_duration));
+			self.console.lock().unwrap().add_text(format!(
+				"Loading map \"{}\" finished in {} seconds",
+				map_name, loading_duration
+			));
 		}
 	}
 
