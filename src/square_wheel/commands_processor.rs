@@ -26,7 +26,7 @@ impl CommandsProcessor
 
 	pub fn remove_command_queue(&mut self, queue: &commands_queue::CommandsQueueDynPtr)
 	{
-		self.commands_queues.retain(|q| Arc::as_ptr(q) != Arc::as_ptr(queue));
+		self.commands_queues.retain(|q| !Arc::ptr_eq(q, queue));
 	}
 
 	// Returns single string if successfully completed or list of variants.

@@ -14,6 +14,7 @@ pub struct Game
 	console: console::ConsoleSharedPtr,
 	resources_manager: ResourcesManagerSharedPtr,
 	commands_queue: commands_queue::CommandsQueuePtr<Game>,
+	commands_queue_dyn: commands_queue::CommandsQueueDynPtr,
 	map: Arc<bsp_map_compact::BSPMap>,
 	physics: test_game_physics::TestGamePhysics,
 	player_controller: PlayerController,
@@ -50,10 +51,11 @@ impl Game
 			("noclip", Game::command_noclip),
 		]);
 
+		let commands_queue_dyn = commands_queue.clone() as commands_queue::CommandsQueueDynPtr;
 		commands_processor
 			.lock()
 			.unwrap()
-			.register_command_queue(commands_queue.clone() as commands_queue::CommandsQueueDynPtr);
+			.register_command_queue(commands_queue_dyn.clone());
 
 		let submodels = vec![None; map.submodels.len()];
 
@@ -62,6 +64,7 @@ impl Game
 			console,
 			resources_manager,
 			commands_queue,
+			commands_queue_dyn,
 			map: map.clone(),
 			physics: test_game_physics::TestGamePhysics::new(map),
 			player_controller: PlayerController::NoclipController(CameraController::new()),
@@ -614,11 +617,13 @@ impl Drop for Game
 {
 	fn drop(&mut self)
 	{
+		// HACK! Save command queue pointer casted to "dyn" in order to avoid nasty bug with broken identity of dynamic objects.
+		// See https://github.com/rust-lang/rust/issues/46139.
 		let commands_processor = self.commands_processor.clone();
 		commands_processor
 			.lock()
 			.unwrap()
-			.remove_command_queue(&(self.commands_queue.clone() as commands_queue::CommandsQueueDynPtr));
+			.remove_command_queue(&self.commands_queue_dyn);
 	}
 }
 
