@@ -13,17 +13,20 @@ Engine:
 
 Renderer:
 * HDR skyboxes
+* Textures for models and decals with mip-levels
 * Animated textures (with N frames)
 * Models rendering improvements - avoid splitting models into pieces for each BSP tree leaf in some cases
 * Models clipping optimizations
+* Fix light underflow in models rasterization code
 * Avoid applying dynamic lights to all surfaces - apply only needed lights
 * Dynamic lights with 2D shadowmap (not only cube)
 * Dynamic lights without shadows
 * Emissive textures (lamps, screens)
 * Billboards and sprites
-* Decals
 
 Lightmapper:
+* Directional light (Sun/Moon)
+* Cone lights
 * Colored shadows
 * Shadows from dynamic objects (configurable)
 

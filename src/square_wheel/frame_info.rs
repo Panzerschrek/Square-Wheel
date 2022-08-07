@@ -8,6 +8,7 @@ pub struct FrameInfo
 	// submodels mapped 1 to 1 to initial submodels.
 	pub submodel_entities: Vec<SubmodelEntityOpt>,
 	pub model_entities: Vec<ModelEntity>,
+	pub decals: Vec<Decal>,
 	pub lights: Vec<PointLight>,
 	pub skybox_rotation: QuaternionF,
 }
@@ -69,4 +70,17 @@ pub enum ModelLighting
 		// May be different from model position (for various reasons).
 		position: Vec3f,
 	},
+}
+
+#[derive(Clone)]
+pub struct Decal
+{
+	// Decal primitive is cube with half-size = 1.
+	pub position: Vec3f,
+	pub rotation: QuaternionF,
+	pub scale: Vec3f,
+	pub texture: SharedResourcePtr<Image>,
+	pub blending_mode: material::BlendingMode,
+	pub lightmap_light_scale: f32,
+	pub light_add: [f32; 3],
 }
