@@ -1368,9 +1368,8 @@ impl Renderer
 		};
 
 		// Clip models polygons by portal planes of current leaf.
-		// Do this in camera space (transform clip planes for this).
 		for &portal_index in &self.map.leafs_portals
-			[(leaf.first_leaf_portal as usize) .. ((leaf.first_leaf_portal + leaf.num_leaf_portals) as usize)]
+			[leaf.first_leaf_portal as usize .. (leaf.first_leaf_portal + leaf.num_leaf_portals) as usize]
 		{
 			let portal = &self.map.portals[portal_index as usize];
 			let clip_plane = if portal.leafs[0] == leaf_index
@@ -1381,20 +1380,22 @@ impl Renderer
 			{
 				portal.plane.get_inverted()
 			};
-
 			add_clip_plane(clip_plane);
 		}
 
 		// Clip models also by polygons of current leaf.
-		for polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
+		for polygon in
+			&self.map.polygons[leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize]
 		{
-			add_clip_plane(self.map.polygons[polygon_index as usize].plane);
+			add_clip_plane(polygon.plane);
 		}
+
+		let used_leaf_clip_planes = &mut leaf_clip_planes[.. num_clip_planes];
 
 		// Perform planes transformation after deduplication.
 		// This is needed because deduplication works badly in stretched camera space.
 		// Also it's faster to transform only unique planes.
-		for plane in &mut leaf_clip_planes[.. num_clip_planes]
+		for plane in used_leaf_clip_planes.iter_mut()
 		{
 			let plane_transformed_vec4 = frame_info.camera_matrices.planes_matrix * plane.vec.extend(-plane.dist);
 			*plane = Plane {
@@ -1417,7 +1418,7 @@ impl Renderer
 					frame_info,
 					&planes_matrix,
 					&clip_planes,
-					&leaf_clip_planes[.. num_clip_planes],
+					used_leaf_clip_planes,
 					leaf_decals,
 					leaf_submodels[0],
 				);
@@ -1432,7 +1433,7 @@ impl Renderer
 				self.draw_mesh(
 					rasterizer,
 					&bounds,
-					&leaf_clip_planes[.. num_clip_planes],
+					used_leaf_clip_planes,
 					&frame_info.model_entities,
 					&self.visible_dynamic_meshes_list[visible_mesh_index as usize],
 				);
@@ -1514,7 +1515,7 @@ impl Renderer
 				self.draw_mesh(
 					rasterizer,
 					bounds,
-					&leaf_clip_planes[.. num_clip_planes],
+					used_leaf_clip_planes,
 					&frame_info.model_entities,
 					&self.visible_dynamic_meshes_list[visible_mesh_index as usize],
 				);
@@ -1531,7 +1532,7 @@ impl Renderer
 						frame_info,
 						&planes_matrix,
 						&clip_planes,
-						&leaf_clip_planes[.. num_clip_planes],
+						used_leaf_clip_planes,
 						leaf_decals,
 						*submodel_index,
 					);
