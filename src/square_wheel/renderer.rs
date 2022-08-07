@@ -1147,12 +1147,14 @@ impl Renderer
 		let skybox_view_matrix = camera_matrices.view_matrix * skybox_matrix;
 		let skybox_planes_matrix = camera_matrices.planes_matrix * skybox_matrix_inverse;
 
-		let bbox_vertices_transformed = BOX_VERTICES.map(|v| {
+		let box_vertices_transformed = BOX_VERTICES.map(|v| {
 			let v_transformed = skybox_view_matrix * (Vec3f::from(v) * 4.0).extend(1.0);
 			Vec3f::new(v_transformed.x, v_transformed.y, v_transformed.w)
 		});
 
 		let clip_planes = bounds.get_clip_planes();
+
+		let mut vertices_2d = [Vec2f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
 
 		for (side, polygon) in bbox_polygons.iter().enumerate()
 		{
@@ -1164,10 +1166,10 @@ impl Renderer
 			}
 
 			let vertices_transformed = [
-				bbox_vertices_transformed[polygon.0[0]],
-				bbox_vertices_transformed[polygon.0[1]],
-				bbox_vertices_transformed[polygon.0[2]],
-				bbox_vertices_transformed[polygon.0[3]],
+				box_vertices_transformed[polygon.0[0]],
+				box_vertices_transformed[polygon.0[1]],
+				box_vertices_transformed[polygon.0[2]],
+				box_vertices_transformed[polygon.0[3]],
 			];
 
 			let depth_equation = DepthEquation::from_transformed_plane_equation(
@@ -1188,7 +1190,6 @@ impl Renderer
 			);
 
 			let mip = {
-				let mut vertices_2d = [Vec2f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
 				let vertex_count = project_and_clip_polygon(&clip_planes, &vertices_transformed, &mut vertices_2d[..]);
 				if vertex_count < 3
 				{
