@@ -553,8 +553,6 @@ impl Renderer
 		frame_info: &FrameInfo,
 	)
 	{
-		let root_node = bsp_map_compact::get_root_node_index(&self.map);
-
 		let screen_rect = rect_splitting::Rect {
 			min: Vec2f::new(0.0, 0.0),
 			max: Vec2f::new(surface_info.width as f32, surface_info.height as f32),
@@ -581,29 +579,7 @@ impl Renderer
 				screen_rect.max.y,
 			);
 
-			if !self.config.invert_polygons_order
-			{
-				self.draw_skybox(
-					&mut rasterizer,
-					&frame_info.camera_matrices,
-					&frame_info.skybox_rotation,
-					&viewport_clipping_polygon,
-				);
-			}
-
-			self.draw_tree_r(&mut rasterizer, frame_info, &viewport_clipping_polygon, root_node);
-
-			if self.config.invert_polygons_order
-			{
-				self.draw_skybox(
-					&mut rasterizer,
-					&frame_info.camera_matrices,
-					&frame_info.skybox_rotation,
-					&viewport_clipping_polygon,
-				);
-			}
-
-			self.draw_view_models(&mut rasterizer, &viewport_clipping_polygon, &frame_info.model_entities);
+			self.perform_rasterization_for_viewport_part(&mut rasterizer, frame_info, &viewport_clipping_polygon);
 		}
 		else
 		{
@@ -644,31 +620,42 @@ impl Renderer
 					rect_corrected.max.y,
 				);
 
-				if !self.config.invert_polygons_order
-				{
-					self.draw_skybox(
-						&mut rasterizer,
-						&frame_info.camera_matrices,
-						&frame_info.skybox_rotation,
-						&viewport_clipping_polygon,
-					);
-				}
-
-				self.draw_tree_r(&mut rasterizer, frame_info, &viewport_clipping_polygon, root_node);
-
-				if self.config.invert_polygons_order
-				{
-					self.draw_skybox(
-						&mut rasterizer,
-						&frame_info.camera_matrices,
-						&frame_info.skybox_rotation,
-						&viewport_clipping_polygon,
-					);
-				}
-
-				self.draw_view_models(&mut rasterizer, &viewport_clipping_polygon, &frame_info.model_entities);
+				self.perform_rasterization_for_viewport_part(&mut rasterizer, frame_info, &viewport_clipping_polygon);
 			});
 		}
+	}
+
+	fn perform_rasterization_for_viewport_part<'a, ColorT: AbstractColor>(
+		&self,
+		rasterizer: &mut Rasterizer<'a, ColorT>,
+		frame_info: &FrameInfo,
+		viewport_clipping_polygon: &ClippingPolygon,
+	)
+	{
+		if !self.config.invert_polygons_order
+		{
+			self.draw_skybox(
+				rasterizer,
+				&frame_info.camera_matrices,
+				&frame_info.skybox_rotation,
+				&viewport_clipping_polygon,
+			);
+		}
+
+		let root_node = bsp_map_compact::get_root_node_index(&self.map);
+		self.draw_tree_r(rasterizer, frame_info, &viewport_clipping_polygon, root_node);
+
+		if self.config.invert_polygons_order
+		{
+			self.draw_skybox(
+				rasterizer,
+				&frame_info.camera_matrices,
+				&frame_info.skybox_rotation,
+				&viewport_clipping_polygon,
+			);
+		}
+
+		self.draw_view_models(rasterizer, &viewport_clipping_polygon, &frame_info.model_entities);
 	}
 
 	fn prepare_polygons_surfaces(&mut self, camera_matrices: &CameraMatrices)
