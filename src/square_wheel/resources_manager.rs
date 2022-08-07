@@ -26,6 +26,7 @@ pub struct ResourcesManager
 	images: ResourcesMap<image::Image>,
 	stub_image: SharedResourcePtr<image::Image>,
 	material_textures: ResourcesMap<TextureWithMips>,
+	lite_textures: ResourcesMap<TextureLiteWithMips>,
 	skybox_textures_32: ResourcesMap<SkyboxTextures<Color32>>,
 	skybox_textures_64: ResourcesMap<SkyboxTextures<Color64>>,
 }
@@ -58,6 +59,7 @@ impl ResourcesManager
 			images: ResourcesMap::new(),
 			stub_image: SharedResourcePtr::new(image::make_stub()),
 			material_textures: ResourcesMap::new(),
+			lite_textures: ResourcesMap::new(),
 			skybox_textures_32: ResourcesMap::new(),
 			skybox_textures_64: ResourcesMap::new(),
 		}))
@@ -189,6 +191,20 @@ impl ResourcesManager
 		ptr
 	}
 
+	pub fn get_texture_lite(&mut self, key: &ResourceKey) -> SharedResourcePtr<TextureLiteWithMips>
+	{
+		if let Some(p) = self.lite_textures.get(key)
+		{
+			return p.clone();
+		}
+
+		let mip0 = load_image(&key, &self.config.textures_path).unwrap_or_else(|| (*self.stub_image).clone());
+		let ptr = SharedResourcePtr::new(make_texture_lite_mips(mip0));
+
+		self.lite_textures.insert(key.clone(), ptr.clone());
+		ptr
+	}
+
 	pub fn get_skybox_textures_32(&mut self, key: &ResourceKey) -> SharedResourcePtr<SkyboxTextures<Color32>>
 	{
 		if let Some(p) = self.skybox_textures_32.get(key)
@@ -241,6 +257,7 @@ impl ResourcesManager
 		remove_unused_resource_map_entries(&mut self.models);
 		remove_unused_resource_map_entries(&mut self.images);
 		remove_unused_resource_map_entries(&mut self.material_textures);
+		remove_unused_resource_map_entries(&mut self.lite_textures);
 		remove_unused_resource_map_entries(&mut self.skybox_textures_32);
 		remove_unused_resource_map_entries(&mut self.skybox_textures_64);
 	}
