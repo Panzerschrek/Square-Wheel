@@ -429,12 +429,30 @@ impl Host
 
 		let map_name = &args[0];
 
-		let map_loading_start_time = std::time::Instant::now();
-		self.console
-			.lock()
-			.unwrap()
-			.add_text(format!("Loading map \"{}\"", map_name));
+		let loading_text = format!("Loading map \"{}\"", map_name);
 
+		let map_loading_start_time = std::time::Instant::now();
+		self.console.lock().unwrap().add_text(loading_text.clone());
+
+		// Draw single frame with loading text.
+		self.window.update_window_surface(|pixels, surface_info| {
+			for pixel in pixels.iter_mut()
+			{
+				*pixel = pixel.get_half_dark();
+			}
+
+			text_printer::print(
+				pixels,
+				surface_info,
+				&loading_text,
+				((surface_info.width / 2) as i32) - ((loading_text.len() * text_printer::GLYPH_WIDTH / 2) as i32),
+				((surface_info.height / 2) as i32) - ((text_printer::GLYPH_HEIGHT / 2) as i32),
+				Color32::from_rgb(255, 255, 255),
+			);
+		});
+		self.window.swap_buffers();
+
+		// Perform actual map loading.
 		let map_opt = self.resources_manager.lock().unwrap().get_map(&args[0]);
 		if let Some(map) = map_opt
 		{
