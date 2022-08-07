@@ -1199,6 +1199,13 @@ impl Renderer
 
 		for (side, polygon) in bbox_polygons.iter().enumerate()
 		{
+			let side_textures = &skybox_textures[side];
+			if side_textures[0].size == 0
+			{
+				// There is no texture for this side.
+				continue;
+			}
+
 			let vertices_transformed = [
 				bbox_vertices_transformed[polygon.0[0]],
 				bbox_vertices_transformed[polygon.0[1]],
@@ -1214,7 +1221,6 @@ impl Renderer
 				k: plane_transformed.z / plane_transformed_w,
 			};
 
-			let side_textures = &skybox_textures[side];
 			let tc_equation_scale = side_textures[0].size as f32 * 0.5;
 
 			// Calculate texture coordinates equations.
