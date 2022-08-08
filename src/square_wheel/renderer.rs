@@ -116,6 +116,7 @@ struct VisibleDynamicMeshInfo
 	clipping_polygon: ClippingPolygon,
 	model_matrix: Mat4f,
 	camera_matrices: CameraMatrices,
+	mip: u32,
 }
 
 #[derive(Default, Copy, Clone)]
@@ -495,6 +496,7 @@ impl Renderer
 					clipping_polygon,
 					model_matrix,
 					camera_matrices: model_camera_matrices,
+					mip: 0, // Set later.
 				});
 
 				let num_vertices = match &mesh.vertex_data
@@ -539,7 +541,10 @@ impl Renderer
 			let model = &models[visible_dynamic_mesh.entity_index as usize];
 			let animation = &model.animation;
 
-			let texture = &model.texture[0];
+			// TODO - calculate proper mip.
+			visible_dynamic_mesh.mip = 2;
+
+			let texture = &model.texture[visible_dynamic_mesh.mip as usize];
 			let mesh = &model.model.meshes[visible_dynamic_mesh.mesh_index as usize];
 
 			// Perform vertices transformation.
@@ -2059,7 +2064,7 @@ impl Renderer
 			}
 		}
 
-		let texture = &model.texture[0];
+		let texture = &model.texture[visible_dynamic_mesh.mip as usize];
 
 		// TODO - use individual texture for each mesh.
 		let texture_info = TextureInfo {
