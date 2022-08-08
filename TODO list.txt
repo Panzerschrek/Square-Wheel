@@ -13,7 +13,6 @@ Engine:
 
 Renderer:
 * HDR skyboxes
-* Textures for models and decals with mip-levels
 * Animated textures (with N frames)
 * Models rendering improvements - avoid splitting models into pieces for each BSP tree leaf in some cases
 * Models clipping optimizations
