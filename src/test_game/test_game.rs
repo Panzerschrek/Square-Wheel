@@ -247,7 +247,7 @@ impl Game
 
 		let mut r = self.resources_manager.lock().unwrap();
 		let model = r.get_model(&args[0]);
-		let texture = r.get_image(&args[1]);
+		let texture = r.get_texture_lite(&args[1]);
 
 		let (pos, rotation) = self.get_camera_location();
 		let bbox = model.frames_info[0].bbox;
@@ -291,7 +291,7 @@ impl Game
 			return;
 		}
 
-		let texture = self.resources_manager.lock().unwrap().get_image(&args[0]);
+		let texture = self.resources_manager.lock().unwrap().get_texture_lite(&args[0]);
 		let scale = if args.len() >= 2
 		{
 			args[1].parse::<f32>().unwrap_or(1.0)
@@ -300,10 +300,12 @@ impl Game
 		{
 			1.0
 		};
+
+		let texture_mip0 = &texture[0];
 		let size = Vec3f::new(
-			texture.size[0].min(texture.size[1]) as f32,
-			texture.size[0] as f32,
-			texture.size[1] as f32,
+			texture_mip0.size[0].min(texture_mip0.size[1]) as f32,
+			texture_mip0.size[0] as f32,
+			texture_mip0.size[1] as f32,
 		) * (0.5 * scale);
 
 		let (position, rotation) = self.get_camera_location();
@@ -335,7 +337,7 @@ impl Game
 
 		let mut r = self.resources_manager.lock().unwrap();
 		let model = r.get_model(&args[0]);
-		let texture = r.get_image(&args[1]);
+		let texture = r.get_texture_lite(&args[1]);
 
 		self.view_model = Some(ModelEntity {
 			position: Vec3f::zero(),

@@ -85,6 +85,10 @@ pub struct SkyboxSideTexture<ColorT: AbstractColor>
 	pub pixels: Vec<ColorT>,
 }
 
+/// Textures for models and decals. Contains only color.
+pub type TextureLiteWithMips = [TextureLite; NUM_MIPS];
+pub type TextureLite = image::Image;
+
 pub fn make_texture(
 	diffuse: image::Image,
 	mut normals: Option<image::Image>,
@@ -318,6 +322,55 @@ pub fn build_texture_mips(mip0: Texture) -> TextureWithMips
 				let dst_roughness = (average_roughness + normal_deviation).max(MIN_VALID_ROUGHNESS).min(1.0);
 
 				dst.packed_normal_roughness = PackedNormalRoughness::pack(&dst_normal, dst_roughness);
+			}
+		}
+		result[i] = mip;
+	}
+
+	result
+}
+
+pub fn make_texture_lite_mips(mip0: TextureLite) -> TextureLiteWithMips
+{
+	let mut result = [
+		mip0,
+		TextureLite::default(),
+		TextureLite::default(),
+		TextureLite::default(),
+	];
+
+	for i in 1 .. NUM_MIPS
+	{
+		let prev_mip = &mut result[i - 1];
+		let mut mip = TextureLite {
+			size: [prev_mip.size[0] >> 1, prev_mip.size[1] >> 1],
+			pixels: Vec::new(),
+		};
+
+		if mip.size[0] * mip.size[1] == 0
+		{
+			continue;
+		}
+
+		mip.pixels = vec![Color32::black(); (mip.size[0] * mip.size[1]) as usize];
+
+		let prev_mip_width = prev_mip.size[0] as usize;
+		let mip_width = mip.size[0] as usize;
+		for y in 0 .. mip.size[1] as usize
+		{
+			let src_offset0 = (y * 2) * prev_mip_width;
+			let src_offset1 = (y * 2 + 1) * prev_mip_width;
+			for (dst, x) in mip.pixels[y * mip_width .. (y + 1) * mip_width]
+				.iter_mut()
+				.zip(0 .. mip_width)
+			{
+				let src_x = x * 2;
+				let p00 = prev_mip.pixels[src_x + src_offset0];
+				let p01 = prev_mip.pixels[src_x + src_offset1];
+				let p10 = prev_mip.pixels[src_x + 1 + src_offset0];
+				let p11 = prev_mip.pixels[src_x + 1 + src_offset1];
+
+				*dst = Color32::get_average_4([p00, p01, p10, p11]);
 			}
 		}
 		result[i] = mip;

@@ -116,6 +116,7 @@ struct VisibleDynamicMeshInfo
 	clipping_polygon: ClippingPolygon,
 	model_matrix: Mat4f,
 	camera_matrices: CameraMatrices,
+	mip: u32,
 }
 
 #[derive(Default, Copy, Clone)]
@@ -495,6 +496,7 @@ impl Renderer
 					clipping_polygon,
 					model_matrix,
 					camera_matrices: model_camera_matrices,
+					mip: 0, // Set later.
 				});
 
 				let num_vertices = match &mesh.vertex_data
@@ -534,12 +536,20 @@ impl Renderer
 		let dst_triangles_shared = SharedMutSlice::new(&mut self.dynamic_meshes_triangles);
 
 		let map = &self.map;
+		let mip_bias = self.mip_bias;
 
 		let func = |visible_dynamic_mesh: &mut VisibleDynamicMeshInfo| {
 			let model = &models[visible_dynamic_mesh.entity_index as usize];
 			let animation = &model.animation;
 
-			let texture = &model.texture;
+			visible_dynamic_mesh.mip = calculate_triangle_model_texture_mip(
+				&visible_dynamic_mesh.camera_matrices.view_matrix,
+				&get_current_triangle_model_bbox(&model.model, animation),
+				model.texture[0].size,
+				mip_bias,
+			);
+
+			let texture = &model.texture[visible_dynamic_mesh.mip as usize];
 			let mesh = &model.model.meshes[visible_dynamic_mesh.mesh_index as usize];
 
 			// Perform vertices transformation.
@@ -1632,7 +1642,7 @@ impl Renderer
 			}
 
 			// Calculate texture coordinates equation.
-			let texture = &decal.texture;
+			let texture = &decal.texture[0];
 
 			let tc_basis_transformed = [
 				decal_planes_matrix * (Vec4f::from(DECAL_TEXTURE_BASIS[0]) * (texture.size[0] as f32)),
@@ -1643,6 +1653,15 @@ impl Renderer
 				depth_equation,
 				&tc_basis_transformed,
 			);
+
+			let mip = calculate_mip(
+				&vertices_projected[.. num_vertices],
+				&depth_equation,
+				&tc_equation,
+				self.mip_bias,
+			);
+			let mip_texture = &decal.texture[mip as usize];
+			let tc_equation_scaled = tc_equation * (1.0 / ((1 << mip) as f32));
 
 			// Use projected polygon texture coordinates equation in order to get lightmap coordinates for decal points.
 			let polygon_lightmap_coord_scale = ((1 << (polygon_data.mip)) as f32) / (lightmap::LIGHTMAP_SCALE as f32);
@@ -1659,10 +1678,11 @@ impl Renderer
 				decal,
 				polygon,
 				depth_equation,
-				&tc_equation,
+				&tc_equation_scaled,
 				&polygon_lightmap_eqution,
 				&polygon_lightmap_coord_shift,
 				&vertices_projected[.. num_vertices],
+				mip_texture,
 				0,
 			);
 		} // for decals.
@@ -1678,6 +1698,7 @@ impl Renderer
 		polygon_lightmap_eqution: &TexCoordEquation,
 		polygon_lightmap_coord_shift: &[f32; 2],
 		points: &[Vec2f],
+		texture: &TextureLite,
 		recursion_depth: usize,
 	)
 	{
@@ -1756,7 +1777,6 @@ impl Renderer
 			}
 
 			// Perform rasteriation of result triangles.
-			let texture = &decal.texture;
 			let texture_info = TextureInfo {
 				size: [texture.size[0] as i32, texture.size[1] as i32],
 			};
@@ -1804,6 +1824,7 @@ impl Renderer
 						&polygon_lightmap_eqution,
 						&polygon_lightmap_coord_shift,
 						&vertices_clipped[.. num_vertices],
+						texture,
 						recursion_depth + 1,
 					);
 				}
@@ -2048,7 +2069,7 @@ impl Renderer
 			}
 		}
 
-		let texture = &model.texture;
+		let texture = &model.texture[visible_dynamic_mesh.mip as usize];
 
 		// TODO - use individual texture for each mesh.
 		let texture_info = TextureInfo {

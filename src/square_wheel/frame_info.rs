@@ -1,5 +1,5 @@
-use super::{light::*, resources_manager::*, triangle_model::*};
-use crate::common::{bbox::*, image::*, material, math_types::*, matrix::*};
+use super::{light::*, resources_manager::*, textures::*, triangle_model::*};
+use crate::common::{bbox::*, material, math_types::*, matrix::*};
 
 pub struct FrameInfo
 {
@@ -30,7 +30,7 @@ pub struct ModelEntity
 	pub rotation: QuaternionF,
 	pub animation: AnimationPoint,
 	pub model: SharedResourcePtr<TriangleModel>,
-	pub texture: SharedResourcePtr<Image>,
+	pub texture: SharedResourcePtr<TextureLiteWithMips>,
 	pub blending_mode: material::BlendingMode,
 	pub lighting: ModelLighting,
 
@@ -79,7 +79,7 @@ pub struct Decal
 	pub position: Vec3f,
 	pub rotation: QuaternionF,
 	pub scale: Vec3f,
-	pub texture: SharedResourcePtr<Image>,
+	pub texture: SharedResourcePtr<TextureLiteWithMips>,
 	pub blending_mode: material::BlendingMode,
 	pub lightmap_light_scale: f32,
 	pub light_add: [f32; 3],
