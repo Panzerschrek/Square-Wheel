@@ -536,13 +536,18 @@ impl Renderer
 		let dst_triangles_shared = SharedMutSlice::new(&mut self.dynamic_meshes_triangles);
 
 		let map = &self.map;
+		let mip_bias = self.mip_bias;
 
 		let func = |visible_dynamic_mesh: &mut VisibleDynamicMeshInfo| {
 			let model = &models[visible_dynamic_mesh.entity_index as usize];
 			let animation = &model.animation;
 
-			// TODO - calculate proper mip.
-			visible_dynamic_mesh.mip = 2;
+			visible_dynamic_mesh.mip = calculate_triangle_model_texture_mip(
+				&visible_dynamic_mesh.camera_matrices.view_matrix,
+				&get_current_triangle_model_bbox(&model.model, animation),
+				model.texture[0].size,
+				mip_bias,
+			);
 
 			let texture = &model.texture[visible_dynamic_mesh.mip as usize];
 			let mesh = &model.model.meshes[visible_dynamic_mesh.mesh_index as usize];

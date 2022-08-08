@@ -1,4 +1,4 @@
-use super::{fast_math::*, frame_info::*, triangle_model::*};
+use super::{fast_math::*, frame_info::*, textures::*, triangle_model::*};
 use crate::common::{bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, plane::*};
 
 pub fn animate_and_transform_triangle_mesh_vertices(
@@ -247,7 +247,7 @@ pub fn calculate_triangle_model_screen_polygon(model_bbox_vertices_transformed: 
 				continue;
 			}
 
-			// This edge is splitted by z_near plane. Clp edge and use intersection point to extend clipping polygon.
+			// This edge is splitted by z_near plane. Cilp edge and use intersection point to extend clipping polygon.
 			let v = get_line_z_intersection(v_i, v_j, Z_NEAR);
 			let point = v.truncate() / v.z;
 			clipping_polyogn.extend_with_point(&point);
@@ -255,6 +255,56 @@ pub fn calculate_triangle_model_screen_polygon(model_bbox_vertices_transformed: 
 	}
 
 	Some(clipping_polyogn)
+}
+
+pub fn calculate_triangle_model_texture_mip(
+	model_view_matrix: &Mat4f,
+	model_bbox: &BBox,
+	texture_size: [u32; 2],
+	mip_bias: f32,
+) -> u32
+{
+	// Make a cube from bbox n order to fix problems with large mip selected for thin model viewed from side.
+	// This method is not so accuratr but it produces good enough results.
+	let bbox_center = model_bbox.get_center();
+	let bbox_half_size = model_bbox.get_size() * 0.5;
+
+	let cube_half_size = (bbox_half_size.x + bbox_half_size.y + bbox_half_size.z) / 3.0;
+	let cube_half_size_vec = Vec3f::new(cube_half_size, cube_half_size, cube_half_size);
+	let cube_bbox = BBox::from_min_max(bbox_center - cube_half_size_vec, bbox_center + cube_half_size_vec);
+
+	let mut bbox_vertices_projected = [Vec2f::zero(); 8];
+	for (dst, src) in bbox_vertices_projected.iter_mut().zip(cube_bbox.get_corners_vertices())
+	{
+		let vertex_projected = model_view_matrix * src.extend(1.0);
+		if vertex_projected.w <= 0.0
+		{
+			return 0;
+		}
+		*dst = Vec2f::new(vertex_projected.x, vertex_projected.y) / vertex_projected.w;
+	}
+
+	let mut min_x = bbox_vertices_projected[0].x;
+	let mut max_x = min_x;
+	let mut min_y = bbox_vertices_projected[0].y;
+	let mut max_y = min_y;
+	for v in &bbox_vertices_projected[1 ..]
+	{
+		min_x = min_x.min(v.x);
+		max_x = max_x.max(v.x);
+		min_y = min_y.min(v.y);
+		max_y = max_y.max(v.y);
+	}
+
+	let max_dimension = (max_x - min_x).max(max_y - min_y);
+	if max_dimension <= 0.0
+	{
+		return MAX_MIP as u32;
+	}
+
+	let approximate_texels_per_pixel = (texture_size[0].max(texture_size[1]) as f32) / max_dimension;
+
+	((approximate_texels_per_pixel.log2() + mip_bias).floor().max(0.0) as u32).min(MAX_MIP as u32)
 }
 
 pub fn reject_triangle_model_back_faces(
