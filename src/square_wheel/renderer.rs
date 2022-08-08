@@ -1644,6 +1644,15 @@ impl Renderer
 				&tc_basis_transformed,
 			);
 
+			let mip = calculate_mip(
+				&vertices_projected[.. num_vertices],
+				&depth_equation,
+				&tc_equation,
+				self.mip_bias,
+			);
+			let mip_texture = &decal.texture[mip as usize];
+			let tc_equation_scaled = tc_equation * (1.0 / ((1 << mip) as f32));
+
 			// Use projected polygon texture coordinates equation in order to get lightmap coordinates for decal points.
 			let polygon_lightmap_coord_scale = ((1 << (polygon_data.mip)) as f32) / (lightmap::LIGHTMAP_SCALE as f32);
 			let polygon_lightmap_coord_shift = [
@@ -1659,10 +1668,11 @@ impl Renderer
 				decal,
 				polygon,
 				depth_equation,
-				&tc_equation,
+				&tc_equation_scaled,
 				&polygon_lightmap_eqution,
 				&polygon_lightmap_coord_shift,
 				&vertices_projected[.. num_vertices],
+				mip_texture,
 				0,
 			);
 		} // for decals.
@@ -1678,6 +1688,7 @@ impl Renderer
 		polygon_lightmap_eqution: &TexCoordEquation,
 		polygon_lightmap_coord_shift: &[f32; 2],
 		points: &[Vec2f],
+		texture: &TextureLite,
 		recursion_depth: usize,
 	)
 	{
@@ -1756,7 +1767,6 @@ impl Renderer
 			}
 
 			// Perform rasteriation of result triangles.
-			let texture = &decal.texture[0];
 			let texture_info = TextureInfo {
 				size: [texture.size[0] as i32, texture.size[1] as i32],
 			};
@@ -1804,6 +1814,7 @@ impl Renderer
 						&polygon_lightmap_eqution,
 						&polygon_lightmap_coord_shift,
 						&vertices_clipped[.. num_vertices],
+						texture,
 						recursion_depth + 1,
 					);
 				}
