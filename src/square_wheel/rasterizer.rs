@@ -982,8 +982,8 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		left_side: PolygonSide,
 		right_side: PolygonSide,
 		tc_start_left: [Fixed16; 2],
-		d_tc_dy_left: [Fixed16; 2],
-		d_tc_dx: [Fixed16; 2],
+		mut d_tc_dy_left: [Fixed16; 2],
+		mut d_tc_dx: [Fixed16; 2],
 		light_start_left: [Fixed16; 3],
 		mut d_light_left: [Fixed16; 3],
 		mut d_light_dx: [Fixed16; 3],
@@ -998,24 +998,70 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		let mut x_left = left_side.x_start + fixed16_mul(y_start_delta, left_side.dx_dy) + FIXED16_HALF;
 		let mut x_right = right_side.x_start + fixed16_mul(y_start_delta, right_side.dx_dy) + FIXED16_HALF;
 
-		let mut tc_left = [0, 0];
-		for i in 0 .. 2
-		{
-			tc_left[i] = tc_start_left[i] + fixed16_mul(y_start_delta, d_tc_dy_left[i]);
-		}
-
 		let y_end_delta = y_end - (y_start + y_start_delta);
 		let d_x_lower = (x_right - x_left).max(0);
 		let x_upper_left = x_left + fixed16_mul(y_end_delta, left_side.dx_dy);
 		let x_upper_right = x_right + fixed16_mul(y_end_delta, right_side.dx_dy);
 		let d_x_upper = (x_upper_right - x_upper_left).max(0);
 
+		// Correct tc equation to fix possible out of borders coordinates.
+		let mut tc_left = [0, 0];
+		for i in 0 .. 2
+		{
+			let max_tc = int_to_fixed16(texture_info.size[i] as i32) - 1;
+
+			// Correct left side equations.
+			tc_left[i] = (tc_start_left[i] + fixed16_mul(y_start_delta, d_tc_dy_left[i]))
+				.max(0)
+				.min(max_tc);
+			let tc_left_end = tc_left[i] + fixed16_mul(y_end_delta, d_tc_dy_left[i]);
+			if tc_left_end < 0
+			{
+				d_tc_dy_left[i] = fixed16_div(-tc_left[i], y_end_delta);
+			}
+			else if tc_left_end > max_tc
+			{
+				d_tc_dy_left[i] = fixed16_div(max_tc - tc_left[i], y_end_delta);
+			}
+
+			// Correct also line equation.
+			// Correct, using lower triangle edge.
+			let tc_lower_x_end = tc_left[i] + fixed16_mul(d_x_lower, d_tc_dx[i]);
+			if tc_lower_x_end < 0
+			{
+				d_tc_dx[i] = fixed16_div(-tc_left[i], d_x_lower);
+			}
+			else if tc_lower_x_end > max_tc
+			{
+				d_tc_dx[i] = fixed16_div(max_tc - tc_left[i], d_x_lower);
+			}
+			debug_assert!(tc_left[i] + fixed16_mul(d_x_lower, d_tc_dx[i]) >= 0);
+			debug_assert!(tc_left[i] + fixed16_mul(d_x_lower, d_tc_dx[i]) <= max_tc);
+
+			// Correct, using upper triangle edge.
+			let tc_upper_x_start = tc_left[i] + fixed16_mul(y_end_delta, d_tc_dy_left[i]);
+			debug_assert!(tc_upper_x_start >= 0);
+			debug_assert!(tc_upper_x_start <= max_tc);
+			let tc_upper_x_end = tc_upper_x_start + fixed16_mul(d_x_upper, d_tc_dx[i]);
+			if tc_upper_x_end < 0
+			{
+				d_tc_dx[i] = fixed16_div(-tc_upper_x_start, d_x_upper);
+			}
+			else if tc_upper_x_end > max_tc
+			{
+				d_tc_dx[i] = fixed16_div(max_tc - tc_upper_x_start, d_x_upper);
+			}
+			debug_assert!(tc_upper_x_start + fixed16_mul(d_x_upper, d_tc_dx[i]) >= 0);
+			debug_assert!(tc_upper_x_start + fixed16_mul(d_x_upper, d_tc_dx[i]) <= max_tc);
+			debug_assert!(tc_left[i] + fixed16_mul(d_x_lower, d_tc_dx[i]) >= 0);
+			debug_assert!(tc_left[i] + fixed16_mul(d_x_lower, d_tc_dx[i]) <= max_tc);
+		}
+
 		// Correct light equation to fix possible underflow.
+		// TODO - prevent overflow too?
 		let mut light_left = [0, 0, 0];
 		for i in 0 .. 3
 		{
-			// TODO - prevent overflow too?
-
 			// Correct left side equations.
 			light_left[i] = (light_start_left[i] + fixed16_mul(y_start_delta, d_light_left[i])).max(0);
 			let light_left_end = light_left[i] + fixed16_mul(y_end_delta, d_light_left[i]);
@@ -1023,7 +1069,6 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			{
 				d_light_left[i] = fixed16_div(-light_left[i], y_end_delta);
 			}
-			debug_assert!(light_left[i] + fixed16_mul(y_end_delta, d_light_left[i]) >= 0);
 
 			// Correct also line equation.
 			// Correct, using lower triangle edge.
@@ -1054,43 +1099,19 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			let x_end_int = fixed16_floor_to_int(x_right).min(self.clip_rect.max_x);
 			if x_start_int < x_end_int
 			{
-				let num_line_pixels = x_end_int - x_start_int;
 				let x_start_delta = int_to_fixed16(x_start_int) + FIXED16_ONE - x_left;
 				debug_assert!(x_start_delta >= 0);
-				let mut line_tc = [0, 0];
-				let mut d_line_tc = [0, 0];
-				// Correct TC equation to avoid out of borders texture fetch.
-				for i in 0 .. 2
-				{
-					let max_coord = int_to_fixed16(texture_info.size[i] as i32) - 1;
-					line_tc[i] = (tc_left[i] + fixed16_mul(x_start_delta, d_tc_dx[i]))
-						.max(0)
-						.min(max_coord);
-					let end_tc = line_tc[i] + d_tc_dx[i] * (num_line_pixels - 1);
 
-					d_line_tc[i] = if end_tc < 0
-					{
-						(-line_tc[i]) / num_line_pixels
-					}
-					else if end_tc > max_coord
-					{
-						(max_coord - line_tc[i]) / num_line_pixels
-					}
-					else
-					{
-						d_tc_dx[i]
-					};
-				}
+				let mut line_tc = [
+					tc_left[0] + fixed16_mul(x_start_delta, d_tc_dx[0]),
+					tc_left[1] + fixed16_mul(x_start_delta, d_tc_dx[1]),
+				];
 
-				let line_light_arr = [
+				let mut line_light = ColorVecI::from_color_i32x3(&[
 					light_left[0] + fixed16_mul(x_start_delta, d_light_dx[0]),
 					light_left[1] + fixed16_mul(x_start_delta, d_light_dx[1]),
 					light_left[2] + fixed16_mul(x_start_delta, d_light_dx[2]),
-				];
-				debug_assert!(line_light_arr[0] >= 0);
-				debug_assert!(line_light_arr[1] >= 0);
-				debug_assert!(line_light_arr[2] >= 0);
-				let mut line_light = ColorVecI::from_color_i32x3(&line_light_arr);
+				]);
 
 				let line_buffer_offset = y_int * self.row_size;
 				let line_dst = unchecked_slice_range_mut(
@@ -1152,7 +1173,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 
 					for i in 0 .. 2
 					{
-						line_tc[i] += d_line_tc[i];
+						line_tc[i] += d_tc_dx[i];
 					}
 					line_light = ColorVecI::add(&line_light, &d_light_dx_vec);
 				}
