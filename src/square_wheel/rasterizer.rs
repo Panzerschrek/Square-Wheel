@@ -993,6 +993,11 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 	{
 		let y_start_int = fixed16_round_to_int(y_start).max(self.clip_rect.min_y);
 		let y_end_int = fixed16_round_to_int(y_end).min(self.clip_rect.max_y);
+		if y_start_int >= y_end_int
+		{
+			return;
+		}
+
 		let y_start_delta = int_to_fixed16(y_start_int) + FIXED16_HALF - y_start;
 		// Add 0.5 to simplify rounding in inner loop.
 		let mut x_left = left_side.x_start + fixed16_mul(y_start_delta, left_side.dx_dy) + FIXED16_HALF;
