@@ -31,9 +31,8 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	let sample_grid_size = settings.sample_grid_size.min(MAX_SAMPLE_GRID_SIZE);
 
 	let mut lights = extract_map_lights(map);
-	println!("Point lights: {}", lights.len());
-
 	let mut sun_lights = extract_sun_lights(map, &map_bbox);
+	println!("Point lights: {}, sun lights: {}", lights.len(), sun_lights.len());
 
 	for l in &mut lights
 	{
@@ -421,10 +420,11 @@ fn extract_sun_lights(map: &bsp_map_compact::BSPMap, map_bbox: &BBox) -> Vec<Sun
 			let dir = if let Some(sun_angles) = sun_angles
 			{
 				let deg2rad = std::f32::consts::PI / 180.0;
-				let pitch = sun_angles.x * deg2rad;
-				let yaw = sun_angles.y * deg2rad;
-				let pitch_sin = pitch.sin();
-				-Vec3f::new(pitch_sin * yaw.cos(), pitch_sin * yaw.sin(), pitch.cos())
+				// TODO - check yaw usage.
+				let yaw = sun_angles.x * deg2rad;
+				let pitch = sun_angles.y * deg2rad;
+				let pitch_cos = pitch.cos();
+				-Vec3f::new(pitch_cos * yaw.cos(), pitch_cos * yaw.sin(), pitch.sin())
 			}
 			else
 			{
