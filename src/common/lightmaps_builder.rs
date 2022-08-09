@@ -31,7 +31,16 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	let mut lights = extract_map_lights(map);
 	println!("Point lights: {}", lights.len());
 
+	let mut sun_lights: Vec<SunLight> = Vec::new();
+
 	for l in &mut lights
+	{
+		l.color[0] *= settings.light_scale;
+		l.color[1] *= settings.light_scale;
+		l.color[2] *= settings.light_scale;
+	}
+
+	for l in &mut sun_lights
 	{
 		l.color[0] *= settings.light_scale;
 		l.color[1] *= settings.light_scale;
@@ -50,6 +59,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	build_primary_lightmaps(
 		sample_grid_size,
 		&lights_by_leaf,
+		&sun_lights,
 		map,
 		&opacity_table,
 		&visibility_matrix,
@@ -163,6 +173,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		build_directional_lightmaps(
 			sample_grid_size,
 			&lights_by_leaf,
+			&sun_lights,
 			&secondary_light_sources,
 			&emissive_light_sources,
 			map,
@@ -183,6 +194,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	let light_grid_uncompressed = calculate_light_grid(
 		sample_grid_size,
 		&lights_by_leaf,
+		&sun_lights,
 		&secondary_light_sources,
 		&emissive_light_sources,
 		map,
@@ -271,6 +283,13 @@ struct PointLight
 {
 	pos: Vec3f,
 	color: [f32; 3], // Color scaled by intensity.
+}
+
+struct SunLight
+{
+	// Direction towards light, scaled by map size so for every point in map point + dir will be outside map.
+	dir: Vec3f,
+	color: [f32; 3],
 }
 
 fn extract_map_lights(map: &bsp_map_compact::BSPMap) -> Vec<PointLight>
@@ -440,6 +459,7 @@ type MaterialAlbedo = [f32; 3];
 fn build_primary_lightmaps(
 	sample_grid_size: u32,
 	lights: &LightsByLeaf,
+	sun_lights: &[SunLight],
 	map: &bsp_map_compact::BSPMap,
 	opacity_table: &MaterialsOpacityTable,
 	visibility_matrix: &pvs::VisibilityMatrix,
@@ -468,6 +488,7 @@ fn build_primary_lightmaps(
 			build_primary_lightmap(
 				sample_grid_size,
 				&visible_lights_list,
+				sun_lights,
 				polygon,
 				map,
 				opacity_table,
@@ -496,6 +517,7 @@ fn build_primary_lightmaps(
 			build_primary_lightmap(
 				sample_grid_size,
 				&visible_lights_list,
+				sun_lights,
 				polygon,
 				map,
 				opacity_table,
@@ -510,6 +532,7 @@ fn build_primary_lightmaps(
 fn build_primary_lightmap(
 	sample_grid_size: u32,
 	lights: &[PointLight],
+	sun_lights: &[SunLight],
 	polygon: &bsp_map_compact::Polygon,
 	map: &bsp_map_compact::BSPMap,
 	opacity_table: &MaterialsOpacityTable,
@@ -587,6 +610,33 @@ fn build_primary_lightmap(
 					}
 
 					let light_scale = shadow_factor * angle_cos / vec_to_light_len2;
+					let color_scaled = [
+						light.color[0] * light_scale,
+						light.color[1] * light_scale,
+						light.color[2] * light_scale,
+					];
+
+					total_light[0] += multi_sampling_scale * color_scaled[0];
+					total_light[1] += multi_sampling_scale * color_scaled[1];
+					total_light[2] += multi_sampling_scale * color_scaled[2];
+				}
+
+				for light in sun_lights
+				{
+					let vec_to_light = light.dir;
+					let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
+					let angle_cos = plane_normal_normalized.dot(vec_to_light) / vec_to_light_len2.sqrt();
+
+					if angle_cos <= 0.0
+					{
+						// Do not determine visibility for light behind polygon plane.
+						continue;
+					}
+
+					// TODO - trace to sun.
+					let shadow_factor = 1.0;
+
+					let light_scale = shadow_factor * angle_cos;
 					let color_scaled = [
 						light.color[0] * light_scale,
 						light.color[1] * light_scale,
@@ -889,6 +939,7 @@ fn build_polygon_secondary_lightmap(
 fn build_directional_lightmaps(
 	sample_grid_size: u32,
 	primary_lights: &LightsByLeaf,
+	sun_lights: &[SunLight],
 	secondary_lights: &[SecondaryLightSource],
 	emissive_lights: &[SecondaryLightSource],
 	map: &bsp_map_compact::BSPMap,
@@ -918,6 +969,7 @@ fn build_directional_lightmaps(
 			build_polygon_diretional_lightmap(
 				sample_grid_size,
 				&visible_lights_list,
+				sun_lights,
 				secondary_lights,
 				emissive_lights,
 				polygon_index,
@@ -948,6 +1000,7 @@ fn build_directional_lightmaps(
 			build_polygon_diretional_lightmap(
 				sample_grid_size,
 				&visible_lights_list,
+				sun_lights,
 				secondary_lights,
 				emissive_lights,
 				polygon_index,
@@ -965,6 +1018,7 @@ fn build_directional_lightmaps(
 fn build_polygon_diretional_lightmap(
 	sample_grid_size: u32,
 	primary_lights: &[PointLight],
+	sun_lights: &[SunLight],
 	secondary_lights: &[SecondaryLightSource],
 	emissive_lights: &[SecondaryLightSource],
 	polygon_index: usize,
@@ -1064,6 +1118,37 @@ fn build_polygon_diretional_lightmap(
 						vec_to_light_from_texel_center.dot(u_vec_normalized),
 						vec_to_light_from_texel_center.dot(v_vec_normalized),
 						vec_to_light_from_texel_center.dot(plane_normal_normalized),
+					);
+					light_hemisphere.add_point_light(&vec_to_light_transformed, &color_scaled);
+				}
+
+				for sun_light in sun_lights
+				{
+					if plane_normal_normalized.dot(sun_light.dir) <= 0.0
+					{
+						// Do not determine visibility for light behind polygon plane.
+						continue;
+					}
+
+					let shadow_factor = 1.0; // TODO - perform sun trace.
+					if shadow_factor <= 0.0
+					{
+						// In shadow.
+						continue;
+					}
+
+					// Do not use agle cos because we add light into light hemisphere.
+					let light_scale = shadow_factor * multi_sampling_scale;
+					let color_scaled = [
+						sun_light.color[0] * light_scale,
+						sun_light.color[1] * light_scale,
+						sun_light.color[2] * light_scale,
+					];
+
+					let vec_to_light_transformed = Vec3f::new(
+						sun_light.dir.dot(u_vec_normalized),
+						sun_light.dir.dot(v_vec_normalized),
+						sun_light.dir.dot(plane_normal_normalized),
 					);
 					light_hemisphere.add_point_light(&vec_to_light_transformed, &color_scaled);
 				}
@@ -1595,6 +1680,7 @@ type LightGridUncompressed = Vec<bsp_map_compact::LightGridElement>;
 fn calculate_light_grid(
 	sample_grid_size: u32,
 	primary_lights: &LightsByLeaf,
+	sun_lights: &[SunLight],
 	secondary_lights: &[SecondaryLightSource],
 	emissive_lights: &[SecondaryLightSource],
 	map: &bsp_map_compact::BSPMap,
@@ -1661,6 +1747,7 @@ fn calculate_light_grid(
 					calculate_light_for_grid_point(
 						&pos_corrected,
 						primary_lights,
+						sun_lights,
 						secondary_lights,
 						emissive_lights,
 						map,
@@ -1786,6 +1873,7 @@ fn compress_light_grid(
 fn calculate_light_for_grid_point(
 	pos: &Vec3f,
 	primary_lights: &LightsByLeaf,
+	sun_lights: &[SunLight],
 	secondary_lights: &[SecondaryLightSource],
 	emissive_lights: &[SecondaryLightSource],
 	map: &bsp_map_compact::BSPMap,
@@ -1830,6 +1918,27 @@ fn calculate_light_for_grid_point(
 				],
 			);
 		} // for primary lights
+
+		for sun_light in sun_lights
+		{
+			let shadow_factor = 1.0; // TODO - trace towards sun.
+			if shadow_factor <= 0.0
+			{
+				// In shadow.
+				continue;
+			}
+
+			// Do not use agle cos because we add light into light sphere.
+			let light_scale = shadow_factor;
+			out_light_cube.add_light_sample(
+				&sun_light.dir,
+				&[
+					sun_light.color[0] * light_scale,
+					sun_light.color[1] * light_scale,
+					sun_light.color[2] * light_scale,
+				],
+			);
+		} // for sun lights
 
 		let light_source_leaf = &map.leafs[light_source_leaf_index as usize];
 		let light_source_leaf_polygons_range = light_source_leaf.first_polygon as usize ..
