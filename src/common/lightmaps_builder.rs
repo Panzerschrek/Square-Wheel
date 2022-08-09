@@ -1,6 +1,6 @@
 use super::{
-	bsp_map_compact, image, light_cube::*, light_hemisphere::*, light_trace::*, lightmap::*, map_file_common, material,
-	math_types::*, pvs, shared_mut_slice::*,
+	bbox::*, bsp_map_compact, image, light_cube::*, light_hemisphere::*, light_trace::*, lightmap::*, map_file_common,
+	material, math_types::*, pvs, shared_mut_slice::*,
 };
 use rayon::prelude::*;
 use std::{io::Write, sync::atomic};
@@ -26,12 +26,14 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	albedo_image_getter: AlbedoImageGetter,
 )
 {
+	let map_bbox = bsp_map_compact::get_map_bbox(map);
+
 	let sample_grid_size = settings.sample_grid_size.min(MAX_SAMPLE_GRID_SIZE);
 
 	let mut lights = extract_map_lights(map);
 	println!("Point lights: {}", lights.len());
 
-	let mut sun_lights: Vec<SunLight> = Vec::new();
+	let mut sun_lights = extract_sun_lights(map, &map_bbox);
 
 	for l in &mut lights
 	{
@@ -189,7 +191,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		map.directional_lightmaps_data = Vec::new();
 	}
 
-	prepare_light_grid(map, settings);
+	prepare_light_grid(map, &map_bbox, settings);
 
 	let light_grid_uncompressed = calculate_light_grid(
 		sample_grid_size,
@@ -360,6 +362,85 @@ fn extract_map_lights(map: &bsp_map_compact::BSPMap) -> Vec<PointLight>
 	}
 
 	result
+}
+
+fn extract_sun_lights(map: &bsp_map_compact::BSPMap, map_bbox: &BBox) -> Vec<SunLight>
+{
+	let bbox_size = map_bbox.get_size();
+	let bbox_max_dimension = bbox_size.magnitude();
+
+	let world_entity = map.entities[0];
+
+	let mut sun_angles: Option<Vec3f> = None;
+	let mut intensity: Option<f32> = None;
+	let mut color: Option<Vec3f> = None;
+
+	// https://ericwa.github.io/ericw-tools/doc/light.html#MODEL%20ENTITY%20KEYS
+
+	for key_value_pair in &map.key_value_pairs[world_entity.first_key_value_pair as usize ..
+		(world_entity.first_key_value_pair + world_entity.num_key_value_pairs) as usize]
+	{
+		let key = bsp_map_compact::get_map_string(key_value_pair.key, map);
+		let value = bsp_map_compact::get_map_string(key_value_pair.value, map);
+		if key == "_sun_mangle"
+		{
+			if let Ok(a) = map_file_common::parse_vec3(value)
+			{
+				sun_angles = Some(a);
+			}
+		}
+		if key == "_sunlight"
+		{
+			if let Ok(i) = map_file_common::parse_number(&mut value.clone())
+			{
+				intensity = Some(i);
+			}
+		}
+		if key == "_sunlight_color"
+		{
+			if let Ok(c) = map_file_common::parse_vec3(value)
+			{
+				color = Some(c);
+			}
+		}
+	}
+
+	if let Some(intensity) = intensity
+	{
+		let intensity = intensity.max(0.0) * MAP_LIGHTS_SCALE;
+		let mut out_color = [intensity, intensity, intensity];
+		if let Some(color) = color
+		{
+			out_color[0] *= (color.x / 255.0).max(0.0).min(1.0);
+			out_color[1] *= (color.y / 255.0).max(0.0).min(1.0);
+			out_color[2] *= (color.z / 255.0).max(0.0).min(1.0);
+		}
+
+		if out_color[0] > 0.0 || out_color[1] > 0.0 || out_color[2] > 0.0
+		{
+			let dir = if let Some(sun_angles) = sun_angles
+			{
+				let deg2rad = std::f32::consts::PI / 180.0;
+				let pitch = sun_angles.x * deg2rad;
+				let yaw = sun_angles.y * deg2rad;
+				let pitch_sin = pitch.sin();
+				-Vec3f::new(pitch_sin * yaw.cos(), pitch_sin * yaw.sin(), pitch.cos())
+			}
+			else
+			{
+				Vec3f::unit_z()
+			};
+
+			let dir_scaled = dir * bbox_max_dimension;
+
+			return vec![SunLight {
+				dir: dir_scaled,
+				color: out_color,
+			}];
+		}
+	}
+
+	Vec::new()
 }
 
 pub type LightmapsData = Vec<bsp_map_compact::LightmapElement>;
@@ -1646,10 +1727,8 @@ fn create_secondary_light_source(
 	}
 }
 
-fn prepare_light_grid(map: &mut bsp_map_compact::BSPMap, settings: &LightmappingSettings)
+fn prepare_light_grid(map: &mut bsp_map_compact::BSPMap, map_bbox: &BBox, settings: &LightmappingSettings)
 {
-	let map_bbox = bsp_map_compact::get_map_bbox(map);
-
 	let light_grid_header = &mut map.light_grid_header;
 
 	let width_clamped = settings.light_grid_cell_width.max(16.0).min(512.0);
