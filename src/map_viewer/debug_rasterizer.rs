@@ -292,7 +292,7 @@ impl<'a> DebugRasterizer<'a>
 		{
 			let x_start_int = fixed16_floor_to_int(x_left).max(0);
 			let x_end_int = fixed16_floor_to_int(x_right).min(self.width);
-			let x_start_f32 = x_start_int as f32 + 0.5;
+			let x_start_f32 = x_start_int as f32 + 1.0;
 			let mut inv_z = x_start_f32 * depth_equation.d_inv_z_dx + line_inv_z;
 			for x_int in x_start_int .. x_end_int
 			{

@@ -991,10 +991,10 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		texture_data: &[TextureColorT],
 	)
 	{
-		// TODO - avoid adding "0.5" for some calculations.
 		let y_start_int = fixed16_round_to_int(y_start).max(self.clip_rect.min_y);
 		let y_end_int = fixed16_round_to_int(y_end).min(self.clip_rect.max_y);
 		let y_start_delta = int_to_fixed16(y_start_int) + FIXED16_HALF - y_start;
+		// Add 0.5 to simplify rounding in inner loop.
 		let mut x_left = left_side.x_start + fixed16_mul(y_start_delta, left_side.dx_dy) + FIXED16_HALF;
 		let mut x_right = right_side.x_start + fixed16_mul(y_start_delta, right_side.dx_dy) + FIXED16_HALF;
 
@@ -1021,7 +1021,8 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			if x_start_int < x_end_int
 			{
 				let num_line_pixels = x_end_int - x_start_int;
-				let x_start_delta = int_to_fixed16(x_start_int) + FIXED16_HALF - x_left;
+				let x_start_delta = int_to_fixed16(x_start_int) + FIXED16_ONE - x_left;
+				debug_assert!(x_start_delta >= 0);
 				let mut line_tc = [0, 0];
 				let mut d_line_tc = [0, 0];
 				// Correct TC equation to avoid out of borders texture fetch.
@@ -1047,11 +1048,16 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					};
 				}
 
-				let mut line_light = ColorVecI::from_color_i32x3(&[
+				let line_light_arr = [
 					light_left[0] + fixed16_mul(x_start_delta, d_light_dx[0]),
 					light_left[1] + fixed16_mul(x_start_delta, d_light_dx[1]),
 					light_left[2] + fixed16_mul(x_start_delta, d_light_dx[2]),
-				]);
+				];
+				debug_assert!(line_light_arr[0] >= 0);
+				debug_assert!(line_light_arr[1] >= 0);
+				debug_assert!(line_light_arr[2] >= 0);
+
+				let mut line_light = ColorVecI::from_color_i32x3(&line_light_arr);
 
 				let line_buffer_offset = y_int * self.row_size;
 				let line_dst = unchecked_slice_range_mut(
