@@ -14,7 +14,13 @@ fn get_texture_opacity(texture_name: &bsp_map_compact::Texture, materials: &Mate
 {
 	if let Some(material) = materials.get(bsp_map_compact::get_texture_string(texture_name))
 	{
-		if material.shadow
+		if material.skybox.is_some()
+		{
+			// For now just assume skyboxes passing all light
+			// It is needed because right now we pass sun light using just gaps in world geometry.
+			1.0
+		}
+		else if material.shadow
 		{
 			match material.blending_mode
 			{
@@ -136,9 +142,22 @@ fn get_shadow_factor_r(
 			return 0.0;
 		}
 
-		// Absorb light by pots sub-paths - front and back.
+		// Absorb light by bots sub-paths - front and back.
 		return shadow_factor_front * shadow_factor_back;
 	}
+}
+
+pub fn get_sun_shadow_factor(
+	from: &Vec3f,
+	dir: &Vec3f,
+	map: &bsp_map_compact::BSPMap,
+	opacity_table: &MaterialsOpacityTable,
+) -> f32
+{
+	// For now just trace into direction of the sun.
+	// This works since skybox brushes does not block light and we have no geometry behind sky brushes.
+	// TODO - find intersections with nearest sky brush towards sun direction instead.
+	get_shadow_factor(from, &(from + dir), map, opacity_table)
 }
 
 fn edge_intersects_with_polygon(

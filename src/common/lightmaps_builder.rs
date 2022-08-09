@@ -714,8 +714,11 @@ fn build_primary_lightmap(
 						continue;
 					}
 
-					// TODO - trace to sun.
-					let shadow_factor = 1.0;
+					let shadow_factor = get_sun_shadow_factor(&pos, &vec_to_light, map, opacity_table);
+					if shadow_factor <= 0.0
+					{
+						continue;
+					}
 
 					let light_scale = shadow_factor * angle_cos;
 					let color_scaled = [
@@ -1211,7 +1214,7 @@ fn build_polygon_diretional_lightmap(
 						continue;
 					}
 
-					let shadow_factor = 1.0; // TODO - perform sun trace.
+					let shadow_factor = get_sun_shadow_factor(&pos, &sun_light.dir, map, opacity_table);
 					if shadow_factor <= 0.0
 					{
 						// In shadow.
@@ -2000,7 +2003,7 @@ fn calculate_light_for_grid_point(
 
 		for sun_light in sun_lights
 		{
-			let shadow_factor = 1.0; // TODO - trace towards sun.
+			let shadow_factor = get_sun_shadow_factor(&pos, &sun_light.dir, map, opacity_table);
 			if shadow_factor <= 0.0
 			{
 				// In shadow.
