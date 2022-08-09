@@ -358,6 +358,11 @@ mod fast_math_impl
 		{
 			unsafe { Self(_mm_srai_epi32(self.0, COUNT)) }
 		}
+
+		pub fn extract<const INDEX: i32>(&mut self) -> i32
+		{
+			unsafe { _mm_extract_epi32(self.0, INDEX) }
+		}
 	} // impl ColorVecI
 }
 
@@ -709,6 +714,11 @@ mod fast_math_impl
 				res[i] = self.0[i] >> COUNT
 			}
 			Self(res)
+		}
+
+		pub fn extract<const INDEX: i32>(&mut self) -> i32
+		{
+			self.0[INDEX as usize]
 		}
 	} // impl ColorVecI
 }
