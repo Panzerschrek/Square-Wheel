@@ -22,7 +22,6 @@ Renderer:
 * Billboards and sprites
 
 Lightmapper:
-* Directional light (Sun/Moon)
 * Cone lights
 * Colored shadows
 * Shadows from dynamic objects (configurable)
