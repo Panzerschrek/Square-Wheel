@@ -1,6 +1,7 @@
-use super::{bsp_map_compact, material::*, math_types::*};
+use super::{bsp_map_compact, clipping::*, material::*, math_types::*};
 
 pub type MaterialsOpacityTable = Vec<f32>;
+pub type MaterialsSkyFlagTable = Vec<bool>;
 
 pub fn build_materials_opacity_table(map: &bsp_map_compact::BSPMap, materials: &MaterialsMap) -> MaterialsOpacityTable
 {
@@ -17,7 +18,6 @@ fn get_texture_opacity(texture_name: &bsp_map_compact::Texture, materials: &Mate
 		if material.skybox.is_some()
 		{
 			// For now just assume skyboxes passing all light
-			// It is needed because right now we pass sun light using just gaps in world geometry.
 			1.0
 		}
 		else if material.shadow
@@ -40,6 +40,27 @@ fn get_texture_opacity(texture_name: &bsp_map_compact::Texture, materials: &Mate
 	else
 	{
 		0.0
+	}
+}
+
+pub fn build_materials_sky_flag_table(map: &bsp_map_compact::BSPMap, materials: &MaterialsMap)
+	-> MaterialsSkyFlagTable
+{
+	map.textures
+		.iter()
+		.map(|texture_name| get_texture_sky_flag(texture_name, materials))
+		.collect()
+}
+
+fn get_texture_sky_flag(texture_name: &bsp_map_compact::Texture, materials: &MaterialsMap) -> bool
+{
+	if let Some(material) = materials.get(bsp_map_compact::get_texture_string(texture_name))
+	{
+		material.skybox.is_some()
+	}
+	else
+	{
+		false
 	}
 }
 
@@ -152,12 +173,105 @@ pub fn get_sun_shadow_factor(
 	dir: &Vec3f,
 	map: &bsp_map_compact::BSPMap,
 	opacity_table: &MaterialsOpacityTable,
+	sky_flag_table: &MaterialsSkyFlagTable,
 ) -> f32
 {
-	// For now just trace into direction of the sun.
-	// This works since skybox brushes does not block light and we have no geometry behind sky brushes.
-	// TODO - find intersections with nearest sky brush towards sun direction instead.
-	get_shadow_factor(from, &(from + dir), map, opacity_table)
+	// Find first intersection with sky polygon, than trace towards this intersection to find shadow factor.
+	let root_node = bsp_map_compact::get_root_node_index(map);
+	if let Some(sky_point) = get_nearest_sky_point_r(from, &(from + dir), root_node, map, sky_flag_table)
+	{
+		get_shadow_factor(from, &sky_point, map, opacity_table)
+	}
+	else
+	{
+		0.0
+	}
+}
+
+fn get_nearest_sky_point_r(
+	from: &Vec3f,
+	to: &Vec3f,
+	current_index: u32,
+	map: &bsp_map_compact::BSPMap,
+	sky_flag_table: &MaterialsSkyFlagTable,
+) -> Option<Vec3f>
+{
+	if current_index >= bsp_map_compact::FIRST_LEAF_INDEX
+	{
+		let leaf_index = current_index - bsp_map_compact::FIRST_LEAF_INDEX;
+		let leaf = &map.leafs[leaf_index as usize];
+		let mut result: Option<Vec3f> = None;
+		for polygon in &map.polygons[leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize]
+		{
+			if sky_flag_table[polygon.texture as usize] && edge_intersects_with_polygon(from, to, polygon, map)
+			{
+				let pos = get_line_plane_intersection(from, to, &polygon.plane);
+				if let Some(prev_pos) = &mut result
+				{
+					if (from - pos).magnitude2() < (*from - *prev_pos).magnitude2()
+					{
+						*prev_pos = pos;
+					}
+				}
+				else
+				{
+					result = Some(pos);
+				}
+			}
+		}
+		return result;
+	}
+	else
+	{
+		let node = &map.nodes[current_index as usize];
+		let dist_from = from.dot(node.plane.vec) - node.plane.dist;
+		let dist_to = to.dot(node.plane.vec) - node.plane.dist;
+		if dist_from >= 0.0 && dist_to >= 0.0
+		{
+			return get_nearest_sky_point_r(from, to, node.children[0], map, sky_flag_table);
+		}
+		if dist_from <= 0.0 && dist_to <= 0.0
+		{
+			return get_nearest_sky_point_r(from, to, node.children[1], map, sky_flag_table);
+		}
+
+		// Split edge using BSP node plane.
+
+		let dist_sum = dist_to - dist_from;
+		if dist_sum.abs() < MIN_POSITIVE_VALUE
+		{
+			// Edge is almost on polygon plane.
+			return None;
+		}
+		let k_from = dist_from / dist_sum;
+		let k_to = dist_to / dist_sum;
+		let intersection_pos = from * k_to - to * k_from;
+
+		let (child_from, child_to) = if dist_from > 0.0 { (0, 1) } else { (1, 0) };
+
+		// HACK!
+		// There is some problems with intersection detection if intersection polygon plane is same as BSP plane.
+		// So, extend edge a little bit behind splitter plane.
+		let eps = 1.0 / 1024.0;
+		let intersection_pos_from = intersection_pos * (1.0 - eps) + from * eps;
+		let intersection_pos_to = intersection_pos * (1.0 - eps) + to * eps;
+
+		// Trace using from -> to order in order to find nearest sky point.
+
+		let result_from = get_nearest_sky_point_r(
+			from,
+			&intersection_pos_to,
+			node.children[child_from],
+			map,
+			sky_flag_table,
+		);
+		if result_from.is_some()
+		{
+			return result_from;
+		}
+
+		return get_nearest_sky_point_r(&intersection_pos_from, to, node.children[child_to], map, sky_flag_table);
+	}
 }
 
 fn edge_intersects_with_polygon(

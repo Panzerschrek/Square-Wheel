@@ -56,6 +56,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	let visibility_matrix = pvs::calculate_visibility_matrix(&map);
 
 	let opacity_table = build_materials_opacity_table(map, materials);
+	let sky_flag_table = build_materials_sky_flag_table(map, materials);
 
 	build_primary_lightmaps(
 		sample_grid_size,
@@ -63,6 +64,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		&sun_lights,
 		map,
 		&opacity_table,
+		&sky_flag_table,
 		&visibility_matrix,
 		&mut primary_lightmaps_data,
 	);
@@ -179,6 +181,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 			&emissive_light_sources,
 			map,
 			&opacity_table,
+			&sky_flag_table,
 			&visibility_matrix,
 			&mut directional_lightmaps_data,
 		);
@@ -200,6 +203,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		&emissive_light_sources,
 		map,
 		&opacity_table,
+		&sky_flag_table,
 		&visibility_matrix,
 	);
 	let (light_grid_columns, light_grid_samples) = compress_light_grid(map, &light_grid_uncompressed);
@@ -543,6 +547,7 @@ fn build_primary_lightmaps(
 	sun_lights: &[SunLight],
 	map: &bsp_map_compact::BSPMap,
 	opacity_table: &MaterialsOpacityTable,
+	sky_flag_table: &MaterialsSkyFlagTable,
 	visibility_matrix: &pvs::VisibilityMatrix,
 	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
 )
@@ -573,6 +578,7 @@ fn build_primary_lightmaps(
 				polygon,
 				map,
 				opacity_table,
+				sky_flag_table,
 				lightmaps_data_unshared,
 			);
 
@@ -602,6 +608,7 @@ fn build_primary_lightmaps(
 				polygon,
 				map,
 				opacity_table,
+				sky_flag_table,
 				lightmaps_data_unshared,
 			);
 
@@ -617,6 +624,7 @@ fn build_primary_lightmap(
 	polygon: &bsp_map_compact::Polygon,
 	map: &bsp_map_compact::BSPMap,
 	opacity_table: &MaterialsOpacityTable,
+	sky_flag_table: &MaterialsSkyFlagTable,
 	lightmaps_data: &mut [bsp_map_compact::LightmapElement],
 )
 {
@@ -714,7 +722,7 @@ fn build_primary_lightmap(
 						continue;
 					}
 
-					let shadow_factor = get_sun_shadow_factor(&pos, &vec_to_light, map, opacity_table);
+					let shadow_factor = get_sun_shadow_factor(&pos, &vec_to_light, map, opacity_table, sky_flag_table);
 					if shadow_factor <= 0.0
 					{
 						continue;
@@ -1028,6 +1036,7 @@ fn build_directional_lightmaps(
 	emissive_lights: &[SecondaryLightSource],
 	map: &bsp_map_compact::BSPMap,
 	opacity_table: &MaterialsOpacityTable,
+	sky_flag_table: &MaterialsSkyFlagTable,
 	visibility_matrix: &pvs::VisibilityMatrix,
 	lightmaps_data: &mut [bsp_map_compact::DirectionalLightmapElement],
 )
@@ -1059,6 +1068,7 @@ fn build_directional_lightmaps(
 				polygon_index,
 				map,
 				opacity_table,
+				sky_flag_table,
 				&visible_leafs_list,
 				lightmaps_data_unshared,
 			);
@@ -1090,6 +1100,7 @@ fn build_directional_lightmaps(
 				polygon_index,
 				map,
 				opacity_table,
+				sky_flag_table,
 				&visible_leafs_list,
 				lightmaps_data_unshared,
 			);
@@ -1108,6 +1119,7 @@ fn build_polygon_diretional_lightmap(
 	polygon_index: usize,
 	map: &bsp_map_compact::BSPMap,
 	opacity_table: &MaterialsOpacityTable,
+	sky_flag_table: &MaterialsSkyFlagTable,
 	visible_leafs: &[u32], // Leafs visible for this polygon.
 	lightmaps_data: &mut [bsp_map_compact::DirectionalLightmapElement],
 )
@@ -1214,7 +1226,7 @@ fn build_polygon_diretional_lightmap(
 						continue;
 					}
 
-					let shadow_factor = get_sun_shadow_factor(&pos, &sun_light.dir, map, opacity_table);
+					let shadow_factor = get_sun_shadow_factor(&pos, &sun_light.dir, map, opacity_table, sky_flag_table);
 					if shadow_factor <= 0.0
 					{
 						// In shadow.
@@ -1767,6 +1779,7 @@ fn calculate_light_grid(
 	emissive_lights: &[SecondaryLightSource],
 	map: &bsp_map_compact::BSPMap,
 	opacity_table: &MaterialsOpacityTable,
+	sky_flag_table: &MaterialsSkyFlagTable,
 	visibility_matrix: &pvs::VisibilityMatrix,
 ) -> LightGridUncompressed
 {
@@ -1834,6 +1847,7 @@ fn calculate_light_grid(
 						emissive_lights,
 						map,
 						opacity_table,
+						sky_flag_table,
 						visibility_matrix,
 						min_light_square_dist,
 						&mut light_cube,
@@ -1960,6 +1974,7 @@ fn calculate_light_for_grid_point(
 	emissive_lights: &[SecondaryLightSource],
 	map: &bsp_map_compact::BSPMap,
 	opacity_table: &MaterialsOpacityTable,
+	sky_flag_table: &MaterialsSkyFlagTable,
 	visibility_matrix: &pvs::VisibilityMatrix,
 	min_light_square_dist: f32,
 	out_light_cube: &mut LightCube,
@@ -2003,7 +2018,7 @@ fn calculate_light_for_grid_point(
 
 		for sun_light in sun_lights
 		{
-			let shadow_factor = get_sun_shadow_factor(&pos, &sun_light.dir, map, opacity_table);
+			let shadow_factor = get_sun_shadow_factor(&pos, &sun_light.dir, map, opacity_table, sky_flag_table);
 			if shadow_factor <= 0.0
 			{
 				// In shadow.
