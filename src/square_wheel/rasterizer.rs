@@ -1015,51 +1015,121 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		{
 			let max_tc = int_to_fixed16(texture_info.size[i] as i32) - 1;
 
-			// Correct left side equations.
-			tc_left[i] = (tc_start_left[i] + fixed16_mul(y_start_delta, d_tc_dy_left[i]))
-				.max(0)
-				.min(max_tc);
-			let tc_left_end = tc_left[i] + fixed16_mul(y_end_delta, d_tc_dy_left[i]);
-			if tc_left_end < 0
+			// Try to avoid d_tc_dx correction, prefer correction of left side equation.
+
 			{
-				d_tc_dy_left[i] = fixed16_div(-tc_left[i], y_end_delta);
+				tc_left[i] = (tc_start_left[i] + fixed16_mul(y_start_delta, d_tc_dy_left[i]))
+					.max(0)
+					.min(max_tc);
+				let tc_lower_delta = fixed16_mul(d_tc_dx[i], d_x_lower);
+				if tc_lower_delta > max_tc
+				{
+					tc_left[i] = 0;
+					d_tc_dx[i] = fixed16_div(max_tc, d_x_lower);
+				}
+				else if tc_lower_delta < -max_tc
+				{
+					tc_left[i] = max_tc;
+					d_tc_dx[i] = fixed16_div(-max_tc, d_x_lower);
+				}
+				else
+				{
+					let tc_lower_right = tc_left[i] + tc_lower_delta;
+					if tc_lower_right > max_tc
+					{
+						tc_left[i] -= tc_lower_right - max_tc;
+					}
+					else if tc_lower_right < 0
+					{
+						tc_left[i] -= tc_lower_right;
+					}
+				}
 			}
-			else if tc_left_end > max_tc
+			debug_assert!(tc_left[i] >= 0);
+			debug_assert!(tc_left[i] <= max_tc);
+			debug_assert!(tc_left[i] + fixed16_mul(d_tc_dx[i], d_x_lower) >= 0);
+			debug_assert!(tc_left[i] + fixed16_mul(d_tc_dx[i], d_x_lower) <= max_tc);
+
 			{
-				d_tc_dy_left[i] = fixed16_div(max_tc - tc_left[i], y_end_delta);
+				let mut tc_upper_x_start = (tc_left[i] + fixed16_mul(y_end_delta, d_tc_dy_left[i]))
+					.max(0)
+					.min(max_tc);
+				let tc_upper_delta = fixed16_mul(d_tc_dx[i], d_x_upper);
+				if tc_upper_delta > max_tc
+				{
+					tc_upper_x_start = 0;
+					d_tc_dx[i] = fixed16_div(max_tc, d_x_upper);
+				}
+				else if tc_upper_delta < -max_tc
+				{
+					tc_upper_x_start = max_tc;
+					d_tc_dx[i] = fixed16_div(-max_tc, d_x_upper);
+				}
+				else
+				{
+					let tc_upper_right = tc_upper_x_start + tc_upper_delta;
+					if tc_upper_right > max_tc
+					{
+						tc_upper_x_start -= tc_upper_right - max_tc;
+					}
+					else if tc_upper_right < 0
+					{
+						tc_upper_x_start -= tc_upper_right;
+					}
+				}
+				debug_assert!(tc_upper_x_start >= 0);
+				debug_assert!(tc_upper_x_start <= max_tc);
+				if y_end_delta > 0
+				{
+					d_tc_dy_left[i] = fixed16_div(tc_upper_x_start - tc_left[i], y_end_delta);
+				}
+				else
+				{
+					d_tc_dy_left[i] = 0;
+				}
+
+				// Perform final d_tc_dx correction if coordinates are still out of borders after correction d_tc_dy_left.
+				// TODO - remove it?
+				let tc_upper_x_start = tc_left[i] + fixed16_mul(y_end_delta, d_tc_dy_left[i]);
+				let tc_upper_delta = fixed16_mul(d_tc_dx[i], d_x_upper);
+				let tc_upper_right = tc_upper_x_start + tc_upper_delta;
+				if tc_upper_right < 0
+				{
+					if d_x_upper > 0
+					{
+						d_tc_dx[i] = fixed16_div(-tc_upper_x_start, d_x_upper);
+					}
+					else
+					{
+						d_tc_dx[i] = 0;
+					}
+				}
+				else if tc_upper_right > max_tc
+				{
+					if d_x_upper > 0
+					{
+						d_tc_dx[i] = fixed16_div(max_tc - tc_upper_x_start, d_x_upper);
+					}
+					else
+					{
+						d_tc_dx[i] = 0;
+					}
+				}
 			}
 
-			// Correct also line equation.
-			// Correct, using lower triangle edge.
-			let tc_lower_x_end = tc_left[i] + fixed16_mul(d_x_lower, d_tc_dx[i]);
-			if tc_lower_x_end < 0
-			{
-				d_tc_dx[i] = fixed16_div(-tc_left[i], d_x_lower);
-			}
-			else if tc_lower_x_end > max_tc
-			{
-				d_tc_dx[i] = fixed16_div(max_tc - tc_left[i], d_x_lower);
-			}
-			debug_assert!(tc_left[i] + fixed16_mul(d_x_lower, d_tc_dx[i]) >= 0);
-			debug_assert!(tc_left[i] + fixed16_mul(d_x_lower, d_tc_dx[i]) <= max_tc);
+			debug_assert!(tc_left[i] >= 0);
+			debug_assert!(tc_left[i] <= max_tc);
+			debug_assert!(tc_left[i] + fixed16_mul(d_tc_dx[i], d_x_lower) >= 0);
+			debug_assert!(tc_left[i] + fixed16_mul(d_tc_dx[i], d_x_lower) <= max_tc);
 
-			// Correct, using upper triangle edge.
-			let tc_upper_x_start = tc_left[i] + fixed16_mul(y_end_delta, d_tc_dy_left[i]);
-			debug_assert!(tc_upper_x_start >= 0);
-			debug_assert!(tc_upper_x_start <= max_tc);
-			let tc_upper_x_end = tc_upper_x_start + fixed16_mul(d_x_upper, d_tc_dx[i]);
-			if tc_upper_x_end < 0
-			{
-				d_tc_dx[i] = fixed16_div(-tc_upper_x_start, d_x_upper);
-			}
-			else if tc_upper_x_end > max_tc
-			{
-				d_tc_dx[i] = fixed16_div(max_tc - tc_upper_x_start, d_x_upper);
-			}
-			debug_assert!(tc_upper_x_start + fixed16_mul(d_x_upper, d_tc_dx[i]) >= 0);
-			debug_assert!(tc_upper_x_start + fixed16_mul(d_x_upper, d_tc_dx[i]) <= max_tc);
-			debug_assert!(tc_left[i] + fixed16_mul(d_x_lower, d_tc_dx[i]) >= 0);
-			debug_assert!(tc_left[i] + fixed16_mul(d_x_lower, d_tc_dx[i]) <= max_tc);
+			debug_assert!(tc_left[i] + fixed16_mul(y_end_delta, d_tc_dy_left[i]) >= 0);
+			debug_assert!(tc_left[i] + fixed16_mul(y_end_delta, d_tc_dy_left[i]) <= max_tc);
+			debug_assert!(
+				tc_left[i] + fixed16_mul(y_end_delta, d_tc_dy_left[i]) + fixed16_mul(d_tc_dx[i], d_x_upper) >= 0
+			);
+			debug_assert!(
+				tc_left[i] + fixed16_mul(y_end_delta, d_tc_dy_left[i]) + fixed16_mul(d_tc_dx[i], d_x_upper) <= max_tc
+			);
 		}
 
 		// Correct light equation to fix possible underflow.
