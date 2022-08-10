@@ -18,6 +18,7 @@ pub mod lightmaps_builder;
 pub mod map_file_common;
 pub mod map_file_q1;
 pub mod map_file_q4;
+pub mod map_lights;
 pub mod map_polygonizer;
 pub mod material;
 pub mod math_types;
