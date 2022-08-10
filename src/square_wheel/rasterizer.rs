@@ -1051,37 +1051,37 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			debug_assert!(tc_left[i] + fixed16_mul(d_tc_dx[i], d_x_lower) <= max_tc);
 
 			{
-				let mut tc_upper_x_start = (tc_left[i] + fixed16_mul(y_end_delta, d_tc_dy_left[i]))
+				let mut tc_upper_left = (tc_left[i] + fixed16_mul(y_end_delta, d_tc_dy_left[i]))
 					.max(0)
 					.min(max_tc);
 				let tc_upper_delta = fixed16_mul(d_tc_dx[i], d_x_upper);
 				if tc_upper_delta > max_tc
 				{
-					tc_upper_x_start = 0;
+					tc_upper_left = 0;
 					d_tc_dx[i] = fixed16_div(max_tc, d_x_upper);
 				}
 				else if tc_upper_delta < -max_tc
 				{
-					tc_upper_x_start = max_tc;
+					tc_upper_left = max_tc;
 					d_tc_dx[i] = fixed16_div(-max_tc, d_x_upper);
 				}
 				else
 				{
-					let tc_upper_right = tc_upper_x_start + tc_upper_delta;
+					let tc_upper_right = tc_upper_left + tc_upper_delta;
 					if tc_upper_right > max_tc
 					{
-						tc_upper_x_start -= tc_upper_right - max_tc;
+						tc_upper_left -= tc_upper_right - max_tc;
 					}
 					else if tc_upper_right < 0
 					{
-						tc_upper_x_start -= tc_upper_right;
+						tc_upper_left -= tc_upper_right;
 					}
 				}
-				debug_assert!(tc_upper_x_start >= 0);
-				debug_assert!(tc_upper_x_start <= max_tc);
+				debug_assert!(tc_upper_left >= 0);
+				debug_assert!(tc_upper_left <= max_tc);
 				if y_end_delta > 0
 				{
-					d_tc_dy_left[i] = fixed16_div(tc_upper_x_start - tc_left[i], y_end_delta);
+					d_tc_dy_left[i] = fixed16_div(tc_upper_left - tc_left[i], y_end_delta);
 				}
 				else
 				{
@@ -1089,15 +1089,14 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				}
 
 				// Perform final d_tc_dx correction if coordinates are still out of borders after correction d_tc_dy_left.
-				// TODO - remove it?
-				let tc_upper_x_start = tc_left[i] + fixed16_mul(y_end_delta, d_tc_dy_left[i]);
+				let tc_upper_left = tc_left[i] + fixed16_mul(y_end_delta, d_tc_dy_left[i]);
 				let tc_upper_delta = fixed16_mul(d_tc_dx[i], d_x_upper);
-				let tc_upper_right = tc_upper_x_start + tc_upper_delta;
+				let tc_upper_right = tc_upper_left + tc_upper_delta;
 				if tc_upper_right < 0
 				{
 					if d_x_upper > 0
 					{
-						d_tc_dx[i] = fixed16_div(-tc_upper_x_start, d_x_upper);
+						d_tc_dx[i] = fixed16_div(-tc_upper_left, d_x_upper);
 					}
 					else
 					{
@@ -1108,7 +1107,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 				{
 					if d_x_upper > 0
 					{
-						d_tc_dx[i] = fixed16_div(max_tc - tc_upper_x_start, d_x_upper);
+						d_tc_dx[i] = fixed16_div(max_tc - tc_upper_left, d_x_upper);
 					}
 					else
 					{
