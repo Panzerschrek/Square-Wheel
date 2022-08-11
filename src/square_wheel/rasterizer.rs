@@ -974,15 +974,19 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			);
 		}
 
-		let center_x = fixed16_floor_to_int((vertices[0].x + vertices[1].x + vertices[2].x) / 3);
-		let center_y = fixed16_floor_to_int((vertices[0].y + vertices[1].y + vertices[2].y) / 3);
-		if center_x >= self.clip_rect.min_x &&
-			center_x < self.clip_rect.max_x &&
-			center_y >= self.clip_rect.min_y &&
-			center_y < self.clip_rect.max_y
+		// Debug draw triangle centers.
+		if false
 		{
-			self.color_buffer[(center_x + center_y * self.row_size) as usize] =
-				ColorVecI::from_color_f32x3(&[255.0, 0.0, 255.0]).into();
+			let center_x = fixed16_floor_to_int((vertices[0].x + vertices[1].x + vertices[2].x) / 3);
+			let center_y = fixed16_floor_to_int((vertices[0].y + vertices[1].y + vertices[2].y) / 3);
+			if center_x >= self.clip_rect.min_x &&
+				center_x < self.clip_rect.max_x &&
+				center_y >= self.clip_rect.min_y &&
+				center_y < self.clip_rect.max_y
+			{
+				self.color_buffer[(center_x + center_y * self.row_size) as usize] =
+					ColorVecI::from_color_f32x3(&[255.0, 0.0, 255.0]).into();
+			}
 		}
 	}
 
