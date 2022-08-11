@@ -1724,13 +1724,21 @@ impl Renderer
 			}
 		}
 
-		if affine_texture_coordinates_interpolation_may_be_used(
-			depth_equation,
-			tc_equation,
-			min_inv_z_point,
-			max_inv_z_point,
-		) || recursion_depth > 8
+		let max_recursion_depth = 4;
+
+		if recursion_depth >= max_recursion_depth ||
+			affine_texture_coordinates_interpolation_may_be_used(
+				depth_equation,
+				tc_equation,
+				min_inv_z_point,
+				max_inv_z_point,
+			)
 		{
+			// Clamp texture coordinates to proper range and add extra epsilon to avoid ugly texture coordinates clamping in rasterizer.
+			let tc_eps = 1.0 / 32.0;
+			let min_tc = [tc_eps, tc_eps];
+			let max_tc = [texture.size[0] as f32 - tc_eps, texture.size[1] as f32 - tc_eps];
+
 			// TODO - use uninitialized memory.
 			let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
 			for (src, dst) in points.iter().zip(vertices_fixed.iter_mut())
@@ -1762,10 +1770,14 @@ impl Renderer
 					y: f32_to_fixed16(src.y),
 					tc: [
 						f32_to_fixed16(
-							z * (tc_equation.d_tc_dx[0] * src.x + tc_equation.d_tc_dy[0] * src.y + tc_equation.k[0]),
+							(z * (tc_equation.d_tc_dx[0] * src.x + tc_equation.d_tc_dy[0] * src.y + tc_equation.k[0]))
+								.max(min_tc[0])
+								.min(max_tc[0]),
 						),
 						f32_to_fixed16(
-							z * (tc_equation.d_tc_dx[1] * src.x + tc_equation.d_tc_dy[1] * src.y + tc_equation.k[1]),
+							(z * (tc_equation.d_tc_dx[1] * src.x + tc_equation.d_tc_dy[1] * src.y + tc_equation.k[1]))
+								.max(min_tc[1])
+								.min(max_tc[1]),
 						),
 					],
 					light: [
@@ -1797,16 +1809,11 @@ impl Renderer
 		else
 		{
 			// Split polygon into two pieces, using clip plane with normal facing towards inv_z gradient.
-			let mut center = Vec2f::zero();
-			for point in points
-			{
-				center += *point;
-			}
-			center /= points.len() as f32;
-
-			// TODO - normalize it?
-			let clip_plane_normal = Vec2f::new(depth_equation.d_inv_z_dx, depth_equation.d_inv_z_dy);
-			let mut clip_plane = clip_plane_normal.extend(clip_plane_normal.dot(center));
+			let mut clip_plane = Vec3f::new(
+				depth_equation.d_inv_z_dx,
+				depth_equation.d_inv_z_dy,
+				(min_inv_z + max_inv_z) * 0.5 - depth_equation.k,
+			);
 
 			// TODO - use uninitialized memory.
 			let mut vertices_clipped = unsafe { std::mem::zeroed::<[Vec2f; MAX_VERTICES]>() };
