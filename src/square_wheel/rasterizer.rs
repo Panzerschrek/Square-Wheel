@@ -1136,33 +1136,53 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 		let mut light_left = [0, 0, 0];
 		for i in 0 .. 3
 		{
-			// Correct left side equations.
 			light_left[i] = (light_start_left[i] + fixed16_mul(y_start_delta, d_light_left[i])).max(0);
-			let light_left_end = light_left[i] + fixed16_mul(y_end_delta, d_light_left[i]);
-			if light_left_end < 0
+			let light_lower_right = light_left[i] + fixed16_mul(d_x_lower, d_light_dx[i]);
+			if light_lower_right < 0
 			{
-				d_light_left[i] = fixed16_div(-light_left[i], y_end_delta);
+				light_left[i] -= light_lower_right;
 			}
-
-			// Correct also line equation.
-			// Correct, using lower triangle edge.
-			let light_lower_x_end = light_left[i] + fixed16_mul(d_x_lower, d_light_dx[i]);
-			if light_lower_x_end < 0
-			{
-				d_light_dx[i] = fixed16_div(-light_left[i], d_x_lower);
-			}
+			debug_assert!(light_left[i] >= 0);
 			debug_assert!(light_left[i] + fixed16_mul(d_x_lower, d_light_dx[i]) >= 0);
 
-			// Correct, using upper triangle edge.
-			let light_upper_x_start = light_left[i] + fixed16_mul(y_end_delta, d_light_left[i]);
-			debug_assert!(light_upper_x_start >= 0);
-			let light_upper_x_end = light_upper_x_start + fixed16_mul(d_x_upper, d_light_dx[i]);
-			if light_upper_x_end < 0
 			{
-				d_light_dx[i] = fixed16_div(-light_upper_x_start, d_x_upper);
+				let mut light_upper_left = (light_left[i] + fixed16_mul(y_end_delta, d_light_left[i])).max(0);
+				let light_upper_right = light_upper_left + fixed16_mul(d_x_upper, d_light_dx[i]);
+				if light_upper_right < 0
+				{
+					light_upper_left -= light_upper_right;
+				}
+				debug_assert!(light_upper_left >= 0);
+				if y_end_delta > 0
+				{
+					d_light_left[i] = fixed16_div(light_upper_left - light_left[i], y_end_delta);
+				}
+				else
+				{
+					d_light_left[i] = 0;
+				}
+
+				// Perform final d_light_dx correction if light is still may be negative after correction d_light_left.
+				let light_upper_left = light_left[i] + fixed16_mul(y_end_delta, d_light_left[i]);
+				let light_upper_right = light_upper_left + fixed16_mul(d_x_upper, d_light_dx[i]);
+				if light_upper_right < 0
+				{
+					if d_x_upper > 0
+					{
+						d_light_dx[i] = fixed16_div(-light_upper_left, d_x_upper);
+					}
+					else
+					{
+						d_light_dx[i] = 0;
+					}
+				}
 			}
-			debug_assert!(light_upper_x_start + fixed16_mul(d_x_upper, d_light_dx[i]) >= 0);
+			debug_assert!(light_left[i] >= 0);
 			debug_assert!(light_left[i] + fixed16_mul(d_x_lower, d_light_dx[i]) >= 0);
+			debug_assert!(light_left[i] + fixed16_mul(y_end_delta, d_light_left[i]) >= 0);
+			debug_assert!(
+				light_left[i] + fixed16_mul(y_end_delta, d_light_left[i]) + fixed16_mul(d_x_upper, d_light_dx[i]) >= 0
+			);
 		}
 
 		let d_light_dx_vec = ColorVecI::from_color_i32x3(&d_light_dx);
