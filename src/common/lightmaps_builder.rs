@@ -1301,6 +1301,7 @@ pub fn create_secondary_light_sources(
 				materials_albedo,
 				map,
 				opacity_table,
+				opacity_table,
 				primary_lightmaps_data,
 				polygon,
 				&mut sample_raster_data,
@@ -1324,6 +1325,9 @@ fn create_emissive_surfaces_light_sources(
 	// In order to do this create pseudo-lightmap with all one values and modulate it by emissive light power.
 	let all_ones_lightmap = vec![[1.0, 1.0, 1.0]; lightmap_data_size];
 
+	// Use self-opacity = 0 for emissive surfaces in order to radiate light even from polygons without shadows.
+	let polygon_self_opacity_table = vec![0.0; opacity_table.len()];
+
 	let mut result = Vec::with_capacity(map.polygons.len());
 	let mut sample_raster_data = Vec::new();
 	for polygon in &map.polygons
@@ -1345,6 +1349,7 @@ fn create_emissive_surfaces_light_sources(
 				materials_emissive_light,
 				map,
 				opacity_table,
+				&polygon_self_opacity_table,
 				&all_ones_lightmap,
 				polygon,
 				&mut sample_raster_data,
@@ -1363,6 +1368,7 @@ fn create_secondary_light_source(
 	materials_albedo: &[MaterialAlbedo],
 	map: &bsp_map_compact::BSPMap,
 	opacity_table: &MaterialsOpacityTable,
+	polygon_self_opacity_table: &MaterialsOpacityTable,
 	primary_lightmaps_data: &LightmapsData,
 	polygon: &bsp_map_compact::Polygon,
 	sample_raster_data: &mut SampleRasterData,
@@ -1384,7 +1390,7 @@ fn create_secondary_light_source(
 	let mut polygon_albedo = materials_albedo[polygon.texture as usize];
 
 	// Make samples of semitransparent materials darker.
-	let albedo_opacity_scaler = 1.0 - opacity_table[polygon.texture as usize];
+	let albedo_opacity_scaler = 1.0 - polygon_self_opacity_table[polygon.texture as usize];
 	for i in 0 .. 3
 	{
 		polygon_albedo[i] *= albedo_opacity_scaler;
