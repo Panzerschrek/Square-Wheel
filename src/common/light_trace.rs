@@ -15,12 +15,7 @@ fn get_texture_opacity(texture_name: &bsp_map_compact::Texture, materials: &Mate
 {
 	if let Some(material) = materials.get(bsp_map_compact::get_texture_string(texture_name))
 	{
-		if material.skybox.is_some()
-		{
-			// For now just assume skyboxes passing all light
-			1.0
-		}
-		else if material.shadow
+		if material.shadow
 		{
 			match material.blending_mode
 			{
@@ -180,7 +175,9 @@ pub fn get_sun_shadow_factor(
 	let root_node = bsp_map_compact::get_root_node_index(map);
 	if let Some(sky_point) = get_nearest_sky_point_r(from, &(from + dir), root_node, map, sky_flag_table)
 	{
-		get_shadow_factor(from, &sky_point, map, opacity_table)
+		// Move trace destination point slightly away from sky in order to avoid detection of intersection with sky polygon itself.
+		let sky_point_corrected = sky_point - dir / (4.0 * dir.magnitude());
+		get_shadow_factor(from, &sky_point_corrected, map, opacity_table)
 	}
 	else
 	{
