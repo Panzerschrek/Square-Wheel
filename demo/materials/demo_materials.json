@@ -1,4 +1,9 @@
 {
+	"__TB_empty" :
+	{
+		"comment" : "TrenchBroom empty texture. Use It as marker of polygon for deletion",
+		"bsp" : false
+	},
 	"bolted_metal_plate":
 	{
 		"diffuse": "bolted_metal_plate.png",
@@ -61,7 +66,13 @@
 	"sky":
 	{
 		"diffuse": "sky.png",
-		"emissive_light" : [0.34, 0.36, 0.5]
+		"emissive_light" : [0.34, 0.36, 0.5],
+		"skybox" :
+		{
+			"side_images" : [ "sky.png", "sky.png", "sky.png", "sky.png", "sky.png", "sky.png" ],
+			"brightness" : 0.5
+		},
+		"light" : false
 	},
 	"stained_glass":
 	{
