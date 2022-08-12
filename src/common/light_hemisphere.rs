@@ -237,6 +237,13 @@ impl LightHemisphere
 
 		brightness_sum = brightness_sum.max(MIN_LEN);
 
+		if scaled_vecs_sum.z < 0.0
+		{
+			// Do not allow Z component to be negative.
+			// This may happen rarely.
+			scaled_vecs_sum.z = 0.0;
+		}
+
 		let mut vec_len = scaled_vecs_sum.magnitude();
 		if vec_len <= 0.0
 		{
