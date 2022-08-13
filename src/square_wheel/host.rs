@@ -214,6 +214,11 @@ impl Host
 	// Returns true if need to continue.
 	pub fn process_frame(&mut self) -> bool
 	{
+		let mut events = self.window.get_events();
+		let mut keyboard_state = self.window.get_keyboard_state();
+		self.process_events(&events);
+
+		let console_is_active = self.console.lock().unwrap().is_active();
 		{
 			let game_grab_mouse_input = if let Some(active_map) = &self.active_map
 			{
@@ -224,11 +229,14 @@ impl Host
 				false
 			};
 			self.window
-				.set_relative_mouse(game_grab_mouse_input && !self.console.lock().unwrap().is_active());
+				.set_relative_mouse(game_grab_mouse_input && !console_is_active);
 		}
-
-		let events = self.window.get_events();
-		self.process_events(&events);
+		if console_is_active
+		{
+			// Do not pass any events to game code if console is active.
+			events.clear();
+			keyboard_state = system_window::KeyboardState::default();
+		}
 
 		self.process_commands();
 		self.synchronize_config();
@@ -269,15 +277,6 @@ impl Host
 		let max_fps = self.config.max_fps;
 		let frame_duration_counter = &self.frame_duration_counter;
 		let prev_frame_end_time = &mut self.prev_frame_end_time;
-
-		let keyboard_state = if !console.lock().unwrap().is_active()
-		{
-			window.get_keyboard_state()
-		}
-		else
-		{
-			system_window::KeyboardState::default()
-		};
 
 		let mut frame_info = None;
 
