@@ -42,9 +42,14 @@ impl CameraController
 		self.rotation_controller.set_angles(azimuth, elevation, roll)
 	}
 
-	pub fn update(&mut self, keyboard_state: &system_window::KeyboardState, time_delta_s: f32)
+	pub fn update(
+		&mut self,
+		keyboard_state: &system_window::KeyboardState,
+		events: &[sdl2::event::Event],
+		time_delta_s: f32,
+	)
 	{
-		self.rotation_controller.update(keyboard_state, time_delta_s);
+		self.rotation_controller.update(keyboard_state, events, time_delta_s);
 
 		const SPEED: f32 = 256.0;
 		const JUMP_SPEED: f32 = 0.8 * SPEED;
