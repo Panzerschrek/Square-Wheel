@@ -1,0 +1,112 @@
+{
+	"connections": [
+		{
+			"from": "gradient",
+			"from_port": 0,
+			"to": "Material",
+			"to_port": 0
+		}
+	],
+	"label": "Graph",
+	"longdesc": "",
+	"name": "3196",
+	"node_position": {
+		"x": 0,
+		"y": 0
+	},
+	"nodes": [
+		{
+			"export_paths": {
+
+			},
+			"name": "Material",
+			"node_position": {
+				"x": 97,
+				"y": -8
+			},
+			"parameters": {
+				"albedo_color": {
+					"a": 1,
+					"b": 1,
+					"g": 1,
+					"r": 1,
+					"type": "Color"
+				},
+				"ao": 1,
+				"depth_scale": 0.5,
+				"emission_energy": 1,
+				"flags_transparent": true,
+				"metallic": 0,
+				"normal": 1,
+				"roughness": 1,
+				"size": 10,
+				"sss": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "material"
+		},
+		{
+			"name": "gradient",
+			"node_position": {
+				"x": -120,
+				"y": 0
+			},
+			"parameters": {
+				"gradient": {
+					"interpolation": 1,
+					"points": [
+						{
+							"a": 1,
+							"b": 0.141144,
+							"g": 0.454426,
+							"pos": 0.501938,
+							"r": 0.976562
+						},
+						{
+							"a": 1,
+							"b": 0.452317,
+							"g": 0.671687,
+							"pos": 0.587209,
+							"r": 0.786596
+						},
+						{
+							"a": 1,
+							"b": 0.574563,
+							"g": 0.664141,
+							"pos": 0.664729,
+							"r": 0.711966
+						},
+						{
+							"a": 1,
+							"b": 0.974491,
+							"g": 0.857651,
+							"pos": 0.757752,
+							"r": 0.467815
+						},
+						{
+							"a": 1,
+							"b": 0.988281,
+							"g": 0.864324,
+							"pos": 1,
+							"r": 0.459396
+						}
+					],
+					"type": "Gradient"
+				},
+				"repeat": 1,
+				"rotate": -90
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "gradient"
+		}
+	],
+	"parameters": {
+
+	},
+	"seed": 0,
+	"seed_locked": false,
+	"shortdesc": "",
+	"type": "graph"
+}

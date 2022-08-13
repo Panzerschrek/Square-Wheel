@@ -1,0 +1,392 @@
+{
+	"connections": [
+		{
+			"from": "sphere",
+			"from_port": 0,
+			"to": "transform2",
+			"to_port": 0
+		},
+		{
+			"from": "transform2",
+			"from_port": 0,
+			"to": "transform2_2",
+			"to_port": 0
+		},
+		{
+			"from": "transform2_2",
+			"from_port": 0,
+			"to": "math",
+			"to_port": 0
+		},
+		{
+			"from": "transform2",
+			"from_port": 0,
+			"to": "math",
+			"to_port": 1
+		},
+		{
+			"from": "normal_map2",
+			"from_port": 0,
+			"to": "Material",
+			"to_port": 4
+		},
+		{
+			"from": "brightness_contrast",
+			"from_port": 0,
+			"to": "Material",
+			"to_port": 7
+		},
+		{
+			"from": "perlin",
+			"from_port": 0,
+			"to": "colorize",
+			"to_port": 0
+		},
+		{
+			"from": "colorize",
+			"from_port": 0,
+			"to": "Material",
+			"to_port": 0
+		},
+		{
+			"from": "math",
+			"from_port": 0,
+			"to": "transform2_3",
+			"to_port": 0
+		},
+		{
+			"from": "math",
+			"from_port": 0,
+			"to": "tile2x2",
+			"to_port": 0
+		},
+		{
+			"from": "transform2_3",
+			"from_port": 0,
+			"to": "tile2x2",
+			"to_port": 1
+		},
+		{
+			"from": "tile2x2",
+			"from_port": 0,
+			"to": "normal_map2",
+			"to_port": 0
+		},
+		{
+			"from": "tile2x2",
+			"from_port": 0,
+			"to": "brightness_contrast",
+			"to_port": 0
+		},
+		{
+			"from": "voronoi",
+			"from_port": 0,
+			"to": "math_2",
+			"to_port": 0
+		},
+		{
+			"from": "math_2",
+			"from_port": 0,
+			"to": "tile2x2",
+			"to_port": 2
+		},
+		{
+			"from": "runes",
+			"from_port": 0,
+			"to": "tile2x2",
+			"to_port": 3
+		}
+	],
+	"label": "Graph",
+	"longdesc": "",
+	"name": "@@312",
+	"node_position": {
+		"x": 0,
+		"y": 0
+	},
+	"nodes": [
+		{
+			"export_paths": {
+				"Godot": "C:/Users/user/Documents/Projects/other/Square-Wheel/demo/textured_intermediate/alpha_grid"
+			},
+			"name": "Material",
+			"node_position": {
+				"x": 1440,
+				"y": 120
+			},
+			"parameters": {
+				"albedo_color": {
+					"a": 1,
+					"b": 1,
+					"g": 1,
+					"r": 1,
+					"type": "Color"
+				},
+				"ao": 1,
+				"depth_scale": 0.1,
+				"emission_energy": 1,
+				"flags_transparent": true,
+				"metallic": 0.7,
+				"normal": 1,
+				"roughness": 0.2,
+				"size": 10,
+				"sss": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "material"
+		},
+		{
+			"name": "sphere",
+			"node_position": {
+				"x": -300,
+				"y": 180
+			},
+			"parameters": {
+				"cx": 0.5,
+				"cy": 0.3,
+				"r": 0.3
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "sphere"
+		},
+		{
+			"name": "transform2",
+			"node_position": {
+				"x": -60,
+				"y": 180
+			},
+			"parameters": {
+				"mode": 1,
+				"rotate": 0,
+				"scale_x": 0.125,
+				"scale_y": 1024,
+				"translate_x": 0,
+				"translate_y": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "transform2"
+		},
+		{
+			"name": "transform2_2",
+			"node_position": {
+				"x": 200,
+				"y": 180
+			},
+			"parameters": {
+				"mode": 1,
+				"rotate": 90,
+				"scale_x": 1,
+				"scale_y": 1,
+				"translate_x": 0,
+				"translate_y": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "transform2"
+		},
+		{
+			"name": "math",
+			"node_position": {
+				"x": 440,
+				"y": 340
+			},
+			"parameters": {
+				"clamp": false,
+				"default_in1": 0,
+				"default_in2": 0,
+				"op": 14
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "math"
+		},
+		{
+			"name": "normal_map2",
+			"node_position": {
+				"x": 1120,
+				"y": 180
+			},
+			"parameters": {
+				"buffer": 1,
+				"param2": 0,
+				"size": 10,
+				"strength": 1
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "normal_map2"
+		},
+		{
+			"name": "brightness_contrast",
+			"node_position": {
+				"x": 1200,
+				"y": 320
+			},
+			"parameters": {
+				"brightness": 2.5,
+				"contrast": 8
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "brightness_contrast"
+		},
+		{
+			"name": "perlin",
+			"node_position": {
+				"x": 840,
+				"y": 100
+			},
+			"parameters": {
+				"iterations": 4,
+				"persistence": 0.5,
+				"scale_x": 24,
+				"scale_y": 24
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "perlin"
+		},
+		{
+			"name": "colorize",
+			"node_position": {
+				"x": 1100,
+				"y": 100
+			},
+			"parameters": {
+				"gradient": {
+					"interpolation": 1,
+					"points": [
+						{
+							"a": 1,
+							"b": 0.43573,
+							"g": 0.43573,
+							"pos": 0,
+							"r": 0.472656
+						},
+						{
+							"a": 1,
+							"b": 0.4375,
+							"g": 0.374268,
+							"pos": 0.254545,
+							"r": 0.414776
+						},
+						{
+							"a": 1,
+							"b": 0.403417,
+							"g": 0.346344,
+							"pos": 0.536364,
+							"r": 0.457031
+						},
+						{
+							"a": 1,
+							"b": 0.352905,
+							"g": 0.380943,
+							"pos": 0.745455,
+							"r": 0.382812
+						},
+						{
+							"a": 1,
+							"b": 0.348183,
+							"g": 0.351562,
+							"pos": 1,
+							"r": 0.344696
+						}
+					],
+					"type": "Gradient"
+				}
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "colorize"
+		},
+		{
+			"name": "transform2_3",
+			"node_position": {
+				"x": 680,
+				"y": 380
+			},
+			"parameters": {
+				"mode": 1,
+				"rotate": 45,
+				"scale_x": 0.7071,
+				"scale_y": 0.7071,
+				"translate_x": 0,
+				"translate_y": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "transform2"
+		},
+		{
+			"name": "tile2x2",
+			"node_position": {
+				"x": 980,
+				"y": 320
+			},
+			"parameters": {
+
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "tile2x2"
+		},
+		{
+			"name": "voronoi",
+			"node_position": {
+				"x": 440,
+				"y": 620
+			},
+			"parameters": {
+				"intensity": 1,
+				"randomness": 0.85,
+				"scale_x": 8,
+				"scale_y": 8,
+				"stretch_x": 1,
+				"stretch_y": 1
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "voronoi"
+		},
+		{
+			"name": "math_2",
+			"node_position": {
+				"x": 700,
+				"y": 600
+			},
+			"parameters": {
+				"clamp": false,
+				"default_in1": 0,
+				"default_in2": 0.7,
+				"op": 2
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "math"
+		},
+		{
+			"name": "runes",
+			"node_position": {
+				"x": 700,
+				"y": 740
+			},
+			"parameters": {
+				"columns": 4,
+				"rows": 4
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "runes"
+		}
+	],
+	"parameters": {
+
+	},
+	"seed": 0,
+	"seed_locked": false,
+	"shortdesc": "",
+	"type": "graph"
+}

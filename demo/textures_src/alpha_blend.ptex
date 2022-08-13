@@ -1,0 +1,220 @@
+{
+	"connections": [
+		{
+			"from": "pattern",
+			"from_port": 0,
+			"to": "transform2",
+			"to_port": 0
+		},
+		{
+			"from": "pattern_2",
+			"from_port": 0,
+			"to": "transform2_2",
+			"to_port": 0
+		},
+		{
+			"from": "transform2_2",
+			"from_port": 0,
+			"to": "transform2",
+			"to_port": 1
+		},
+		{
+			"from": "gradient",
+			"from_port": 0,
+			"to": "Material",
+			"to_port": 0
+		},
+		{
+			"from": "transform2",
+			"from_port": 0,
+			"to": "Material",
+			"to_port": 7
+		}
+	],
+	"label": "Graph",
+	"longdesc": "",
+	"name": "@@2193",
+	"node_position": {
+		"x": 0,
+		"y": 0
+	},
+	"nodes": [
+		{
+			"export_paths": {
+
+			},
+			"name": "Material",
+			"node_position": {
+				"x": 420,
+				"y": -180
+			},
+			"parameters": {
+				"albedo_color": {
+					"a": 1,
+					"b": 1,
+					"g": 1,
+					"r": 1,
+					"type": "Color"
+				},
+				"ao": 1,
+				"depth_scale": 0.5,
+				"emission_energy": 1,
+				"flags_transparent": true,
+				"metallic": 0,
+				"normal": 1,
+				"roughness": 1,
+				"size": 9,
+				"sss": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "material"
+		},
+		{
+			"name": "pattern",
+			"node_position": {
+				"x": -100,
+				"y": -80
+			},
+			"parameters": {
+				"mix": 0,
+				"x_scale": 1,
+				"x_wave": 0,
+				"y_scale": 1,
+				"y_wave": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "pattern"
+		},
+		{
+			"name": "transform2",
+			"node_position": {
+				"x": 180,
+				"y": 0
+			},
+			"parameters": {
+				"mode": 1,
+				"rotate": 0,
+				"scale_x": 0.25,
+				"scale_y": 1024,
+				"translate_x": 0.02,
+				"translate_y": 0.1
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "transform2"
+		},
+		{
+			"name": "pattern_2",
+			"node_position": {
+				"x": -360,
+				"y": 40
+			},
+			"parameters": {
+				"mix": 0,
+				"x_scale": 1,
+				"x_wave": 0,
+				"y_scale": 1,
+				"y_wave": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "pattern"
+		},
+		{
+			"name": "transform2_2",
+			"node_position": {
+				"x": -80,
+				"y": 40
+			},
+			"parameters": {
+				"mode": 1,
+				"rotate": 0,
+				"scale_x": 1024,
+				"scale_y": 0.25,
+				"translate_x": 0,
+				"translate_y": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "transform2"
+		},
+		{
+			"name": "gradient",
+			"node_position": {
+				"x": 200,
+				"y": -180
+			},
+			"parameters": {
+				"gradient": {
+					"interpolation": 1,
+					"points": [
+						{
+							"a": 1,
+							"b": 0.444733,
+							"g": 0.493493,
+							"pos": 0,
+							"r": 0.964844
+						},
+						{
+							"a": 1,
+							"b": 0.470901,
+							"g": 0.919324,
+							"pos": 0.186047,
+							"r": 0.949219
+						},
+						{
+							"a": 1,
+							"b": 0.493729,
+							"g": 0.964844,
+							"pos": 0.348837,
+							"r": 0.663036
+						},
+						{
+							"a": 1,
+							"b": 0.954956,
+							"g": 1,
+							"pos": 0.511628,
+							"r": 0.519531
+						},
+						{
+							"a": 1,
+							"b": 0.988281,
+							"g": 0.713584,
+							"pos": 0.666667,
+							"r": 0.478699
+						},
+						{
+							"a": 1,
+							"b": 0.873465,
+							"g": 0.438354,
+							"pos": 0.837209,
+							"r": 0.984375
+						},
+						{
+							"a": 1,
+							"b": 0.496094,
+							"g": 0.496094,
+							"pos": 1,
+							"r": 1
+						}
+					],
+					"type": "Gradient"
+				},
+				"repeat": 1,
+				"rotate": 90
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "gradient"
+		}
+	],
+	"parameters": {
+
+	},
+	"seed": 0,
+	"seed_locked": false,
+	"shortdesc": "",
+	"type": "graph"
+}
