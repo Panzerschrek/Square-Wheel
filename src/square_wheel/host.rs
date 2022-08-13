@@ -11,7 +11,6 @@ pub struct Host
 	config_file_path: std::path::PathBuf,
 	app_config: config::ConfigSharedPtr,
 	config: HostConfig,
-	config_is_durty: bool,
 
 	commands_queue: commands_queue::CommandsQueuePtr<Host>,
 	commands_processor: commands_processor::CommandsProcessorPtr,
@@ -100,7 +99,6 @@ impl Host
 			config_file_path,
 			app_config: app_config.clone(),
 			config: host_config,
-			config_is_durty: false,
 			commands_queue,
 			commands_processor,
 			console: console.clone(),
@@ -183,6 +181,26 @@ impl Host
 		}
 	}
 
+	fn update_window_state(&mut self)
+	{
+		if self.config.fullscreen_mode == 0
+		{
+			self.window.set_windowed();
+		}
+		else if self.config.fullscreen_mode == 1
+		{
+			self.window.set_fullscreen_desktop();
+		}
+		else if self.config.fullscreen_mode == 2
+		{
+			self.window.set_fullscreen();
+		}
+		else
+		{
+			self.config.fullscreen_mode = 0;
+		}
+	}
+
 	fn process_commands(&mut self)
 	{
 		let queue_ptr_copy = self.commands_queue.clone();
@@ -193,21 +211,19 @@ impl Host
 	{
 		self.postprocessor.synchronize_config();
 
-		if self.config_is_durty
-		{
-			self.config_is_durty = false;
-			self.config.update_app_config(&self.app_config);
-		}
-		else
-		{
-			self.config = HostConfig::from_app_config(&self.app_config);
-		}
+		self.config = HostConfig::from_app_config(&self.app_config);
 
 		// Make sure that config values are reasonable.
+		let mut config_is_durty = false;
 		if self.config.max_fps < 0.0
 		{
 			self.config.max_fps = 0.0;
-			self.config_is_durty = true;
+			config_is_durty = true;
+		}
+
+		if config_is_durty
+		{
+			self.config.update_app_config(&self.app_config);
 		}
 	}
 
@@ -240,23 +256,7 @@ impl Host
 
 		self.process_commands();
 		self.synchronize_config();
-
-		if self.config.fullscreen_mode == 0
-		{
-			self.window.set_windowed();
-		}
-		else if self.config.fullscreen_mode == 1
-		{
-			self.window.set_fullscreen_desktop();
-		}
-		else if self.config.fullscreen_mode == 2
-		{
-			self.window.set_fullscreen();
-		}
-		else
-		{
-			self.config.fullscreen_mode = 0;
-		}
+		self.update_window_state();
 
 		// Limit time delta if engine works very slow (in debug mode).
 		const MAX_TIME_DELTA: f32 = 0.1;
