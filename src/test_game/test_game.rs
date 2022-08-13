@@ -537,6 +537,11 @@ impl GameInterface for Game
 		self.physics.update(time_delta_s);
 	}
 
+	fn grab_mouse_input(&self) -> bool
+	{
+		true
+	}
+
 	fn get_frame_info(&self, surface_info: &system_window::SurfaceInfo) -> FrameInfo
 	{
 		let (pos, angles) = self.get_camera_location();

@@ -214,6 +214,19 @@ impl Host
 	// Returns true if need to continue.
 	pub fn process_frame(&mut self) -> bool
 	{
+		{
+			let game_grab_mouse_input = if let Some(active_map) = &self.active_map
+			{
+				active_map.game.grab_mouse_input()
+			}
+			else
+			{
+				false
+			};
+			self.window
+				.set_relative_mouse(game_grab_mouse_input && !self.console.lock().unwrap().is_active());
+		}
+
 		let events = self.window.get_events();
 		self.process_events(&events);
 
