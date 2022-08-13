@@ -57,8 +57,10 @@ impl CameraRotationController
 		time_delta_s: f32,
 	)
 	{
+		// TODO - make these values configurable.
 		const ANGLE_SPEED: RadiansF = Rad(2.0);
-		const MOUSE_SENSETIVITY: RadiansF = Rad(0.005);
+		const MOUSE_SENSITIVITY: RadiansF = Rad(0.005);
+
 		const PI: RadiansF = Rad(std::f32::consts::PI);
 		const MAX_ROLL: RadiansF = Rad(std::f32::consts::PI / 6.0);
 		let half_pi = PI / 2.0;
@@ -97,8 +99,8 @@ impl CameraRotationController
 			{
 				sdl2::event::Event::MouseMotion { xrel, yrel, .. } =>
 				{
-					self.azimuth -= MOUSE_SENSETIVITY * (*xrel as f32);
-					self.elevation -= MOUSE_SENSETIVITY * (*yrel as f32);
+					self.azimuth -= MOUSE_SENSITIVITY * (*xrel as f32);
+					self.elevation -= MOUSE_SENSITIVITY * (*yrel as f32);
 				},
 				_ =>
 				{},
