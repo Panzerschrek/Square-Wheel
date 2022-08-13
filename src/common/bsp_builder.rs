@@ -76,12 +76,20 @@ pub fn build_leaf_bsp_tree(map_entities: &[map_polygonizer::Entity], materials: 
 	let reachable_leafs = collect_reachable_leafs(&tree_root, &entities_positions);
 
 	// Now correct BSP tree. Remove unreachable leafs and all nodes with only unreachable children.
-	let root_is_reachable = remove_unreachable_leafs_r(&mut tree_root, &reachable_leafs);
+	let mut leafs_removal_stats = UnreachelbeLeafsRemovalStats {
+		total_leafs: 0,
+		leafs_removed: 0,
+	};
+	let root_is_reachable = remove_unreachable_leafs_r(&mut tree_root, &reachable_leafs, &mut leafs_removal_stats);
 	if !root_is_reachable
 	{
 		// TODO - what we should do in such case?
 		println!("Warning, root node is unreachable!");
 	}
+	println!(
+		"Bsp leafs initial: {}, unreachable leafs removed: {}",
+		leafs_removal_stats.total_leafs, leafs_removal_stats.leafs_removed
+	);
 
 	// Remove portals between ureachable leafs from global portals list.
 	remove_unreachable_portals(&mut portals, &reachable_leafs);
@@ -1200,16 +1208,26 @@ fn collect_reachable_leafs_r(leaf_ptr: &BSPLeafPtr, reachable_leafs: &mut Reacha
 	}
 }
 
+struct UnreachelbeLeafsRemovalStats
+{
+	total_leafs: u32,
+	leafs_removed: u32,
+}
+
 // Returns "true" if need to preserve this child.
-fn remove_unreachable_leafs_r(node_child: &mut BSPNodeChild, reachable_leafs: &ReachableLeafsMap) -> bool
+fn remove_unreachable_leafs_r(
+	node_child: &mut BSPNodeChild,
+	reachable_leafs: &ReachableLeafsMap,
+	stats: &mut UnreachelbeLeafsRemovalStats,
+) -> bool
 {
 	match node_child
 	{
 		BSPNodeChild::NodeChild(node_ptr) =>
 		{
 			let mut node = node_ptr.borrow_mut();
-			let preserve_front = remove_unreachable_leafs_r(&mut node.children[0], reachable_leafs);
-			let preserve_back = remove_unreachable_leafs_r(&mut node.children[1], reachable_leafs);
+			let preserve_front = remove_unreachable_leafs_r(&mut node.children[0], reachable_leafs, stats);
+			let preserve_back = remove_unreachable_leafs_r(&mut node.children[1], reachable_leafs, stats);
 			if !preserve_front && !preserve_back
 			{
 				return false;
@@ -1231,9 +1249,18 @@ fn remove_unreachable_leafs_r(node_child: &mut BSPNodeChild, reachable_leafs: &R
 		},
 		BSPNodeChild::LeafChild(leaf_ptr) =>
 		{
+			stats.total_leafs += 1;
+
 			let leaf = leaf_ptr.borrow();
 			let leaf_raw_ptr = (&*leaf) as *const BSPLeaf;
-			reachable_leafs.contains_key(&leaf_raw_ptr)
+			let is_reachable = reachable_leafs.contains_key(&leaf_raw_ptr);
+
+			if !is_reachable
+			{
+				stats.leafs_removed += 1;
+			}
+
+			is_reachable
 		},
 	}
 }
