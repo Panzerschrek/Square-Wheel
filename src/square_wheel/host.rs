@@ -131,12 +131,12 @@ impl Host
 		host
 	}
 
-	fn process_events(&mut self)
+	fn process_events(&mut self, events: &[sdl2::event::Event])
 	{
 		// Remember if ` was pressed to avoid using it as input for console.
 		let mut has_backquote = false;
 		let mut console = self.console.lock().unwrap();
-		for event in self.window.get_events()
+		for event in events
 		{
 			match event
 			{
@@ -146,7 +146,7 @@ impl Host
 				},
 				Event::KeyDown { keycode, .. } =>
 				{
-					if keycode == Some(Keycode::Escape)
+					if *keycode == Some(Keycode::Escape)
 					{
 						if console.is_active()
 						{
@@ -157,14 +157,14 @@ impl Host
 							self.quit_requested = true;
 						}
 					}
-					if keycode == Some(Keycode::Backquote)
+					if *keycode == Some(Keycode::Backquote)
 					{
 						has_backquote = true;
 						console.toggle();
 					}
 					if console.is_active()
 					{
-						if let Some(k) = keycode
+						if let Some(k) = *keycode
 						{
 							console.process_key_press(k);
 						}
@@ -214,7 +214,9 @@ impl Host
 	// Returns true if need to continue.
 	pub fn process_frame(&mut self) -> bool
 	{
-		self.process_events();
+		let events = self.window.get_events();
+		self.process_events(&events);
+
 		self.process_commands();
 		self.synchronize_config();
 
@@ -272,7 +274,7 @@ impl Host
 			if let Some(active_map) = active_map
 			{
 				// Process game logic.
-				active_map.game.update(&keyboard_state, time_delta_s);
+				active_map.game.update(&keyboard_state, &events, time_delta_s);
 
 				// Get frame info from game code.
 				frame_info = Some(active_map.game.get_frame_info(&surface_info_initial));

@@ -394,7 +394,12 @@ impl Game
 
 impl GameInterface for Game
 {
-	fn update(&mut self, keyboard_state: &system_window::KeyboardState, time_delta_s: f32)
+	fn update(
+		&mut self,
+		keyboard_state: &system_window::KeyboardState,
+		_events: &[sdl2::event::Event],
+		time_delta_s: f32,
+	)
 	{
 		self.process_commands();
 
