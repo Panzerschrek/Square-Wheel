@@ -4,6 +4,7 @@ pub struct SystemWindow
 {
 	sdl2_window: sdl2::video::Window,
 	sdl2_event_pump: sdl2::EventPump,
+	sdl2_mouse: sdl2::mouse::MouseUtil,
 }
 
 #[derive(PartialEq)]
@@ -37,6 +38,7 @@ impl SystemWindow
 		SystemWindow {
 			sdl2_window: window,
 			sdl2_event_pump: event_pump,
+			sdl2_mouse: context.mouse(),
 		}
 	}
 
@@ -62,6 +64,11 @@ impl SystemWindow
 	{
 		// TODO - resize window properly before this?
 		let _gnore = self.sdl2_window.set_fullscreen(sdl2::video::FullscreenType::True);
+	}
+
+	pub fn set_relative_mouse(&mut self, relative: bool)
+	{
+		self.sdl2_mouse.set_relative_mouse_mode(relative);
 	}
 
 	pub fn get_events(&mut self) -> Vec<sdl2::event::Event>

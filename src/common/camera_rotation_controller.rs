@@ -50,9 +50,17 @@ impl CameraRotationController
 		self.roll = Rad(roll);
 	}
 
-	pub fn update(&mut self, keyboard_state: &system_window::KeyboardState, time_delta_s: f32)
+	pub fn update(
+		&mut self,
+		keyboard_state: &system_window::KeyboardState,
+		events: &[sdl2::event::Event],
+		time_delta_s: f32,
+	)
 	{
+		// TODO - make these values configurable.
 		const ANGLE_SPEED: RadiansF = Rad(2.0);
+		const MOUSE_SENSITIVITY: RadiansF = Rad(0.005);
+
 		const PI: RadiansF = Rad(std::f32::consts::PI);
 		const MAX_ROLL: RadiansF = Rad(std::f32::consts::PI / 6.0);
 		let half_pi = PI / 2.0;
@@ -83,6 +91,20 @@ impl CameraRotationController
 		if keyboard_state.contains(&Scancode::E)
 		{
 			self.roll += ANGLE_SPEED * time_delta_s;
+		}
+
+		for event in events
+		{
+			match event
+			{
+				sdl2::event::Event::MouseMotion { xrel, yrel, .. } =>
+				{
+					self.azimuth -= MOUSE_SENSITIVITY * (*xrel as f32);
+					self.elevation -= MOUSE_SENSITIVITY * (*yrel as f32);
+				},
+				_ =>
+				{},
+			}
 		}
 
 		while self.azimuth > PI

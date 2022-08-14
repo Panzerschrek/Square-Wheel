@@ -11,7 +11,6 @@ pub struct Host
 	config_file_path: std::path::PathBuf,
 	app_config: config::ConfigSharedPtr,
 	config: HostConfig,
-	config_is_durty: bool,
 
 	commands_queue: commands_queue::CommandsQueuePtr<Host>,
 	commands_processor: commands_processor::CommandsProcessorPtr,
@@ -100,7 +99,6 @@ impl Host
 			config_file_path,
 			app_config: app_config.clone(),
 			config: host_config,
-			config_is_durty: false,
 			commands_queue,
 			commands_processor,
 			console: console.clone(),
@@ -131,12 +129,12 @@ impl Host
 		host
 	}
 
-	fn process_events(&mut self)
+	fn process_events(&mut self, events: &[sdl2::event::Event])
 	{
 		// Remember if ` was pressed to avoid using it as input for console.
 		let mut has_backquote = false;
 		let mut console = self.console.lock().unwrap();
-		for event in self.window.get_events()
+		for event in events
 		{
 			match event
 			{
@@ -146,7 +144,7 @@ impl Host
 				},
 				Event::KeyDown { keycode, .. } =>
 				{
-					if keycode == Some(Keycode::Escape)
+					if *keycode == Some(Keycode::Escape)
 					{
 						if console.is_active()
 						{
@@ -157,14 +155,14 @@ impl Host
 							self.quit_requested = true;
 						}
 					}
-					if keycode == Some(Keycode::Backquote)
+					if *keycode == Some(Keycode::Backquote)
 					{
 						has_backquote = true;
 						console.toggle();
 					}
 					if console.is_active()
 					{
-						if let Some(k) = keycode
+						if let Some(k) = *keycode
 						{
 							console.process_key_press(k);
 						}
@@ -183,41 +181,8 @@ impl Host
 		}
 	}
 
-	fn process_commands(&mut self)
+	fn update_window_state(&mut self)
 	{
-		let queue_ptr_copy = self.commands_queue.clone();
-		queue_ptr_copy.lock().unwrap().process_commands(self);
-	}
-
-	fn synchronize_config(&mut self)
-	{
-		self.postprocessor.synchronize_config();
-
-		if self.config_is_durty
-		{
-			self.config_is_durty = false;
-			self.config.update_app_config(&self.app_config);
-		}
-		else
-		{
-			self.config = HostConfig::from_app_config(&self.app_config);
-		}
-
-		// Make sure that config values are reasonable.
-		if self.config.max_fps < 0.0
-		{
-			self.config.max_fps = 0.0;
-			self.config_is_durty = true;
-		}
-	}
-
-	// Returns true if need to continue.
-	pub fn process_frame(&mut self) -> bool
-	{
-		self.process_events();
-		self.process_commands();
-		self.synchronize_config();
-
 		if self.config.fullscreen_mode == 0
 		{
 			self.window.set_windowed();
@@ -234,6 +199,64 @@ impl Host
 		{
 			self.config.fullscreen_mode = 0;
 		}
+	}
+
+	fn process_commands(&mut self)
+	{
+		let queue_ptr_copy = self.commands_queue.clone();
+		queue_ptr_copy.lock().unwrap().process_commands(self);
+	}
+
+	fn synchronize_config(&mut self)
+	{
+		self.postprocessor.synchronize_config();
+
+		self.config = HostConfig::from_app_config(&self.app_config);
+
+		// Make sure that config values are reasonable.
+		let mut config_is_durty = false;
+		if self.config.max_fps < 0.0
+		{
+			self.config.max_fps = 0.0;
+			config_is_durty = true;
+		}
+
+		if config_is_durty
+		{
+			self.config.update_app_config(&self.app_config);
+		}
+	}
+
+	// Returns true if need to continue.
+	pub fn process_frame(&mut self) -> bool
+	{
+		let mut events = self.window.get_events();
+		let mut keyboard_state = self.window.get_keyboard_state();
+		self.process_events(&events);
+
+		let console_is_active = self.console.lock().unwrap().is_active();
+		{
+			let game_grab_mouse_input = if let Some(active_map) = &self.active_map
+			{
+				active_map.game.grab_mouse_input()
+			}
+			else
+			{
+				false
+			};
+			self.window
+				.set_relative_mouse(game_grab_mouse_input && !console_is_active);
+		}
+		if console_is_active
+		{
+			// Do not pass any events to game code if console is active.
+			events.clear();
+			keyboard_state = system_window::KeyboardState::default();
+		}
+
+		self.process_commands();
+		self.synchronize_config();
+		self.update_window_state();
 
 		// Limit time delta if engine works very slow (in debug mode).
 		const MAX_TIME_DELTA: f32 = 0.1;
@@ -255,15 +278,6 @@ impl Host
 		let frame_duration_counter = &self.frame_duration_counter;
 		let prev_frame_end_time = &mut self.prev_frame_end_time;
 
-		let keyboard_state = if !console.lock().unwrap().is_active()
-		{
-			window.get_keyboard_state()
-		}
-		else
-		{
-			system_window::KeyboardState::default()
-		};
-
 		let mut frame_info = None;
 
 		// First, only prepare frame without accessing surface pixels.
@@ -272,7 +286,7 @@ impl Host
 			if let Some(active_map) = active_map
 			{
 				// Process game logic.
-				active_map.game.update(&keyboard_state, time_delta_s);
+				active_map.game.update(&keyboard_state, &events, time_delta_s);
 
 				// Get frame info from game code.
 				frame_info = Some(active_map.game.get_frame_info(&surface_info_initial));

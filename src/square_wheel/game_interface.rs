@@ -4,7 +4,17 @@ use std::sync::Arc;
 
 pub trait GameInterface: Send + Sync
 {
-	fn update(&mut self, keyboard_state: &system_window::KeyboardState, time_delta_s: f32);
+	fn update(
+		&mut self,
+		keyboard_state: &system_window::KeyboardState,
+		events: &[sdl2::event::Event],
+		time_delta_s: f32,
+	);
+
+	fn grab_mouse_input(&self) -> bool
+	{
+		false
+	}
 
 	fn get_frame_info(&self, surface_info: &system_window::SurfaceInfo) -> FrameInfo;
 

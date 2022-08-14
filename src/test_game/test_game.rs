@@ -394,7 +394,12 @@ impl Game
 
 impl GameInterface for Game
 {
-	fn update(&mut self, keyboard_state: &system_window::KeyboardState, time_delta_s: f32)
+	fn update(
+		&mut self,
+		keyboard_state: &system_window::KeyboardState,
+		events: &[sdl2::event::Event],
+		time_delta_s: f32,
+	)
 	{
 		self.process_commands();
 
@@ -404,14 +409,14 @@ impl GameInterface for Game
 		{
 			PlayerController::NoclipController(camera_controller) =>
 			{
-				camera_controller.update(keyboard_state, time_delta_s)
+				camera_controller.update(keyboard_state, events, time_delta_s)
 			},
 			PlayerController::PhysicsController {
 				rotation_controller,
 				phys_handle,
 			} =>
 			{
-				rotation_controller.update(keyboard_state, time_delta_s);
+				rotation_controller.update(keyboard_state, events, time_delta_s);
 
 				let azimuth = rotation_controller.get_angles().0;
 				let forward_vector = Vec3f::new(-(azimuth.sin()), azimuth.cos(), 0.0);
@@ -530,6 +535,11 @@ impl GameInterface for Game
 
 		// Update physics only after settig params of externally-controlled physics objects - player, platforms, etc.
 		self.physics.update(time_delta_s);
+	}
+
+	fn grab_mouse_input(&self) -> bool
+	{
+		true
 	}
 
 	fn get_frame_info(&self, surface_info: &system_window::SurfaceInfo) -> FrameInfo

@@ -155,7 +155,7 @@ pub fn main()
 		let time_delta_s = (cur_time - prev_time).as_secs_f32();
 		prev_time = cur_time;
 
-		camera_controller.update(&window.get_keyboard_state(), time_delta_s);
+		camera_controller.update(&window.get_keyboard_state(), &[], time_delta_s);
 
 		window.update_window_surface(|pixels, surface_info| {
 			debug_renderer::draw_frame(
