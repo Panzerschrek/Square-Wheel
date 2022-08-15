@@ -147,13 +147,12 @@ fn load_md3_mesh(
 		.map(|x| [x[0] as VertexIndex, x[1] as VertexIndex, x[2] as VertexIndex])
 		.collect();
 
-	let vertex_data_constant = tex_coords_src
+	let vertex_data_constant: Vec<VertexAnimatedVertexConstant> = tex_coords_src
 		.iter()
 		.map(|&tex_coord| VertexAnimatedVertexConstant { tex_coord })
 		.collect();
 
-	// TODO - transform coordinates properly.
-	let vertex_data_variable = frames_src
+	let vertex_data_variable: Vec<VertexAnimatedVertexVariable> = frames_src
 		.iter()
 		.map(|v| VertexAnimatedVertexVariable {
 			position: Vec3f::new(v.origin[0] as f32, v.origin[1] as f32, v.origin[2] as f32) * MD3_COORD_SCALE,
@@ -171,15 +170,34 @@ fn load_md3_mesh(
 	}
 	.to_string();
 
+	let vertex_data = if src_mesh.num_frames == 1 && vertex_data_constant.len() == vertex_data_variable.len()
+	{
+		VertexData::NonAnimated(
+			vertex_data_constant
+				.iter()
+				.zip(vertex_data_variable.iter())
+				.map(|(v_c, v_v)| VertexNonAnimated {
+					position: v_v.position,
+					normal: v_v.normal,
+					tex_coord: v_c.tex_coord,
+				})
+				.collect(),
+		)
+	}
+	else
+	{
+		VertexData::VertexAnimated {
+			constant: vertex_data_constant,
+			variable: vertex_data_variable,
+		}
+	};
+
 	Ok(Some(TriangleModelMesh {
 		name: get_str(&src_mesh.name).to_string(),
 		material_name,
 		triangles,
 		num_frames: src_mesh.num_frames,
-		vertex_data: VertexData::VertexAnimated {
-			constant: vertex_data_constant,
-			variable: vertex_data_variable,
-		},
+		vertex_data,
 	}))
 }
 

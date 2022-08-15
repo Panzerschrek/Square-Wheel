@@ -55,6 +55,7 @@ pub type VertexIndex = u16;
 
 pub enum VertexData
 {
+	NonAnimated(Vec<VertexNonAnimated>),
 	VertexAnimated
 	{
 		constant: Vec<VertexAnimatedVertexConstant>,
@@ -62,6 +63,14 @@ pub enum VertexData
 		variable: Vec<VertexAnimatedVertexVariable>,
 	},
 	SkeletonAnimated(Vec<SkeletonAnimatedVertex>),
+}
+
+#[derive(Copy, Clone)]
+pub struct VertexNonAnimated
+{
+	pub position: Vec3f,
+	pub normal: Vec3f,
+	pub tex_coord: [f32; 2],
 }
 
 #[derive(Copy, Clone)]

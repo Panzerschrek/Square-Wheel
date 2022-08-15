@@ -24,6 +24,19 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 
 	match &mesh.vertex_data
 	{
+		VertexData::NonAnimated(v) =>
+		{
+			for (v, dst_v) in v.iter().zip(dst_vertices.iter_mut())
+			{
+				let pos_transformed = model_view_matrix * v.position.extend(1.0);
+				let normal_transformed = normals_matrix * v.normal;
+				*dst_v = ModelVertex3d {
+					pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
+					tc: Vec2f::from(v.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
+					light: get_vertex_light(light, &normal_transformed),
+				};
+			}
+		},
 		VertexData::VertexAnimated { constant, variable } =>
 		{
 			let frame_vertex_data0 = &variable[frame0 * constant.len() .. (frame0 + 1) * constant.len()];
