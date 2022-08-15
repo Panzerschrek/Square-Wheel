@@ -1,4 +1,24 @@
 {
+	"__TB_empty" :
+	{
+		"comment" : "TrenchBroom empty texture. Use It as marker of polygon for deletion",
+		"bsp" : false
+	},
+	"alpha_blend":
+	{
+		"diffuse": "alpha_blend.png",
+		"blending_mode": "AlphaBlend",
+		"blocks_view": false
+	},
+	"alpha_grid":
+	{
+		"diffuse": "alpha_grid.png",
+		"normal_map": "alpha_grid_normal.png",
+		"roughness" : 0.1,
+		"is_metal" : true,
+		"blending_mode": "AlphaTest",
+		"blocks_view": false
+	},
 	"bolted_metal_plate":
 	{
 		"diffuse": "bolted_metal_plate.png",
@@ -61,7 +81,13 @@
 	"sky":
 	{
 		"diffuse": "sky.png",
-		"emissive_light" : [0.34, 0.36, 0.5]
+		"emissive_light" : [0.34, 0.36, 0.5],
+		"skybox" :
+		{
+			"side_images" : [ "sky_side.png", "sky_side.png", "sky_side.png", "sky_side.png", "sky_bottom.png", "sky_top.png" ],
+			"brightness" : 0.5
+		},
+		"light" : false
 	},
 	"stained_glass":
 	{
