@@ -74,15 +74,13 @@ impl Game
 
 	fn spawn_entities(&mut self)
 	{
-		for index in 0 .. self.map.submodels.len()
-		{
-			self.ecs.spawn((TestSubmodelComponent {
-				phys_handle: self
-					.physics
-					.add_submodel_object(index, &Vec3f::zero(), &QuaternionF::zero()),
+		let physics = &mut self.physics;
+		self.ecs.spawn_batch((0 .. self.map.submodels.len()).map(|index| {
+			(TestSubmodelComponent {
+				phys_handle: physics.add_submodel_object(index, &Vec3f::zero(), &QuaternionF::zero()),
 				index,
-			},));
-		}
+			},)
+		}));
 
 		self.player_entity = self.ecs.spawn((
 			PlayerComponent {},
