@@ -18,10 +18,10 @@ pub struct Game
 	map: Arc<bsp_map_compact::BSPMap>,
 	physics: test_game_physics::TestGamePhysics,
 	player_controller: PlayerController,
-	view_model: Option<ModelEntity>,
 	game_time: f32,
 	ecs: hecs::World,
 	ecs_command_buffer: hecs::CommandBuffer,
+	player_entity: hecs::Entity,
 }
 
 impl Game
@@ -64,10 +64,10 @@ impl Game
 			map: map.clone(),
 			physics: test_game_physics::TestGamePhysics::new(map),
 			player_controller: PlayerController::NoclipController(CameraController::new()),
-			view_model: None,
 			game_time: 0.0,
 			ecs: hecs::World::new(),
 			ecs_command_buffer: hecs::CommandBuffer::new(),
+			player_entity: hecs::Entity::DANGLING,
 		};
 
 		result.spawn_entities();
@@ -86,6 +86,8 @@ impl Game
 				index,
 			},));
 		}
+
+		self.player_entity = self.ecs.spawn((PlayerComponent {},));
 	}
 
 	fn get_camera_location(&self) -> (Vec3f, QuaternionF)
@@ -358,7 +360,7 @@ impl Game
 
 	fn command_set_view_model(&mut self, args: commands_queue::CommandArgs)
 	{
-		self.view_model = None;
+		let _ignore = self.ecs.remove_one::<ModelEntity>(self.player_entity);
 		if args.len() < 2
 		{
 			self.console.lock().unwrap().add_text("Expected 2 args".to_string());
@@ -369,25 +371,28 @@ impl Game
 		let model = r.get_model(&args[0]);
 		let texture = r.get_texture_lite(&args[1]);
 
-		self.view_model = Some(ModelEntity {
-			position: Vec3f::zero(),
-			rotation: QuaternionF::zero(),
-			animation: AnimationPoint {
-				frames: [0, 0],
-				lerp: 0.0,
+		let _ignore = self.ecs.insert_one(
+			self.player_entity,
+			ModelEntity {
+				position: Vec3f::zero(),
+				rotation: QuaternionF::zero(),
+				animation: AnimationPoint {
+					frames: [0, 0],
+					lerp: 0.0,
+				},
+				model,
+				texture,
+				blending_mode: material::BlendingMode::Average,
+				lighting: ModelLighting::Default,
+				is_view_model: true,
+				ordering_custom_bbox: None,
 			},
-			model,
-			texture,
-			blending_mode: material::BlendingMode::Average,
-			lighting: ModelLighting::Default,
-			is_view_model: true,
-			ordering_custom_bbox: None,
-		});
+		);
 	}
 
 	fn command_reset_view_model(&mut self, _args: commands_queue::CommandArgs)
 	{
-		self.view_model = None;
+		let _ignore = self.ecs.remove_one::<ModelEntity>(self.player_entity);
 	}
 
 	fn command_noclip(&mut self, _args: commands_queue::CommandArgs)
@@ -513,6 +518,33 @@ impl GameInterface for Game
 			},
 		}
 
+		// Update player entity.
+		if let Ok(mut q) = self
+			.ecs
+			.query_one::<(&PlayerComponent, Option<&mut ModelEntity>)>(self.player_entity)
+		{
+			if let Some((_player_component, Some(view_model))) = q.get()
+			{
+				let azimuth = self.get_camera_angles().0;
+
+				// TODO - use also camera elevation.
+				let shift_vec_front = Vec3f::new(-azimuth.sin(), azimuth.cos(), 0.0) * 16.0;
+				let shift_vec_left = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0) * 8.0;
+				let shift_vec_down = Vec3f::new(0.0, 0.0, -1.0) * 10.0;
+
+				let (pos, rotation) = self.get_camera_location();
+				view_model.position = pos + shift_vec_front + shift_vec_left + shift_vec_down;
+				view_model.rotation = rotation;
+
+				view_model.lighting = ModelLighting::AdvancedLight {
+					position: pos, // Use camera position to fetch light.
+					grid_light_scale: 1.0,
+					light_add: [0.1, 0.1, 0.1],
+				};
+			}
+		}
+
+		// Update moving submodels.
 		for (id, (test_submodel_component,)) in self.ecs.query::<(&TestSubmodelComponent,)>().iter()
 		{
 			let index = test_submodel_component.index;
@@ -555,6 +587,7 @@ impl GameInterface for Game
 		// Update physics only after settig params of externally-controlled physics objects - player, platforms, etc.
 		self.physics.update(time_delta_s);
 
+		// Update test models.
 		for (_id, (_test_model_component, phys_handle, model)) in self.ecs.query_mut::<(
 			&PhysicsTestModelComponent,
 			&test_game_physics::ObjectHandle,
@@ -592,34 +625,12 @@ impl GameInterface for Game
 			surface_info.height as f32,
 		);
 
-		let mut model_entities = self
+		let model_entities = self
 			.ecs
 			.query::<(&ModelEntity,)>()
 			.iter()
 			.map(|(_id, (e,))| e.clone())
 			.collect::<Vec<_>>();
-
-		if let Some(mut view_model) = self.view_model.clone()
-		{
-			let azimuth = self.get_camera_angles().0;
-
-			// TODO - use also camera elevation.
-			let shift_vec_front = Vec3f::new(-azimuth.sin(), azimuth.cos(), 0.0) * 16.0;
-			let shift_vec_left = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0) * 8.0;
-			let shift_vec_down = Vec3f::new(0.0, 0.0, -1.0) * 10.0;
-
-			let (pos, rotation) = self.get_camera_location();
-			view_model.position = pos + shift_vec_front + shift_vec_left + shift_vec_down;
-			view_model.rotation = rotation;
-
-			view_model.lighting = ModelLighting::AdvancedLight {
-				position: pos, // Use camera position to fetch light.
-				grid_light_scale: 1.0,
-				light_add: [0.1, 0.1, 0.1],
-			};
-
-			model_entities.push(view_model);
-		}
 
 		let mut submodel_entities = vec![None; self.map.submodels.len()];
 		for (_id, (submodel_entity_with_index,)) in self.ecs.query::<(&SubmodelEntityWithIndex,)>().iter()
@@ -692,6 +703,7 @@ impl Drop for Game
 	}
 }
 
+struct PlayerComponent {}
 struct PhysicsTestModelComponent {}
 struct TestDecalComponent {}
 struct TestLightComponent {}
