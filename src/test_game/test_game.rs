@@ -3,8 +3,7 @@ use super::{
 	test_game_physics,
 };
 use square_wheel_lib::common::{
-	bsp_map_compact, camera_controller::*, camera_rotation_controller::*, color::*, material, math_types::*, matrix::*,
-	system_window,
+	bsp_map_compact, camera_rotation_controller::*, color::*, material, math_types::*, matrix::*, system_window,
 };
 use std::sync::Arc;
 
@@ -17,7 +16,6 @@ pub struct Game
 	commands_queue_dyn: commands_queue::CommandsQueueDynPtr,
 	map: Arc<bsp_map_compact::BSPMap>,
 	physics: test_game_physics::TestGamePhysics,
-	player_controller: PlayerController,
 	game_time: f32,
 	ecs: hecs::World,
 	ecs_command_buffer: hecs::CommandBuffer,
@@ -63,7 +61,6 @@ impl Game
 			commands_queue_dyn,
 			map: map.clone(),
 			physics: test_game_physics::TestGamePhysics::new(map),
-			player_controller: PlayerController::NoclipController(CameraController::new()),
 			game_time: 0.0,
 			ecs: hecs::World::new(),
 			ecs_command_buffer: hecs::CommandBuffer::new(),
@@ -87,50 +84,54 @@ impl Game
 			},));
 		}
 
-		self.player_entity = self.ecs.spawn((PlayerComponent {},));
+		self.player_entity = self.ecs.spawn((
+			PlayerComponent {},
+			PlayerController {
+				rotation_controller: CameraRotationController::new(),
+				position_source: PlayerPositionSource::Noclip(Vec3f::zero()),
+			},
+		));
 	}
 
 	fn get_camera_location(&self) -> (Vec3f, QuaternionF)
 	{
-		match &self.player_controller
+		let mut q = self
+			.ecs
+			.query_one::<(&PlayerComponent, &PlayerController)>(self.player_entity)
+			.unwrap();
+		let (_player_component, player_controller) = q.get().unwrap();
+
+		let position = match player_controller.position_source
 		{
-			PlayerController::NoclipController(camera_controller) =>
-			{
-				(camera_controller.get_pos(), camera_controller.get_rotation())
-			},
-			PlayerController::PhysicsController {
-				rotation_controller,
-				phys_handle,
-			} => (
-				self.physics.get_object_location(*phys_handle).0,
-				rotation_controller.get_rotation(),
-			),
-		}
+			PlayerPositionSource::Noclip(p) => p,
+			PlayerPositionSource::Phys(handle) => self.physics.get_object_location(handle).0,
+		};
+
+		(position, player_controller.rotation_controller.get_rotation())
 	}
 
 	fn get_camera_angles(&self) -> (f32, f32, f32)
 	{
-		match &self.player_controller
-		{
-			PlayerController::NoclipController(camera_controller) => camera_controller.get_angles(),
-			PlayerController::PhysicsController {
-				rotation_controller, ..
-			} => rotation_controller.get_angles(),
-		}
+		let mut q = self
+			.ecs
+			.query_one::<(&PlayerComponent, &PlayerController)>(self.player_entity)
+			.unwrap();
+		let (_player_component, player_controller) = q.get().unwrap();
+
+		player_controller.rotation_controller.get_angles()
 	}
 
 	fn set_camera_angles(&mut self, azimuth: f32, elevation: f32, roll: f32)
 	{
-		match &mut self.player_controller
-		{
-			PlayerController::NoclipController(camera_controller) =>
-			{
-				camera_controller.set_angles(azimuth, elevation, roll)
-			},
-			PlayerController::PhysicsController {
-				rotation_controller, ..
-			} => rotation_controller.set_angles(azimuth, elevation, roll),
-		}
+		let mut q = self
+			.ecs
+			.query_one::<(&PlayerComponent, &mut PlayerController)>(self.player_entity)
+			.unwrap();
+		let (_player_component, player_controller) = q.get().unwrap();
+
+		player_controller
+			.rotation_controller
+			.set_angles(azimuth, elevation, roll)
 	}
 
 	fn process_commands(&mut self)
@@ -159,13 +160,19 @@ impl Game
 		if let (Ok(x), Ok(y), Ok(z)) = (args[0].parse::<f32>(), args[1].parse::<f32>(), args[2].parse::<f32>())
 		{
 			let pos = Vec3f::new(x, y, z);
-			match &mut self.player_controller
+			let mut q = self
+				.ecs
+				.query_one::<(&PlayerComponent, &mut PlayerController)>(self.player_entity)
+				.unwrap();
+			let (_player_component, player_controller) = q.get().unwrap();
+
+			match &mut player_controller.position_source
 			{
-				PlayerController::NoclipController(camera_controller) =>
+				PlayerPositionSource::Noclip(dst_pos) =>
 				{
-					camera_controller.set_pos(&pos);
+					*dst_pos = pos;
 				},
-				PlayerController::PhysicsController { phys_handle, .. } =>
+				PlayerPositionSource::Phys(phys_handle) =>
 				{
 					self.physics.teleport_object(*phys_handle, &pos);
 				},
@@ -397,33 +404,32 @@ impl Game
 
 	fn command_noclip(&mut self, _args: commands_queue::CommandArgs)
 	{
-		let (pos, _) = self.get_camera_location();
-		let angles = self.get_camera_angles();
+		let mut q = self
+			.ecs
+			.query_one::<(&PlayerComponent, &mut PlayerController)>(self.player_entity)
+			.unwrap();
+		let (_player_component, player_controller) = q.get().unwrap();
 
-		if let PlayerController::PhysicsController { phys_handle, .. } = &self.player_controller
+		let new_position_source = match player_controller.position_source
 		{
-			self.physics.remove_object(*phys_handle);
+			PlayerPositionSource::Noclip(pos) =>
+			{
+				self.console.lock().unwrap().add_text("Noclip OFF".to_string());
 
-			let mut camera_controller = CameraController::new();
-			camera_controller.set_pos(&pos);
-			camera_controller.set_angles(angles.0, angles.1, angles.2);
+				PlayerPositionSource::Phys(self.physics.add_character_object(&pos, 60.0, 120.0))
+			},
+			PlayerPositionSource::Phys(phys_handle) =>
+			{
+				self.console.lock().unwrap().add_text("Noclip ON".to_string());
 
-			self.player_controller = PlayerController::NoclipController(camera_controller);
+				let pos = self.physics.get_object_location(phys_handle).0;
+				self.physics.remove_object(phys_handle);
 
-			self.console.lock().unwrap().add_text("Noclip ON".to_string());
-		}
-		else
-		{
-			let mut rotation_controller = CameraRotationController::new();
-			rotation_controller.set_angles(angles.0, angles.1, angles.2);
+				PlayerPositionSource::Noclip(pos)
+			},
+		};
 
-			self.player_controller = PlayerController::PhysicsController {
-				phys_handle: self.physics.add_character_object(&pos, 60.0, 120.0),
-				rotation_controller,
-			};
-
-			self.console.lock().unwrap().add_text("Noclip OFF".to_string());
-		}
+		player_controller.position_source = new_position_source;
 	}
 }
 
@@ -440,90 +446,106 @@ impl GameInterface for Game
 
 		self.game_time += time_delta_s;
 
-		match &mut self.player_controller
-		{
-			PlayerController::NoclipController(camera_controller) =>
-			{
-				camera_controller.update(keyboard_state, events, time_delta_s)
-			},
-			PlayerController::PhysicsController {
-				rotation_controller,
-				phys_handle,
-			} =>
-			{
-				rotation_controller.update(keyboard_state, events, time_delta_s);
-
-				let azimuth = rotation_controller.get_angles().0;
-				let forward_vector = Vec3f::new(-(azimuth.sin()), azimuth.cos(), 0.0);
-				let left_vector = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0);
-				let mut move_vector = Vec3f::new(0.0, 0.0, 0.0);
-
-				use sdl2::keyboard::Scancode;
-				if keyboard_state.contains(&Scancode::W)
-				{
-					move_vector += forward_vector;
-				}
-				if keyboard_state.contains(&Scancode::S)
-				{
-					move_vector -= forward_vector;
-				}
-				if keyboard_state.contains(&Scancode::D)
-				{
-					move_vector += left_vector;
-				}
-				if keyboard_state.contains(&Scancode::A)
-				{
-					move_vector -= left_vector;
-				}
-
-				let move_vector_length = move_vector.magnitude();
-				if move_vector_length > 0.0
-				{
-					move_vector = move_vector / move_vector_length;
-				}
-
-				let ground_acceleration = 2048.0;
-				let air_acceleration = 512.0;
-				let max_velocity = 400.0;
-				let jump_velocity_add = 256.0;
-
-				let cur_velocity = self.physics.get_object_velocity(*phys_handle);
-				let on_ground = self.physics.is_object_on_ground(*phys_handle);
-
-				let acceleration: f32 = if on_ground
-				{
-					ground_acceleration
-				}
-				else
-				{
-					air_acceleration
-				};
-
-				let mut velocity_add = Vec3f::zero();
-
-				// Limit maximum velocity.
-				let velocity_projection_to_move_vector = move_vector.dot(cur_velocity);
-				if velocity_projection_to_move_vector < max_velocity
-				{
-					let max_can_add = max_velocity - velocity_projection_to_move_vector;
-					velocity_add = move_vector * (acceleration * time_delta_s).min(max_can_add);
-				}
-
-				if keyboard_state.contains(&Scancode::Space) && on_ground && cur_velocity.z <= 1.0
-				{
-					velocity_add.z = jump_velocity_add;
-				}
-
-				self.physics.add_object_velocity(*phys_handle, &velocity_add);
-			},
-		}
-
 		// Update player entity.
 		if let Ok(mut q) = self
 			.ecs
-			.query_one::<(&PlayerComponent, Option<&mut ModelEntity>)>(self.player_entity)
+			.query_one::<(&PlayerComponent, &mut PlayerController, Option<&mut ModelEntity>)>(self.player_entity)
 		{
-			if let Some((_player_component, Some(view_model))) = q.get()
+			let (_player_component, player_controller, view_model) = q.get().unwrap();
+			player_controller
+				.rotation_controller
+				.update(keyboard_state, events, time_delta_s);
+
+			let azimuth = player_controller.rotation_controller.get_angles().0;
+			let forward_vector = Vec3f::new(-(azimuth.sin()), azimuth.cos(), 0.0);
+			let left_vector = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0);
+			let mut move_vector = Vec3f::new(0.0, 0.0, 0.0);
+
+			use sdl2::keyboard::Scancode;
+			if keyboard_state.contains(&Scancode::W)
+			{
+				move_vector += forward_vector;
+			}
+			if keyboard_state.contains(&Scancode::S)
+			{
+				move_vector -= forward_vector;
+			}
+			if keyboard_state.contains(&Scancode::D)
+			{
+				move_vector += left_vector;
+			}
+			if keyboard_state.contains(&Scancode::A)
+			{
+				move_vector -= left_vector;
+			}
+
+			let move_vector_length = move_vector.magnitude();
+			if move_vector_length > 0.0
+			{
+				move_vector = move_vector / move_vector_length;
+			}
+
+			match &mut player_controller.position_source
+			{
+				PlayerPositionSource::Noclip(position) =>
+				{
+					const SPEED: f32 = 256.0;
+					const JUMP_SPEED: f32 = 0.8 * SPEED;
+
+					let move_vector_length = move_vector.magnitude();
+					if move_vector_length > 0.0
+					{
+						*position += move_vector * (time_delta_s * SPEED / move_vector_length);
+					}
+
+					if keyboard_state.contains(&Scancode::Space)
+					{
+						position.z += time_delta_s * JUMP_SPEED;
+					}
+					if keyboard_state.contains(&Scancode::C)
+					{
+						position.z -= time_delta_s * JUMP_SPEED;
+					}
+				},
+				PlayerPositionSource::Phys(phys_handle) =>
+				{
+					let ground_acceleration = 2048.0;
+					let air_acceleration = 512.0;
+					let max_velocity = 400.0;
+					let jump_velocity_add = 256.0;
+
+					let cur_velocity = self.physics.get_object_velocity(*phys_handle);
+					let on_ground = self.physics.is_object_on_ground(*phys_handle);
+
+					let acceleration: f32 = if on_ground
+					{
+						ground_acceleration
+					}
+					else
+					{
+						air_acceleration
+					};
+
+					let mut velocity_add = Vec3f::zero();
+
+					// Limit maximum velocity.
+					let velocity_projection_to_move_vector = move_vector.dot(cur_velocity);
+					if velocity_projection_to_move_vector < max_velocity
+					{
+						let max_can_add = max_velocity - velocity_projection_to_move_vector;
+						velocity_add = move_vector * (acceleration * time_delta_s).min(max_can_add);
+					}
+
+					if keyboard_state.contains(&Scancode::Space) && on_ground && cur_velocity.z <= 1.0
+					{
+						velocity_add.z = jump_velocity_add;
+					}
+
+					self.physics.add_object_velocity(*phys_handle, &velocity_add);
+				},
+			}
+
+			if let Some(view_model) = view_model
 			{
 				let azimuth = self.get_camera_angles().0;
 
@@ -721,12 +743,14 @@ struct SubmodelEntityWithIndex
 	submodel_entity: SubmodelEntity,
 }
 
-enum PlayerController
+struct PlayerController
 {
-	NoclipController(CameraController),
-	PhysicsController
-	{
-		rotation_controller: CameraRotationController,
-		phys_handle: test_game_physics::ObjectHandle,
-	},
+	rotation_controller: CameraRotationController,
+	position_source: PlayerPositionSource,
+}
+
+enum PlayerPositionSource
+{
+	Noclip(Vec3f),
+	Phys(test_game_physics::ObjectHandle),
 }
