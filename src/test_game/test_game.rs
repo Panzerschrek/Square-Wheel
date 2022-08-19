@@ -18,10 +18,10 @@ pub struct Game
 	map: Arc<bsp_map_compact::BSPMap>,
 	physics: test_game_physics::TestGamePhysics,
 	player_controller: PlayerController,
-	submodels: Vec<Option<PhysicsTestSubmodel>>,
 	view_model: Option<ModelEntity>,
 	game_time: f32,
 	ecs: hecs::World,
+	ecs_command_buffer: hecs::CommandBuffer,
 }
 
 impl Game
@@ -55,9 +55,7 @@ impl Game
 			.unwrap()
 			.register_command_queue(commands_queue_dyn.clone());
 
-		let submodels = vec![None; map.submodels.len()];
-
-		Self {
+		let mut result = Self {
 			commands_processor,
 			console,
 			resources_manager,
@@ -66,10 +64,27 @@ impl Game
 			map: map.clone(),
 			physics: test_game_physics::TestGamePhysics::new(map),
 			player_controller: PlayerController::NoclipController(CameraController::new()),
-			submodels,
 			view_model: None,
 			game_time: 0.0,
 			ecs: hecs::World::new(),
+			ecs_command_buffer: hecs::CommandBuffer::new(),
+		};
+
+		result.spawn_entities();
+
+		result
+	}
+
+	fn spawn_entities(&mut self)
+	{
+		for index in 0 .. self.map.submodels.len()
+		{
+			self.ecs.spawn((TestSubmodelComponent {
+				phys_handle: self
+					.physics
+					.add_submodel_object(index, &Vec3f::zero(), &QuaternionF::zero()),
+				index,
+			},));
 		}
 	}
 
@@ -513,8 +528,9 @@ impl GameInterface for Game
 			},
 		}
 
-		for (index, submodel_opt) in self.submodels.iter_mut().enumerate()
+		for (id, (test_submodel_component,)) in self.ecs.query::<(&TestSubmodelComponent,)>().iter()
 		{
+			let index = test_submodel_component.index;
 			let phase = index as f32;
 			let shift = 32.0 *
 				Vec3f::new(
@@ -523,31 +539,36 @@ impl GameInterface for Game
 					(0.11111 * self.game_time + phase).sin(),
 				);
 
-			if submodel_opt.is_none()
+			let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
+			let bbox_center = bbox.get_center();
+
+			self.physics
+				.set_kinematic_object_position(test_submodel_component.phys_handle, &(bbox_center + shift));
+			let (position, rotation) = self.physics.get_object_location(test_submodel_component.phys_handle);
+
+			if let Ok(mut q) = self.ecs.query_one::<(&mut SubmodelEntityWithIndex,)>(id)
 			{
-				let rotation = QuaternionF::zero();
-				*submodel_opt = Some(PhysicsTestSubmodel {
-					phys_handle: self.physics.add_submodel_object(index, &shift, &rotation),
-					draw_entity: SubmodelEntity {
-						rotation,
-						position: Vec3f::zero(),
-					},
-				});
-			}
-
-			if let Some(submodel) = submodel_opt
-			{
-				let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
-				let bbox_center = bbox.get_center();
-
-				self.physics
-					.set_kinematic_object_position(submodel.phys_handle, &(bbox_center + shift));
-				let (position, rotation) = self.physics.get_object_location(submodel.phys_handle);
-
-				submodel.draw_entity.position = position;
-				submodel.draw_entity.rotation = rotation;
+				if let Some((submodel_entity_with_index,)) = q.get()
+				{
+					submodel_entity_with_index.submodel_entity.position = position;
+					submodel_entity_with_index.submodel_entity.rotation = rotation;
+				}
+				else
+				{
+					self.ecs_command_buffer.insert_one(
+						id,
+						SubmodelEntityWithIndex {
+							index,
+							submodel_entity: SubmodelEntity { position, rotation },
+						},
+					);
+				}
 			}
 		}
+		self.ecs_command_buffer.run_on(&mut self.ecs);
+
+		// Update physics only after settig params of externally-controlled physics objects - player, platforms, etc.
+		self.physics.update(time_delta_s);
 
 		for (_id, (_test_model_component, phys_handle, model)) in self.ecs.query_mut::<(
 			&PhysicsTestModelComponent,
@@ -566,9 +587,6 @@ impl GameInterface for Game
 			model.position = location.0;
 			model.rotation = location.1;
 		}
-
-		// Update physics only after settig params of externally-controlled physics objects - player, platforms, etc.
-		self.physics.update(time_delta_s);
 	}
 
 	fn grab_mouse_input(&self) -> bool
@@ -618,11 +636,11 @@ impl GameInterface for Game
 			model_entities.push(view_model);
 		}
 
-		let submodel_entities = self
-			.submodels
-			.iter()
-			.map(|s| s.map(|s| s.draw_entity.clone()))
-			.collect();
+		let mut submodel_entities = vec![None; self.map.submodels.len()];
+		for (_id, (submodel_entity_with_index,)) in self.ecs.query::<(&SubmodelEntityWithIndex,)>().iter()
+		{
+			submodel_entities[submodel_entity_with_index.index] = Some(submodel_entity_with_index.submodel_entity);
+		}
 
 		let lights = self
 			.ecs
@@ -694,10 +712,16 @@ struct TestDecalComponent {}
 struct TestLightComponent {}
 
 #[derive(Clone, Copy)]
-struct PhysicsTestSubmodel
+struct TestSubmodelComponent
 {
 	phys_handle: test_game_physics::ObjectHandle,
-	draw_entity: SubmodelEntity,
+	index: usize,
+}
+
+struct SubmodelEntityWithIndex
+{
+	index: usize,
+	submodel_entity: SubmodelEntity,
 }
 
 enum PlayerController
