@@ -19,8 +19,6 @@ pub struct Game
 	physics: test_game_physics::TestGamePhysics,
 	player_controller: PlayerController,
 	submodels: Vec<Option<PhysicsTestSubmodel>>,
-	test_lights: Vec<PointLight>,
-	test_decals: Vec<Decal>,
 	view_model: Option<ModelEntity>,
 	game_time: f32,
 	ecs: hecs::World,
@@ -69,8 +67,6 @@ impl Game
 			physics: test_game_physics::TestGamePhysics::new(map),
 			player_controller: PlayerController::NoclipController(CameraController::new()),
 			submodels,
-			test_lights: Vec::new(),
-			test_decals: Vec::new(),
 			view_model: None,
 			game_time: 0.0,
 			ecs: hecs::World::new(),
@@ -218,10 +214,13 @@ impl Game
 
 		if let (Ok(r), Ok(g), Ok(b)) = (args[0].parse::<f32>(), args[1].parse::<f32>(), args[2].parse::<f32>())
 		{
-			self.test_lights.push(PointLight {
-				pos: self.get_camera_location().0,
-				color: [r * 1024.0, g * 1024.0, b * 1024.0],
-			});
+			self.ecs.spawn((
+				TestLightComponent {},
+				PointLight {
+					pos: self.get_camera_location().0,
+					color: [r * 1024.0, g * 1024.0, b * 1024.0],
+				},
+			));
 		}
 		else
 		{
@@ -234,7 +233,16 @@ impl Game
 
 	fn command_reset_test_lights(&mut self, _args: commands_queue::CommandArgs)
 	{
-		self.test_lights.clear();
+		let mut entities_to_despawn = Vec::new();
+		for (id, (_test_light_component,)) in self.ecs.query_mut::<(&TestLightComponent,)>()
+		{
+			entities_to_despawn.push(id);
+		}
+
+		for id in &entities_to_despawn
+		{
+			let _ignore = self.ecs.despawn(*id);
+		}
 	}
 
 	fn command_add_test_model(&mut self, args: commands_queue::CommandArgs)
@@ -254,7 +262,7 @@ impl Game
 
 		let phys_handle = self.physics.add_object(&pos, &rotation, &bbox);
 		self.ecs.spawn((
-			PhysicsTestModelComponent::default(),
+			PhysicsTestModelComponent {},
 			phys_handle,
 			ModelEntity {
 				position: pos,
@@ -320,20 +328,32 @@ impl Game
 
 		let (position, rotation) = self.get_camera_location();
 
-		self.test_decals.push(Decal {
-			position,
-			rotation,
-			scale: size,
-			texture,
-			blending_mode: material::BlendingMode::None,
-			lightmap_light_scale: 1.0,
-			light_add: [0.0; 3],
-		});
+		self.ecs.spawn((
+			TestDecalComponent {},
+			Decal {
+				position,
+				rotation,
+				scale: size,
+				texture,
+				blending_mode: material::BlendingMode::None,
+				lightmap_light_scale: 1.0,
+				light_add: [0.0; 3],
+			},
+		));
 	}
 
 	fn command_reset_test_decals(&mut self, _args: commands_queue::CommandArgs)
 	{
-		self.test_decals.clear();
+		let mut entities_to_despawn = Vec::new();
+		for (id, (_test_decal_component,)) in self.ecs.query_mut::<(&TestDecalComponent,)>()
+		{
+			entities_to_despawn.push(id);
+		}
+
+		for id in &entities_to_despawn
+		{
+			let _ignore = self.ecs.despawn(*id);
+		}
 	}
 
 	fn command_set_view_model(&mut self, args: commands_queue::CommandArgs)
@@ -604,14 +624,28 @@ impl GameInterface for Game
 			.map(|s| s.map(|s| s.draw_entity.clone()))
 			.collect();
 
+		let lights = self
+			.ecs
+			.query::<(&PointLight,)>()
+			.iter()
+			.map(|(_id, (d,))| d.clone())
+			.collect::<Vec<_>>();
+
+		let decals = self
+			.ecs
+			.query::<(&Decal,)>()
+			.iter()
+			.map(|(_id, (d,))| d.clone())
+			.collect::<Vec<_>>();
+
 		FrameInfo {
 			camera_matrices,
 			submodel_entities,
 			skybox_rotation: QuaternionF::zero(),
 			game_time_s: self.game_time,
-			lights: self.test_lights.clone(),
+			lights,
 			model_entities,
-			decals: self.test_decals.clone(),
+			decals,
 		}
 	}
 
@@ -655,8 +689,9 @@ impl Drop for Game
 	}
 }
 
-#[derive(Default)]
 struct PhysicsTestModelComponent {}
+struct TestDecalComponent {}
+struct TestLightComponent {}
 
 #[derive(Clone, Copy)]
 struct PhysicsTestSubmodel
