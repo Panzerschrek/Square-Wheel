@@ -1,3 +1,4 @@
+pub mod components;
 pub mod test_game;
 pub mod test_game_physics;
 
