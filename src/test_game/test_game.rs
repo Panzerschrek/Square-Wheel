@@ -20,10 +20,10 @@ pub struct Game
 	player_controller: PlayerController,
 	submodels: Vec<Option<PhysicsTestSubmodel>>,
 	test_lights: Vec<PointLight>,
-	test_models: Vec<PhysicsTestModel>,
 	test_decals: Vec<Decal>,
 	view_model: Option<ModelEntity>,
 	game_time: f32,
+	ecs: hecs::World,
 }
 
 impl Game
@@ -70,10 +70,10 @@ impl Game
 			player_controller: PlayerController::NoclipController(CameraController::new()),
 			submodels,
 			test_lights: Vec::new(),
-			test_models: Vec::new(),
 			test_decals: Vec::new(),
 			view_model: None,
 			game_time: 0.0,
+			ecs: hecs::World::new(),
 		}
 	}
 
@@ -252,9 +252,11 @@ impl Game
 		let (pos, rotation) = self.get_camera_location();
 		let bbox = model.frames_info[0].bbox;
 
-		self.test_models.push(PhysicsTestModel {
-			phys_handle: self.physics.add_object(&pos, &rotation, &bbox),
-			draw_entity: ModelEntity {
+		let phys_handle = self.physics.add_object(&pos, &rotation, &bbox);
+		self.ecs.spawn((
+			PhysicsTestModelComponent::default(),
+			phys_handle,
+			ModelEntity {
 				position: pos,
 				rotation: rotation,
 				animation: AnimationPoint {
@@ -268,16 +270,24 @@ impl Game
 				is_view_model: false,
 				ordering_custom_bbox: None,
 			},
-		});
+		));
 	}
 
 	fn command_reset_test_models(&mut self, _args: commands_queue::CommandArgs)
 	{
-		for model in &self.test_models
+		let mut entities_to_despawn = Vec::new();
+		for (id, (_test_model_component, phys_handle)) in self
+			.ecs
+			.query_mut::<(&PhysicsTestModelComponent, &test_game_physics::ObjectHandle)>()
 		{
-			self.physics.remove_object(model.phys_handle);
+			self.physics.remove_object(*phys_handle);
+			entities_to_despawn.push(id);
 		}
-		self.test_models.clear();
+
+		for id in &entities_to_despawn
+		{
+			let _ignore = self.ecs.despawn(*id);
+		}
 	}
 
 	fn command_add_test_decal(&mut self, args: commands_queue::CommandArgs)
@@ -519,18 +529,22 @@ impl GameInterface for Game
 			}
 		}
 
-		for model in &mut self.test_models
+		for (_id, (_test_model_component, phys_handle, model)) in self.ecs.query_mut::<(
+			&PhysicsTestModelComponent,
+			&test_game_physics::ObjectHandle,
+			&mut ModelEntity,
+		)>()
 		{
-			let num_frames = model.draw_entity.model.frames_info.len() as u32;
+			let num_frames = model.model.frames_info.len() as u32;
 			let frame_f = self.game_time * 10.0;
-			model.draw_entity.animation.frames[0] = (frame_f as u32) % num_frames;
-			model.draw_entity.animation.frames[1] = (frame_f as u32 + 1) % num_frames;
-			model.draw_entity.animation.lerp = 1.0 - frame_f.fract();
+			model.animation.frames[0] = (frame_f as u32) % num_frames;
+			model.animation.frames[1] = (frame_f as u32 + 1) % num_frames;
+			model.animation.lerp = 1.0 - frame_f.fract();
 
-			let location = self.physics.get_object_location(model.phys_handle);
+			let location = self.physics.get_object_location(*phys_handle);
 
-			model.draw_entity.position = location.0;
-			model.draw_entity.rotation = location.1;
+			model.position = location.0;
+			model.rotation = location.1;
 		}
 
 		// Update physics only after settig params of externally-controlled physics objects - player, platforms, etc.
@@ -556,10 +570,12 @@ impl GameInterface for Game
 		);
 
 		let mut model_entities = self
-			.test_models
+			.ecs
+			.query::<(&ModelEntity,)>()
 			.iter()
-			.map(|e| e.draw_entity.clone())
+			.map(|(_id, (e,))| e.clone())
 			.collect::<Vec<_>>();
+
 		if let Some(mut view_model) = self.view_model.clone()
 		{
 			let azimuth = self.get_camera_angles().0;
@@ -639,11 +655,8 @@ impl Drop for Game
 	}
 }
 
-struct PhysicsTestModel
-{
-	phys_handle: test_game_physics::ObjectHandle,
-	draw_entity: ModelEntity,
-}
+#[derive(Default)]
+struct PhysicsTestModelComponent {}
 
 #[derive(Clone, Copy)]
 struct PhysicsTestSubmodel
