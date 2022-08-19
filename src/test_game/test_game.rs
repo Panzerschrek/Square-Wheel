@@ -1,10 +1,9 @@
 use super::{
-	commands_processor, commands_queue, console, frame_info::*, game_interface::*, light::*, resources_manager::*,
-	test_game_physics,
+	commands_processor, commands_queue, components::*, console, frame_info::*, game_interface::*, light::*,
+	resources_manager::*, test_game_physics,
 };
 use square_wheel_lib::common::{
-	bsp_map_compact, camera_controller::*, camera_rotation_controller::*, color::*, material, math_types::*, matrix::*,
-	system_window,
+	bsp_map_compact, camera_rotation_controller::*, color::*, material, math_types::*, matrix::*, system_window,
 };
 use std::sync::Arc;
 
@@ -17,13 +16,10 @@ pub struct Game
 	commands_queue_dyn: commands_queue::CommandsQueueDynPtr,
 	map: Arc<bsp_map_compact::BSPMap>,
 	physics: test_game_physics::TestGamePhysics,
-	player_controller: PlayerController,
-	submodels: Vec<Option<PhysicsTestSubmodel>>,
-	test_lights: Vec<PointLight>,
-	test_models: Vec<PhysicsTestModel>,
-	test_decals: Vec<Decal>,
-	view_model: Option<ModelEntity>,
 	game_time: f32,
+	ecs: hecs::World,
+	ecs_command_buffer: hecs::CommandBuffer,
+	player_entity: hecs::Entity,
 }
 
 impl Game
@@ -57,9 +53,7 @@ impl Game
 			.unwrap()
 			.register_command_queue(commands_queue_dyn.clone());
 
-		let submodels = vec![None; map.submodels.len()];
-
-		Self {
+		let mut result = Self {
 			commands_processor,
 			console,
 			resources_manager,
@@ -67,57 +61,300 @@ impl Game
 			commands_queue_dyn,
 			map: map.clone(),
 			physics: test_game_physics::TestGamePhysics::new(map),
-			player_controller: PlayerController::NoclipController(CameraController::new()),
-			submodels,
-			test_lights: Vec::new(),
-			test_models: Vec::new(),
-			test_decals: Vec::new(),
-			view_model: None,
 			game_time: 0.0,
+			ecs: hecs::World::new(),
+			ecs_command_buffer: hecs::CommandBuffer::new(),
+			player_entity: hecs::Entity::DANGLING,
+		};
+
+		result.spawn_entities();
+
+		result
+	}
+
+	fn spawn_entities(&mut self)
+	{
+		let physics = &mut self.physics;
+		self.ecs.spawn_batch((0 .. self.map.submodels.len()).map(|index| {
+			(TestSubmodelComponent {
+				phys_handle: physics.add_submodel_object(index, &Vec3f::zero(), &QuaternionF::zero()),
+				index,
+			},)
+		}));
+
+		self.player_entity = self.ecs.spawn((
+			PlayerComponent {
+				view_model_entity: hecs::Entity::DANGLING,
+			},
+			LocationComponent {
+				position: Vec3f::zero(),
+				rotation: QuaternionF::zero(),
+			},
+			PlayerControllerLocationComponent {},
+			PlayerControllerComponent {
+				rotation_controller: CameraRotationController::new(),
+				position_source: PlayerPositionSource::Noclip(Vec3f::zero()),
+			},
+		));
+	}
+
+	fn update_player_entity(
+		&mut self,
+		keyboard_state: &system_window::KeyboardState,
+		events: &[sdl2::event::Event],
+		time_delta_s: f32,
+	)
+	{
+		if let Ok(mut q) = self
+			.ecs
+			.query_one::<(&mut PlayerControllerComponent,)>(self.player_entity)
+		{
+			let (player_controller,) = q.get().unwrap();
+			player_controller
+				.rotation_controller
+				.update(keyboard_state, events, time_delta_s);
+
+			let azimuth = player_controller.rotation_controller.get_angles().0;
+			let forward_vector = Vec3f::new(-(azimuth.sin()), azimuth.cos(), 0.0);
+			let left_vector = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0);
+			let mut move_vector = Vec3f::new(0.0, 0.0, 0.0);
+
+			use sdl2::keyboard::Scancode;
+			if keyboard_state.contains(&Scancode::W)
+			{
+				move_vector += forward_vector;
+			}
+			if keyboard_state.contains(&Scancode::S)
+			{
+				move_vector -= forward_vector;
+			}
+			if keyboard_state.contains(&Scancode::D)
+			{
+				move_vector += left_vector;
+			}
+			if keyboard_state.contains(&Scancode::A)
+			{
+				move_vector -= left_vector;
+			}
+
+			let move_vector_length = move_vector.magnitude();
+			if move_vector_length > 0.0
+			{
+				move_vector = move_vector / move_vector_length;
+			}
+
+			match &mut player_controller.position_source
+			{
+				PlayerPositionSource::Noclip(position) =>
+				{
+					let speed = 256.0;
+					let jump_speed = 0.8 * speed;
+
+					*position += move_vector * (time_delta_s * speed);
+
+					if keyboard_state.contains(&Scancode::Space)
+					{
+						position.z += time_delta_s * jump_speed;
+					}
+					if keyboard_state.contains(&Scancode::C)
+					{
+						position.z -= time_delta_s * jump_speed;
+					}
+				},
+				PlayerPositionSource::Phys(phys_handle) =>
+				{
+					let ground_acceleration = 2048.0;
+					let air_acceleration = 512.0;
+					let max_velocity = 400.0;
+					let jump_velocity_add = 256.0;
+
+					let cur_velocity = self.physics.get_object_velocity(*phys_handle);
+					let on_ground = self.physics.is_object_on_ground(*phys_handle);
+
+					let acceleration: f32 = if on_ground
+					{
+						ground_acceleration
+					}
+					else
+					{
+						air_acceleration
+					};
+
+					let mut velocity_add = Vec3f::zero();
+
+					// Limit maximum velocity.
+					let velocity_projection_to_move_vector = move_vector.dot(cur_velocity);
+					if velocity_projection_to_move_vector < max_velocity
+					{
+						let max_can_add = max_velocity - velocity_projection_to_move_vector;
+						velocity_add = move_vector * (acceleration * time_delta_s).min(max_can_add);
+					}
+
+					if keyboard_state.contains(&Scancode::Space) && on_ground && cur_velocity.z <= 1.0
+					{
+						velocity_add.z = jump_velocity_add;
+					}
+
+					self.physics.add_object_velocity(*phys_handle, &velocity_add);
+				},
+			}
 		}
+	}
+
+	fn update_test_submodels(&mut self)
+	{
+		for (id, (test_submodel_component,)) in self.ecs.query::<(&TestSubmodelComponent,)>().iter()
+		{
+			let index = test_submodel_component.index;
+			let phase = index as f32;
+			let shift = 32.0 *
+				Vec3f::new(
+					(0.5 * self.game_time + phase).sin(),
+					(0.33 * self.game_time + phase).sin(),
+					(0.11111 * self.game_time + phase).sin(),
+				);
+
+			let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
+			let bbox_center = bbox.get_center();
+
+			self.physics
+				.set_kinematic_object_position(test_submodel_component.phys_handle, &(bbox_center + shift));
+			let (position, rotation) = self.physics.get_object_location(test_submodel_component.phys_handle);
+
+			if let Ok(mut q) = self.ecs.query_one::<(&mut SubmodelEntityWithIndex,)>(id)
+			{
+				if let Some((submodel_entity_with_index,)) = q.get()
+				{
+					submodel_entity_with_index.submodel_entity.position = position;
+					submodel_entity_with_index.submodel_entity.rotation = rotation;
+				}
+				else
+				{
+					self.ecs_command_buffer.insert_one(
+						id,
+						SubmodelEntityWithIndex {
+							index,
+							submodel_entity: SubmodelEntity { position, rotation },
+						},
+					);
+				}
+			}
+		}
+		self.ecs_command_buffer.run_on(&mut self.ecs);
+	}
+
+	fn update_animations(&mut self)
+	{
+		for (_id, (_simple_animation_component, model)) in
+			self.ecs.query_mut::<(&SimpleAnimationComponent, &mut ModelEntity)>()
+		{
+			let num_frames = model.model.frames_info.len() as u32;
+			let frame_f = self.game_time * 10.0;
+			model.animation.frames[0] = (frame_f as u32) % num_frames;
+			model.animation.frames[1] = (frame_f as u32 + 1) % num_frames;
+			model.animation.lerp = 1.0 - frame_f.fract();
+		}
+	}
+
+	fn update_player_controller_locations(&mut self)
+	{
+		for (_id, (_player_controller_location_component, player_controller, location)) in self.ecs.query_mut::<(
+			&PlayerControllerLocationComponent,
+			&PlayerControllerComponent,
+			&mut LocationComponent,
+		)>()
+		{
+			location.position = match player_controller.position_source
+			{
+				PlayerPositionSource::Noclip(p) => p,
+				PlayerPositionSource::Phys(handle) => self.physics.get_object_location(handle).0,
+			};
+
+			location.rotation = player_controller.rotation_controller.get_rotation();
+		}
+	}
+
+	fn update_phys_model_locations(&mut self)
+	{
+		for (_id, (phys_handle, location)) in self
+			.ecs
+			.query_mut::<(&PhysicsLocationComponent, &mut LocationComponent)>()
+		{
+			let phys_location = self.physics.get_object_location(*phys_handle);
+			location.position = phys_location.0;
+			location.rotation = phys_location.1;
+		}
+	}
+
+	fn update_other_entity_locations(&mut self)
+	{
+		for (_id, (other_entity_location_component, location_component)) in self
+			.ecs
+			.query::<(&OtherEntityLocationComponent, &mut LocationComponent)>()
+			.into_iter()
+		{
+			// TODO - support chains of linked entities.
+			let mut q = self
+				.ecs
+				.query_one::<(&LocationComponent,)>(other_entity_location_component.entity)
+				.unwrap();
+			let (src_location_component,) = q.get().unwrap();
+
+			location_component.position = src_location_component.position +
+				src_location_component
+					.rotation
+					.rotate_vector(other_entity_location_component.relative_position);
+			location_component.rotation =
+				src_location_component.rotation * other_entity_location_component.relative_rotation;
+		}
+	}
+
+	fn update_models_locations(&mut self)
+	{
+		for (_id, (_model_entity_location_link_component, location_component, model)) in
+			self.ecs
+				.query_mut::<(&ModelEntityLocationLinkComponent, &LocationComponent, &mut ModelEntity)>()
+		{
+			model.position = location_component.position;
+			model.rotation = location_component.rotation;
+		}
+	}
+
+	fn collect_drawable_components<T: hecs::Component + Clone>(&self) -> Vec<T>
+	{
+		self.ecs.query::<(&T,)>().iter().map(|(_id, (c,))| c.clone()).collect()
 	}
 
 	fn get_camera_location(&self) -> (Vec3f, QuaternionF)
 	{
-		match &self.player_controller
-		{
-			PlayerController::NoclipController(camera_controller) =>
-			{
-				(camera_controller.get_pos(), camera_controller.get_rotation())
-			},
-			PlayerController::PhysicsController {
-				rotation_controller,
-				phys_handle,
-			} => (
-				self.physics.get_object_location(*phys_handle).0,
-				rotation_controller.get_rotation(),
-			),
-		}
+		let mut q = self.ecs.query_one::<(&LocationComponent,)>(self.player_entity).unwrap();
+		let (location_component,) = q.get().unwrap();
+
+		(location_component.position, location_component.rotation)
 	}
 
 	fn get_camera_angles(&self) -> (f32, f32, f32)
 	{
-		match &self.player_controller
-		{
-			PlayerController::NoclipController(camera_controller) => camera_controller.get_angles(),
-			PlayerController::PhysicsController {
-				rotation_controller, ..
-			} => rotation_controller.get_angles(),
-		}
+		let mut q = self
+			.ecs
+			.query_one::<(&PlayerControllerComponent,)>(self.player_entity)
+			.unwrap();
+		let (player_controller,) = q.get().unwrap();
+
+		player_controller.rotation_controller.get_angles()
 	}
 
 	fn set_camera_angles(&mut self, azimuth: f32, elevation: f32, roll: f32)
 	{
-		match &mut self.player_controller
-		{
-			PlayerController::NoclipController(camera_controller) =>
-			{
-				camera_controller.set_angles(azimuth, elevation, roll)
-			},
-			PlayerController::PhysicsController {
-				rotation_controller, ..
-			} => rotation_controller.set_angles(azimuth, elevation, roll),
-		}
+		let mut q = self
+			.ecs
+			.query_one::<(&mut PlayerControllerComponent,)>(self.player_entity)
+			.unwrap();
+		let (player_controller,) = q.get().unwrap();
+
+		player_controller
+			.rotation_controller
+			.set_angles(azimuth, elevation, roll)
 	}
 
 	fn process_commands(&mut self)
@@ -146,13 +383,19 @@ impl Game
 		if let (Ok(x), Ok(y), Ok(z)) = (args[0].parse::<f32>(), args[1].parse::<f32>(), args[2].parse::<f32>())
 		{
 			let pos = Vec3f::new(x, y, z);
-			match &mut self.player_controller
+			let mut q = self
+				.ecs
+				.query_one::<(&mut PlayerControllerComponent,)>(self.player_entity)
+				.unwrap();
+			let (player_controller,) = q.get().unwrap();
+
+			match &mut player_controller.position_source
 			{
-				PlayerController::NoclipController(camera_controller) =>
+				PlayerPositionSource::Noclip(dst_pos) =>
 				{
-					camera_controller.set_pos(&pos);
+					*dst_pos = pos;
 				},
-				PlayerController::PhysicsController { phys_handle, .. } =>
+				PlayerPositionSource::Phys(phys_handle) =>
 				{
 					self.physics.teleport_object(*phys_handle, &pos);
 				},
@@ -218,10 +461,13 @@ impl Game
 
 		if let (Ok(r), Ok(g), Ok(b)) = (args[0].parse::<f32>(), args[1].parse::<f32>(), args[2].parse::<f32>())
 		{
-			self.test_lights.push(PointLight {
-				pos: self.get_camera_location().0,
-				color: [r * 1024.0, g * 1024.0, b * 1024.0],
-			});
+			self.ecs.spawn((
+				TestLightComponent {},
+				PointLight {
+					pos: self.get_camera_location().0,
+					color: [r * 1024.0, g * 1024.0, b * 1024.0],
+				},
+			));
 		}
 		else
 		{
@@ -234,7 +480,11 @@ impl Game
 
 	fn command_reset_test_lights(&mut self, _args: commands_queue::CommandArgs)
 	{
-		self.test_lights.clear();
+		for (id, (_test_light_component,)) in self.ecs.query_mut::<(&TestLightComponent,)>()
+		{
+			self.ecs_command_buffer.despawn(id);
+		}
+		self.ecs_command_buffer.run_on(&mut self.ecs);
 	}
 
 	fn command_add_test_model(&mut self, args: commands_queue::CommandArgs)
@@ -249,14 +499,19 @@ impl Game
 		let model = r.get_model(&args[0]);
 		let texture = r.get_texture_lite(&args[1]);
 
-		let (pos, rotation) = self.get_camera_location();
+		let (position, rotation) = self.get_camera_location();
 		let bbox = model.frames_info[0].bbox;
 
-		self.test_models.push(PhysicsTestModel {
-			phys_handle: self.physics.add_object(&pos, &rotation, &bbox),
-			draw_entity: ModelEntity {
-				position: pos,
-				rotation: rotation,
+		let phys_handle = self.physics.add_object(&position, &rotation, &bbox);
+		self.ecs.spawn((
+			TestModelComponent {},
+			SimpleAnimationComponent {},
+			LocationComponent { position, rotation },
+			ModelEntityLocationLinkComponent {},
+			phys_handle,
+			ModelEntity {
+				position,
+				rotation,
 				animation: AnimationPoint {
 					frames: [0, 0],
 					lerp: 0.0,
@@ -268,16 +523,19 @@ impl Game
 				is_view_model: false,
 				ordering_custom_bbox: None,
 			},
-		});
+		));
 	}
 
 	fn command_reset_test_models(&mut self, _args: commands_queue::CommandArgs)
 	{
-		for model in &self.test_models
+		for (id, (_test_model_component, phys_handle)) in self
+			.ecs
+			.query_mut::<(&TestModelComponent, &test_game_physics::ObjectHandle)>()
 		{
-			self.physics.remove_object(model.phys_handle);
+			self.physics.remove_object(*phys_handle);
+			self.ecs_command_buffer.despawn(id);
 		}
-		self.test_models.clear();
+		self.ecs_command_buffer.run_on(&mut self.ecs);
 	}
 
 	fn command_add_test_decal(&mut self, args: commands_queue::CommandArgs)
@@ -310,25 +568,33 @@ impl Game
 
 		let (position, rotation) = self.get_camera_location();
 
-		self.test_decals.push(Decal {
-			position,
-			rotation,
-			scale: size,
-			texture,
-			blending_mode: material::BlendingMode::None,
-			lightmap_light_scale: 1.0,
-			light_add: [0.0; 3],
-		});
+		self.ecs.spawn((
+			TestDecalComponent {},
+			Decal {
+				position,
+				rotation,
+				scale: size,
+				texture,
+				blending_mode: material::BlendingMode::None,
+				lightmap_light_scale: 1.0,
+				light_add: [0.0; 3],
+			},
+		));
 	}
 
 	fn command_reset_test_decals(&mut self, _args: commands_queue::CommandArgs)
 	{
-		self.test_decals.clear();
+		for (id, (_test_decal_component,)) in self.ecs.query_mut::<(&TestDecalComponent,)>()
+		{
+			self.ecs_command_buffer.despawn(id)
+		}
+		self.ecs_command_buffer.run_on(&mut self.ecs);
 	}
 
 	fn command_set_view_model(&mut self, args: commands_queue::CommandArgs)
 	{
-		self.view_model = None;
+		self.command_reset_view_model(Vec::new());
+
 		if args.len() < 2
 		{
 			self.console.lock().unwrap().add_text("Expected 2 args".to_string());
@@ -339,56 +605,87 @@ impl Game
 		let model = r.get_model(&args[0]);
 		let texture = r.get_texture_lite(&args[1]);
 
-		self.view_model = Some(ModelEntity {
-			position: Vec3f::zero(),
-			rotation: QuaternionF::zero(),
-			animation: AnimationPoint {
-				frames: [0, 0],
-				lerp: 0.0,
+		let position = Vec3f::zero();
+		let rotation = QuaternionF::zero();
+
+		let view_model_entity = self.ecs.spawn((
+			SimpleAnimationComponent {},
+			OtherEntityLocationComponent {
+				entity: self.player_entity,
+				relative_position: Vec3f::new(16.0, -8.0, -10.0),
+				relative_rotation: QuaternionF::from_angle_x(Rad(0.0)),
 			},
-			model,
-			texture,
-			blending_mode: material::BlendingMode::Average,
-			lighting: ModelLighting::Default,
-			is_view_model: true,
-			ordering_custom_bbox: None,
-		});
+			LocationComponent { position, rotation },
+			ModelEntityLocationLinkComponent {},
+			ModelEntity {
+				position,
+				rotation,
+				animation: AnimationPoint {
+					frames: [0, 0],
+					lerp: 0.0,
+				},
+				model,
+				texture,
+				blending_mode: material::BlendingMode::Average,
+				lighting: ModelLighting::Default,
+				is_view_model: true,
+				ordering_custom_bbox: None,
+			},
+		));
+
+		let mut q = self
+			.ecs
+			.query_one::<(&mut PlayerComponent,)>(self.player_entity)
+			.unwrap();
+		let (player_component,) = q.get().unwrap();
+		player_component.view_model_entity = view_model_entity;
 	}
 
 	fn command_reset_view_model(&mut self, _args: commands_queue::CommandArgs)
 	{
-		self.view_model = None;
+		let mut q = self
+			.ecs
+			.query_one::<(&mut PlayerComponent,)>(self.player_entity)
+			.unwrap();
+		let (player_component,) = q.get().unwrap();
+
+		if player_component.view_model_entity != hecs::Entity::DANGLING
+		{
+			let view_model_entity = player_component.view_model_entity;
+			player_component.view_model_entity = hecs::Entity::DANGLING;
+			drop(q);
+			let _ignore = self.ecs.despawn(view_model_entity);
+		}
 	}
 
 	fn command_noclip(&mut self, _args: commands_queue::CommandArgs)
 	{
-		let (pos, _) = self.get_camera_location();
-		let angles = self.get_camera_angles();
+		let mut q = self
+			.ecs
+			.query_one::<(&mut PlayerControllerComponent,)>(self.player_entity)
+			.unwrap();
+		let (player_controller,) = q.get().unwrap();
 
-		if let PlayerController::PhysicsController { phys_handle, .. } = &self.player_controller
+		let new_position_source = match player_controller.position_source
 		{
-			self.physics.remove_object(*phys_handle);
+			PlayerPositionSource::Noclip(pos) =>
+			{
+				self.console.lock().unwrap().add_text("Noclip OFF".to_string());
 
-			let mut camera_controller = CameraController::new();
-			camera_controller.set_pos(&pos);
-			camera_controller.set_angles(angles.0, angles.1, angles.2);
+				PlayerPositionSource::Phys(self.physics.add_character_object(&pos, 60.0, 120.0))
+			},
+			PlayerPositionSource::Phys(phys_handle) =>
+			{
+				self.console.lock().unwrap().add_text("Noclip ON".to_string());
 
-			self.player_controller = PlayerController::NoclipController(camera_controller);
+				let pos = self.physics.get_object_location(phys_handle).0;
+				self.physics.remove_object(phys_handle);
 
-			self.console.lock().unwrap().add_text("Noclip ON".to_string());
-		}
-		else
-		{
-			let mut rotation_controller = CameraRotationController::new();
-			rotation_controller.set_angles(angles.0, angles.1, angles.2);
+				PlayerPositionSource::Noclip(pos)
+			},
+		};
 
-			self.player_controller = PlayerController::PhysicsController {
-				phys_handle: self.physics.add_character_object(&pos, 60.0, 120.0),
-				rotation_controller,
-			};
-
-			self.console.lock().unwrap().add_text("Noclip OFF".to_string());
-		}
+		player_controller.position_source = new_position_source;
 	}
 }
 
@@ -405,136 +702,25 @@ impl GameInterface for Game
 
 		self.game_time += time_delta_s;
 
-		match &mut self.player_controller
-		{
-			PlayerController::NoclipController(camera_controller) =>
-			{
-				camera_controller.update(keyboard_state, events, time_delta_s)
-			},
-			PlayerController::PhysicsController {
-				rotation_controller,
-				phys_handle,
-			} =>
-			{
-				rotation_controller.update(keyboard_state, events, time_delta_s);
-
-				let azimuth = rotation_controller.get_angles().0;
-				let forward_vector = Vec3f::new(-(azimuth.sin()), azimuth.cos(), 0.0);
-				let left_vector = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0);
-				let mut move_vector = Vec3f::new(0.0, 0.0, 0.0);
-
-				use sdl2::keyboard::Scancode;
-				if keyboard_state.contains(&Scancode::W)
-				{
-					move_vector += forward_vector;
-				}
-				if keyboard_state.contains(&Scancode::S)
-				{
-					move_vector -= forward_vector;
-				}
-				if keyboard_state.contains(&Scancode::D)
-				{
-					move_vector += left_vector;
-				}
-				if keyboard_state.contains(&Scancode::A)
-				{
-					move_vector -= left_vector;
-				}
-
-				let move_vector_length = move_vector.magnitude();
-				if move_vector_length > 0.0
-				{
-					move_vector = move_vector / move_vector_length;
-				}
-
-				let ground_acceleration = 2048.0;
-				let air_acceleration = 512.0;
-				let max_velocity = 400.0;
-				let jump_velocity_add = 256.0;
-
-				let cur_velocity = self.physics.get_object_velocity(*phys_handle);
-				let on_ground = self.physics.is_object_on_ground(*phys_handle);
-
-				let acceleration: f32 = if on_ground
-				{
-					ground_acceleration
-				}
-				else
-				{
-					air_acceleration
-				};
-
-				let mut velocity_add = Vec3f::zero();
-
-				// Limit maximum velocity.
-				let velocity_projection_to_move_vector = move_vector.dot(cur_velocity);
-				if velocity_projection_to_move_vector < max_velocity
-				{
-					let max_can_add = max_velocity - velocity_projection_to_move_vector;
-					velocity_add = move_vector * (acceleration * time_delta_s).min(max_can_add);
-				}
-
-				if keyboard_state.contains(&Scancode::Space) && on_ground && cur_velocity.z <= 1.0
-				{
-					velocity_add.z = jump_velocity_add;
-				}
-
-				self.physics.add_object_velocity(*phys_handle, &velocity_add);
-			},
-		}
-
-		for (index, submodel_opt) in self.submodels.iter_mut().enumerate()
-		{
-			let phase = index as f32;
-			let shift = 32.0 *
-				Vec3f::new(
-					(0.5 * self.game_time + phase).sin(),
-					(0.33 * self.game_time + phase).sin(),
-					(0.11111 * self.game_time + phase).sin(),
-				);
-
-			if submodel_opt.is_none()
-			{
-				let rotation = QuaternionF::zero();
-				*submodel_opt = Some(PhysicsTestSubmodel {
-					phys_handle: self.physics.add_submodel_object(index, &shift, &rotation),
-					draw_entity: SubmodelEntity {
-						rotation,
-						position: Vec3f::zero(),
-					},
-				});
-			}
-
-			if let Some(submodel) = submodel_opt
-			{
-				let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
-				let bbox_center = bbox.get_center();
-
-				self.physics
-					.set_kinematic_object_position(submodel.phys_handle, &(bbox_center + shift));
-				let (position, rotation) = self.physics.get_object_location(submodel.phys_handle);
-
-				submodel.draw_entity.position = position;
-				submodel.draw_entity.rotation = rotation;
-			}
-		}
-
-		for model in &mut self.test_models
-		{
-			let num_frames = model.draw_entity.model.frames_info.len() as u32;
-			let frame_f = self.game_time * 10.0;
-			model.draw_entity.animation.frames[0] = (frame_f as u32) % num_frames;
-			model.draw_entity.animation.frames[1] = (frame_f as u32 + 1) % num_frames;
-			model.draw_entity.animation.lerp = 1.0 - frame_f.fract();
-
-			let location = self.physics.get_object_location(model.phys_handle);
-
-			model.draw_entity.position = location.0;
-			model.draw_entity.rotation = location.1;
-		}
+		self.update_player_entity(keyboard_state, events, time_delta_s);
+		self.update_test_submodels();
 
 		// Update physics only after settig params of externally-controlled physics objects - player, platforms, etc.
 		self.physics.update(time_delta_s);
+
+		// Update models after physics update in order to setup position properly.
+
+		self.update_animations();
+
+		// Update location of player entity, taken from player controller.
+		self.update_player_controller_locations();
+		// Take locations from physics engine.
+		self.update_phys_model_locations();
+		// Take locations from other entities. This is needed for entities, attached to other entities.
+		self.update_other_entity_locations();
+
+		// Update locations of visible models.
+		self.update_models_locations();
 	}
 
 	fn grab_mouse_input(&self) -> bool
@@ -555,47 +741,20 @@ impl GameInterface for Game
 			surface_info.height as f32,
 		);
 
-		let mut model_entities = self
-			.test_models
-			.iter()
-			.map(|e| e.draw_entity.clone())
-			.collect::<Vec<_>>();
-		if let Some(mut view_model) = self.view_model.clone()
+		let mut submodel_entities = vec![None; self.map.submodels.len()];
+		for (_id, (submodel_entity_with_index,)) in self.ecs.query::<(&SubmodelEntityWithIndex,)>().iter()
 		{
-			let azimuth = self.get_camera_angles().0;
-
-			// TODO - use also camera elevation.
-			let shift_vec_front = Vec3f::new(-azimuth.sin(), azimuth.cos(), 0.0) * 16.0;
-			let shift_vec_left = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0) * 8.0;
-			let shift_vec_down = Vec3f::new(0.0, 0.0, -1.0) * 10.0;
-
-			let (pos, rotation) = self.get_camera_location();
-			view_model.position = pos + shift_vec_front + shift_vec_left + shift_vec_down;
-			view_model.rotation = rotation;
-
-			view_model.lighting = ModelLighting::AdvancedLight {
-				position: pos, // Use camera position to fetch light.
-				grid_light_scale: 1.0,
-				light_add: [0.1, 0.1, 0.1],
-			};
-
-			model_entities.push(view_model);
+			submodel_entities[submodel_entity_with_index.index] = Some(submodel_entity_with_index.submodel_entity);
 		}
-
-		let submodel_entities = self
-			.submodels
-			.iter()
-			.map(|s| s.map(|s| s.draw_entity.clone()))
-			.collect();
 
 		FrameInfo {
 			camera_matrices,
 			submodel_entities,
 			skybox_rotation: QuaternionF::zero(),
 			game_time_s: self.game_time,
-			lights: self.test_lights.clone(),
-			model_entities,
-			decals: self.test_decals.clone(),
+			lights: self.collect_drawable_components(),
+			model_entities: self.collect_drawable_components(),
+			decals: self.collect_drawable_components(),
 		}
 	}
 
@@ -637,27 +796,4 @@ impl Drop for Game
 			.unwrap()
 			.remove_command_queue(&self.commands_queue_dyn);
 	}
-}
-
-struct PhysicsTestModel
-{
-	phys_handle: test_game_physics::ObjectHandle,
-	draw_entity: ModelEntity,
-}
-
-#[derive(Clone, Copy)]
-struct PhysicsTestSubmodel
-{
-	phys_handle: test_game_physics::ObjectHandle,
-	draw_entity: SubmodelEntity,
-}
-
-enum PlayerController
-{
-	NoclipController(CameraController),
-	PhysicsController
-	{
-		rotation_controller: CameraRotationController,
-		phys_handle: test_game_physics::ObjectHandle,
-	},
 }
