@@ -248,16 +248,11 @@ impl Game
 
 	fn command_reset_test_lights(&mut self, _args: commands_queue::CommandArgs)
 	{
-		let mut entities_to_despawn = Vec::new();
 		for (id, (_test_light_component,)) in self.ecs.query_mut::<(&TestLightComponent,)>()
 		{
-			entities_to_despawn.push(id);
+			self.ecs_command_buffer.despawn(id);
 		}
-
-		for id in &entities_to_despawn
-		{
-			let _ignore = self.ecs.despawn(*id);
-		}
+		self.ecs_command_buffer.run_on(&mut self.ecs);
 	}
 
 	fn command_add_test_model(&mut self, args: commands_queue::CommandArgs)
@@ -298,19 +293,14 @@ impl Game
 
 	fn command_reset_test_models(&mut self, _args: commands_queue::CommandArgs)
 	{
-		let mut entities_to_despawn = Vec::new();
 		for (id, (_test_model_component, phys_handle)) in self
 			.ecs
 			.query_mut::<(&PhysicsTestModelComponent, &test_game_physics::ObjectHandle)>()
 		{
 			self.physics.remove_object(*phys_handle);
-			entities_to_despawn.push(id);
+			self.ecs_command_buffer.despawn(id);
 		}
-
-		for id in &entities_to_despawn
-		{
-			let _ignore = self.ecs.despawn(*id);
-		}
+		self.ecs_command_buffer.run_on(&mut self.ecs);
 	}
 
 	fn command_add_test_decal(&mut self, args: commands_queue::CommandArgs)
@@ -359,16 +349,11 @@ impl Game
 
 	fn command_reset_test_decals(&mut self, _args: commands_queue::CommandArgs)
 	{
-		let mut entities_to_despawn = Vec::new();
 		for (id, (_test_decal_component,)) in self.ecs.query_mut::<(&TestDecalComponent,)>()
 		{
-			entities_to_despawn.push(id);
+			self.ecs_command_buffer.despawn(id)
 		}
-
-		for id in &entities_to_despawn
-		{
-			let _ignore = self.ecs.despawn(*id);
-		}
+		self.ecs_command_buffer.run_on(&mut self.ecs);
 	}
 
 	fn command_set_view_model(&mut self, args: commands_queue::CommandArgs)
