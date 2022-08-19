@@ -148,22 +148,18 @@ impl Game
 			{
 				PlayerPositionSource::Noclip(position) =>
 				{
-					const SPEED: f32 = 256.0;
-					const JUMP_SPEED: f32 = 0.8 * SPEED;
+					let speed = 256.0;
+					let jump_speed = 0.8 * speed;
 
-					let move_vector_length = move_vector.magnitude();
-					if move_vector_length > 0.0
-					{
-						*position += move_vector * (time_delta_s * SPEED / move_vector_length);
-					}
+					*position += move_vector * (time_delta_s * speed);
 
 					if keyboard_state.contains(&Scancode::Space)
 					{
-						position.z += time_delta_s * JUMP_SPEED;
+						position.z += time_delta_s * jump_speed;
 					}
 					if keyboard_state.contains(&Scancode::C)
 					{
-						position.z -= time_delta_s * JUMP_SPEED;
+						position.z -= time_delta_s * jump_speed;
 					}
 				},
 				PlayerPositionSource::Phys(phys_handle) =>
@@ -323,6 +319,11 @@ impl Game
 			model.position = location_component.position;
 			model.rotation = location_component.rotation;
 		}
+	}
+
+	fn collect_drawable_components<T: hecs::Component + Clone>(&self) -> Vec<T>
+	{
+		self.ecs.query::<(&T,)>().iter().map(|(_id, (c,))| c.clone()).collect()
 	}
 
 	fn get_camera_location(&self) -> (Vec3f, QuaternionF)
@@ -605,17 +606,21 @@ impl Game
 		let model = r.get_model(&args[0]);
 		let texture = r.get_texture_lite(&args[1]);
 
+		let position = Vec3f::zero();
+		let rotation = QuaternionF::zero();
+
 		let view_model_entity = self.ecs.spawn((
 			SimpleAnimationComponent {},
 			OtherEntityLocationComponent {
 				entity: self.player_entity,
-				relative_position: Vec3f::new(16.0, 8.0, 10.0),
-				relative_rotation: QuaternionF::zero(),
+				relative_position: Vec3f::new(16.0, -8.0, -10.0),
+				relative_rotation: QuaternionF::from_angle_x(Rad(0.0)),
 			},
+			LocationComponent { position, rotation },
 			ModelEntityLocationLinkComponent {},
 			ModelEntity {
-				position: Vec3f::zero(),
-				rotation: QuaternionF::zero(),
+				position,
+				rotation,
 				animation: AnimationPoint {
 					frames: [0, 0],
 					lerp: 0.0,
@@ -737,41 +742,20 @@ impl GameInterface for Game
 			surface_info.height as f32,
 		);
 
-		let model_entities = self
-			.ecs
-			.query::<(&ModelEntity,)>()
-			.iter()
-			.map(|(_id, (e,))| e.clone())
-			.collect::<Vec<_>>();
-
 		let mut submodel_entities = vec![None; self.map.submodels.len()];
 		for (_id, (submodel_entity_with_index,)) in self.ecs.query::<(&SubmodelEntityWithIndex,)>().iter()
 		{
 			submodel_entities[submodel_entity_with_index.index] = Some(submodel_entity_with_index.submodel_entity);
 		}
 
-		let lights = self
-			.ecs
-			.query::<(&PointLight,)>()
-			.iter()
-			.map(|(_id, (d,))| d.clone())
-			.collect::<Vec<_>>();
-
-		let decals = self
-			.ecs
-			.query::<(&Decal,)>()
-			.iter()
-			.map(|(_id, (d,))| d.clone())
-			.collect::<Vec<_>>();
-
 		FrameInfo {
 			camera_matrices,
 			submodel_entities,
 			skybox_rotation: QuaternionF::zero(),
 			game_time_s: self.game_time,
-			lights,
-			model_entities,
-			decals,
+			lights: self.collect_drawable_components(),
+			model_entities: self.collect_drawable_components(),
+			decals: self.collect_drawable_components(),
 		}
 	}
 
