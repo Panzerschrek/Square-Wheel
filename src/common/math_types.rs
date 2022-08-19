@@ -22,4 +22,4 @@ pub type DegreesD = cgmath::Rad<f64>;
 
 pub type EulerAnglesF = cgmath::Euler<RadiansF>;
 
-pub use cgmath::{Angle, ElementWise, InnerSpace, Matrix, Rad, Rotation3, SquareMatrix, Zero};
+pub use cgmath::{Angle, ElementWise, InnerSpace, Matrix, Rad, Rotation, Rotation3, SquareMatrix, Zero};
