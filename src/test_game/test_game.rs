@@ -93,6 +93,196 @@ impl Game
 		));
 	}
 
+	fn update_player_entity(
+		&mut self,
+		keyboard_state: &system_window::KeyboardState,
+		events: &[sdl2::event::Event],
+		time_delta_s: f32,
+	)
+	{
+		if let Ok(mut q) = self
+			.ecs
+			.query_one::<(&PlayerComponent, &mut PlayerController, Option<&mut ModelEntity>)>(self.player_entity)
+		{
+			let (_player_component, player_controller, view_model) = q.get().unwrap();
+			player_controller
+				.rotation_controller
+				.update(keyboard_state, events, time_delta_s);
+
+			let azimuth = player_controller.rotation_controller.get_angles().0;
+			let forward_vector = Vec3f::new(-(azimuth.sin()), azimuth.cos(), 0.0);
+			let left_vector = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0);
+			let mut move_vector = Vec3f::new(0.0, 0.0, 0.0);
+
+			use sdl2::keyboard::Scancode;
+			if keyboard_state.contains(&Scancode::W)
+			{
+				move_vector += forward_vector;
+			}
+			if keyboard_state.contains(&Scancode::S)
+			{
+				move_vector -= forward_vector;
+			}
+			if keyboard_state.contains(&Scancode::D)
+			{
+				move_vector += left_vector;
+			}
+			if keyboard_state.contains(&Scancode::A)
+			{
+				move_vector -= left_vector;
+			}
+
+			let move_vector_length = move_vector.magnitude();
+			if move_vector_length > 0.0
+			{
+				move_vector = move_vector / move_vector_length;
+			}
+
+			match &mut player_controller.position_source
+			{
+				PlayerPositionSource::Noclip(position) =>
+				{
+					const SPEED: f32 = 256.0;
+					const JUMP_SPEED: f32 = 0.8 * SPEED;
+
+					let move_vector_length = move_vector.magnitude();
+					if move_vector_length > 0.0
+					{
+						*position += move_vector * (time_delta_s * SPEED / move_vector_length);
+					}
+
+					if keyboard_state.contains(&Scancode::Space)
+					{
+						position.z += time_delta_s * JUMP_SPEED;
+					}
+					if keyboard_state.contains(&Scancode::C)
+					{
+						position.z -= time_delta_s * JUMP_SPEED;
+					}
+				},
+				PlayerPositionSource::Phys(phys_handle) =>
+				{
+					let ground_acceleration = 2048.0;
+					let air_acceleration = 512.0;
+					let max_velocity = 400.0;
+					let jump_velocity_add = 256.0;
+
+					let cur_velocity = self.physics.get_object_velocity(*phys_handle);
+					let on_ground = self.physics.is_object_on_ground(*phys_handle);
+
+					let acceleration: f32 = if on_ground
+					{
+						ground_acceleration
+					}
+					else
+					{
+						air_acceleration
+					};
+
+					let mut velocity_add = Vec3f::zero();
+
+					// Limit maximum velocity.
+					let velocity_projection_to_move_vector = move_vector.dot(cur_velocity);
+					if velocity_projection_to_move_vector < max_velocity
+					{
+						let max_can_add = max_velocity - velocity_projection_to_move_vector;
+						velocity_add = move_vector * (acceleration * time_delta_s).min(max_can_add);
+					}
+
+					if keyboard_state.contains(&Scancode::Space) && on_ground && cur_velocity.z <= 1.0
+					{
+						velocity_add.z = jump_velocity_add;
+					}
+
+					self.physics.add_object_velocity(*phys_handle, &velocity_add);
+				},
+			}
+
+			if let Some(view_model) = view_model
+			{
+				let azimuth = self.get_camera_angles().0;
+
+				// TODO - use also camera elevation.
+				let shift_vec_front = Vec3f::new(-azimuth.sin(), azimuth.cos(), 0.0) * 16.0;
+				let shift_vec_left = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0) * 8.0;
+				let shift_vec_down = Vec3f::new(0.0, 0.0, -1.0) * 10.0;
+
+				let (pos, rotation) = self.get_camera_location();
+				view_model.position = pos + shift_vec_front + shift_vec_left + shift_vec_down;
+				view_model.rotation = rotation;
+
+				view_model.lighting = ModelLighting::AdvancedLight {
+					position: pos, // Use camera position to fetch light.
+					grid_light_scale: 1.0,
+					light_add: [0.1, 0.1, 0.1],
+				};
+			}
+		}
+	}
+
+	fn update_test_submodels(&mut self)
+	{
+		for (id, (test_submodel_component,)) in self.ecs.query::<(&TestSubmodelComponent,)>().iter()
+		{
+			let index = test_submodel_component.index;
+			let phase = index as f32;
+			let shift = 32.0 *
+				Vec3f::new(
+					(0.5 * self.game_time + phase).sin(),
+					(0.33 * self.game_time + phase).sin(),
+					(0.11111 * self.game_time + phase).sin(),
+				);
+
+			let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
+			let bbox_center = bbox.get_center();
+
+			self.physics
+				.set_kinematic_object_position(test_submodel_component.phys_handle, &(bbox_center + shift));
+			let (position, rotation) = self.physics.get_object_location(test_submodel_component.phys_handle);
+
+			if let Ok(mut q) = self.ecs.query_one::<(&mut SubmodelEntityWithIndex,)>(id)
+			{
+				if let Some((submodel_entity_with_index,)) = q.get()
+				{
+					submodel_entity_with_index.submodel_entity.position = position;
+					submodel_entity_with_index.submodel_entity.rotation = rotation;
+				}
+				else
+				{
+					self.ecs_command_buffer.insert_one(
+						id,
+						SubmodelEntityWithIndex {
+							index,
+							submodel_entity: SubmodelEntity { position, rotation },
+						},
+					);
+				}
+			}
+		}
+		self.ecs_command_buffer.run_on(&mut self.ecs);
+	}
+
+	fn update_test_models(&mut self)
+	{
+		for (_id, (_test_model_component, phys_handle, model)) in self.ecs.query_mut::<(
+			&PhysicsTestModelComponent,
+			&test_game_physics::ObjectHandle,
+			&mut ModelEntity,
+		)>()
+		{
+			let num_frames = model.model.frames_info.len() as u32;
+			let frame_f = self.game_time * 10.0;
+			model.animation.frames[0] = (frame_f as u32) % num_frames;
+			model.animation.frames[1] = (frame_f as u32 + 1) % num_frames;
+			model.animation.lerp = 1.0 - frame_f.fract();
+
+			let location = self.physics.get_object_location(*phys_handle);
+
+			model.position = location.0;
+			model.rotation = location.1;
+		}
+	}
+
 	fn get_camera_location(&self) -> (Vec3f, QuaternionF)
 	{
 		let mut q = self
@@ -446,187 +636,14 @@ impl GameInterface for Game
 
 		self.game_time += time_delta_s;
 
-		// Update player entity.
-		if let Ok(mut q) = self
-			.ecs
-			.query_one::<(&PlayerComponent, &mut PlayerController, Option<&mut ModelEntity>)>(self.player_entity)
-		{
-			let (_player_component, player_controller, view_model) = q.get().unwrap();
-			player_controller
-				.rotation_controller
-				.update(keyboard_state, events, time_delta_s);
-
-			let azimuth = player_controller.rotation_controller.get_angles().0;
-			let forward_vector = Vec3f::new(-(azimuth.sin()), azimuth.cos(), 0.0);
-			let left_vector = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0);
-			let mut move_vector = Vec3f::new(0.0, 0.0, 0.0);
-
-			use sdl2::keyboard::Scancode;
-			if keyboard_state.contains(&Scancode::W)
-			{
-				move_vector += forward_vector;
-			}
-			if keyboard_state.contains(&Scancode::S)
-			{
-				move_vector -= forward_vector;
-			}
-			if keyboard_state.contains(&Scancode::D)
-			{
-				move_vector += left_vector;
-			}
-			if keyboard_state.contains(&Scancode::A)
-			{
-				move_vector -= left_vector;
-			}
-
-			let move_vector_length = move_vector.magnitude();
-			if move_vector_length > 0.0
-			{
-				move_vector = move_vector / move_vector_length;
-			}
-
-			match &mut player_controller.position_source
-			{
-				PlayerPositionSource::Noclip(position) =>
-				{
-					const SPEED: f32 = 256.0;
-					const JUMP_SPEED: f32 = 0.8 * SPEED;
-
-					let move_vector_length = move_vector.magnitude();
-					if move_vector_length > 0.0
-					{
-						*position += move_vector * (time_delta_s * SPEED / move_vector_length);
-					}
-
-					if keyboard_state.contains(&Scancode::Space)
-					{
-						position.z += time_delta_s * JUMP_SPEED;
-					}
-					if keyboard_state.contains(&Scancode::C)
-					{
-						position.z -= time_delta_s * JUMP_SPEED;
-					}
-				},
-				PlayerPositionSource::Phys(phys_handle) =>
-				{
-					let ground_acceleration = 2048.0;
-					let air_acceleration = 512.0;
-					let max_velocity = 400.0;
-					let jump_velocity_add = 256.0;
-
-					let cur_velocity = self.physics.get_object_velocity(*phys_handle);
-					let on_ground = self.physics.is_object_on_ground(*phys_handle);
-
-					let acceleration: f32 = if on_ground
-					{
-						ground_acceleration
-					}
-					else
-					{
-						air_acceleration
-					};
-
-					let mut velocity_add = Vec3f::zero();
-
-					// Limit maximum velocity.
-					let velocity_projection_to_move_vector = move_vector.dot(cur_velocity);
-					if velocity_projection_to_move_vector < max_velocity
-					{
-						let max_can_add = max_velocity - velocity_projection_to_move_vector;
-						velocity_add = move_vector * (acceleration * time_delta_s).min(max_can_add);
-					}
-
-					if keyboard_state.contains(&Scancode::Space) && on_ground && cur_velocity.z <= 1.0
-					{
-						velocity_add.z = jump_velocity_add;
-					}
-
-					self.physics.add_object_velocity(*phys_handle, &velocity_add);
-				},
-			}
-
-			if let Some(view_model) = view_model
-			{
-				let azimuth = self.get_camera_angles().0;
-
-				// TODO - use also camera elevation.
-				let shift_vec_front = Vec3f::new(-azimuth.sin(), azimuth.cos(), 0.0) * 16.0;
-				let shift_vec_left = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0) * 8.0;
-				let shift_vec_down = Vec3f::new(0.0, 0.0, -1.0) * 10.0;
-
-				let (pos, rotation) = self.get_camera_location();
-				view_model.position = pos + shift_vec_front + shift_vec_left + shift_vec_down;
-				view_model.rotation = rotation;
-
-				view_model.lighting = ModelLighting::AdvancedLight {
-					position: pos, // Use camera position to fetch light.
-					grid_light_scale: 1.0,
-					light_add: [0.1, 0.1, 0.1],
-				};
-			}
-		}
-
-		// Update moving submodels.
-		for (id, (test_submodel_component,)) in self.ecs.query::<(&TestSubmodelComponent,)>().iter()
-		{
-			let index = test_submodel_component.index;
-			let phase = index as f32;
-			let shift = 32.0 *
-				Vec3f::new(
-					(0.5 * self.game_time + phase).sin(),
-					(0.33 * self.game_time + phase).sin(),
-					(0.11111 * self.game_time + phase).sin(),
-				);
-
-			let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
-			let bbox_center = bbox.get_center();
-
-			self.physics
-				.set_kinematic_object_position(test_submodel_component.phys_handle, &(bbox_center + shift));
-			let (position, rotation) = self.physics.get_object_location(test_submodel_component.phys_handle);
-
-			if let Ok(mut q) = self.ecs.query_one::<(&mut SubmodelEntityWithIndex,)>(id)
-			{
-				if let Some((submodel_entity_with_index,)) = q.get()
-				{
-					submodel_entity_with_index.submodel_entity.position = position;
-					submodel_entity_with_index.submodel_entity.rotation = rotation;
-				}
-				else
-				{
-					self.ecs_command_buffer.insert_one(
-						id,
-						SubmodelEntityWithIndex {
-							index,
-							submodel_entity: SubmodelEntity { position, rotation },
-						},
-					);
-				}
-			}
-		}
-		self.ecs_command_buffer.run_on(&mut self.ecs);
+		self.update_player_entity(keyboard_state, events, time_delta_s);
+		self.update_test_submodels();
 
 		// Update physics only after settig params of externally-controlled physics objects - player, platforms, etc.
 		self.physics.update(time_delta_s);
 
-		// Update test models.
-		for (_id, (_test_model_component, phys_handle, model)) in self.ecs.query_mut::<(
-			&PhysicsTestModelComponent,
-			&test_game_physics::ObjectHandle,
-			&mut ModelEntity,
-		)>()
-		{
-			let num_frames = model.model.frames_info.len() as u32;
-			let frame_f = self.game_time * 10.0;
-			model.animation.frames[0] = (frame_f as u32) % num_frames;
-			model.animation.frames[1] = (frame_f as u32 + 1) % num_frames;
-			model.animation.lerp = 1.0 - frame_f.fract();
-
-			let location = self.physics.get_object_location(*phys_handle);
-
-			model.position = location.0;
-			model.rotation = location.1;
-		}
+		// Updatr models after physics update in order to setup position properly.
+		self.update_test_models();
 	}
 
 	fn grab_mouse_input(&self) -> bool
