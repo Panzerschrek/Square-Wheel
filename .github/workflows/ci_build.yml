@@ -30,3 +30,20 @@ jobs:
     - name: BuildRelease
       working-directory: src
       run: ./build_release.sh
+    # Check formatting in parallel, using nightly toolchain.
+  check_fmt:
+      runs-on: ubuntu-18.04
+      steps:
+      - name: Fetch
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: Rustup
+        uses: actions-rs/toolchain@v1
+        with:
+          override: true
+          profile: default
+          toolchain: nightly
+      - name: Check rustfmt
+        working-directory: src
+        run: cargo fmt -- --check
