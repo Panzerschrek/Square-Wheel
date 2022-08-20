@@ -85,16 +85,18 @@ impl Game
 					let index = entity.submodel_index as usize;
 					if index < self.map.submodels.len()
 					{
-						let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
-						let bbox_center = bbox.get_center();
-
-						self.ecs.spawn((SubmodelEntityWithIndex {
-							index,
-							submodel_entity: SubmodelEntity {
-								position: bbox_center,
-								rotation: QuaternionF::zero(),
+						self.ecs.spawn((
+							self.physics
+								.add_submodel_object(index, &Vec3f::zero(), &QuaternionF::zero()),
+							SubmodelEntityWithIndex {
+								index,
+								submodel_entity: SubmodelEntity {
+									position: bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index])
+										.get_center(),
+									rotation: QuaternionF::zero(),
+								},
 							},
-						},));
+						));
 					}
 				},
 				_ =>
