@@ -1,0 +1,29 @@
+on:
+  push:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-18.04
+    steps:
+    # Clone repository and submodules
+    - name: Fetch
+      uses: actions/checkout@v2
+      with:
+        submodules: recursive
+    # Install Rust compiler
+    - name: Rustup
+      uses: actions-rs/toolchain@v1
+      with:
+        override: true
+        profile: default
+        toolchain: 1.60.0
+    # Build debug
+    - name: BuildDebug
+      working-directory: src
+      run: cargo build
+    # Build release
+    - name: BuildRelease
+      working-directory: src
+      run: ./build_release.sh
