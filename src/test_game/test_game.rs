@@ -99,6 +99,19 @@ impl Game
 						));
 					}
 				},
+				Some("trigger_multiple") =>
+				{
+					let index = entity.submodel_index as usize;
+					if index < self.map.submodels.len()
+					{
+						// Spawn trigger.
+						self.ecs
+							.spawn((self.physics.add_trigger(&bsp_map_compact::get_submodel_bbox(
+								&self.map,
+								&self.map.submodels[index],
+							)),));
+					}
+				},
 				_ =>
 				{
 					let index = entity.submodel_index as usize;

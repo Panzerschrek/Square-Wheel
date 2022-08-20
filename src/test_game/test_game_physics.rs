@@ -17,7 +17,7 @@ pub struct TestGamePhysics
 	multibody_joint_set: r3d::MultibodyJointSet,
 	ccd_solver: r3d::CCDSolver,
 	hooks: PhysicsHooks,
-	event_handler: (),
+	event_handler: EventHandler,
 }
 
 pub type ObjectHandle = r3d::RigidBodyHandle;
@@ -44,7 +44,7 @@ impl TestGamePhysics
 			multibody_joint_set: r3d::MultibodyJointSet::new(),
 			ccd_solver: r3d::CCDSolver::new(),
 			hooks: PhysicsHooks::new(),
-			event_handler: (),
+			event_handler: EventHandler {},
 		}
 	}
 
@@ -115,6 +115,27 @@ impl TestGamePhysics
 			.friction(0.95)
 			.active_hooks(r3d::ActiveHooks::MODIFY_SOLVER_CONTACTS)
 			.user_data(CHARACTER_USER_DATA)
+			.build();
+
+		let handle = self.rigid_body_set.insert(body);
+		self.collider_set
+			.insert_with_parent(collider, handle, &mut self.rigid_body_set);
+
+		handle
+	}
+
+	pub fn add_trigger(&mut self, bbox: &BBox) -> ObjectHandle
+	{
+		let bbox_half_size = bbox.get_size() * 0.5;
+		let bbox_center = bbox.get_center();
+
+		let body = r3d::RigidBodyBuilder::fixed()
+			.translation(r3d::Vector::new(bbox_center.x, bbox_center.y, bbox_center.z))
+			.build();
+
+		let collider = r3d::ColliderBuilder::cuboid(bbox_half_size.x, bbox_half_size.y, bbox_half_size.z)
+			.sensor(true)
+			.active_events(r3d::ActiveEvents::COLLISION_EVENTS)
 			.build();
 
 		let handle = self.rigid_body_set.insert(body);
@@ -336,5 +357,32 @@ impl r3d::PhysicsHooks for PhysicsHooks
 				contact.friction *= fiction_scale;
 			}
 		}
+	}
+}
+
+struct EventHandler {}
+
+impl r3d::EventHandler for EventHandler
+{
+	fn handle_collision_event(
+		&self,
+		_bodies: &r3d::RigidBodySet,
+		_colliders: &r3d::ColliderSet,
+		_event: r3d::CollisionEvent,
+		_contact_pair: Option<&r3d::ContactPair>,
+	)
+	{
+		println!("Collision!");
+	}
+
+	fn handle_contact_force_event(
+		&self,
+		_dt: r3d::Real,
+		_bodies: &r3d::RigidBodySet,
+		_colliders: &r3d::ColliderSet,
+		_contact_pair: &r3d::ContactPair,
+		_total_force_magnitude: r3d::Real,
+	)
+	{
 	}
 }
