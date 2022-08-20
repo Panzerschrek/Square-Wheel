@@ -74,13 +74,45 @@ impl Game
 
 	fn spawn_entities(&mut self)
 	{
-		let physics = &mut self.physics;
-		self.ecs.spawn_batch((0 .. self.map.submodels.len()).map(|index| {
-			(TestSubmodelComponent {
-				phys_handle: physics.add_submodel_object(index, &Vec3f::zero(), &QuaternionF::zero()),
-				index,
-			},)
-		}));
+		// Skip world entity.
+		for entity in &self.map.entities[1 ..]
+		{
+			match get_entity_classname(entity, &self.map)
+			{
+				Some("func_detail") =>
+				{
+					// Spawn non-moving static entity.
+					let index = entity.submodel_index as usize;
+					if index < self.map.submodels.len()
+					{
+						let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
+						let bbox_center = bbox.get_center();
+
+						self.ecs.spawn((SubmodelEntityWithIndex {
+							index,
+							submodel_entity: SubmodelEntity {
+								position: bbox_center,
+								rotation: QuaternionF::zero(),
+							},
+						},));
+					}
+				},
+				_ =>
+				{
+					let index = entity.submodel_index as usize;
+					if index < self.map.submodels.len()
+					{
+						// Spawn test submodel.
+						self.ecs.spawn((TestSubmodelComponent {
+							phys_handle: self
+								.physics
+								.add_submodel_object(index, &Vec3f::zero(), &QuaternionF::zero()),
+							index,
+						},));
+					}
+				},
+			}
+		}
 
 		self.player_entity = self.ecs.spawn((
 			PlayerComponent {
@@ -782,6 +814,30 @@ impl GameInterface for Game
 			}
 		}
 	}
+}
+
+fn get_entity_classname<'a>(entity: &bsp_map_compact::Entity, map: &'a bsp_map_compact::BSPMap) -> Option<&'a str>
+{
+	get_entity_key_value(entity, map, "classname")
+}
+
+fn get_entity_key_value<'a>(
+	entity: &bsp_map_compact::Entity,
+	map: &'a bsp_map_compact::BSPMap,
+	key: &str,
+) -> Option<&'a str>
+{
+	for key_value in &map.key_value_pairs
+		[entity.first_key_value_pair as usize .. (entity.first_key_value_pair + entity.num_key_value_pairs) as usize]
+	{
+		let actual_key = bsp_map_compact::get_map_string(key_value.key, map);
+		if actual_key == key
+		{
+			return Some(bsp_map_compact::get_map_string(key_value.value, map));
+		}
+	}
+
+	None
 }
 
 impl Drop for Game
