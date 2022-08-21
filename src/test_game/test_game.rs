@@ -3,7 +3,8 @@ use super::{
 	resources_manager::*, test_game_physics,
 };
 use square_wheel_lib::common::{
-	bsp_map_compact, camera_rotation_controller::*, color::*, material, math_types::*, matrix::*, system_window,
+	bbox::*, bsp_map_compact, camera_rotation_controller::*, color::*, material, math_types::*, matrix::*,
+	system_window,
 };
 use std::sync::Arc;
 
@@ -75,14 +76,14 @@ impl Game
 	fn spawn_entities(&mut self)
 	{
 		// Skip world entity.
-		for entity in &self.map.entities[1 ..]
+		for map_entity in &self.map.entities[1 ..]
 		{
-			match get_entity_classname(entity, &self.map)
+			match get_entity_classname(map_entity, &self.map)
 			{
 				Some("func_detail") =>
 				{
 					// Spawn non-moving static entity.
-					let index = entity.submodel_index as usize;
+					let index = map_entity.submodel_index as usize;
 					if index < self.map.submodels.len()
 					{
 						let entity = self.ecs.spawn((SubmodelEntityWithIndex {
@@ -104,7 +105,7 @@ impl Game
 				},
 				Some("trigger_multiple") =>
 				{
-					let index = entity.submodel_index as usize;
+					let index = map_entity.submodel_index as usize;
 					if index < self.map.submodels.len()
 					{
 						// Spawn trigger.
@@ -131,9 +132,74 @@ impl Game
 						}
 					}
 				},
+				Some("func_plat") =>
+				{
+					let index = map_entity.submodel_index as usize;
+					if index < self.map.submodels.len()
+					{
+						let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
+						let height = bbox.max.z - bbox.min.z;
+
+						let position_upper = bbox.get_center();
+						let position_lower = position_upper - Vec3f::new(0.0, 0.0, height);
+
+						let position = position_lower;
+						let rotation = QuaternionF::zero();
+
+						let entity = self.ecs.spawn(());
+						self.ecs
+							.insert(
+								entity,
+								(
+									SubmodelEntityWithIndex {
+										index,
+										submodel_entity: SubmodelEntity { position, rotation },
+									},
+									LocationComponent { position, rotation },
+									EntityActivationComponent { activated: false },
+									PlateComponent {
+										phys_handle: self.physics.add_submodel_object(
+											entity,
+											index,
+											&Vec3f::new(0.0, 0.0, -height),
+											&rotation,
+										),
+										speed: get_entity_key_value(map_entity, &self.map, "speed")
+											.unwrap_or("")
+											.parse::<f32>()
+											.unwrap_or(150.0),
+										position_lower,
+										position_upper,
+										state: PlateState::TargetDown,
+									},
+								),
+							)
+							.ok();
+
+						// Add activation trigger.
+						let bbox_half_size = bbox.get_size() * 0.5;
+						let bbox_reduce_min = Vec3f::new(
+							(bbox_half_size.x - 1.0).min(25.0),
+							(bbox_half_size.y - 1.0).min(25.0),
+							0.0,
+						);
+						let bbox_reduce_max = Vec3f::new(
+							(bbox_half_size.x - 1.0).min(25.0),
+							(bbox_half_size.y - 1.0).min(25.0),
+							(bbox_half_size.z - 1.0).min(-8.0),
+						);
+
+						let trigger_bbox = BBox::from_min_max(bbox.min + bbox_reduce_min, bbox.max - bbox_reduce_max);
+
+						self.ecs.spawn((
+							TriggerComponent { bbox: trigger_bbox },
+							TrggerSingleTargetComponent { target: entity },
+						));
+					}
+				},
 				_ =>
 				{
-					let index = entity.submodel_index as usize;
+					let index = map_entity.submodel_index as usize;
 					if index < self.map.submodels.len()
 					{
 						// Spawn test submodel.
@@ -276,6 +342,55 @@ impl Game
 		}
 	}
 
+	fn update_plates(&mut self, time_delta_s: f32)
+	{
+		for (_id, (plate_component, activation_component, location_component, submodel_entity_with_index)) in
+			self.ecs.query_mut::<(
+				&mut PlateComponent,
+				&mut EntityActivationComponent,
+				&mut LocationComponent,
+				&mut SubmodelEntityWithIndex,
+			)>()
+		{
+			let was_activated = activation_component.activated;
+			if activation_component.activated
+			{
+				activation_component.activated = false;
+				plate_component.state = PlateState::TargetUp;
+			}
+
+			match plate_component.state
+			{
+				PlateState::TargetUp =>
+				{
+					location_component.position.z += time_delta_s * plate_component.speed;
+					if location_component.position.z >= plate_component.position_upper.z
+					{
+						if !was_activated
+						{
+							// Start moving down when reached upper position, but wait until activation is active.
+							plate_component.state = PlateState::TargetDown;
+						}
+						location_component.position.z = plate_component.position_upper.z;
+					}
+				},
+				PlateState::TargetDown =>
+				{
+					location_component.position.z -= time_delta_s * plate_component.speed;
+					if location_component.position.z <= plate_component.position_lower.z
+					{
+						location_component.position.z = plate_component.position_lower.z;
+					}
+				},
+			}
+
+			self.physics
+				.set_kinematic_object_position(plate_component.phys_handle, &location_component.position);
+
+			submodel_entity_with_index.submodel_entity.position = location_component.position;
+		}
+	}
+
 	fn update_test_submodels(&mut self)
 	{
 		for (id, (test_submodel_component,)) in self.ecs.query::<(&TestSubmodelComponent,)>().iter()
@@ -320,7 +435,10 @@ impl Game
 
 	fn update_triggers(&mut self)
 	{
-		for (_id, (trigger_component,)) in self.ecs.query::<(&TriggerComponent,)>().iter()
+		for (_id, (trigger_component, trigger_single_target_component)) in self
+			.ecs
+			.query::<(&TriggerComponent, Option<&TrggerSingleTargetComponent>)>()
+			.iter()
 		{
 			self.physics
 				.get_box_touching_entities(&trigger_component.bbox, |entity| {
@@ -329,7 +447,26 @@ impl Game
 					{
 						if let Some((_player_component,)) = q.get()
 						{
-							println!("Touching {}", entity.to_bits());
+						}
+						else
+						{
+							return;
+						}
+					}
+					else
+					{
+						return;
+					}
+
+					// Activate target.
+					if let Some(t) = trigger_single_target_component
+					{
+						if let Ok(mut q) = self.ecs.query_one::<(&mut EntityActivationComponent,)>(t.target)
+						{
+							if let Some((entity_activation_component,)) = q.get()
+							{
+								entity_activation_component.activated = true;
+							}
 						}
 					}
 				});
@@ -798,6 +935,7 @@ impl GameInterface for Game
 
 		self.update_player_entity(keyboard_state, events, time_delta_s);
 		self.update_test_submodels();
+		self.update_plates(time_delta_s);
 
 		// Update physics only after settig params of externally-controlled physics objects - player, platforms, etc.
 		self.physics.update(time_delta_s);

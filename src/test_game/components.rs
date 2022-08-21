@@ -71,7 +71,35 @@ pub enum PlayerPositionSource
 	Phys(test_game_physics::ObjectHandle),
 }
 
+// Trigger than can be activated by touching.
 pub struct TriggerComponent
 {
 	pub bbox: BBox,
+}
+
+// Component of trigger entity to trigger single target.
+pub struct TrggerSingleTargetComponent
+{
+	pub target: hecs::Entity,
+}
+
+// Component for entities that may be activated.
+pub struct EntityActivationComponent
+{
+	pub activated: bool,
+}
+
+pub struct PlateComponent
+{
+	pub phys_handle: test_game_physics::ObjectHandle,
+	pub speed: f32,
+	pub position_lower: Vec3f,
+	pub position_upper: Vec3f,
+	pub state: PlateState,
+}
+
+pub enum PlateState
+{
+	TargetUp,
+	TargetDown,
 }
