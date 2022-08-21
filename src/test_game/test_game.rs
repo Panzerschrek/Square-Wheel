@@ -108,16 +108,27 @@ impl Game
 					if index < self.map.submodels.len()
 					{
 						// Spawn trigger.
+						let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
+
 						let entity = self.ecs.spawn(());
-						self.ecs
-							.insert_one(
-								entity,
-								self.physics.add_trigger(
+						self.ecs.insert_one(entity, TriggerComponent { bbox }).ok();
+
+						// Test visualiation.
+						if false
+						{
+							self.ecs
+								.insert_one(
 									entity,
-									&bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]),
-								),
-							)
-							.ok();
+									SubmodelEntityWithIndex {
+										index,
+										submodel_entity: SubmodelEntity {
+											position: bbox.get_center(),
+											rotation: QuaternionF::zero(),
+										},
+									},
+								)
+								.ok();
+						}
 					}
 				},
 				_ =>
@@ -305,6 +316,24 @@ impl Game
 			}
 		}
 		self.ecs_command_buffer.run_on(&mut self.ecs);
+	}
+
+	fn update_triggers(&mut self)
+	{
+		for (_id, (trigger_component,)) in self.ecs.query::<(&TriggerComponent,)>().iter()
+		{
+			self.physics
+				.get_box_touching_entities(&trigger_component.bbox, |entity| {
+					// Only player can activate triggers.
+					if let Ok(mut q) = self.ecs.query_one::<(&mut PlayerComponent,)>(entity)
+					{
+						if let Some((_player_component,)) = q.get()
+						{
+							println!("Touching {}", entity.to_bits());
+						}
+					}
+				});
+		}
 	}
 
 	fn update_animations(&mut self)
@@ -774,6 +803,8 @@ impl GameInterface for Game
 		self.physics.update(time_delta_s);
 
 		// Update models after physics update in order to setup position properly.
+
+		self.update_triggers();
 
 		self.update_animations();
 

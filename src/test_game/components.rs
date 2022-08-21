@@ -1,5 +1,5 @@
 use super::{frame_info::*, test_game_physics};
-use square_wheel_lib::common::{camera_rotation_controller::*, math_types::*};
+use square_wheel_lib::common::{bbox::*, camera_rotation_controller::*, math_types::*};
 
 // This file contains various ECS components.
 //
@@ -69,4 +69,9 @@ pub enum PlayerPositionSource
 {
 	Noclip(Vec3f),
 	Phys(test_game_physics::ObjectHandle),
+}
+
+pub struct TriggerComponent
+{
+	pub bbox: BBox,
 }

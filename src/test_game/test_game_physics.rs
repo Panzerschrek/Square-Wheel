@@ -10,6 +10,7 @@ pub struct TestGamePhysics
 	collider_set: r3d::ColliderSet,
 
 	physics_pipeline: r3d::PhysicsPipeline,
+	query_pipeline: r3d::QueryPipeline,
 	island_manager: r3d::IslandManager,
 	broad_phase: r3d::BroadPhase,
 	narrow_phase: r3d::NarrowPhase,
@@ -37,6 +38,7 @@ impl TestGamePhysics
 			rigid_body_set,
 			collider_set,
 			physics_pipeline: r3d::PhysicsPipeline::new(),
+			query_pipeline: r3d::QueryPipeline::new(),
 			island_manager: r3d::IslandManager::new(),
 			broad_phase: r3d::BroadPhase::new(),
 			narrow_phase: r3d::NarrowPhase::new(),
@@ -137,30 +139,8 @@ impl TestGamePhysics
 			.restitution(0.0)
 			.friction(0.95)
 			.active_hooks(r3d::ActiveHooks::MODIFY_SOLVER_CONTACTS)
-			.user_data(CHARACTER_USER_DATA)
-			.build();
-
-		let handle = self.rigid_body_set.insert(body);
-		self.collider_set
-			.insert_with_parent(collider, handle, &mut self.rigid_body_set);
-
-		handle
-	}
-
-	pub fn add_trigger(&mut self, entity: hecs::Entity, bbox: &BBox) -> ObjectHandle
-	{
-		let bbox_half_size = bbox.get_size() * 0.5;
-		let bbox_center = bbox.get_center();
-
-		let body = r3d::RigidBodyBuilder::fixed()
-			.user_data(entity_to_user_data(entity))
-			.translation(r3d::Vector::new(bbox_center.x, bbox_center.y, bbox_center.z))
-			.build();
-
-		let collider = r3d::ColliderBuilder::cuboid(bbox_half_size.x, bbox_half_size.y, bbox_half_size.z)
-			.user_data(entity_to_user_data(entity))
-			.sensor(true)
-			.active_events(r3d::ActiveEvents::COLLISION_EVENTS)
+			// TODO - fix this.
+			//.user_data(CHARACTER_USER_DATA)
 			.build();
 
 		let handle = self.rigid_body_set.insert(body);
@@ -258,6 +238,32 @@ impl TestGamePhysics
 		)
 	}
 
+	pub fn get_box_touching_entities<Func: FnMut(hecs::Entity)>(&self, bbox: &BBox, mut func: Func)
+	{
+		let bbox_half_size = bbox.get_size() * 0.5;
+		let bbox_center = bbox.get_center();
+
+		let shape = r3d::Cuboid::new(r3d::Vector::new(bbox_half_size.x, bbox_half_size.y, bbox_half_size.z));
+		let shape_center = r3d::Vector::new(bbox_center.x, bbox_center.y, bbox_center.z);
+
+		self.query_pipeline.intersections_with_shape(
+			&self.rigid_body_set,
+			&self.collider_set,
+			&r3d::Isometry::new(shape_center, r3d::Vector::new(0.0, 0.0, 0.0)),
+			&shape,
+			r3d::QueryFilter::default(),
+			|collider_handle| {
+				let collider = &self.collider_set[collider_handle];
+				let dst_entity = entity_from_user_data(collider.user_data);
+				if dst_entity != hecs::Entity::DANGLING
+				{
+					func(dst_entity);
+				}
+				true
+			},
+		);
+	}
+
 	pub fn update(&mut self, time_delta_s: f32)
 	{
 		let gravity = r3d::Vector::new(0.0, 0.0, -627.84);
@@ -287,6 +293,9 @@ impl TestGamePhysics
 				&self.hooks,
 				&self.event_handler,
 			);
+
+			self.query_pipeline
+				.update(&self.island_manager, &self.rigid_body_set, &self.collider_set);
 		}
 	}
 }
@@ -415,4 +424,9 @@ impl r3d::EventHandler for EventHandler
 fn entity_to_user_data(entity: hecs::Entity) -> u128
 {
 	entity.to_bits().get() as u128
+}
+
+fn entity_from_user_data(user_data: u128) -> hecs::Entity
+{
+	hecs::Entity::from_bits(user_data as u64).unwrap_or(hecs::Entity::DANGLING)
 }
