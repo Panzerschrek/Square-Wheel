@@ -158,12 +158,6 @@ impl Game
 									LocationComponent { position, rotation },
 									EntityActivationComponent { activated: false },
 									PlateComponent {
-										phys_handle: self.physics.add_submodel_object(
-											entity,
-											index,
-											&Vec3f::new(0.0, 0.0, -height),
-											&rotation,
-										),
 										speed: get_entity_key_value(map_entity, &self.map, "speed")
 											.unwrap_or("")
 											.parse::<f32>()
@@ -172,6 +166,17 @@ impl Game
 										position_upper,
 										state: PlateState::TargetDown,
 									},
+									// Update physics object using location component.
+									LocationKinematicPhysicsObjectComponent {
+										phys_handle: self.physics.add_submodel_object(
+											entity,
+											index,
+											&Vec3f::new(0.0, 0.0, -height),
+											&rotation,
+										),
+									},
+									// Update draw model location, using location component.
+									SubmodelEntityWithIndexLocationLinkComponent {},
 								),
 							)
 							.ok();
@@ -203,19 +208,30 @@ impl Game
 					if index < self.map.submodels.len()
 					{
 						// Spawn test submodel.
+						let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
+						let position = bbox.get_center();
+						let rotation = QuaternionF::zero();
+
 						let entity = self.ecs.spawn(());
 						self.ecs
-							.insert_one(
+							.insert(
 								entity,
-								TestSubmodelComponent {
-									phys_handle: self.physics.add_submodel_object(
-										entity,
+								(
+									TestSubmodelComponent { index },
+									SubmodelEntityWithIndex {
 										index,
-										&Vec3f::zero(),
-										&QuaternionF::zero(),
-									),
-									index,
-								},
+										submodel_entity: SubmodelEntity { position, rotation },
+									},
+									LocationComponent { position, rotation },
+									// Update physics object using location component.
+									LocationKinematicPhysicsObjectComponent {
+										phys_handle: self
+											.physics
+											.add_submodel_object(entity, index, &position, &rotation),
+									},
+									// Update draw model location, using location component.
+									SubmodelEntityWithIndexLocationLinkComponent {},
+								),
 							)
 							.ok();
 					}
@@ -344,13 +360,11 @@ impl Game
 
 	fn update_plates(&mut self, time_delta_s: f32)
 	{
-		for (_id, (plate_component, activation_component, location_component, submodel_entity_with_index)) in
-			self.ecs.query_mut::<(
-				&mut PlateComponent,
-				&mut EntityActivationComponent,
-				&mut LocationComponent,
-				&mut SubmodelEntityWithIndex,
-			)>()
+		for (_id, (plate_component, activation_component, location_component)) in self.ecs.query_mut::<(
+			&mut PlateComponent,
+			&mut EntityActivationComponent,
+			&mut LocationComponent,
+		)>()
 		{
 			let was_activated = activation_component.activated;
 			if activation_component.activated
@@ -383,17 +397,13 @@ impl Game
 					}
 				},
 			}
-
-			self.physics
-				.set_kinematic_object_position(plate_component.phys_handle, &location_component.position);
-
-			submodel_entity_with_index.submodel_entity.position = location_component.position;
 		}
 	}
 
 	fn update_test_submodels(&mut self)
 	{
-		for (id, (test_submodel_component,)) in self.ecs.query::<(&TestSubmodelComponent,)>().iter()
+		for (_id, (test_submodel_component, location_component)) in
+			self.ecs.query_mut::<(&TestSubmodelComponent, &mut LocationComponent)>()
 		{
 			let index = test_submodel_component.index;
 			let phase = index as f32;
@@ -405,32 +415,23 @@ impl Game
 				);
 
 			let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
-			let bbox_center = bbox.get_center();
 
-			self.physics
-				.set_kinematic_object_position(test_submodel_component.phys_handle, &(bbox_center + shift));
-			let (position, rotation) = self.physics.get_object_location(test_submodel_component.phys_handle);
-
-			if let Ok(mut q) = self.ecs.query_one::<(&mut SubmodelEntityWithIndex,)>(id)
-			{
-				if let Some((submodel_entity_with_index,)) = q.get()
-				{
-					submodel_entity_with_index.submodel_entity.position = position;
-					submodel_entity_with_index.submodel_entity.rotation = rotation;
-				}
-				else
-				{
-					self.ecs_command_buffer.insert_one(
-						id,
-						SubmodelEntityWithIndex {
-							index,
-							submodel_entity: SubmodelEntity { position, rotation },
-						},
-					);
-				}
-			}
+			location_component.position = bbox.get_center() + shift;
 		}
 		self.ecs_command_buffer.run_on(&mut self.ecs);
+	}
+
+	fn update_kinematic_physics_objects(&mut self)
+	{
+		for (_id, (location_kinematic_physics_object_component, location_component)) in self
+			.ecs
+			.query_mut::<(&LocationKinematicPhysicsObjectComponent, &LocationComponent)>()
+		{
+			self.physics.set_kinematic_object_position(
+				location_kinematic_physics_object_component.phys_handle,
+				&location_component.position,
+			);
+		}
 	}
 
 	fn update_triggers(&mut self)
@@ -547,6 +548,20 @@ impl Game
 		{
 			model.position = location_component.position;
 			model.rotation = location_component.rotation;
+		}
+	}
+
+	fn update_submodels_locations(&mut self)
+	{
+		for (_id, (_submodel_entity_with_index_location_component, location_component, submodel_entity_with_index)) in
+			self.ecs.query_mut::<(
+				&SubmodelEntityWithIndexLocationLinkComponent,
+				&LocationComponent,
+				&mut SubmodelEntityWithIndex,
+			)>()
+		{
+			submodel_entity_with_index.submodel_entity.position = location_component.position;
+			submodel_entity_with_index.submodel_entity.rotation = location_component.rotation;
 		}
 	}
 
@@ -936,6 +951,7 @@ impl GameInterface for Game
 		self.update_player_entity(keyboard_state, events, time_delta_s);
 		self.update_test_submodels();
 		self.update_plates(time_delta_s);
+		self.update_kinematic_physics_objects();
 
 		// Update physics only after settig params of externally-controlled physics objects - player, platforms, etc.
 		self.physics.update(time_delta_s);
@@ -955,6 +971,7 @@ impl GameInterface for Game
 
 		// Update locations of visible models.
 		self.update_models_locations();
+		self.update_submodels_locations();
 	}
 
 	fn grab_mouse_input(&self) -> bool

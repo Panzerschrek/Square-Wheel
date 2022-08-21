@@ -12,7 +12,6 @@ pub struct TestLightComponent {}
 
 pub struct TestSubmodelComponent
 {
-	pub phys_handle: test_game_physics::ObjectHandle,
 	pub index: usize,
 }
 
@@ -37,6 +36,12 @@ pub struct PlayerControllerLocationComponent {}
 // Location will be taken from physics engine.
 pub type PhysicsLocationComponent = test_game_physics::ObjectHandle;
 
+// Component for physics object, which location will be updated according to location component.
+pub struct LocationKinematicPhysicsObjectComponent
+{
+	pub phys_handle: test_game_physics::ObjectHandle,
+}
+
 // Calculate location relative other entity.
 pub struct OtherEntityLocationComponent
 {
@@ -47,6 +52,9 @@ pub struct OtherEntityLocationComponent
 
 // Component that sets ModelEntity position/rotation using LocationComponent.
 pub struct ModelEntityLocationLinkComponent {}
+
+// Component that sets SubmodelEntityWithIndex position/rotation using LocationComponent.
+pub struct SubmodelEntityWithIndexLocationLinkComponent {}
 
 // Just play animation consisting of all model frames.
 pub struct SimpleAnimationComponent {}
@@ -91,7 +99,6 @@ pub struct EntityActivationComponent
 
 pub struct PlateComponent
 {
-	pub phys_handle: test_game_physics::ObjectHandle,
 	pub speed: f32,
 	pub position_lower: Vec3f,
 	pub position_upper: Vec3f,
