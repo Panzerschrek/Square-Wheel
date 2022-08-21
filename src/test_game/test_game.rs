@@ -138,13 +138,25 @@ impl Game
 					if index < self.map.submodels.len()
 					{
 						let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
-						let height = bbox.max.z - bbox.min.z;
+
+						let height = if let Ok(h) = get_entity_key_value(map_entity, &self.map, "height")
+							.unwrap_or("")
+							.parse::<f32>()
+						{
+							h
+						}
+						else
+						{
+							bbox.max.z - bbox.min.z - 8.0
+						};
 
 						let position_upper = bbox.get_center();
 						let position_lower = position_upper - Vec3f::new(0.0, 0.0, height);
 
 						let position = position_lower;
 						let rotation = QuaternionF::zero();
+
+						// TODO - start at top if plate requires activation by abother entity.
 
 						let entity = self.ecs.spawn(());
 						self.ecs
@@ -182,6 +194,7 @@ impl Game
 							.ok();
 
 						// Add activation trigger.
+						// TODO - use PLAT_LOW_TRIGGER.
 						let bbox_half_size = bbox.get_size() * 0.5;
 						let bbox_reduce_min = Vec3f::new(
 							(bbox_half_size.x - 1.0).min(25.0),
@@ -191,7 +204,7 @@ impl Game
 						let bbox_reduce_max = Vec3f::new(
 							(bbox_half_size.x - 1.0).min(25.0),
 							(bbox_half_size.y - 1.0).min(25.0),
-							(bbox_half_size.z - 1.0).min(-8.0),
+							-8.0,
 						);
 
 						let trigger_bbox = BBox::from_min_max(bbox.min + bbox_reduce_min, bbox.max - bbox_reduce_max);
@@ -373,19 +386,20 @@ impl Game
 				plate_component.state = PlateState::TargetUp;
 			}
 
-			match plate_component.state
+			let wait_time_s = 3.0;
+
+			match &mut plate_component.state
 			{
 				PlateState::TargetUp =>
 				{
 					location_component.position.z += time_delta_s * plate_component.speed;
 					if location_component.position.z >= plate_component.position_upper.z
 					{
-						if !was_activated
-						{
-							// Start moving down when reached upper position, but wait until activation is active.
-							plate_component.state = PlateState::TargetDown;
-						}
 						location_component.position.z = plate_component.position_upper.z;
+
+						plate_component.state = PlateState::StayTop {
+							down_time_s: self.game_time + wait_time_s,
+						};
 					}
 				},
 				PlateState::TargetDown =>
@@ -394,6 +408,18 @@ impl Game
 					if location_component.position.z <= plate_component.position_lower.z
 					{
 						location_component.position.z = plate_component.position_lower.z;
+					}
+				},
+				PlateState::StayTop { down_time_s } =>
+				{
+					// Wait a bit starting from moment when trigger was deactivated.
+					if was_activated
+					{
+						*down_time_s = self.game_time + wait_time_s;
+					}
+					else if self.game_time >= *down_time_s
+					{
+						plate_component.state = PlateState::TargetDown;
 					}
 				},
 			}

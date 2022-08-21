@@ -109,4 +109,8 @@ pub enum PlateState
 {
 	TargetUp,
 	TargetDown,
+	StayTop
+	{
+		down_time_s: f32,
+	},
 }
