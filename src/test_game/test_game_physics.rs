@@ -48,10 +48,17 @@ impl TestGamePhysics
 		}
 	}
 
-	pub fn add_object(&mut self, position: &Vec3f, rotation: &QuaternionF, bbox: &BBox) -> ObjectHandle
+	pub fn add_object(
+		&mut self,
+		entity: hecs::Entity,
+		position: &Vec3f,
+		rotation: &QuaternionF,
+		bbox: &BBox,
+	) -> ObjectHandle
 	{
 		// TODO - maybe tune physics and disable CCD?
 		let body = r3d::RigidBodyBuilder::dynamic()
+			.user_data(entity_to_user_data(entity))
 			.translation(r3d::Vector::new(position.x, position.y, position.z))
 			.rotation(quaternion_to_ang_vector(rotation))
 			.ccd_enabled(true)
@@ -61,6 +68,7 @@ impl TestGamePhysics
 		let bbox_center = bbox.get_center();
 
 		let collider = r3d::ColliderBuilder::cuboid(bbox_half_size.x, bbox_half_size.y, bbox_half_size.z)
+			.user_data(entity_to_user_data(entity))
 			.translation(r3d::Vector::new(bbox_center.x, bbox_center.y, bbox_center.z))
 			.restitution(0.5)
 			.friction(0.5)
@@ -73,8 +81,13 @@ impl TestGamePhysics
 		handle
 	}
 
-	pub fn add_submodel_object(&mut self, submodel_index: usize, shift: &Vec3f, rotation: &QuaternionF)
-		-> ObjectHandle
+	pub fn add_submodel_object(
+		&mut self,
+		entity: hecs::Entity,
+		submodel_index: usize,
+		shift: &Vec3f,
+		rotation: &QuaternionF,
+	) -> ObjectHandle
 	{
 		let submodel = &self.map.submodels[submodel_index];
 		let bbox = bsp_map_compact::get_submodel_bbox(&self.map, submodel);
@@ -84,12 +97,14 @@ impl TestGamePhysics
 		let position = shift + bbox_center;
 
 		let body = r3d::RigidBodyBuilder::kinematic_position_based()
+			.user_data(entity_to_user_data(entity))
 			.translation(r3d::Vector::new(position.x, position.y, position.z))
 			.rotation(quaternion_to_ang_vector(rotation))
 			.ccd_enabled(true)
 			.build();
 
 		let collider = r3d::ColliderBuilder::cuboid(bbox_half_size.x, bbox_half_size.y, bbox_half_size.z)
+			.user_data(entity_to_user_data(entity))
 			.restitution(0.0)
 			.build();
 
@@ -100,10 +115,17 @@ impl TestGamePhysics
 		handle
 	}
 
-	pub fn add_character_object(&mut self, position: &Vec3f, width: f32, heigt: f32) -> ObjectHandle
+	pub fn add_character_object(
+		&mut self,
+		entity: hecs::Entity,
+		position: &Vec3f,
+		width: f32,
+		heigt: f32,
+	) -> ObjectHandle
 	{
 		// TODO - maybe tune physics and disable CCD?
 		let body = r3d::RigidBodyBuilder::dynamic()
+			.user_data(entity_to_user_data(entity))
 			.translation(r3d::Vector::new(position.x, position.y, position.z))
 			.ccd_enabled(true)
 			.linear_damping(0.5)
@@ -111,6 +133,7 @@ impl TestGamePhysics
 			.build();
 
 		let collider = r3d::ColliderBuilder::capsule_z((heigt - width) * 0.5, width * 0.5)
+			.user_data(entity_to_user_data(entity))
 			.restitution(0.0)
 			.friction(0.95)
 			.active_hooks(r3d::ActiveHooks::MODIFY_SOLVER_CONTACTS)
@@ -124,16 +147,18 @@ impl TestGamePhysics
 		handle
 	}
 
-	pub fn add_trigger(&mut self, bbox: &BBox) -> ObjectHandle
+	pub fn add_trigger(&mut self, entity: hecs::Entity, bbox: &BBox) -> ObjectHandle
 	{
 		let bbox_half_size = bbox.get_size() * 0.5;
 		let bbox_center = bbox.get_center();
 
 		let body = r3d::RigidBodyBuilder::fixed()
+			.user_data(entity_to_user_data(entity))
 			.translation(r3d::Vector::new(bbox_center.x, bbox_center.y, bbox_center.z))
 			.build();
 
 		let collider = r3d::ColliderBuilder::cuboid(bbox_half_size.x, bbox_half_size.y, bbox_half_size.z)
+			.user_data(entity_to_user_data(entity))
 			.sensor(true)
 			.active_events(r3d::ActiveEvents::COLLISION_EVENTS)
 			.build();
@@ -385,4 +410,9 @@ impl r3d::EventHandler for EventHandler
 	)
 	{
 	}
+}
+
+fn entity_to_user_data(entity: hecs::Entity) -> u128
+{
+	entity.to_bits().get() as u128
 }

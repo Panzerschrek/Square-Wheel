@@ -85,18 +85,21 @@ impl Game
 					let index = entity.submodel_index as usize;
 					if index < self.map.submodels.len()
 					{
-						self.ecs.spawn((
-							self.physics
-								.add_submodel_object(index, &Vec3f::zero(), &QuaternionF::zero()),
-							SubmodelEntityWithIndex {
-								index,
-								submodel_entity: SubmodelEntity {
-									position: bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index])
-										.get_center(),
-									rotation: QuaternionF::zero(),
-								},
+						let entity = self.ecs.spawn((SubmodelEntityWithIndex {
+							index,
+							submodel_entity: SubmodelEntity {
+								position: bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index])
+									.get_center(),
+								rotation: QuaternionF::zero(),
 							},
-						));
+						},));
+						self.ecs
+							.insert_one(
+								entity,
+								self.physics
+									.add_submodel_object(entity, index, &Vec3f::zero(), &QuaternionF::zero()),
+							)
+							.ok();
 					}
 				},
 				Some("trigger_multiple") =>
@@ -105,11 +108,16 @@ impl Game
 					if index < self.map.submodels.len()
 					{
 						// Spawn trigger.
+						let entity = self.ecs.spawn(());
 						self.ecs
-							.spawn((self.physics.add_trigger(&bsp_map_compact::get_submodel_bbox(
-								&self.map,
-								&self.map.submodels[index],
-							)),));
+							.insert_one(
+								entity,
+								self.physics.add_trigger(
+									entity,
+									&bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]),
+								),
+							)
+							.ok();
 					}
 				},
 				_ =>
@@ -118,12 +126,21 @@ impl Game
 					if index < self.map.submodels.len()
 					{
 						// Spawn test submodel.
-						self.ecs.spawn((TestSubmodelComponent {
-							phys_handle: self
-								.physics
-								.add_submodel_object(index, &Vec3f::zero(), &QuaternionF::zero()),
-							index,
-						},));
+						let entity = self.ecs.spawn(());
+						self.ecs
+							.insert_one(
+								entity,
+								TestSubmodelComponent {
+									phys_handle: self.physics.add_submodel_object(
+										entity,
+										index,
+										&Vec3f::zero(),
+										&QuaternionF::zero(),
+									),
+									index,
+								},
+							)
+							.ok();
 					}
 				},
 			}
@@ -549,13 +566,11 @@ impl Game
 		let (position, rotation) = self.get_camera_location();
 		let bbox = model.frames_info[0].bbox;
 
-		let phys_handle = self.physics.add_object(&position, &rotation, &bbox);
-		self.ecs.spawn((
+		let entity = self.ecs.spawn((
 			TestModelComponent {},
 			SimpleAnimationComponent {},
 			LocationComponent { position, rotation },
 			ModelEntityLocationLinkComponent {},
-			phys_handle,
 			ModelEntity {
 				position,
 				rotation,
@@ -571,6 +586,9 @@ impl Game
 				ordering_custom_bbox: None,
 			},
 		));
+		self.ecs
+			.insert_one(entity, self.physics.add_object(entity, &position, &rotation, &bbox))
+			.ok();
 	}
 
 	fn command_reset_test_models(&mut self, _args: commands_queue::CommandArgs)
@@ -719,7 +737,7 @@ impl Game
 			{
 				self.console.lock().unwrap().add_text("Noclip OFF".to_string());
 
-				PlayerPositionSource::Phys(self.physics.add_character_object(&pos, 60.0, 120.0))
+				PlayerPositionSource::Phys(self.physics.add_character_object(self.player_entity, &pos, 60.0, 120.0))
 			},
 			PlayerPositionSource::Phys(phys_handle) =>
 			{
