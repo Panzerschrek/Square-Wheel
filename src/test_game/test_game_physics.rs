@@ -60,7 +60,7 @@ impl TestGamePhysics
 	{
 		// TODO - maybe tune physics and disable CCD?
 		let body = r3d::RigidBodyBuilder::dynamic()
-			.user_data(entity_to_user_data(entity))
+			.user_data(make_user_data(entity, 0))
 			.translation(r3d::Vector::new(position.x, position.y, position.z))
 			.rotation(quaternion_to_ang_vector(rotation))
 			.ccd_enabled(true)
@@ -70,7 +70,7 @@ impl TestGamePhysics
 		let bbox_center = bbox.get_center();
 
 		let collider = r3d::ColliderBuilder::cuboid(bbox_half_size.x, bbox_half_size.y, bbox_half_size.z)
-			.user_data(entity_to_user_data(entity))
+			.user_data(make_user_data(entity, 0))
 			.translation(r3d::Vector::new(bbox_center.x, bbox_center.y, bbox_center.z))
 			.restitution(0.5)
 			.friction(0.5)
@@ -99,14 +99,14 @@ impl TestGamePhysics
 		let position = shift + bbox_center;
 
 		let body = r3d::RigidBodyBuilder::kinematic_position_based()
-			.user_data(entity_to_user_data(entity))
+			.user_data(make_user_data(entity, 0))
 			.translation(r3d::Vector::new(position.x, position.y, position.z))
 			.rotation(quaternion_to_ang_vector(rotation))
 			.ccd_enabled(true)
 			.build();
 
 		let collider = r3d::ColliderBuilder::cuboid(bbox_half_size.x, bbox_half_size.y, bbox_half_size.z)
-			.user_data(entity_to_user_data(entity))
+			.user_data(make_user_data(entity, 0))
 			.restitution(0.0)
 			.build();
 
@@ -127,7 +127,7 @@ impl TestGamePhysics
 	{
 		// TODO - maybe tune physics and disable CCD?
 		let body = r3d::RigidBodyBuilder::dynamic()
-			.user_data(entity_to_user_data(entity))
+			.user_data(make_user_data(entity, CHARACTER_FLAG))
 			.translation(r3d::Vector::new(position.x, position.y, position.z))
 			.ccd_enabled(true)
 			.linear_damping(0.5)
@@ -135,12 +135,10 @@ impl TestGamePhysics
 			.build();
 
 		let collider = r3d::ColliderBuilder::capsule_z((heigt - width) * 0.5, width * 0.5)
-			.user_data(entity_to_user_data(entity))
+			.user_data(make_user_data(entity, CHARACTER_FLAG))
 			.restitution(0.0)
 			.friction(0.95)
 			.active_hooks(r3d::ActiveHooks::MODIFY_SOLVER_CONTACTS)
-			// TODO - fix this.
-			//.user_data(CHARACTER_USER_DATA)
 			.build();
 
 		let handle = self.rigid_body_set.insert(body);
@@ -356,7 +354,7 @@ impl PhysicsHooks
 	}
 }
 
-const CHARACTER_USER_DATA: u128 = 42;
+const CHARACTER_FLAG: u64 = 1;
 const STAIRS_HACK_NORMAL_Z: f32 = 0.3;
 
 impl r3d::PhysicsHooks for PhysicsHooks
@@ -365,7 +363,8 @@ impl r3d::PhysicsHooks for PhysicsHooks
 	{
 		// For colliders with stairs hack modify contact point normal in order to avoid slowing-down while climbing stairs.
 		let collider1 = &context.colliders[context.collider1];
-		if collider1.user_data == CHARACTER_USER_DATA
+		let collider1_is_character = additional_data_from_user_data(collider1.user_data) == CHARACTER_FLAG;
+		if collider1_is_character
 		{
 			if context.normal.z < -STAIRS_HACK_NORMAL_Z
 			{
@@ -374,7 +373,8 @@ impl r3d::PhysicsHooks for PhysicsHooks
 		}
 
 		let collider2 = &context.colliders[context.collider2];
-		if collider2.user_data == CHARACTER_USER_DATA
+		let collider2_is_character = additional_data_from_user_data(collider2.user_data) == CHARACTER_FLAG;
+		if collider2_is_character
 		{
 			if context.normal.z > STAIRS_HACK_NORMAL_Z
 			{
@@ -383,7 +383,7 @@ impl r3d::PhysicsHooks for PhysicsHooks
 		}
 
 		// Modify also friction to disable walls friction.
-		if collider1.user_data == CHARACTER_USER_DATA || collider2.user_data == CHARACTER_USER_DATA
+		if collider1_is_character || collider2_is_character
 		{
 			let fiction_scale = context.normal.z.abs();
 			for contact in context.solver_contacts.iter_mut()
@@ -406,7 +406,7 @@ impl r3d::EventHandler for EventHandler
 		_contact_pair: Option<&r3d::ContactPair>,
 	)
 	{
-		println!("Collision!");
+		// println!("Collision!");
 	}
 
 	fn handle_contact_force_event(
@@ -421,12 +421,19 @@ impl r3d::EventHandler for EventHandler
 	}
 }
 
-fn entity_to_user_data(entity: hecs::Entity) -> u128
+// Store entity in lower 64 bits and various physics flags in upper 64 bits.
+
+fn make_user_data(entity: hecs::Entity, additional_data: u64) -> u128
 {
-	entity.to_bits().get() as u128
+	(entity.to_bits().get() as u128) | ((additional_data as u128) << 64)
 }
 
 fn entity_from_user_data(user_data: u128) -> hecs::Entity
 {
 	hecs::Entity::from_bits(user_data as u64).unwrap_or(hecs::Entity::DANGLING)
+}
+
+fn additional_data_from_user_data(user_data: u128) -> u64
+{
+	(user_data >> 64) as u64
 }
