@@ -365,7 +365,7 @@ impl Game
 									EntityActivationComponent { activated: false },
 									TrainComponent {
 										speed: get_entity_f32(map_entity, &self.map, "speed").unwrap_or(100.0),
-										state: TrainState::SearchForNextTarget,
+										state: TrainState::SearchForInitialPosition,
 										target: entity,
 										// Shift target positions because in Quake position is regulated for minimum point of bbox.
 										target_shift: bbox.get_size() * 0.5,
@@ -873,7 +873,7 @@ impl Game
 
 	fn update_trains(&mut self, time_delta_s: f32)
 	{
-		for (id, (train_component, _activation_component)) in self
+		for (id, (train_component, activation_component)) in self
 			.ecs
 			.query::<(&mut TrainComponent, &mut EntityActivationComponent)>()
 			.iter()
@@ -882,6 +882,59 @@ impl Game
 			{
 				match &mut train_component.state
 				{
+					TrainState::SearchForInitialPosition =>
+					{
+						let mut q = self
+							.ecs
+							.query_one::<(&TargetNameComponent,)>(train_component.target)
+							.unwrap();
+						let target_name = &q.get().unwrap().0.name;
+
+						for (target_id, (named_target_component,)) in
+							self.ecs.query::<(&NamedTargetComponent,)>().iter()
+						{
+							if named_target_component.name == *target_name
+							{
+								// Just started. Set location to location of first target.
+								let mut dst_q = self.ecs.query_one::<(&LocationComponent,)>(target_id).unwrap();
+								let dst_position = dst_q.get().unwrap().0.position;
+								drop(dst_q);
+
+								let mut q = self
+									.ecs
+									.query_one::<(&mut LocationComponent, Option<&NamedTargetComponent>)>(id)
+									.unwrap();
+								let (location_component, named_target_component) = q.get().unwrap();
+								location_component.position = dst_position + train_component.target_shift;
+
+								train_component.target = target_id;
+
+								// Wait for activation if this entity has NamedTargetComponent. Else - start moving immediately.
+								train_component.state = if named_target_component.is_some()
+								{
+									TrainState::WaitForActivation
+								}
+								else
+								{
+									TrainState::Move
+								};
+								break;
+							}
+						}
+
+						// Continue in order to process move.
+						continue;
+					},
+					TrainState::WaitForActivation =>
+					{
+						if activation_component.activated
+						{
+							activation_component.activated = false;
+							train_component.state = TrainState::SearchForNextTarget;
+							// Continue in order to process move.
+							continue;
+						}
+					},
 					TrainState::SearchForNextTarget =>
 					{
 						let mut q = self
@@ -895,17 +948,6 @@ impl Game
 						{
 							if named_target_component.name == *target_name
 							{
-								if train_component.target == id
-								{
-									// Just started. Set location to location of first target.
-									let mut dst_q = self.ecs.query_one::<(&mut LocationComponent,)>(target_id).unwrap();
-									let dst_position = dst_q.get().unwrap().0.position;
-									drop(dst_q);
-
-									let mut q = self.ecs.query_one::<(&mut LocationComponent,)>(id).unwrap();
-									q.get().unwrap().0.position = dst_position + train_component.target_shift;
-								}
-
 								train_component.state = TrainState::Move;
 								train_component.target = target_id;
 								break;

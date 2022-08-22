@@ -182,6 +182,8 @@ pub struct TrainComponent
 
 pub enum TrainState
 {
+	SearchForInitialPosition,
+	WaitForActivation,
 	SearchForNextTarget,
 	Move,
 	Wait
