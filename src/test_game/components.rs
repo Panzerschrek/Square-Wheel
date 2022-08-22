@@ -118,6 +118,7 @@ pub enum PlateState
 pub struct DoorComponent
 {
 	pub speed: f32,
+	pub wait: f32,
 	pub position_closed: Vec3f,
 	pub position_opened: Vec3f,
 	pub state: DoorState,

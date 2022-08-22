@@ -224,8 +224,14 @@ impl Game
 
 						let direction = get_entity_move_direction(map_entity, &self.map);
 
+						let lip = get_entity_key_value(map_entity, &self.map, "lip")
+							.unwrap_or("")
+							.parse::<f32>()
+							.unwrap_or(8.0);
+
 						let position_closed = bbox.get_center();
-						let position_opened = position_closed + direction * (direction.dot(bbox.get_size()).abs());
+						let position_opened =
+							position_closed + direction * (direction.dot(bbox.get_size()).abs() - lip);
 
 						let position = position_closed;
 						let rotation = QuaternionF::zero();
@@ -246,6 +252,10 @@ impl Game
 											.unwrap_or("")
 											.parse::<f32>()
 											.unwrap_or(100.0),
+										wait: get_entity_key_value(map_entity, &self.map, "wait")
+											.unwrap_or("")
+											.parse::<f32>()
+											.unwrap_or(3.0),
 										position_opened,
 										position_closed,
 										state: DoorState::TargetClosed,
@@ -502,9 +512,6 @@ impl Game
 				door_component.state = DoorState::TargetOpened;
 			}
 
-			// TODO - make it configurable.
-			let wait_time_s = 3.0;
-
 			let step = time_delta_s * door_component.speed;
 
 			// TODO - avoid computational errors - interpolate positions based on scalar.
@@ -522,7 +529,7 @@ impl Game
 						location_component.position = door_component.position_opened;
 
 						door_component.state = DoorState::StayOpened {
-							down_time_s: self.game_time + wait_time_s,
+							down_time_s: self.game_time + door_component.wait,
 						};
 					}
 				},
@@ -543,7 +550,7 @@ impl Game
 					// Wait a bit starting from moment when trigger was deactivated.
 					if was_activated
 					{
-						*down_time_s = self.game_time + wait_time_s;
+						*down_time_s = self.game_time + door_component.wait;
 					}
 					else if self.game_time >= *down_time_s
 					{
