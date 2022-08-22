@@ -128,10 +128,16 @@ impl Game
 					{
 						if let Ok(origin) = map_file_common::parse_vec3(origin_str)
 						{
-							let entity = self.ecs.spawn((LocationComponent {
-								position: origin,
-								rotation: QuaternionF::zero(),
-							},));
+							let entity = self.ecs.spawn((
+								LocationComponent {
+									position: origin,
+									rotation: QuaternionF::zero(),
+								},
+								WaitComponent {
+									wait: get_entity_f32(map_entity, &self.map, "wait").unwrap_or(0.0),
+								},
+							));
+
 							Self::add_entity_common_components(&mut self.ecs, &self.map, map_entity, entity);
 						}
 					}
@@ -359,7 +365,10 @@ impl Game
 									EntityActivationComponent { activated: false },
 									TrainComponent {
 										speed: get_entity_f32(map_entity, &self.map, "speed").unwrap_or(100.0),
-										state: TrainState::SearchForFirstTarget,
+										state: TrainState::SearchForNextTarget,
+										target: entity,
+										// Shift target positions because in Quake position is regulated for minimum point of bbox.
+										target_shift: bbox.get_size() * 0.5,
 									},
 									// Update physics object using location component.
 									LocationKinematicPhysicsObjectComponent {
@@ -864,76 +873,113 @@ impl Game
 
 	fn update_trains(&mut self, time_delta_s: f32)
 	{
-		for (id, (train_component, _activation_component, target_name_component)) in self
+		for (id, (train_component, _activation_component)) in self
 			.ecs
-			.query::<(
-				&mut TrainComponent,
-				&mut EntityActivationComponent,
-				&mut TargetNameComponent,
-			)>()
+			.query::<(&mut TrainComponent, &mut EntityActivationComponent)>()
 			.iter()
 		{
-			let step = time_delta_s * train_component.speed;
-
-			match &mut train_component.state
+			loop
 			{
-				TrainState::SearchForFirstTarget =>
+				match &mut train_component.state
 				{
-					let mut target_position = None;
-					for (_id, (named_target_component, target_location_component)) in
-						self.ecs.query::<(&NamedTargetComponent, &LocationComponent)>().iter()
+					TrainState::SearchForNextTarget =>
 					{
-						if target_name_component.name == named_target_component.name
-						{
-							target_position = Some(target_location_component.position);
-							// TODO - update train's target_name_component.
-						}
-					}
+						let mut q = self
+							.ecs
+							.query_one::<(&TargetNameComponent,)>(train_component.target)
+							.unwrap();
+						let target_name = &q.get().unwrap().0.name;
 
-					if let Some(position) = target_position
+						for (target_id, (named_target_component,)) in
+							self.ecs.query::<(&NamedTargetComponent,)>().iter()
+						{
+							if named_target_component.name == *target_name
+							{
+								if train_component.target == id
+								{
+									// Just started. Set location to location of first target.
+									let mut dst_q = self.ecs.query_one::<(&mut LocationComponent,)>(target_id).unwrap();
+									let dst_position = dst_q.get().unwrap().0.position;
+									drop(dst_q);
+
+									let mut q = self.ecs.query_one::<(&mut LocationComponent,)>(id).unwrap();
+									q.get().unwrap().0.position = dst_position + train_component.target_shift;
+								}
+
+								train_component.state = TrainState::Move;
+								train_component.target = target_id;
+								break;
+							}
+						}
+
+						// Continue in order to process move.
+						continue;
+					},
+					TrainState::Move =>
 					{
+						let mut dst_q = self
+							.ecs
+							.query_one::<(&LocationComponent, &WaitComponent)>(train_component.target)
+							.unwrap();
+						let (dst_location_component, dst_wait_component) = dst_q.get().unwrap();
+						let dst_position = dst_location_component.position + train_component.target_shift;
+						let dst_wait = dst_wait_component.wait;
+						drop(dst_q);
+
 						let mut q = self.ecs.query_one::<(&mut LocationComponent,)>(id).unwrap();
-						q.get().unwrap().0.position = position;
-						train_component.state = TrainState::SearchForNextTarget;
-					}
-				},
-				TrainState::SearchForNextTarget =>
-				{
-					let mut q = self.ecs.query_one::<(&LocationComponent,)>(id).unwrap();
-					let position = q.get().unwrap().0.position;
-					drop(q);
+						let position = &mut q.get().unwrap().0.position;
 
-					for (_id, (named_target_component, target_location_component)) in
-						self.ecs.query::<(&NamedTargetComponent, &LocationComponent)>().iter()
-					{
-						if target_name_component.name == named_target_component.name
+						let vec_to = dst_position - *position;
+						let vec_to_len = vec_to.magnitude();
+						if vec_to_len != 0.0
 						{
-							train_component.state = TrainState::Move {
-								start: position,
-								destination: target_location_component.position,
-							};
-							// TODO - update train's target_name_component.
+							let step = time_delta_s * train_component.speed;
+							if vec_to_len > step
+							{
+								*position += vec_to * (step / vec_to_len);
+							}
+							else
+							{
+								*position = dst_position;
+							}
 						}
-					}
-				},
-				TrainState::Move { start, destination } =>
-				{
-					let mut q = self.ecs.query_one::<(&mut LocationComponent,)>(id).unwrap();
-					let position = &mut q.get().unwrap().0.position;
+						else
+						{
+							*position = dst_position;
+						}
 
-					// TODO - avoid computational errors - interpolate positions based on scalar.
-					let vec_to = *destination - *start;
-					let vec_to_len = vec_to.magnitude();
-					*position += vec_to * (step / vec_to_len);
-
-					let distance_traveled = (*position - *start).magnitude();
-					if distance_traveled >= vec_to_len
+						if *position == dst_position
+						{
+							if dst_wait < 0.0
+							{
+								// Wait forever.
+								train_component.state = TrainState::Wait {
+									continue_time_s: self.game_time + 1.0e12,
+								};
+							}
+							else if dst_wait > 0.0
+							{
+								train_component.state = TrainState::Wait {
+									continue_time_s: self.game_time + dst_wait,
+								};
+							}
+							else
+							{
+								train_component.state = TrainState::SearchForNextTarget;
+							}
+						}
+					},
+					TrainState::Wait { continue_time_s } =>
 					{
-						*position = *destination;
-						// TODO - wait until moving to next target.
-						train_component.state = TrainState::SearchForNextTarget;
-					}
-				},
+						if self.game_time >= *continue_time_s
+						{
+							train_component.state = TrainState::SearchForNextTarget;
+						}
+					},
+				}
+
+				// Normally break (if we do not need to perform state transition).
+				break;
 			}
 		}
 	}

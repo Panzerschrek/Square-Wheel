@@ -103,6 +103,12 @@ pub struct NamedTargetComponent
 	pub name: String,
 }
 
+// Used for various entites with "wait" field.
+pub struct WaitComponent
+{
+	pub wait: f32,
+}
+
 // Component for entities that may be activated.
 pub struct EntityActivationComponent
 {
@@ -169,16 +175,17 @@ pub enum ButtonState
 pub struct TrainComponent
 {
 	pub speed: f32,
+	pub target_shift: Vec3f,
 	pub state: TrainState,
+	pub target: hecs::Entity,
 }
 
 pub enum TrainState
 {
-	SearchForFirstTarget,
 	SearchForNextTarget,
-	Move
+	Move,
+	Wait
 	{
-		start: Vec3f,
-		destination: Vec3f,
+		continue_time_s: f32,
 	},
 }
