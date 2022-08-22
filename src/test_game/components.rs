@@ -165,3 +165,20 @@ pub enum ButtonState
 		down_time_s: f32,
 	},
 }
+
+pub struct TrainComponent
+{
+	pub speed: f32,
+	pub state: TrainState,
+}
+
+pub enum TrainState
+{
+	SearchForFirstTarget,
+	SearchForNextTarget,
+	Move
+	{
+		start: Vec3f,
+		destination: Vec3f,
+	},
+}

@@ -3,8 +3,8 @@ use super::{
 	resources_manager::*, test_game_physics,
 };
 use square_wheel_lib::common::{
-	bbox::*, bsp_map_compact, camera_rotation_controller::*, color::*, material, math_types::*, matrix::*,
-	system_window,
+	bbox::*, bsp_map_compact, camera_rotation_controller::*, color::*, map_file_common, material, math_types::*,
+	matrix::*, system_window,
 };
 use std::sync::Arc;
 
@@ -120,6 +120,20 @@ impl Game
 
 						let entity = self.ecs.spawn((TouchTriggerComponent { bbox },));
 						Self::add_entity_common_components(&mut self.ecs, &self.map, map_entity, entity);
+					}
+				},
+				Some("path_corner") =>
+				{
+					if let Some(origin_str) = get_entity_key_value(map_entity, &self.map, "origin")
+					{
+						if let Ok(origin) = map_file_common::parse_vec3(origin_str)
+						{
+							let entity = self.ecs.spawn((LocationComponent {
+								position: origin,
+								rotation: QuaternionF::zero(),
+							},));
+							Self::add_entity_common_components(&mut self.ecs, &self.map, map_entity, entity);
+						}
 					}
 				},
 				Some("func_plat") =>
@@ -320,6 +334,49 @@ impl Game
 							TouchTriggerComponent { bbox: trigger_bbox },
 							TriggerSingleTargetComponent { target: entity },
 						));
+					}
+				},
+				Some("func_train") =>
+				{
+					let index = map_entity.submodel_index as usize;
+					if index < self.map.submodels.len()
+					{
+						let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
+
+						let position = bbox.get_center();
+						let rotation = QuaternionF::zero();
+
+						let entity = self.ecs.spawn(());
+						self.ecs
+							.insert(
+								entity,
+								(
+									SubmodelEntityWithIndex {
+										index,
+										submodel_entity: SubmodelEntity { position, rotation },
+									},
+									LocationComponent { position, rotation },
+									EntityActivationComponent { activated: false },
+									TrainComponent {
+										speed: get_entity_f32(map_entity, &self.map, "speed").unwrap_or(100.0),
+										state: TrainState::SearchForFirstTarget,
+									},
+									// Update physics object using location component.
+									LocationKinematicPhysicsObjectComponent {
+										phys_handle: self.physics.add_submodel_object(
+											entity,
+											index,
+											&Vec3f::zero(),
+											&rotation,
+										),
+									},
+									// Update draw model location, using location component.
+									SubmodelEntityWithIndexLocationLinkComponent {},
+								),
+							)
+							.ok();
+
+						Self::add_entity_common_components(&mut self.ecs, &self.map, map_entity, entity);
 					}
 				},
 				_ =>
@@ -799,6 +856,82 @@ impl Game
 					else if self.game_time >= *down_time_s
 					{
 						button_component.state = ButtonState::TargetReleased;
+					}
+				},
+			}
+		}
+	}
+
+	fn update_trains(&mut self, time_delta_s: f32)
+	{
+		for (id, (train_component, _activation_component, target_name_component)) in self
+			.ecs
+			.query::<(
+				&mut TrainComponent,
+				&mut EntityActivationComponent,
+				&mut TargetNameComponent,
+			)>()
+			.iter()
+		{
+			let step = time_delta_s * train_component.speed;
+
+			match &mut train_component.state
+			{
+				TrainState::SearchForFirstTarget =>
+				{
+					let mut target_position = None;
+					for (_id, (named_target_component, target_location_component)) in
+						self.ecs.query::<(&NamedTargetComponent, &LocationComponent)>().iter()
+					{
+						if target_name_component.name == named_target_component.name
+						{
+							target_position = Some(target_location_component.position);
+							// TODO - update train's target_name_component.
+						}
+					}
+
+					if let Some(position) = target_position
+					{
+						let mut q = self.ecs.query_one::<(&mut LocationComponent,)>(id).unwrap();
+						q.get().unwrap().0.position = position;
+						train_component.state = TrainState::SearchForNextTarget;
+					}
+				},
+				TrainState::SearchForNextTarget =>
+				{
+					let mut q = self.ecs.query_one::<(&LocationComponent,)>(id).unwrap();
+					let position = q.get().unwrap().0.position;
+					drop(q);
+
+					for (_id, (named_target_component, target_location_component)) in
+						self.ecs.query::<(&NamedTargetComponent, &LocationComponent)>().iter()
+					{
+						if target_name_component.name == named_target_component.name
+						{
+							train_component.state = TrainState::Move {
+								start: position,
+								destination: target_location_component.position,
+							};
+							// TODO - update train's target_name_component.
+						}
+					}
+				},
+				TrainState::Move { start, destination } =>
+				{
+					let mut q = self.ecs.query_one::<(&mut LocationComponent,)>(id).unwrap();
+					let position = &mut q.get().unwrap().0.position;
+
+					// TODO - avoid computational errors - interpolate positions based on scalar.
+					let vec_to = *destination - *start;
+					let vec_to_len = vec_to.magnitude();
+					*position += vec_to * (step / vec_to_len);
+
+					let distance_traveled = (*position - *start).magnitude();
+					if distance_traveled >= vec_to_len
+					{
+						*position = *destination;
+						// TODO - wait until moving to next target.
+						train_component.state = TrainState::SearchForNextTarget;
 					}
 				},
 			}
@@ -1412,6 +1545,7 @@ impl GameInterface for Game
 		self.update_plates(time_delta_s);
 		self.update_doors(time_delta_s);
 		self.update_buttons(time_delta_s);
+		self.update_trains(time_delta_s);
 		self.update_kinematic_physics_objects();
 
 		// Update physics only after settig params of externally-controlled physics objects - player, platforms, etc.
