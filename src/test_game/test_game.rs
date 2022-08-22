@@ -280,6 +280,75 @@ impl Game
 						// Add trigger later - after linking touched doors.
 					}
 				},
+				Some("func_button") =>
+				{
+					let index = map_entity.submodel_index as usize;
+					if index < self.map.submodels.len()
+					{
+						let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
+
+						let direction = get_entity_move_direction(map_entity, &self.map);
+
+						let lip = get_entity_key_value(map_entity, &self.map, "lip")
+							.unwrap_or("")
+							.parse::<f32>()
+							.unwrap_or(4.0);
+
+						let position_released = bbox.get_center();
+						let position_pressed =
+							position_released + direction * (direction.dot(bbox.get_size()).abs() - lip);
+
+						let position = position_released;
+						let rotation = QuaternionF::zero();
+
+						let entity = self.ecs.spawn(());
+						self.ecs
+							.insert(
+								entity,
+								(
+									SubmodelEntityWithIndex {
+										index,
+										submodel_entity: SubmodelEntity { position, rotation },
+									},
+									LocationComponent { position, rotation },
+									EntityActivationComponent { activated: false },
+									ButtonComponent {
+										speed: get_entity_key_value(map_entity, &self.map, "speed")
+											.unwrap_or("")
+											.parse::<f32>()
+											.unwrap_or(40.0),
+										wait: get_entity_key_value(map_entity, &self.map, "wait")
+											.unwrap_or("")
+											.parse::<f32>()
+											.unwrap_or(1.0),
+										position_released,
+										position_pressed,
+										state: ButtonState::TargetReleased,
+									},
+									// Update physics object using location component.
+									LocationKinematicPhysicsObjectComponent {
+										phys_handle: self.physics.add_submodel_object(
+											entity,
+											index,
+											&(bbox.get_center() - position_released),
+											&rotation,
+										),
+									},
+									// Update draw model location, using location component.
+									SubmodelEntityWithIndexLocationLinkComponent {},
+								),
+							)
+							.ok();
+
+						let bbox_increase = Vec3f::new(1.0, 1.0, 1.0);
+						let trigger_bbox = BBox::from_min_max(bbox.min - bbox_increase, bbox.max + bbox_increase);
+
+						self.ecs.spawn((
+							TriggerComponent { bbox: trigger_bbox },
+							TrggerSingleTargetComponent { target: entity },
+						));
+					}
+				},
 				_ =>
 				{
 					let index = map_entity.submodel_index as usize;
@@ -645,6 +714,75 @@ impl Game
 					else if self.game_time >= *down_time_s
 					{
 						door_component.state = DoorState::TargetClosed;
+					}
+				},
+			}
+		}
+	}
+
+	fn update_buttons(&mut self, time_delta_s: f32)
+	{
+		for (_id, (button_component, activation_component, location_component)) in self
+			.ecs
+			.query::<(
+				&mut ButtonComponent,
+				&mut EntityActivationComponent,
+				&mut LocationComponent,
+			)>()
+			.iter()
+		{
+			let was_activated = activation_component.activated;
+			if activation_component.activated
+			{
+				activation_component.activated = false;
+				button_component.state = ButtonState::TargetPressed;
+			}
+
+			let step = time_delta_s * button_component.speed;
+
+			// TODO - avoid computational errors - interpolate positions based on scalar.
+			match &mut button_component.state
+			{
+				ButtonState::TargetPressed =>
+				{
+					let vec_to = button_component.position_pressed - button_component.position_released;
+					let vec_to_len = vec_to.magnitude();
+					location_component.position += vec_to * (step / vec_to_len);
+
+					let distance_traveled =
+						(location_component.position - button_component.position_released).magnitude();
+					if distance_traveled >= vec_to_len
+					{
+						location_component.position = button_component.position_pressed;
+
+						button_component.state = ButtonState::StayPressed {
+							down_time_s: self.game_time + button_component.wait,
+						};
+					}
+				},
+				ButtonState::TargetReleased =>
+				{
+					let vec_to = button_component.position_released - button_component.position_pressed;
+					let vec_to_len = vec_to.magnitude();
+					location_component.position += vec_to * (step / vec_to_len);
+
+					let distance_traveled =
+						(location_component.position - button_component.position_pressed).magnitude();
+					if distance_traveled >= vec_to_len
+					{
+						location_component.position = button_component.position_released;
+					}
+				},
+				ButtonState::StayPressed { down_time_s } =>
+				{
+					// Wait a bit starting from moment when trigger was deactivated.
+					if was_activated
+					{
+						*down_time_s = self.game_time + button_component.wait;
+					}
+					else if self.game_time >= *down_time_s
+					{
+						button_component.state = ButtonState::TargetReleased;
 					}
 				},
 			}
@@ -1203,6 +1341,7 @@ impl GameInterface for Game
 		self.update_test_submodels();
 		self.update_plates(time_delta_s);
 		self.update_doors(time_delta_s);
+		self.update_buttons(time_delta_s);
 		self.update_kinematic_physics_objects();
 
 		// Update physics only after settig params of externally-controlled physics objects - player, platforms, etc.

@@ -134,3 +134,22 @@ pub enum DoorState
 		down_time_s: f32,
 	},
 }
+
+pub struct ButtonComponent
+{
+	pub speed: f32,
+	pub wait: f32,
+	pub position_released: Vec3f,
+	pub position_pressed: Vec3f,
+	pub state: ButtonState,
+}
+
+pub enum ButtonState
+{
+	TargetPressed,
+	TargetReleased,
+	StayPressed
+	{
+		down_time_s: f32,
+	},
+}
