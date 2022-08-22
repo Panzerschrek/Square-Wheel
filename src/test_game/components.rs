@@ -114,3 +114,21 @@ pub enum PlateState
 		down_time_s: f32,
 	},
 }
+
+pub struct DoorComponent
+{
+	pub speed: f32,
+	pub position_closed: Vec3f,
+	pub position_opened: Vec3f,
+	pub state: DoorState,
+}
+
+pub enum DoorState
+{
+	TargetOpened,
+	TargetClosed,
+	StayOpened
+	{
+		down_time_s: f32,
+	},
+}

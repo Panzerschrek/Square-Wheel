@@ -156,7 +156,7 @@ impl Game
 						let position = position_lower;
 						let rotation = QuaternionF::zero();
 
-						// TODO - start at top if plate requires activation by abother entity.
+						// TODO - start at top if plate requires activation by another entity.
 
 						let entity = self.ecs.spawn(());
 						self.ecs
@@ -208,6 +208,67 @@ impl Game
 						);
 
 						let trigger_bbox = BBox::from_min_max(bbox.min + bbox_reduce_min, bbox.max - bbox_reduce_max);
+
+						self.ecs.spawn((
+							TriggerComponent { bbox: trigger_bbox },
+							TrggerSingleTargetComponent { target: entity },
+						));
+					}
+				},
+				Some("func_door") =>
+				{
+					let index = map_entity.submodel_index as usize;
+					if index < self.map.submodels.len()
+					{
+						let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
+
+						let direction = get_entity_move_direction(map_entity, &self.map);
+
+						let position_closed = bbox.get_center();
+						let position_opened = position_closed + direction * (direction.dot(bbox.get_size()).abs());
+
+						let position = position_closed;
+						let rotation = QuaternionF::zero();
+
+						let entity = self.ecs.spawn(());
+						self.ecs
+							.insert(
+								entity,
+								(
+									SubmodelEntityWithIndex {
+										index,
+										submodel_entity: SubmodelEntity { position, rotation },
+									},
+									LocationComponent { position, rotation },
+									EntityActivationComponent { activated: false },
+									DoorComponent {
+										speed: get_entity_key_value(map_entity, &self.map, "speed")
+											.unwrap_or("")
+											.parse::<f32>()
+											.unwrap_or(100.0),
+										position_opened,
+										position_closed,
+										state: DoorState::TargetClosed,
+									},
+									// Update physics object using location component.
+									LocationKinematicPhysicsObjectComponent {
+										phys_handle: self.physics.add_submodel_object(
+											entity,
+											index,
+											&(bbox.get_center() - position_closed),
+											&rotation,
+										),
+									},
+									// Update draw model location, using location component.
+									SubmodelEntityWithIndexLocationLinkComponent {},
+								),
+							)
+							.ok();
+
+						// Add activation trigger.
+						// TODO - use DOOR_START_OPEN.
+						let bbox_increase = Vec3f::new(60.0, 60.0, 8.0);
+						let trigger_bbox = BBox::from_min_max(bbox.min - bbox_increase, bbox.max + bbox_increase);
 
 						self.ecs.spawn((
 							TriggerComponent { bbox: trigger_bbox },
@@ -420,6 +481,73 @@ impl Game
 					else if self.game_time >= *down_time_s
 					{
 						plate_component.state = PlateState::TargetDown;
+					}
+				},
+			}
+		}
+	}
+
+	fn update_doors(&mut self, time_delta_s: f32)
+	{
+		for (_id, (door_component, activation_component, location_component)) in self.ecs.query_mut::<(
+			&mut DoorComponent,
+			&mut EntityActivationComponent,
+			&mut LocationComponent,
+		)>()
+		{
+			let was_activated = activation_component.activated;
+			if activation_component.activated
+			{
+				activation_component.activated = false;
+				door_component.state = DoorState::TargetOpened;
+			}
+
+			// TODO - make it configurable.
+			let wait_time_s = 3.0;
+
+			let step = time_delta_s * door_component.speed;
+
+			// TODO - avoid computational errors - interpolate positions based on scalar.
+			match &mut door_component.state
+			{
+				DoorState::TargetOpened =>
+				{
+					let vec_to = door_component.position_opened - door_component.position_closed;
+					let vec_to_len = vec_to.magnitude();
+					location_component.position += vec_to * (step / vec_to_len);
+
+					let distance_traveled = (location_component.position - door_component.position_closed).magnitude();
+					if distance_traveled >= vec_to_len
+					{
+						location_component.position = door_component.position_opened;
+
+						door_component.state = DoorState::StayOpened {
+							down_time_s: self.game_time + wait_time_s,
+						};
+					}
+				},
+				DoorState::TargetClosed =>
+				{
+					let vec_to = door_component.position_closed - door_component.position_opened;
+					let vec_to_len = vec_to.magnitude();
+					location_component.position += vec_to * (step / vec_to_len);
+
+					let distance_traveled = (location_component.position - door_component.position_opened).magnitude();
+					if distance_traveled >= vec_to_len
+					{
+						location_component.position = door_component.position_closed;
+					}
+				},
+				DoorState::StayOpened { down_time_s } =>
+				{
+					// Wait a bit starting from moment when trigger was deactivated.
+					if was_activated
+					{
+						*down_time_s = self.game_time + wait_time_s;
+					}
+					else if self.game_time >= *down_time_s
+					{
+						door_component.state = DoorState::TargetClosed;
 					}
 				},
 			}
@@ -977,6 +1105,7 @@ impl GameInterface for Game
 		self.update_player_entity(keyboard_state, events, time_delta_s);
 		self.update_test_submodels();
 		self.update_plates(time_delta_s);
+		self.update_doors(time_delta_s);
 		self.update_kinematic_physics_objects();
 
 		// Update physics only after settig params of externally-controlled physics objects - player, platforms, etc.
@@ -1059,6 +1188,32 @@ impl GameInterface for Game
 			}
 		}
 	}
+}
+
+// Returns normalized vector.
+fn get_entity_move_direction(entity: &bsp_map_compact::Entity, map: &bsp_map_compact::BSPMap) -> Vec3f
+{
+	if let Some(angle) = get_entity_key_value(entity, map, "angle")
+	{
+		if let Ok(num) = angle.parse::<f32>()
+		{
+			if num == -1.0
+			{
+				return Vec3f::new(0.0, 0.0, 1.0);
+			}
+			if num == -2.0
+			{
+				return Vec3f::new(0.0, 0.0, -1.0);
+			}
+			let angle_rad = num * (std::f32::consts::PI / 180.0);
+			return Vec3f::new(angle_rad.cos(), angle_rad.sin(), 0.0);
+		}
+	}
+
+	// TODO - support "angles".
+
+	// Return something.
+	return Vec3f::unit_x();
 }
 
 fn get_entity_classname<'a>(entity: &bsp_map_compact::Entity, map: &'a bsp_map_compact::BSPMap) -> Option<&'a str>
