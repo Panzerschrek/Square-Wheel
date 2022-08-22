@@ -139,9 +139,7 @@ impl Game
 					{
 						let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
 
-						let height = if let Ok(h) = get_entity_key_value(map_entity, &self.map, "height")
-							.unwrap_or("")
-							.parse::<f32>()
+						let height = if let Some(h) = get_entity_f32(map_entity, &self.map, "height")
 						{
 							h
 						}
@@ -170,10 +168,7 @@ impl Game
 									LocationComponent { position, rotation },
 									EntityActivationComponent { activated: false },
 									PlateComponent {
-										speed: get_entity_key_value(map_entity, &self.map, "speed")
-											.unwrap_or("")
-											.parse::<f32>()
-											.unwrap_or(150.0),
+										speed: get_entity_f32(map_entity, &self.map, "speed").unwrap_or(150.0),
 										position_lower,
 										position_upper,
 										state: PlateState::TargetDown,
@@ -224,10 +219,7 @@ impl Game
 
 						let direction = get_entity_move_direction(map_entity, &self.map);
 
-						let lip = get_entity_key_value(map_entity, &self.map, "lip")
-							.unwrap_or("")
-							.parse::<f32>()
-							.unwrap_or(8.0);
+						let lip = get_entity_f32(map_entity, &self.map, "lip").unwrap_or(8.0);
 
 						// TODO - use DOOR_START_OPEN.
 						let position_closed = bbox.get_center();
@@ -249,14 +241,8 @@ impl Game
 									LocationComponent { position, rotation },
 									EntityActivationComponent { activated: false },
 									DoorComponent {
-										speed: get_entity_key_value(map_entity, &self.map, "speed")
-											.unwrap_or("")
-											.parse::<f32>()
-											.unwrap_or(100.0),
-										wait: get_entity_key_value(map_entity, &self.map, "wait")
-											.unwrap_or("")
-											.parse::<f32>()
-											.unwrap_or(3.0),
+										speed: get_entity_f32(map_entity, &self.map, "speed").unwrap_or(100.0),
+										wait: get_entity_f32(map_entity, &self.map, "wait").unwrap_or(3.0),
 										position_opened,
 										position_closed,
 										state: DoorState::TargetClosed,
@@ -289,10 +275,7 @@ impl Game
 
 						let direction = get_entity_move_direction(map_entity, &self.map);
 
-						let lip = get_entity_key_value(map_entity, &self.map, "lip")
-							.unwrap_or("")
-							.parse::<f32>()
-							.unwrap_or(4.0);
+						let lip = get_entity_f32(map_entity, &self.map, "lip").unwrap_or(4.0);
 
 						let position_released = bbox.get_center();
 						let position_pressed =
@@ -313,14 +296,8 @@ impl Game
 									LocationComponent { position, rotation },
 									EntityActivationComponent { activated: false },
 									ButtonComponent {
-										speed: get_entity_key_value(map_entity, &self.map, "speed")
-											.unwrap_or("")
-											.parse::<f32>()
-											.unwrap_or(40.0),
-										wait: get_entity_key_value(map_entity, &self.map, "wait")
-											.unwrap_or("")
-											.parse::<f32>()
-											.unwrap_or(1.0),
+										speed: get_entity_f32(map_entity, &self.map, "speed").unwrap_or(40.0),
+										wait: get_entity_f32(map_entity, &self.map, "wait").unwrap_or(1.0),
 										position_released,
 										position_pressed,
 										state: ButtonState::TargetReleased,
@@ -1450,6 +1427,11 @@ fn get_entity_move_direction(entity: &bsp_map_compact::Entity, map: &bsp_map_com
 
 	// Return something.
 	return Vec3f::unit_x();
+}
+
+fn get_entity_f32(entity: &bsp_map_compact::Entity, map: &bsp_map_compact::BSPMap, key: &str) -> Option<f32>
+{
+	get_entity_key_value(entity, map, key).unwrap_or("").parse::<f32>().ok()
 }
 
 fn get_entity_classname<'a>(entity: &bsp_map_compact::Entity, map: &'a bsp_map_compact::BSPMap) -> Option<&'a str>
