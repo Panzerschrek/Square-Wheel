@@ -122,6 +122,7 @@ pub struct DoorComponent
 	pub position_closed: Vec3f,
 	pub position_opened: Vec3f,
 	pub state: DoorState,
+	pub slave_doors: Vec<hecs::Entity>,
 }
 
 pub enum DoorState

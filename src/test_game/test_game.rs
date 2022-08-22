@@ -229,6 +229,7 @@ impl Game
 							.parse::<f32>()
 							.unwrap_or(8.0);
 
+						// TODO - use DOOR_START_OPEN.
 						let position_closed = bbox.get_center();
 						let position_opened =
 							position_closed + direction * (direction.dot(bbox.get_size()).abs() - lip);
@@ -259,6 +260,7 @@ impl Game
 										position_opened,
 										position_closed,
 										state: DoorState::TargetClosed,
+										slave_doors: Vec::new(), // set later
 									},
 									// Update physics object using location component.
 									LocationKinematicPhysicsObjectComponent {
@@ -275,15 +277,7 @@ impl Game
 							)
 							.ok();
 
-						// Add activation trigger.
-						// TODO - use DOOR_START_OPEN.
-						let bbox_increase = Vec3f::new(60.0, 60.0, 8.0);
-						let trigger_bbox = BBox::from_min_max(bbox.min - bbox_increase, bbox.max + bbox_increase);
-
-						self.ecs.spawn((
-							TriggerComponent { bbox: trigger_bbox },
-							TrggerSingleTargetComponent { target: entity },
-						));
+						// Add trigger later - after linking touched doors.
 					}
 				},
 				_ =>
@@ -323,6 +317,8 @@ impl Game
 			}
 		}
 
+		self.prepare_linked_doors();
+
 		self.player_entity = self.ecs.spawn((
 			PlayerComponent {
 				view_model_entity: hecs::Entity::DANGLING,
@@ -337,6 +333,72 @@ impl Game
 				position_source: PlayerPositionSource::Noclip(Vec3f::zero()),
 			},
 		));
+	}
+
+	fn prepare_linked_doors(&mut self)
+	{
+		// Find touching doors groups.
+		let mut master_doors = std::collections::HashMap::<hecs::Entity, (BBox, Vec<hecs::Entity>)>::new();
+		let mut slave_doors_set = std::collections::HashSet::<hecs::Entity>::new();
+
+		for (id0, (_door_component0, submodel_entity_with_index_component0)) in
+			self.ecs.query::<(&DoorComponent, &SubmodelEntityWithIndex)>().iter()
+		{
+			if slave_doors_set.contains(&id0)
+			{
+				continue;
+			}
+			let mut bbox = bsp_map_compact::get_submodel_bbox(
+				&self.map,
+				&self.map.submodels[submodel_entity_with_index_component0.index],
+			);
+
+			let mut slave_doors = Vec::new();
+
+			for (id1, (_door_component1, submodel_entity_with_index_component1)) in
+				self.ecs.query::<(&DoorComponent, &SubmodelEntityWithIndex)>().iter()
+			{
+				if id0 == id1
+				{
+					continue;
+				}
+				if slave_doors_set.contains(&id0)
+				{
+					continue;
+				}
+
+				let bbox1 = bsp_map_compact::get_submodel_bbox(
+					&self.map,
+					&self.map.submodels[submodel_entity_with_index_component1.index],
+				);
+				if bbox.touches_or_intersects(&bbox1)
+				{
+					bbox.extend(&bbox1);
+					slave_doors.push(id1);
+					slave_doors_set.insert(id1);
+				}
+			}
+
+			master_doors.insert(id0, (bbox, slave_doors));
+		}
+
+		// Spawn triggers for master doors only.
+		// Slave doors will be automatically activated together with master doors.
+		for (id, (bbox, slave_doors)) in master_doors.drain()
+		{
+			if let Ok(mut q) = self.ecs.query_one::<(&mut DoorComponent,)>(id)
+			{
+				q.get().unwrap().0.slave_doors = slave_doors;
+			}
+
+			let bbox_increase = Vec3f::new(60.0, 60.0, 8.0);
+			let trigger_bbox = BBox::from_min_max(bbox.min - bbox_increase, bbox.max + bbox_increase);
+
+			self.ecs.spawn((
+				TriggerComponent { bbox: trigger_bbox },
+				TrggerSingleTargetComponent { target: id },
+			));
+		}
 	}
 
 	fn update_player_entity(
@@ -499,11 +561,39 @@ impl Game
 
 	fn update_doors(&mut self, time_delta_s: f32)
 	{
-		for (_id, (door_component, activation_component, location_component)) in self.ecs.query_mut::<(
-			&mut DoorComponent,
-			&mut EntityActivationComponent,
-			&mut LocationComponent,
-		)>()
+		// Make prepass - trigger activation of slave doors if master door is activated.
+		for (id, (door_component,)) in self.ecs.query::<(&DoorComponent,)>().iter()
+		{
+			if door_component.slave_doors.is_empty()
+			{
+				continue;
+			}
+
+			let mut q = self.ecs.query_one::<(&mut EntityActivationComponent,)>(id).unwrap();
+			let activated = q.get().unwrap().0.activated;
+			drop(q);
+
+			if activated
+			{
+				for slave_door_id in &door_component.slave_doors
+				{
+					if let Ok(mut q) = self.ecs.query_one::<(&mut EntityActivationComponent,)>(*slave_door_id)
+					{
+						q.get().unwrap().0.activated = true;
+					}
+				}
+			}
+		}
+
+		// Perform actual doors logic.
+		for (_id, (door_component, activation_component, location_component)) in self
+			.ecs
+			.query::<(
+				&mut DoorComponent,
+				&mut EntityActivationComponent,
+				&mut LocationComponent,
+			)>()
+			.iter()
 		{
 			let was_activated = activation_component.activated;
 			if activation_component.activated

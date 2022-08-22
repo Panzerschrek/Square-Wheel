@@ -50,6 +50,16 @@ impl BBox
 			self.max.z >= other.max.z
 	}
 
+	pub fn touches_or_intersects(&self, other: &BBox) -> bool
+	{
+		!(self.max.x < other.min.x ||
+			self.min.x > other.max.x ||
+			self.max.y < other.min.y ||
+			self.min.y > other.max.y ||
+			self.max.z < other.min.z ||
+			self.min.z > other.max.z)
+	}
+
 	pub fn get_center(&self) -> Vec3f
 	{
 		(self.min + self.max) * 0.5
