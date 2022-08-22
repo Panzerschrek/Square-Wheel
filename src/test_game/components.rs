@@ -80,13 +80,13 @@ pub enum PlayerPositionSource
 }
 
 // Trigger than can be activated by touching.
-pub struct TriggerComponent
+pub struct TouchTriggerComponent
 {
 	pub bbox: BBox,
 }
 
 // Component of trigger entity to trigger single target.
-pub struct TrggerSingleTargetComponent
+pub struct TriggerSingleTargetComponent
 {
 	pub target: hecs::Entity,
 }

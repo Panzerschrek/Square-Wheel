@@ -75,6 +75,12 @@ impl Game
 
 	fn spawn_entities(&mut self)
 	{
+		self.spawn_regular_entities();
+		self.spawn_player();
+	}
+
+	fn spawn_regular_entities(&mut self)
+	{
 		// Skip world entity.
 		for map_entity in &self.map.entities[1 ..]
 		{
@@ -110,30 +116,10 @@ impl Game
 					let index = map_entity.submodel_index as usize;
 					if index < self.map.submodels.len()
 					{
-						// Spawn trigger.
 						let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
 
-						let entity = self.ecs.spawn(());
-						self.ecs.insert_one(entity, TriggerComponent { bbox }).ok();
-
+						let entity = self.ecs.spawn((TouchTriggerComponent { bbox },));
 						Self::add_entity_common_components(&mut self.ecs, &self.map, map_entity, entity);
-
-						// Test visualiation.
-						if false
-						{
-							self.ecs
-								.insert_one(
-									entity,
-									SubmodelEntityWithIndex {
-										index,
-										submodel_entity: SubmodelEntity {
-											position: bbox.get_center(),
-											rotation: QuaternionF::zero(),
-										},
-									},
-								)
-								.ok();
-						}
 					}
 				},
 				Some("func_plat") =>
@@ -211,8 +197,8 @@ impl Game
 						let trigger_bbox = BBox::from_min_max(bbox.min + bbox_reduce_min, bbox.max - bbox_reduce_max);
 
 						self.ecs.spawn((
-							TriggerComponent { bbox: trigger_bbox },
-							TrggerSingleTargetComponent { target: entity },
+							TouchTriggerComponent { bbox: trigger_bbox },
+							TriggerSingleTargetComponent { target: entity },
 						));
 					}
 				},
@@ -331,8 +317,8 @@ impl Game
 						let trigger_bbox = BBox::from_min_max(bbox.min - bbox_increase, bbox.max + bbox_increase);
 
 						self.ecs.spawn((
-							TriggerComponent { bbox: trigger_bbox },
-							TrggerSingleTargetComponent { target: entity },
+							TouchTriggerComponent { bbox: trigger_bbox },
+							TriggerSingleTargetComponent { target: entity },
 						));
 					}
 				},
@@ -374,7 +360,10 @@ impl Game
 		}
 
 		self.prepare_linked_doors();
+	}
 
+	fn spawn_player(&mut self)
+	{
 		self.player_entity = self.ecs.spawn((
 			PlayerComponent {
 				view_model_entity: hecs::Entity::DANGLING,
@@ -491,8 +480,8 @@ impl Game
 			let trigger_bbox = BBox::from_min_max(bbox.min - bbox_increase, bbox.max + bbox_increase);
 
 			self.ecs.spawn((
-				TriggerComponent { bbox: trigger_bbox },
-				TrggerSingleTargetComponent { target: id },
+				TouchTriggerComponent { bbox: trigger_bbox },
+				TriggerSingleTargetComponent { target: id },
 			));
 		}
 	}
@@ -850,15 +839,19 @@ impl Game
 		}
 	}
 
-	fn update_triggers(&mut self)
+	fn update_touch_triggers(&mut self)
 	{
-		for (_id, (trigger_component, trigger_single_target_component)) in self
+		for (_id, (touch_trigger_component, trigger_single_target_component, target_name_component)) in self
 			.ecs
-			.query::<(&TriggerComponent, Option<&TrggerSingleTargetComponent>)>()
+			.query::<(
+				&TouchTriggerComponent,
+				Option<&TriggerSingleTargetComponent>,
+				Option<&TargetNameComponent>,
+			)>()
 			.iter()
 		{
 			self.physics
-				.get_box_touching_entities(&trigger_component.bbox, |entity| {
+				.get_box_touching_entities(&touch_trigger_component.bbox, |entity| {
 					// Only player can activate triggers.
 					if let Ok(mut q) = self.ecs.query_one::<(&mut PlayerComponent,)>(entity)
 					{
@@ -883,6 +876,24 @@ impl Game
 							if let Some((entity_activation_component,)) = q.get()
 							{
 								entity_activation_component.activated = true;
+							}
+						}
+					}
+					// Activate named targets.
+					if let Some(TargetNameComponent { name }) = target_name_component
+					{
+						for (target_id, (named_target_component,)) in
+							self.ecs.query::<(&NamedTargetComponent,)>().iter()
+						{
+							if named_target_component.name == *name
+							{
+								if let Ok(mut q) = self.ecs.query_one::<(&mut EntityActivationComponent,)>(target_id)
+								{
+									if let Some((actication_component,)) = q.get()
+									{
+										actication_component.activated = true;
+									}
+								}
 							}
 						}
 					}
@@ -1408,7 +1419,7 @@ impl GameInterface for Game
 
 		// Update models after physics update in order to setup position properly.
 
-		self.update_triggers();
+		self.update_touch_triggers();
 		self.update_named_activations();
 
 		self.update_animations();
