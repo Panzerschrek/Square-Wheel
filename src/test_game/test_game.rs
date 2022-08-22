@@ -101,6 +101,8 @@ impl Game
 									.add_submodel_object(entity, index, &Vec3f::zero(), &QuaternionF::zero()),
 							)
 							.ok();
+
+						Self::add_entity_common_components(&mut self.ecs, &self.map, map_entity, entity);
 					}
 				},
 				Some("trigger_multiple") =>
@@ -113,6 +115,8 @@ impl Game
 
 						let entity = self.ecs.spawn(());
 						self.ecs.insert_one(entity, TriggerComponent { bbox }).ok();
+
+						Self::add_entity_common_components(&mut self.ecs, &self.map, map_entity, entity);
 
 						// Test visualiation.
 						if false
@@ -187,6 +191,8 @@ impl Game
 								),
 							)
 							.ok();
+
+						Self::add_entity_common_components(&mut self.ecs, &self.map, map_entity, entity);
 
 						// Add activation trigger.
 						// TODO - use PLAT_LOW_TRIGGER.
@@ -263,6 +269,8 @@ impl Game
 							)
 							.ok();
 
+						Self::add_entity_common_components(&mut self.ecs, &self.map, map_entity, entity);
+
 						// Add trigger later - after linking touched doors.
 					}
 				},
@@ -316,6 +324,8 @@ impl Game
 								),
 							)
 							.ok();
+
+						Self::add_entity_common_components(&mut self.ecs, &self.map, map_entity, entity);
 
 						let bbox_increase = Vec3f::new(1.0, 1.0, 1.0);
 						let trigger_bbox = BBox::from_min_max(bbox.min - bbox_increase, bbox.max + bbox_increase);
@@ -381,6 +391,36 @@ impl Game
 		));
 	}
 
+	fn add_entity_common_components(
+		ecs: &mut hecs::World,
+		map: &bsp_map_compact::BSPMap,
+		map_entity: &bsp_map_compact::Entity,
+		entity: hecs::Entity,
+	)
+	{
+		if let Some(target) = get_entity_key_value(map_entity, map, "target")
+		{
+			ecs.insert_one(
+				entity,
+				TargetNameComponent {
+					name: target.to_string(),
+				},
+			)
+			.ok();
+		}
+
+		if let Some(targetname) = get_entity_key_value(map_entity, map, "targetname")
+		{
+			ecs.insert_one(
+				entity,
+				NamedTargetComponent {
+					name: targetname.to_string(),
+				},
+			)
+			.ok();
+		}
+	}
+
 	fn prepare_linked_doors(&mut self)
 	{
 		// Find touching doors groups.
@@ -432,10 +472,20 @@ impl Game
 		// Slave doors will be automatically activated together with master doors.
 		for (id, (bbox, slave_doors)) in master_doors.drain()
 		{
-			if let Ok(mut q) = self.ecs.query_one::<(&mut DoorComponent,)>(id)
+			let mut q = self
+				.ecs
+				.query_one::<(&mut DoorComponent, Option<&NamedTargetComponent>)>(id)
+				.unwrap();
+			let (door_component, named_target_component) = q.get().unwrap();
+
+			door_component.slave_doors = slave_doors;
+
+			if named_target_component.is_some()
 			{
-				q.get().unwrap().0.slave_doors = slave_doors;
+				// This door is activated by some other trigger.
+				continue;
 			}
+			drop(q);
 
 			let bbox_increase = Vec3f::new(60.0, 60.0, 8.0);
 			let trigger_bbox = BBox::from_min_max(bbox.min - bbox_increase, bbox.max + bbox_increase);
@@ -837,6 +887,38 @@ impl Game
 						}
 					}
 				});
+		}
+	}
+
+	fn update_named_activations(&mut self)
+	{
+		for (id, (target_name_component,)) in self.ecs.query::<(&TargetNameComponent,)>().iter()
+		{
+			let mut activated = false;
+			if let Ok(mut q) = self.ecs.query_one::<(&EntityActivationComponent,)>(id)
+			{
+				if let Some((actication_component,)) = q.get()
+				{
+					activated = actication_component.activated;
+				}
+			}
+
+			if activated
+			{
+				for (target_id, (named_target_component,)) in self.ecs.query::<(&NamedTargetComponent,)>().iter()
+				{
+					if named_target_component.name == target_name_component.name
+					{
+						if let Ok(mut q) = self.ecs.query_one::<(&mut EntityActivationComponent,)>(target_id)
+						{
+							if let Some((actication_component,)) = q.get()
+							{
+								actication_component.activated = true;
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -1327,6 +1409,7 @@ impl GameInterface for Game
 		// Update models after physics update in order to setup position properly.
 
 		self.update_triggers();
+		self.update_named_activations();
 
 		self.update_animations();
 

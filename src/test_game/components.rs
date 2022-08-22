@@ -91,6 +91,18 @@ pub struct TrggerSingleTargetComponent
 	pub target: hecs::Entity,
 }
 
+// Name of triggerable object(s) for buttons, triggers.
+pub struct TargetNameComponent
+{
+	pub name: String,
+}
+
+// Name of triggerable object, used by buttons, triggers.
+pub struct NamedTargetComponent
+{
+	pub name: String,
+}
+
 // Component for entities that may be activated.
 pub struct EntityActivationComponent
 {
