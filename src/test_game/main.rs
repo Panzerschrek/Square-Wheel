@@ -1,6 +1,7 @@
 pub mod components;
 pub mod test_game;
 pub mod test_game_physics;
+pub mod world_spawn;
 pub mod world_update;
 
 pub use square_wheel_lib::square_wheel::*;
