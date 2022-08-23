@@ -18,6 +18,7 @@ pub struct Game
 	ecs: hecs::World,
 	ecs_command_buffer: hecs::CommandBuffer,
 	player_entity: hecs::Entity,
+	camera_view_offset: Vec3f,
 }
 
 impl Game
@@ -68,6 +69,7 @@ impl Game
 			ecs,
 			ecs_command_buffer: hecs::CommandBuffer::new(),
 			player_entity,
+			camera_view_offset: Vec3f::new(0.0, 0.0, 22.0),
 		}
 	}
 
@@ -81,7 +83,10 @@ impl Game
 		let mut q = self.ecs.query_one::<(&LocationComponent,)>(self.player_entity).unwrap();
 		let (location_component,) = q.get().unwrap();
 
-		(location_component.position, location_component.rotation)
+		(
+			location_component.position + self.camera_view_offset,
+			location_component.rotation,
+		)
 	}
 
 	fn get_camera_angles(&self) -> (f32, f32, f32)
@@ -133,7 +138,7 @@ impl Game
 
 		if let (Ok(x), Ok(y), Ok(z)) = (args[0].parse::<f32>(), args[1].parse::<f32>(), args[2].parse::<f32>())
 		{
-			let pos = Vec3f::new(x, y, z);
+			let pos = Vec3f::new(x, y, z) - self.camera_view_offset;
 			let mut q = self
 				.ecs
 				.query_one::<(&mut PlayerControllerComponent,)>(self.player_entity)
