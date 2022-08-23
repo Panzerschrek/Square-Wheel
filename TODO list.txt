@@ -9,9 +9,12 @@ General:
 
 Engine:
 * More advanced skeleton animation - with animations combination, override matrices for specific bones, ragdoll, etc.
-* Anmation files as separate resources (share animations between different models).
+* Animation files as separate resources (share animations between different models).
+* Basic sound support - with game-driven sound playback and sound resources
 
 Renderer:
+* Fix bug with missing visibility when camera lies on portal plane inside portal polygon
+* Fix buggy visibility calculationg with portals clipped by "z_near" plane
 * HDR skyboxes
 * Animated textures (with N frames)
 * Models rendering improvements - avoid splitting models into pieces for each BSP tree leaf in some cases
@@ -25,7 +28,14 @@ Lightmapper:
 * Cone lights
 * Colored shadows
 * Shadows from dynamic objects (configurable)
+* Alpha-shadows (with texture fetch in tracing code)
 
 Map compiler:
 * Speed-up of large maps compilation
 * More map source formats (Quake II, Quake III Arena), Source Engine
+* Bezier curves support (perform tesselation during map compilation)
+
+Test game:
+* Entites with static models (decorations)
+* Save/Load (including serialization of resource handles)
+* Materials without collisions, with collision filters (pass bulletes, but not player, etc.)
