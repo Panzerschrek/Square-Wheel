@@ -8,331 +8,314 @@ pub fn spawn_regular_entities(ecs: &mut hecs::World, physics: &mut TestGamePhysi
 	// Skip world entity.
 	for map_entity in &map.entities[1 ..]
 	{
-		match get_entity_classname(map_entity, map)
-		{
-			Some("func_detail") =>
-			{
-				// Spawn non-moving static entity.
-				let index = map_entity.submodel_index as usize;
-				if index < map.submodels.len()
-				{
-					let entity = ecs.spawn((SubmodelEntityWithIndex {
-						index,
-						submodel_entity: SubmodelEntity {
-							position: bsp_map_compact::get_submodel_bbox(map, &map.submodels[index]).get_center(),
-							rotation: QuaternionF::one(),
-						},
-					},));
-					ecs.insert_one(
-						entity,
-						physics.add_submodel_object(entity, index, &Vec3f::zero(), &QuaternionF::one()),
-					)
-					.ok();
-
-					add_entity_common_components(ecs, map, map_entity, entity);
-				}
-			},
-			Some("trigger_multiple") =>
-			{
-				let index = map_entity.submodel_index as usize;
-				if index < map.submodels.len()
-				{
-					let bbox = bsp_map_compact::get_submodel_bbox(map, &map.submodels[index]);
-
-					let entity = ecs.spawn((TouchTriggerComponent { bbox },));
-					add_entity_common_components(ecs, map, map_entity, entity);
-				}
-			},
-			Some("path_corner") =>
-			{
-				if let Some(origin_str) = get_entity_key_value(map_entity, map, "origin")
-				{
-					if let Ok(origin) = map_file_common::parse_vec3(origin_str)
-					{
-						let entity = ecs.spawn((
-							LocationComponent {
-								position: origin,
-								rotation: QuaternionF::one(),
-							},
-							WaitComponent {
-								wait: get_entity_f32(map_entity, map, "wait").unwrap_or(0.0),
-							},
-						));
-
-						add_entity_common_components(ecs, map, map_entity, entity);
-					}
-				}
-			},
-			Some("func_plat") =>
-			{
-				let index = map_entity.submodel_index as usize;
-				if index < map.submodels.len()
-				{
-					let bbox = bsp_map_compact::get_submodel_bbox(map, &map.submodels[index]);
-
-					let height = if let Some(h) = get_entity_f32(map_entity, map, "height")
-					{
-						h
-					}
-					else
-					{
-						bbox.max.z - bbox.min.z - 8.0
-					};
-
-					let position_upper = bbox.get_center();
-					let position_lower = position_upper - Vec3f::new(0.0, 0.0, height);
-
-					let position = position_lower;
-					let rotation = QuaternionF::one();
-
-					// TODO - start at top if plate requires activation by another entity.
-
-					let entity = ecs.spawn(());
-					ecs.insert(
-						entity,
-						(
-							SubmodelEntityWithIndex {
-								index,
-								submodel_entity: SubmodelEntity { position, rotation },
-							},
-							LocationComponent { position, rotation },
-							EntityActivationComponent { activated: false },
-							PlateComponent {
-								speed: get_entity_f32(map_entity, map, "speed").unwrap_or(150.0),
-								position_lower,
-								position_upper,
-								state: PlateState::TargetDown,
-							},
-							// Update physics object using location component.
-							LocationKinematicPhysicsObjectComponent {
-								phys_handle: physics.add_submodel_object(
-									entity,
-									index,
-									&Vec3f::new(0.0, 0.0, -height),
-									&rotation,
-								),
-							},
-							// Update draw model location, using location component.
-							SubmodelEntityWithIndexLocationLinkComponent {},
-						),
-					)
-					.ok();
-
-					add_entity_common_components(ecs, map, map_entity, entity);
-
-					// Add activation trigger.
-					// TODO - use PLAT_LOW_TRIGGER.
-					let bbox_half_size = bbox.get_size() * 0.5;
-					let bbox_reduce_min = Vec3f::new(
-						(bbox_half_size.x - 1.0).min(25.0),
-						(bbox_half_size.y - 1.0).min(25.0),
-						0.0,
-					);
-					let bbox_reduce_max = Vec3f::new(
-						(bbox_half_size.x - 1.0).min(25.0),
-						(bbox_half_size.y - 1.0).min(25.0),
-						-8.0,
-					);
-
-					let trigger_bbox = BBox::from_min_max(bbox.min + bbox_reduce_min, bbox.max - bbox_reduce_max);
-
-					ecs.spawn((
-						TouchTriggerComponent { bbox: trigger_bbox },
-						TriggerSingleTargetComponent { target: entity },
-					));
-				}
-			},
-			Some("func_door") =>
-			{
-				let index = map_entity.submodel_index as usize;
-				if index < map.submodels.len()
-				{
-					let bbox = bsp_map_compact::get_submodel_bbox(map, &map.submodels[index]);
-
-					let direction = get_entity_move_direction(map_entity, map);
-
-					let lip = get_entity_f32(map_entity, map, "lip").unwrap_or(8.0);
-
-					// TODO - use DOOR_START_OPEN.
-					let position_closed = bbox.get_center();
-					let position_opened = position_closed + direction * (direction.dot(bbox.get_size()).abs() - lip);
-
-					let position = position_closed;
-					let rotation = QuaternionF::one();
-
-					let entity = ecs.spawn(());
-					ecs.insert(
-						entity,
-						(
-							SubmodelEntityWithIndex {
-								index,
-								submodel_entity: SubmodelEntity { position, rotation },
-							},
-							LocationComponent { position, rotation },
-							EntityActivationComponent { activated: false },
-							DoorComponent {
-								speed: get_entity_f32(map_entity, map, "speed").unwrap_or(100.0),
-								wait: get_entity_f32(map_entity, map, "wait").unwrap_or(3.0),
-								position_opened,
-								position_closed,
-								state: DoorState::TargetClosed,
-								slave_doors: Vec::new(), // set later
-							},
-							// Update physics object using location component.
-							LocationKinematicPhysicsObjectComponent {
-								phys_handle: physics.add_submodel_object(
-									entity,
-									index,
-									&(bbox.get_center() - position_closed),
-									&rotation,
-								),
-							},
-							// Update draw model location, using location component.
-							SubmodelEntityWithIndexLocationLinkComponent {},
-						),
-					)
-					.ok();
-
-					add_entity_common_components(ecs, map, map_entity, entity);
-
-					// Add trigger later - after linking touched doors.
-				}
-			},
-			Some("func_button") =>
-			{
-				let index = map_entity.submodel_index as usize;
-				if index < map.submodels.len()
-				{
-					let bbox = bsp_map_compact::get_submodel_bbox(map, &map.submodels[index]);
-
-					let direction = get_entity_move_direction(map_entity, map);
-
-					let lip = get_entity_f32(map_entity, map, "lip").unwrap_or(4.0);
-
-					let position_released = bbox.get_center();
-					let position_pressed = position_released + direction * (direction.dot(bbox.get_size()).abs() - lip);
-
-					let position = position_released;
-					let rotation = QuaternionF::one();
-
-					let entity = ecs.spawn(());
-					ecs.insert(
-						entity,
-						(
-							SubmodelEntityWithIndex {
-								index,
-								submodel_entity: SubmodelEntity { position, rotation },
-							},
-							LocationComponent { position, rotation },
-							EntityActivationComponent { activated: false },
-							ButtonComponent {
-								speed: get_entity_f32(map_entity, map, "speed").unwrap_or(40.0),
-								wait: get_entity_f32(map_entity, map, "wait").unwrap_or(1.0),
-								position_released,
-								position_pressed,
-								state: ButtonState::TargetReleased,
-							},
-							// Update physics object using location component.
-							LocationKinematicPhysicsObjectComponent {
-								phys_handle: physics.add_submodel_object(
-									entity,
-									index,
-									&(bbox.get_center() - position_released),
-									&rotation,
-								),
-							},
-							// Update draw model location, using location component.
-							SubmodelEntityWithIndexLocationLinkComponent {},
-						),
-					)
-					.ok();
-
-					add_entity_common_components(ecs, map, map_entity, entity);
-
-					let bbox_increase = Vec3f::new(1.0, 1.0, 1.0);
-					let trigger_bbox = BBox::from_min_max(bbox.min - bbox_increase, bbox.max + bbox_increase);
-
-					ecs.spawn((
-						TouchTriggerComponent { bbox: trigger_bbox },
-						TriggerSingleTargetComponent { target: entity },
-					));
-				}
-			},
-			Some("func_train") =>
-			{
-				let index = map_entity.submodel_index as usize;
-				if index < map.submodels.len()
-				{
-					let bbox = bsp_map_compact::get_submodel_bbox(map, &map.submodels[index]);
-
-					let position = bbox.get_center();
-					let rotation = QuaternionF::one();
-
-					let entity = ecs.spawn(());
-					ecs.insert(
-						entity,
-						(
-							SubmodelEntityWithIndex {
-								index,
-								submodel_entity: SubmodelEntity { position, rotation },
-							},
-							LocationComponent { position, rotation },
-							EntityActivationComponent { activated: false },
-							TrainComponent {
-								speed: get_entity_f32(map_entity, map, "speed").unwrap_or(100.0),
-								state: TrainState::SearchForInitialPosition,
-								target: entity,
-								// Shift target positions because in Quake position is regulated for minimum point of bbox.
-								target_shift: bbox.get_size() * 0.5,
-							},
-							// Update physics object using location component.
-							LocationKinematicPhysicsObjectComponent {
-								phys_handle: physics.add_submodel_object(entity, index, &Vec3f::zero(), &rotation),
-							},
-							// Update draw model location, using location component.
-							SubmodelEntityWithIndexLocationLinkComponent {},
-						),
-					)
-					.ok();
-
-					add_entity_common_components(ecs, map, map_entity, entity);
-				}
-			},
-			_ =>
-			{
-				let index = map_entity.submodel_index as usize;
-				if index < map.submodels.len()
-				{
-					// Spawn test submodel.
-					let bbox = bsp_map_compact::get_submodel_bbox(map, &map.submodels[index]);
-					let position = bbox.get_center();
-					let rotation = QuaternionF::one();
-
-					let entity = ecs.spawn(());
-					ecs.insert(
-						entity,
-						(
-							TestSubmodelComponent { index },
-							SubmodelEntityWithIndex {
-								index,
-								submodel_entity: SubmodelEntity { position, rotation },
-							},
-							LocationComponent { position, rotation },
-							// Update physics object using location component.
-							LocationKinematicPhysicsObjectComponent {
-								phys_handle: physics.add_submodel_object(entity, index, &position, &rotation),
-							},
-							// Update draw model location, using location component.
-							SubmodelEntityWithIndexLocationLinkComponent {},
-						),
-					)
-					.ok();
-				}
-			},
-		}
+		spawn_regular_entity(ecs, physics, map, map_entity);
 	}
 
 	prepare_linked_doors(ecs, map);
+}
+
+fn spawn_regular_entity(
+	ecs: &mut hecs::World,
+	physics: &mut TestGamePhysics,
+	map: &bsp_map_compact::BSPMap,
+	map_entity: &bsp_map_compact::Entity,
+)
+{
+	match get_entity_classname(map_entity, map)
+	{
+		Some("func_detail") =>
+		{
+			// Spawn non-moving static entity.
+			let index = map_entity.submodel_index as usize;
+			if index < map.submodels.len()
+			{
+				let entity = ecs.spawn((SubmodelEntityWithIndex {
+					index,
+					submodel_entity: SubmodelEntity {
+						position: bsp_map_compact::get_submodel_bbox(map, &map.submodels[index]).get_center(),
+						rotation: QuaternionF::one(),
+					},
+				},));
+				ecs.insert_one(
+					entity,
+					physics.add_submodel_object(entity, index, &Vec3f::zero(), &QuaternionF::one()),
+				)
+				.ok();
+
+				add_entity_common_components(ecs, map, map_entity, entity);
+			}
+		},
+		Some("trigger_multiple") =>
+		{
+			let index = map_entity.submodel_index as usize;
+			if index < map.submodels.len()
+			{
+				let bbox = bsp_map_compact::get_submodel_bbox(map, &map.submodels[index]);
+
+				let entity = ecs.spawn((TouchTriggerComponent { bbox },));
+				add_entity_common_components(ecs, map, map_entity, entity);
+			}
+		},
+		Some("path_corner") =>
+		{
+			if let Some(origin_str) = get_entity_key_value(map_entity, map, "origin")
+			{
+				if let Ok(origin) = map_file_common::parse_vec3(origin_str)
+				{
+					let entity = ecs.spawn((
+						LocationComponent {
+							position: origin,
+							rotation: QuaternionF::one(),
+						},
+						WaitComponent {
+							wait: get_entity_f32(map_entity, map, "wait").unwrap_or(0.0),
+						},
+					));
+
+					add_entity_common_components(ecs, map, map_entity, entity);
+				}
+			}
+		},
+		Some("func_plat") =>
+		{
+			let index = map_entity.submodel_index as usize;
+			if index < map.submodels.len()
+			{
+				let bbox = bsp_map_compact::get_submodel_bbox(map, &map.submodels[index]);
+
+				let height = if let Some(h) = get_entity_f32(map_entity, map, "height")
+				{
+					h
+				}
+				else
+				{
+					bbox.max.z - bbox.min.z - 8.0
+				};
+
+				let position_upper = bbox.get_center();
+				let position_lower = position_upper - Vec3f::new(0.0, 0.0, height);
+
+				let position = position_lower;
+				let rotation = QuaternionF::one();
+
+				// TODO - start at top if plate requires activation by another entity.
+
+				let entity = ecs.spawn(());
+				ecs.insert(
+					entity,
+					(
+						SubmodelEntityWithIndex {
+							index,
+							submodel_entity: SubmodelEntity { position, rotation },
+						},
+						LocationComponent { position, rotation },
+						EntityActivationComponent { activated: false },
+						PlateComponent {
+							speed: get_entity_f32(map_entity, map, "speed").unwrap_or(150.0),
+							position_lower,
+							position_upper,
+							state: PlateState::TargetDown,
+						},
+						// Update physics object using location component.
+						LocationKinematicPhysicsObjectComponent {
+							phys_handle: physics.add_submodel_object(
+								entity,
+								index,
+								&Vec3f::new(0.0, 0.0, -height),
+								&rotation,
+							),
+						},
+						// Update draw model location, using location component.
+						SubmodelEntityWithIndexLocationLinkComponent {},
+					),
+				)
+				.ok();
+
+				add_entity_common_components(ecs, map, map_entity, entity);
+
+				// Add activation trigger.
+				// TODO - use PLAT_LOW_TRIGGER.
+				let bbox_half_size = bbox.get_size() * 0.5;
+				let bbox_reduce_min = Vec3f::new(
+					(bbox_half_size.x - 1.0).min(25.0),
+					(bbox_half_size.y - 1.0).min(25.0),
+					0.0,
+				);
+				let bbox_reduce_max = Vec3f::new(
+					(bbox_half_size.x - 1.0).min(25.0),
+					(bbox_half_size.y - 1.0).min(25.0),
+					-8.0,
+				);
+
+				let trigger_bbox = BBox::from_min_max(bbox.min + bbox_reduce_min, bbox.max - bbox_reduce_max);
+
+				ecs.spawn((
+					TouchTriggerComponent { bbox: trigger_bbox },
+					TriggerSingleTargetComponent { target: entity },
+				));
+			}
+		},
+		Some("func_door") =>
+		{
+			let index = map_entity.submodel_index as usize;
+			if index < map.submodels.len()
+			{
+				let bbox = bsp_map_compact::get_submodel_bbox(map, &map.submodels[index]);
+
+				let direction = get_entity_move_direction(map_entity, map);
+
+				let lip = get_entity_f32(map_entity, map, "lip").unwrap_or(8.0);
+
+				// TODO - use DOOR_START_OPEN.
+				let position_closed = bbox.get_center();
+				let position_opened = position_closed + direction * (direction.dot(bbox.get_size()).abs() - lip);
+
+				let position = position_closed;
+				let rotation = QuaternionF::one();
+
+				let entity = ecs.spawn(());
+				ecs.insert(
+					entity,
+					(
+						SubmodelEntityWithIndex {
+							index,
+							submodel_entity: SubmodelEntity { position, rotation },
+						},
+						LocationComponent { position, rotation },
+						EntityActivationComponent { activated: false },
+						DoorComponent {
+							speed: get_entity_f32(map_entity, map, "speed").unwrap_or(100.0),
+							wait: get_entity_f32(map_entity, map, "wait").unwrap_or(3.0),
+							position_opened,
+							position_closed,
+							state: DoorState::TargetClosed,
+							slave_doors: Vec::new(), // set later
+						},
+						// Update physics object using location component.
+						LocationKinematicPhysicsObjectComponent {
+							phys_handle: physics.add_submodel_object(
+								entity,
+								index,
+								&(bbox.get_center() - position_closed),
+								&rotation,
+							),
+						},
+						// Update draw model location, using location component.
+						SubmodelEntityWithIndexLocationLinkComponent {},
+					),
+				)
+				.ok();
+
+				add_entity_common_components(ecs, map, map_entity, entity);
+
+				// Add trigger later - after linking touched doors.
+			}
+		},
+		Some("func_button") =>
+		{
+			let index = map_entity.submodel_index as usize;
+			if index < map.submodels.len()
+			{
+				let bbox = bsp_map_compact::get_submodel_bbox(map, &map.submodels[index]);
+
+				let direction = get_entity_move_direction(map_entity, map);
+
+				let lip = get_entity_f32(map_entity, map, "lip").unwrap_or(4.0);
+
+				let position_released = bbox.get_center();
+				let position_pressed = position_released + direction * (direction.dot(bbox.get_size()).abs() - lip);
+
+				let position = position_released;
+				let rotation = QuaternionF::one();
+
+				let entity = ecs.spawn(());
+				ecs.insert(
+					entity,
+					(
+						SubmodelEntityWithIndex {
+							index,
+							submodel_entity: SubmodelEntity { position, rotation },
+						},
+						LocationComponent { position, rotation },
+						EntityActivationComponent { activated: false },
+						ButtonComponent {
+							speed: get_entity_f32(map_entity, map, "speed").unwrap_or(40.0),
+							wait: get_entity_f32(map_entity, map, "wait").unwrap_or(1.0),
+							position_released,
+							position_pressed,
+							state: ButtonState::TargetReleased,
+						},
+						// Update physics object using location component.
+						LocationKinematicPhysicsObjectComponent {
+							phys_handle: physics.add_submodel_object(
+								entity,
+								index,
+								&(bbox.get_center() - position_released),
+								&rotation,
+							),
+						},
+						// Update draw model location, using location component.
+						SubmodelEntityWithIndexLocationLinkComponent {},
+					),
+				)
+				.ok();
+
+				add_entity_common_components(ecs, map, map_entity, entity);
+
+				let bbox_increase = Vec3f::new(1.0, 1.0, 1.0);
+				let trigger_bbox = BBox::from_min_max(bbox.min - bbox_increase, bbox.max + bbox_increase);
+
+				ecs.spawn((
+					TouchTriggerComponent { bbox: trigger_bbox },
+					TriggerSingleTargetComponent { target: entity },
+				));
+			}
+		},
+		Some("func_train") =>
+		{
+			let index = map_entity.submodel_index as usize;
+			if index < map.submodels.len()
+			{
+				let bbox = bsp_map_compact::get_submodel_bbox(map, &map.submodels[index]);
+
+				let position = bbox.get_center();
+				let rotation = QuaternionF::one();
+
+				let entity = ecs.spawn(());
+				ecs.insert(
+					entity,
+					(
+						SubmodelEntityWithIndex {
+							index,
+							submodel_entity: SubmodelEntity { position, rotation },
+						},
+						LocationComponent { position, rotation },
+						EntityActivationComponent { activated: false },
+						TrainComponent {
+							speed: get_entity_f32(map_entity, map, "speed").unwrap_or(100.0),
+							state: TrainState::SearchForInitialPosition,
+							target: entity,
+							// Shift target positions because in Quake position is regulated for minimum point of bbox.
+							target_shift: bbox.get_size() * 0.5,
+						},
+						// Update physics object using location component.
+						LocationKinematicPhysicsObjectComponent {
+							phys_handle: physics.add_submodel_object(entity, index, &Vec3f::zero(), &rotation),
+						},
+						// Update draw model location, using location component.
+						SubmodelEntityWithIndexLocationLinkComponent {},
+					),
+				)
+				.ok();
+
+				add_entity_common_components(ecs, map, map_entity, entity);
+			}
+		},
+		_ =>
+		{
+			// Unknown entity type, ignore it.
+		},
+	}
 }
 
 pub fn spawn_player(ecs: &mut hecs::World) -> hecs::Entity

@@ -10,11 +10,6 @@ pub struct TestModelComponent {}
 pub struct TestDecalComponent {}
 pub struct TestLightComponent {}
 
-pub struct TestSubmodelComponent
-{
-	pub index: usize,
-}
-
 // Drawable submodel with index.
 // Store index in order to fill result vector of submodels.
 pub struct SubmodelEntityWithIndex
