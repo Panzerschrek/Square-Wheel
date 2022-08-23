@@ -10,6 +10,7 @@ pub struct TestGamePhysics
 	collider_set: r3d::ColliderSet,
 
 	physics_pipeline: r3d::PhysicsPipeline,
+	query_pipeline: r3d::QueryPipeline,
 	island_manager: r3d::IslandManager,
 	broad_phase: r3d::BroadPhase,
 	narrow_phase: r3d::NarrowPhase,
@@ -17,7 +18,7 @@ pub struct TestGamePhysics
 	multibody_joint_set: r3d::MultibodyJointSet,
 	ccd_solver: r3d::CCDSolver,
 	hooks: PhysicsHooks,
-	event_handler: (),
+	event_handler: EventHandler,
 }
 
 pub type ObjectHandle = r3d::RigidBodyHandle;
@@ -37,6 +38,7 @@ impl TestGamePhysics
 			rigid_body_set,
 			collider_set,
 			physics_pipeline: r3d::PhysicsPipeline::new(),
+			query_pipeline: r3d::QueryPipeline::new(),
 			island_manager: r3d::IslandManager::new(),
 			broad_phase: r3d::BroadPhase::new(),
 			narrow_phase: r3d::NarrowPhase::new(),
@@ -44,14 +46,21 @@ impl TestGamePhysics
 			multibody_joint_set: r3d::MultibodyJointSet::new(),
 			ccd_solver: r3d::CCDSolver::new(),
 			hooks: PhysicsHooks::new(),
-			event_handler: (),
+			event_handler: EventHandler {},
 		}
 	}
 
-	pub fn add_object(&mut self, position: &Vec3f, rotation: &QuaternionF, bbox: &BBox) -> ObjectHandle
+	pub fn add_object(
+		&mut self,
+		entity: hecs::Entity,
+		position: &Vec3f,
+		rotation: &QuaternionF,
+		bbox: &BBox,
+	) -> ObjectHandle
 	{
 		// TODO - maybe tune physics and disable CCD?
 		let body = r3d::RigidBodyBuilder::dynamic()
+			.user_data(make_user_data(entity, 0))
 			.translation(r3d::Vector::new(position.x, position.y, position.z))
 			.rotation(quaternion_to_ang_vector(rotation))
 			.ccd_enabled(true)
@@ -61,6 +70,7 @@ impl TestGamePhysics
 		let bbox_center = bbox.get_center();
 
 		let collider = r3d::ColliderBuilder::cuboid(bbox_half_size.x, bbox_half_size.y, bbox_half_size.z)
+			.user_data(make_user_data(entity, 0))
 			.translation(r3d::Vector::new(bbox_center.x, bbox_center.y, bbox_center.z))
 			.restitution(0.5)
 			.friction(0.5)
@@ -73,8 +83,13 @@ impl TestGamePhysics
 		handle
 	}
 
-	pub fn add_submodel_object(&mut self, submodel_index: usize, shift: &Vec3f, rotation: &QuaternionF)
-		-> ObjectHandle
+	pub fn add_submodel_object(
+		&mut self,
+		entity: hecs::Entity,
+		submodel_index: usize,
+		shift: &Vec3f,
+		rotation: &QuaternionF,
+	) -> ObjectHandle
 	{
 		let submodel = &self.map.submodels[submodel_index];
 		let bbox = bsp_map_compact::get_submodel_bbox(&self.map, submodel);
@@ -84,12 +99,14 @@ impl TestGamePhysics
 		let position = shift + bbox_center;
 
 		let body = r3d::RigidBodyBuilder::kinematic_position_based()
+			.user_data(make_user_data(entity, 0))
 			.translation(r3d::Vector::new(position.x, position.y, position.z))
 			.rotation(quaternion_to_ang_vector(rotation))
 			.ccd_enabled(true)
 			.build();
 
 		let collider = r3d::ColliderBuilder::cuboid(bbox_half_size.x, bbox_half_size.y, bbox_half_size.z)
+			.user_data(make_user_data(entity, 0))
 			.restitution(0.0)
 			.build();
 
@@ -100,10 +117,17 @@ impl TestGamePhysics
 		handle
 	}
 
-	pub fn add_character_object(&mut self, position: &Vec3f, width: f32, heigt: f32) -> ObjectHandle
+	pub fn add_character_object(
+		&mut self,
+		entity: hecs::Entity,
+		position: &Vec3f,
+		width: f32,
+		heigt: f32,
+	) -> ObjectHandle
 	{
 		// TODO - maybe tune physics and disable CCD?
 		let body = r3d::RigidBodyBuilder::dynamic()
+			.user_data(make_user_data(entity, CHARACTER_FLAG))
 			.translation(r3d::Vector::new(position.x, position.y, position.z))
 			.ccd_enabled(true)
 			.linear_damping(0.5)
@@ -111,10 +135,10 @@ impl TestGamePhysics
 			.build();
 
 		let collider = r3d::ColliderBuilder::capsule_z((heigt - width) * 0.5, width * 0.5)
+			.user_data(make_user_data(entity, CHARACTER_FLAG))
 			.restitution(0.0)
 			.friction(0.95)
 			.active_hooks(r3d::ActiveHooks::MODIFY_SOLVER_CONTACTS)
-			.user_data(CHARACTER_USER_DATA)
 			.build();
 
 		let handle = self.rigid_body_set.insert(body);
@@ -212,6 +236,32 @@ impl TestGamePhysics
 		)
 	}
 
+	pub fn get_box_touching_entities<Func: FnMut(hecs::Entity)>(&self, bbox: &BBox, mut func: Func)
+	{
+		let bbox_half_size = bbox.get_size() * 0.5;
+		let bbox_center = bbox.get_center();
+
+		let shape = r3d::Cuboid::new(r3d::Vector::new(bbox_half_size.x, bbox_half_size.y, bbox_half_size.z));
+		let shape_center = r3d::Vector::new(bbox_center.x, bbox_center.y, bbox_center.z);
+
+		self.query_pipeline.intersections_with_shape(
+			&self.rigid_body_set,
+			&self.collider_set,
+			&r3d::Isometry::new(shape_center, r3d::Vector::new(0.0, 0.0, 0.0)),
+			&shape,
+			r3d::QueryFilter::default(),
+			|collider_handle| {
+				let collider = &self.collider_set[collider_handle];
+				let dst_entity = entity_from_user_data(collider.user_data);
+				if dst_entity != hecs::Entity::DANGLING
+				{
+					func(dst_entity);
+				}
+				true
+			},
+		);
+	}
+
 	pub fn update(&mut self, time_delta_s: f32)
 	{
 		let gravity = r3d::Vector::new(0.0, 0.0, -627.84);
@@ -241,6 +291,9 @@ impl TestGamePhysics
 				&self.hooks,
 				&self.event_handler,
 			);
+
+			self.query_pipeline
+				.update(&self.island_manager, &self.rigid_body_set, &self.collider_set);
 		}
 	}
 }
@@ -301,7 +354,7 @@ impl PhysicsHooks
 	}
 }
 
-const CHARACTER_USER_DATA: u128 = 42;
+const CHARACTER_FLAG: u64 = 1;
 const STAIRS_HACK_NORMAL_Z: f32 = 0.3;
 
 impl r3d::PhysicsHooks for PhysicsHooks
@@ -310,7 +363,8 @@ impl r3d::PhysicsHooks for PhysicsHooks
 	{
 		// For colliders with stairs hack modify contact point normal in order to avoid slowing-down while climbing stairs.
 		let collider1 = &context.colliders[context.collider1];
-		if collider1.user_data == CHARACTER_USER_DATA
+		let collider1_is_character = additional_data_from_user_data(collider1.user_data) == CHARACTER_FLAG;
+		if collider1_is_character
 		{
 			if context.normal.z < -STAIRS_HACK_NORMAL_Z
 			{
@@ -319,7 +373,8 @@ impl r3d::PhysicsHooks for PhysicsHooks
 		}
 
 		let collider2 = &context.colliders[context.collider2];
-		if collider2.user_data == CHARACTER_USER_DATA
+		let collider2_is_character = additional_data_from_user_data(collider2.user_data) == CHARACTER_FLAG;
+		if collider2_is_character
 		{
 			if context.normal.z > STAIRS_HACK_NORMAL_Z
 			{
@@ -328,7 +383,7 @@ impl r3d::PhysicsHooks for PhysicsHooks
 		}
 
 		// Modify also friction to disable walls friction.
-		if collider1.user_data == CHARACTER_USER_DATA || collider2.user_data == CHARACTER_USER_DATA
+		if collider1_is_character || collider2_is_character
 		{
 			let fiction_scale = context.normal.z.abs();
 			for contact in context.solver_contacts.iter_mut()
@@ -337,4 +392,48 @@ impl r3d::PhysicsHooks for PhysicsHooks
 			}
 		}
 	}
+}
+
+struct EventHandler {}
+
+impl r3d::EventHandler for EventHandler
+{
+	fn handle_collision_event(
+		&self,
+		_bodies: &r3d::RigidBodySet,
+		_colliders: &r3d::ColliderSet,
+		_event: r3d::CollisionEvent,
+		_contact_pair: Option<&r3d::ContactPair>,
+	)
+	{
+		// println!("Collision!");
+	}
+
+	fn handle_contact_force_event(
+		&self,
+		_dt: r3d::Real,
+		_bodies: &r3d::RigidBodySet,
+		_colliders: &r3d::ColliderSet,
+		_contact_pair: &r3d::ContactPair,
+		_total_force_magnitude: r3d::Real,
+	)
+	{
+	}
+}
+
+// Store entity in lower 64 bits and various physics flags in upper 64 bits.
+
+fn make_user_data(entity: hecs::Entity, additional_data: u64) -> u128
+{
+	(entity.to_bits().get() as u128) | ((additional_data as u128) << 64)
+}
+
+fn entity_from_user_data(user_data: u128) -> hecs::Entity
+{
+	hecs::Entity::from_bits(user_data as u64).unwrap_or(hecs::Entity::DANGLING)
+}
+
+fn additional_data_from_user_data(user_data: u128) -> u64
+{
+	(user_data >> 64) as u64
 }

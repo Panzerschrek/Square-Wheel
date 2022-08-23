@@ -1,10 +1,8 @@
 use super::{
 	commands_processor, commands_queue, components::*, console, frame_info::*, game_interface::*, light::*,
-	resources_manager::*, test_game_physics,
+	resources_manager::*, test_game_physics, world_spawn, world_update,
 };
-use square_wheel_lib::common::{
-	bsp_map_compact, camera_rotation_controller::*, color::*, material, math_types::*, matrix::*, system_window,
-};
+use square_wheel_lib::common::{bsp_map_compact, color::*, material, math_types::*, matrix::*, system_window};
 use std::sync::Arc;
 
 pub struct Game
@@ -53,270 +51,23 @@ impl Game
 			.unwrap()
 			.register_command_queue(commands_queue_dyn.clone());
 
-		let mut result = Self {
+		let mut ecs = hecs::World::new();
+		let mut physics = test_game_physics::TestGamePhysics::new(map.clone());
+		world_spawn::spawn_regular_entities(&mut ecs, &mut physics, &map);
+		let player_entity = world_spawn::spawn_player(&mut ecs, &mut physics, &map);
+
+		Self {
 			commands_processor,
 			console,
 			resources_manager,
 			commands_queue,
 			commands_queue_dyn,
-			map: map.clone(),
-			physics: test_game_physics::TestGamePhysics::new(map),
+			map: map,
+			physics,
 			game_time: 0.0,
-			ecs: hecs::World::new(),
+			ecs,
 			ecs_command_buffer: hecs::CommandBuffer::new(),
-			player_entity: hecs::Entity::DANGLING,
-		};
-
-		result.spawn_entities();
-
-		result
-	}
-
-	fn spawn_entities(&mut self)
-	{
-		let physics = &mut self.physics;
-		self.ecs.spawn_batch((0 .. self.map.submodels.len()).map(|index| {
-			(TestSubmodelComponent {
-				phys_handle: physics.add_submodel_object(index, &Vec3f::zero(), &QuaternionF::zero()),
-				index,
-			},)
-		}));
-
-		self.player_entity = self.ecs.spawn((
-			PlayerComponent {
-				view_model_entity: hecs::Entity::DANGLING,
-			},
-			LocationComponent {
-				position: Vec3f::zero(),
-				rotation: QuaternionF::zero(),
-			},
-			PlayerControllerLocationComponent {},
-			PlayerControllerComponent {
-				rotation_controller: CameraRotationController::new(),
-				position_source: PlayerPositionSource::Noclip(Vec3f::zero()),
-			},
-		));
-	}
-
-	fn update_player_entity(
-		&mut self,
-		keyboard_state: &system_window::KeyboardState,
-		events: &[sdl2::event::Event],
-		time_delta_s: f32,
-	)
-	{
-		if let Ok(mut q) = self
-			.ecs
-			.query_one::<(&mut PlayerControllerComponent,)>(self.player_entity)
-		{
-			let (player_controller,) = q.get().unwrap();
-			player_controller
-				.rotation_controller
-				.update(keyboard_state, events, time_delta_s);
-
-			let azimuth = player_controller.rotation_controller.get_angles().0;
-			let forward_vector = Vec3f::new(-(azimuth.sin()), azimuth.cos(), 0.0);
-			let left_vector = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0);
-			let mut move_vector = Vec3f::new(0.0, 0.0, 0.0);
-
-			use sdl2::keyboard::Scancode;
-			if keyboard_state.contains(&Scancode::W)
-			{
-				move_vector += forward_vector;
-			}
-			if keyboard_state.contains(&Scancode::S)
-			{
-				move_vector -= forward_vector;
-			}
-			if keyboard_state.contains(&Scancode::D)
-			{
-				move_vector += left_vector;
-			}
-			if keyboard_state.contains(&Scancode::A)
-			{
-				move_vector -= left_vector;
-			}
-
-			let move_vector_length = move_vector.magnitude();
-			if move_vector_length > 0.0
-			{
-				move_vector = move_vector / move_vector_length;
-			}
-
-			match &mut player_controller.position_source
-			{
-				PlayerPositionSource::Noclip(position) =>
-				{
-					let speed = 256.0;
-					let jump_speed = 0.8 * speed;
-
-					*position += move_vector * (time_delta_s * speed);
-
-					if keyboard_state.contains(&Scancode::Space)
-					{
-						position.z += time_delta_s * jump_speed;
-					}
-					if keyboard_state.contains(&Scancode::C)
-					{
-						position.z -= time_delta_s * jump_speed;
-					}
-				},
-				PlayerPositionSource::Phys(phys_handle) =>
-				{
-					let ground_acceleration = 2048.0;
-					let air_acceleration = 512.0;
-					let max_velocity = 400.0;
-					let jump_velocity_add = 256.0;
-
-					let cur_velocity = self.physics.get_object_velocity(*phys_handle);
-					let on_ground = self.physics.is_object_on_ground(*phys_handle);
-
-					let acceleration: f32 = if on_ground
-					{
-						ground_acceleration
-					}
-					else
-					{
-						air_acceleration
-					};
-
-					let mut velocity_add = Vec3f::zero();
-
-					// Limit maximum velocity.
-					let velocity_projection_to_move_vector = move_vector.dot(cur_velocity);
-					if velocity_projection_to_move_vector < max_velocity
-					{
-						let max_can_add = max_velocity - velocity_projection_to_move_vector;
-						velocity_add = move_vector * (acceleration * time_delta_s).min(max_can_add);
-					}
-
-					if keyboard_state.contains(&Scancode::Space) && on_ground && cur_velocity.z <= 1.0
-					{
-						velocity_add.z = jump_velocity_add;
-					}
-
-					self.physics.add_object_velocity(*phys_handle, &velocity_add);
-				},
-			}
-		}
-	}
-
-	fn update_test_submodels(&mut self)
-	{
-		for (id, (test_submodel_component,)) in self.ecs.query::<(&TestSubmodelComponent,)>().iter()
-		{
-			let index = test_submodel_component.index;
-			let phase = index as f32;
-			let shift = 32.0 *
-				Vec3f::new(
-					(0.5 * self.game_time + phase).sin(),
-					(0.33 * self.game_time + phase).sin(),
-					(0.11111 * self.game_time + phase).sin(),
-				);
-
-			let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
-			let bbox_center = bbox.get_center();
-
-			self.physics
-				.set_kinematic_object_position(test_submodel_component.phys_handle, &(bbox_center + shift));
-			let (position, rotation) = self.physics.get_object_location(test_submodel_component.phys_handle);
-
-			if let Ok(mut q) = self.ecs.query_one::<(&mut SubmodelEntityWithIndex,)>(id)
-			{
-				if let Some((submodel_entity_with_index,)) = q.get()
-				{
-					submodel_entity_with_index.submodel_entity.position = position;
-					submodel_entity_with_index.submodel_entity.rotation = rotation;
-				}
-				else
-				{
-					self.ecs_command_buffer.insert_one(
-						id,
-						SubmodelEntityWithIndex {
-							index,
-							submodel_entity: SubmodelEntity { position, rotation },
-						},
-					);
-				}
-			}
-		}
-		self.ecs_command_buffer.run_on(&mut self.ecs);
-	}
-
-	fn update_animations(&mut self)
-	{
-		for (_id, (_simple_animation_component, model)) in
-			self.ecs.query_mut::<(&SimpleAnimationComponent, &mut ModelEntity)>()
-		{
-			let num_frames = model.model.frames_info.len() as u32;
-			let frame_f = self.game_time * 10.0;
-			model.animation.frames[0] = (frame_f as u32) % num_frames;
-			model.animation.frames[1] = (frame_f as u32 + 1) % num_frames;
-			model.animation.lerp = 1.0 - frame_f.fract();
-		}
-	}
-
-	fn update_player_controller_locations(&mut self)
-	{
-		for (_id, (_player_controller_location_component, player_controller, location)) in self.ecs.query_mut::<(
-			&PlayerControllerLocationComponent,
-			&PlayerControllerComponent,
-			&mut LocationComponent,
-		)>()
-		{
-			location.position = match player_controller.position_source
-			{
-				PlayerPositionSource::Noclip(p) => p,
-				PlayerPositionSource::Phys(handle) => self.physics.get_object_location(handle).0,
-			};
-
-			location.rotation = player_controller.rotation_controller.get_rotation();
-		}
-	}
-
-	fn update_phys_model_locations(&mut self)
-	{
-		for (_id, (phys_handle, location)) in self
-			.ecs
-			.query_mut::<(&PhysicsLocationComponent, &mut LocationComponent)>()
-		{
-			let phys_location = self.physics.get_object_location(*phys_handle);
-			location.position = phys_location.0;
-			location.rotation = phys_location.1;
-		}
-	}
-
-	fn update_other_entity_locations(&mut self)
-	{
-		for (_id, (other_entity_location_component, location_component)) in self
-			.ecs
-			.query::<(&OtherEntityLocationComponent, &mut LocationComponent)>()
-			.into_iter()
-		{
-			// TODO - support chains of linked entities.
-			let mut q = self
-				.ecs
-				.query_one::<(&LocationComponent,)>(other_entity_location_component.entity)
-				.unwrap();
-			let (src_location_component,) = q.get().unwrap();
-
-			location_component.position = src_location_component.position +
-				src_location_component
-					.rotation
-					.rotate_vector(other_entity_location_component.relative_position);
-			location_component.rotation =
-				src_location_component.rotation * other_entity_location_component.relative_rotation;
-		}
-	}
-
-	fn update_models_locations(&mut self)
-	{
-		for (_id, (_model_entity_location_link_component, location_component, model)) in
-			self.ecs
-				.query_mut::<(&ModelEntityLocationLinkComponent, &LocationComponent, &mut ModelEntity)>()
-		{
-			model.position = location_component.position;
-			model.rotation = location_component.rotation;
+			player_entity,
 		}
 	}
 
@@ -502,13 +253,11 @@ impl Game
 		let (position, rotation) = self.get_camera_location();
 		let bbox = model.frames_info[0].bbox;
 
-		let phys_handle = self.physics.add_object(&position, &rotation, &bbox);
-		self.ecs.spawn((
+		let entity = self.ecs.spawn((
 			TestModelComponent {},
 			SimpleAnimationComponent {},
 			LocationComponent { position, rotation },
 			ModelEntityLocationLinkComponent {},
-			phys_handle,
 			ModelEntity {
 				position,
 				rotation,
@@ -524,6 +273,9 @@ impl Game
 				ordering_custom_bbox: None,
 			},
 		));
+		self.ecs
+			.insert_one(entity, self.physics.add_object(entity, &position, &rotation, &bbox))
+			.ok();
 	}
 
 	fn command_reset_test_models(&mut self, _args: commands_queue::CommandArgs)
@@ -606,14 +358,14 @@ impl Game
 		let texture = r.get_texture_lite(&args[1]);
 
 		let position = Vec3f::zero();
-		let rotation = QuaternionF::zero();
+		let rotation = QuaternionF::one();
 
 		let view_model_entity = self.ecs.spawn((
 			SimpleAnimationComponent {},
 			OtherEntityLocationComponent {
 				entity: self.player_entity,
 				relative_position: Vec3f::new(16.0, -8.0, -10.0),
-				relative_rotation: QuaternionF::from_angle_x(Rad(0.0)),
+				relative_rotation: QuaternionF::one(),
 			},
 			LocationComponent { position, rotation },
 			ModelEntityLocationLinkComponent {},
@@ -672,7 +424,11 @@ impl Game
 			{
 				self.console.lock().unwrap().add_text("Noclip OFF".to_string());
 
-				PlayerPositionSource::Phys(self.physics.add_character_object(&pos, 60.0, 120.0))
+				PlayerPositionSource::Phys(world_spawn::create_player_phys_object(
+					&mut self.physics,
+					self.player_entity,
+					&pos,
+				))
 			},
 			PlayerPositionSource::Phys(phys_handle) =>
 			{
@@ -702,25 +458,40 @@ impl GameInterface for Game
 
 		self.game_time += time_delta_s;
 
-		self.update_player_entity(keyboard_state, events, time_delta_s);
-		self.update_test_submodels();
+		world_update::update_player_entity(
+			&mut self.ecs,
+			&mut self.physics,
+			self.player_entity,
+			keyboard_state,
+			events,
+			time_delta_s,
+		);
+		world_update::update_plates(&mut self.ecs, self.game_time, time_delta_s);
+		world_update::update_doors(&mut self.ecs, self.game_time, time_delta_s);
+		world_update::update_buttons(&mut self.ecs, self.game_time, time_delta_s);
+		world_update::update_trains(&mut self.ecs, self.game_time, time_delta_s);
+		world_update::update_kinematic_physics_objects(&mut self.ecs, &mut self.physics);
 
 		// Update physics only after settig params of externally-controlled physics objects - player, platforms, etc.
 		self.physics.update(time_delta_s);
 
 		// Update models after physics update in order to setup position properly.
 
-		self.update_animations();
+		world_update::update_touch_triggers(&mut self.ecs, &self.physics);
+		world_update::update_named_activations(&mut self.ecs);
+
+		world_update::update_animations(&mut self.ecs, self.game_time);
 
 		// Update location of player entity, taken from player controller.
-		self.update_player_controller_locations();
+		world_update::update_player_controller_locations(&mut self.ecs, &self.physics);
 		// Take locations from physics engine.
-		self.update_phys_model_locations();
+		world_update::update_phys_model_locations(&mut self.ecs, &self.physics);
 		// Take locations from other entities. This is needed for entities, attached to other entities.
-		self.update_other_entity_locations();
+		world_update::update_other_entity_locations(&mut self.ecs);
 
 		// Update locations of visible models.
-		self.update_models_locations();
+		world_update::update_models_locations(&mut self.ecs);
+		world_update::update_submodels_locations(&mut self.ecs);
 	}
 
 	fn grab_mouse_input(&self) -> bool
@@ -750,7 +521,7 @@ impl GameInterface for Game
 		FrameInfo {
 			camera_matrices,
 			submodel_entities,
-			skybox_rotation: QuaternionF::zero(),
+			skybox_rotation: QuaternionF::one(),
 			game_time_s: self.game_time,
 			lights: self.collect_drawable_components(),
 			model_entities: self.collect_drawable_components(),
