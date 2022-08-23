@@ -97,14 +97,14 @@ impl Game
 							submodel_entity: SubmodelEntity {
 								position: bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index])
 									.get_center(),
-								rotation: QuaternionF::zero(),
+								rotation: QuaternionF::one(),
 							},
 						},));
 						self.ecs
 							.insert_one(
 								entity,
 								self.physics
-									.add_submodel_object(entity, index, &Vec3f::zero(), &QuaternionF::zero()),
+									.add_submodel_object(entity, index, &Vec3f::zero(), &QuaternionF::one()),
 							)
 							.ok();
 
@@ -131,7 +131,7 @@ impl Game
 							let entity = self.ecs.spawn((
 								LocationComponent {
 									position: origin,
-									rotation: QuaternionF::zero(),
+									rotation: QuaternionF::one(),
 								},
 								WaitComponent {
 									wait: get_entity_f32(map_entity, &self.map, "wait").unwrap_or(0.0),
@@ -162,7 +162,7 @@ impl Game
 						let position_lower = position_upper - Vec3f::new(0.0, 0.0, height);
 
 						let position = position_lower;
-						let rotation = QuaternionF::zero();
+						let rotation = QuaternionF::one();
 
 						// TODO - start at top if plate requires activation by another entity.
 
@@ -239,7 +239,7 @@ impl Game
 							position_closed + direction * (direction.dot(bbox.get_size()).abs() - lip);
 
 						let position = position_closed;
-						let rotation = QuaternionF::zero();
+						let rotation = QuaternionF::one();
 
 						let entity = self.ecs.spawn(());
 						self.ecs
@@ -296,7 +296,7 @@ impl Game
 							position_released + direction * (direction.dot(bbox.get_size()).abs() - lip);
 
 						let position = position_released;
-						let rotation = QuaternionF::zero();
+						let rotation = QuaternionF::one();
 
 						let entity = self.ecs.spawn(());
 						self.ecs
@@ -350,7 +350,7 @@ impl Game
 						let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
 
 						let position = bbox.get_center();
-						let rotation = QuaternionF::zero();
+						let rotation = QuaternionF::one();
 
 						let entity = self.ecs.spawn(());
 						self.ecs
@@ -396,7 +396,7 @@ impl Game
 						// Spawn test submodel.
 						let bbox = bsp_map_compact::get_submodel_bbox(&self.map, &self.map.submodels[index]);
 						let position = bbox.get_center();
-						let rotation = QuaternionF::zero();
+						let rotation = QuaternionF::one();
 
 						let entity = self.ecs.spawn(());
 						self.ecs
@@ -436,7 +436,7 @@ impl Game
 			},
 			LocationComponent {
 				position: Vec3f::zero(),
-				rotation: QuaternionF::zero(),
+				rotation: QuaternionF::one(),
 			},
 			PlayerControllerLocationComponent {},
 			PlayerControllerComponent {
@@ -1503,14 +1503,14 @@ impl Game
 		let texture = r.get_texture_lite(&args[1]);
 
 		let position = Vec3f::zero();
-		let rotation = QuaternionF::zero();
+		let rotation = QuaternionF::one();
 
 		let view_model_entity = self.ecs.spawn((
 			SimpleAnimationComponent {},
 			OtherEntityLocationComponent {
 				entity: self.player_entity,
 				relative_position: Vec3f::new(16.0, -8.0, -10.0),
-				relative_rotation: QuaternionF::from_angle_x(Rad(0.0)),
+				relative_rotation: QuaternionF::one(),
 			},
 			LocationComponent { position, rotation },
 			ModelEntityLocationLinkComponent {},
@@ -1656,7 +1656,7 @@ impl GameInterface for Game
 		FrameInfo {
 			camera_matrices,
 			submodel_entities,
-			skybox_rotation: QuaternionF::zero(),
+			skybox_rotation: QuaternionF::one(),
 			game_time_s: self.game_time,
 			lights: self.collect_drawable_components(),
 			model_entities: self.collect_drawable_components(),
