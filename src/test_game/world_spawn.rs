@@ -23,28 +23,6 @@ fn spawn_regular_entity(
 {
 	match get_entity_classname(map_entity, map)
 	{
-		Some("func_detail") =>
-		{
-			// Spawn non-moving static entity.
-			let index = map_entity.submodel_index as usize;
-			if index < map.submodels.len()
-			{
-				let entity = ecs.spawn((SubmodelEntityWithIndex {
-					index,
-					submodel_entity: SubmodelEntity {
-						position: bsp_map_compact::get_submodel_bbox(map, &map.submodels[index]).get_center(),
-						rotation: QuaternionF::one(),
-					},
-				},));
-				ecs.insert_one(
-					entity,
-					physics.add_submodel_object(entity, index, &Vec3f::zero(), &QuaternionF::one()),
-				)
-				.ok();
-
-				add_entity_common_components(ecs, map, map_entity, entity);
-			}
-		},
 		Some("trigger_multiple") =>
 		{
 			let index = map_entity.submodel_index as usize;
@@ -311,9 +289,28 @@ fn spawn_regular_entity(
 				add_entity_common_components(ecs, map, map_entity, entity);
 			}
 		},
-		_ =>
+		// Process unknown entities with submodels as "func_detal".
+		Some("func_detail") | _ =>
 		{
-			// Unknown entity type, ignore it.
+			// Spawn non-moving static entity.
+			let index = map_entity.submodel_index as usize;
+			if index < map.submodels.len()
+			{
+				let entity = ecs.spawn((SubmodelEntityWithIndex {
+					index,
+					submodel_entity: SubmodelEntity {
+						position: bsp_map_compact::get_submodel_bbox(map, &map.submodels[index]).get_center(),
+						rotation: QuaternionF::one(),
+					},
+				},));
+				ecs.insert_one(
+					entity,
+					physics.add_submodel_object(entity, index, &Vec3f::zero(), &QuaternionF::one()),
+				)
+				.ok();
+
+				add_entity_common_components(ecs, map, map_entity, entity);
+			}
 		},
 	}
 }
