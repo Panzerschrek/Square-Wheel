@@ -54,7 +54,7 @@ impl Game
 		let mut ecs = hecs::World::new();
 		let mut physics = test_game_physics::TestGamePhysics::new(map.clone());
 		world_spawn::spawn_regular_entities(&mut ecs, &mut physics, &map);
-		let player_entity = world_spawn::spawn_player(&mut ecs);
+		let player_entity = world_spawn::spawn_player(&mut ecs, &mut physics, &map);
 
 		Self {
 			commands_processor,
@@ -424,7 +424,11 @@ impl Game
 			{
 				self.console.lock().unwrap().add_text("Noclip OFF".to_string());
 
-				PlayerPositionSource::Phys(self.physics.add_character_object(self.player_entity, &pos, 60.0, 120.0))
+				PlayerPositionSource::Phys(world_spawn::create_player_phys_object(
+					&mut self.physics,
+					self.player_entity,
+					&pos,
+				))
 			},
 			PlayerPositionSource::Phys(phys_handle) =>
 			{

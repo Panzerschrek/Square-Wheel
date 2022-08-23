@@ -318,9 +318,25 @@ fn spawn_regular_entity(
 	}
 }
 
-pub fn spawn_player(ecs: &mut hecs::World) -> hecs::Entity
+pub fn spawn_player(ecs: &mut hecs::World, physics: &mut TestGamePhysics, map: &bsp_map_compact::BSPMap)
+	-> hecs::Entity
 {
-	ecs.spawn((
+	let mut spawn_entity = None;
+	for classname in [
+		"info_player_start",
+		"info_player_start2",
+		"info_player_coop",
+		"info_player_deathmatch",
+	]
+	{
+		spawn_entity = find_first_entity_of_given_class(map, classname);
+		if spawn_entity.is_some()
+		{
+			break;
+		}
+	}
+
+	let player_entity = ecs.spawn((
 		PlayerComponent {
 			view_model_entity: hecs::Entity::DANGLING,
 		},
@@ -329,11 +345,46 @@ pub fn spawn_player(ecs: &mut hecs::World) -> hecs::Entity
 			rotation: QuaternionF::one(),
 		},
 		PlayerControllerLocationComponent {},
+	));
+
+	let mut rotation_controller = CameraRotationController::new();
+	let mut position_source = PlayerPositionSource::Noclip(Vec3f::zero());
+	if let Some(spawn_entity) = spawn_entity
+	{
+		if let Some(origin_str) = get_entity_key_value(spawn_entity, map, "origin")
+		{
+			if let Ok(origin) = map_file_common::parse_vec3(origin_str)
+			{
+				position_source =
+					PlayerPositionSource::Phys(create_player_phys_object(physics, player_entity, &origin));
+			}
+		}
+
+		let angle = get_entity_f32(spawn_entity, map, "angle").unwrap_or(0.0);
+		let angle_rad = angle * (std::f32::consts::PI / 180.0);
+		rotation_controller.set_angles(angle_rad - 0.5 * std::f32::consts::PI, 0.0, 0.0);
+	}
+
+	ecs.insert_one(
+		player_entity,
 		PlayerControllerComponent {
-			rotation_controller: CameraRotationController::new(),
-			position_source: PlayerPositionSource::Noclip(Vec3f::zero()),
+			rotation_controller,
+			position_source,
 		},
-	))
+	)
+	.ok();
+
+	player_entity
+}
+
+pub fn create_player_phys_object(
+	physics: &mut TestGamePhysics,
+	player_entity: hecs::Entity,
+	position: &Vec3f,
+) -> ObjectHandle
+{
+	// Use same dimensions of player as in Quake.
+	physics.add_character_object(player_entity, &position, 31.0, 56.0)
 }
 
 fn add_entity_common_components(
@@ -461,6 +512,22 @@ fn get_entity_move_direction(entity: &bsp_map_compact::Entity, map: &bsp_map_com
 
 	// Return something.
 	return Vec3f::unit_x();
+}
+
+fn find_first_entity_of_given_class<'a>(
+	map: &'a bsp_map_compact::BSPMap,
+	classname: &str,
+) -> Option<&'a bsp_map_compact::Entity>
+{
+	for entity in &map.entities
+	{
+		if get_entity_classname(entity, map) == Some(classname)
+		{
+			return Some(entity);
+		}
+	}
+
+	None
 }
 
 fn get_entity_f32(entity: &bsp_map_compact::Entity, map: &bsp_map_compact::BSPMap, key: &str) -> Option<f32>
