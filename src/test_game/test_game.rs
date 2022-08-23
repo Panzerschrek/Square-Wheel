@@ -676,11 +676,14 @@ impl Game
 			{
 				PlateState::TargetUp =>
 				{
-					location_component.position.z += time_delta_s * plate_component.speed;
-					if location_component.position.z >= plate_component.position_upper.z
+					location_component.position = move_towards_target(
+						&location_component.position,
+						&plate_component.position_upper,
+						plate_component.speed,
+						time_delta_s,
+					);
+					if location_component.position == plate_component.position_upper
 					{
-						location_component.position.z = plate_component.position_upper.z;
-
 						plate_component.state = PlateState::StayTop {
 							down_time_s: self.game_time + wait_time_s,
 						};
@@ -688,11 +691,12 @@ impl Game
 				},
 				PlateState::TargetDown =>
 				{
-					location_component.position.z -= time_delta_s * plate_component.speed;
-					if location_component.position.z <= plate_component.position_lower.z
-					{
-						location_component.position.z = plate_component.position_lower.z;
-					}
+					location_component.position = move_towards_target(
+						&location_component.position,
+						&plate_component.position_lower,
+						plate_component.speed,
+						time_delta_s,
+					);
 				},
 				PlateState::StayTop { down_time_s } =>
 				{
@@ -753,22 +757,18 @@ impl Game
 				door_component.state = DoorState::TargetOpened;
 			}
 
-			let step = time_delta_s * door_component.speed;
-
-			// TODO - avoid computational errors - interpolate positions based on scalar.
 			match &mut door_component.state
 			{
 				DoorState::TargetOpened =>
 				{
-					let vec_to = door_component.position_opened - door_component.position_closed;
-					let vec_to_len = vec_to.magnitude();
-					location_component.position += vec_to * (step / vec_to_len);
-
-					let distance_traveled = (location_component.position - door_component.position_closed).magnitude();
-					if distance_traveled >= vec_to_len
+					location_component.position = move_towards_target(
+						&location_component.position,
+						&door_component.position_opened,
+						door_component.speed,
+						time_delta_s,
+					);
+					if location_component.position == door_component.position_opened
 					{
-						location_component.position = door_component.position_opened;
-
 						door_component.state = DoorState::StayOpened {
 							down_time_s: self.game_time + door_component.wait,
 						};
@@ -776,15 +776,12 @@ impl Game
 				},
 				DoorState::TargetClosed =>
 				{
-					let vec_to = door_component.position_closed - door_component.position_opened;
-					let vec_to_len = vec_to.magnitude();
-					location_component.position += vec_to * (step / vec_to_len);
-
-					let distance_traveled = (location_component.position - door_component.position_opened).magnitude();
-					if distance_traveled >= vec_to_len
-					{
-						location_component.position = door_component.position_closed;
-					}
+					location_component.position = move_towards_target(
+						&location_component.position,
+						&door_component.position_closed,
+						door_component.speed,
+						time_delta_s,
+					);
 				},
 				DoorState::StayOpened { down_time_s } =>
 				{
@@ -820,23 +817,18 @@ impl Game
 				button_component.state = ButtonState::TargetPressed;
 			}
 
-			let step = time_delta_s * button_component.speed;
-
-			// TODO - avoid computational errors - interpolate positions based on scalar.
 			match &mut button_component.state
 			{
 				ButtonState::TargetPressed =>
 				{
-					let vec_to = button_component.position_pressed - button_component.position_released;
-					let vec_to_len = vec_to.magnitude();
-					location_component.position += vec_to * (step / vec_to_len);
-
-					let distance_traveled =
-						(location_component.position - button_component.position_released).magnitude();
-					if distance_traveled >= vec_to_len
+					location_component.position = move_towards_target(
+						&location_component.position,
+						&button_component.position_pressed,
+						button_component.speed,
+						time_delta_s,
+					);
+					if location_component.position == button_component.position_pressed
 					{
-						location_component.position = button_component.position_pressed;
-
 						button_component.state = ButtonState::StayPressed {
 							down_time_s: self.game_time + button_component.wait,
 						};
@@ -844,16 +836,12 @@ impl Game
 				},
 				ButtonState::TargetReleased =>
 				{
-					let vec_to = button_component.position_released - button_component.position_pressed;
-					let vec_to_len = vec_to.magnitude();
-					location_component.position += vec_to * (step / vec_to_len);
-
-					let distance_traveled =
-						(location_component.position - button_component.position_pressed).magnitude();
-					if distance_traveled >= vec_to_len
-					{
-						location_component.position = button_component.position_released;
-					}
+					location_component.position = move_towards_target(
+						&location_component.position,
+						&button_component.position_released,
+						button_component.speed,
+						time_delta_s,
+					);
 				},
 				ButtonState::StayPressed { down_time_s } =>
 				{
@@ -971,24 +959,7 @@ impl Game
 						let mut q = self.ecs.query_one::<(&mut LocationComponent,)>(id).unwrap();
 						let position = &mut q.get().unwrap().0.position;
 
-						let vec_to = dst_position - *position;
-						let vec_to_len = vec_to.magnitude();
-						if vec_to_len != 0.0
-						{
-							let step = time_delta_s * train_component.speed;
-							if vec_to_len > step
-							{
-								*position += vec_to * (step / vec_to_len);
-							}
-							else
-							{
-								*position = dst_position;
-							}
-						}
-						else
-						{
-							*position = dst_position;
-						}
+						*position = move_towards_target(position, &dst_position, train_component.speed, time_delta_s);
 
 						if *position == dst_position
 						{
@@ -1719,6 +1690,35 @@ impl GameInterface for Game
 	}
 }
 
+impl Drop for Game
+{
+	fn drop(&mut self)
+	{
+		// HACK! Save command queue pointer casted to "dyn" in order to avoid nasty bug with broken identity of dynamic objects.
+		// See https://github.com/rust-lang/rust/issues/46139.
+		let commands_processor = self.commands_processor.clone();
+		commands_processor
+			.lock()
+			.unwrap()
+			.remove_command_queue(&self.commands_queue_dyn);
+	}
+}
+
+fn move_towards_target(position: &Vec3f, target_position: &Vec3f, speed: f32, time_delta: f32) -> Vec3f
+{
+	let step = speed * time_delta;
+	debug_assert!(step >= 0.0);
+
+	let vec_to = target_position - position;
+	let vec_to_len = vec_to.magnitude();
+	if vec_to_len <= 0.0 || vec_to_len <= step
+	{
+		return *target_position;
+	}
+
+	position + vec_to * (step / vec_to_len)
+}
+
 // Returns normalized vector.
 fn get_entity_move_direction(entity: &bsp_map_compact::Entity, map: &bsp_map_compact::BSPMap) -> Vec3f
 {
@@ -1772,18 +1772,4 @@ fn get_entity_key_value<'a>(
 	}
 
 	None
-}
-
-impl Drop for Game
-{
-	fn drop(&mut self)
-	{
-		// HACK! Save command queue pointer casted to "dyn" in order to avoid nasty bug with broken identity of dynamic objects.
-		// See https://github.com/rust-lang/rust/issues/46139.
-		let commands_processor = self.commands_processor.clone();
-		commands_processor
-			.lock()
-			.unwrap()
-			.remove_command_queue(&self.commands_queue_dyn);
-	}
 }
