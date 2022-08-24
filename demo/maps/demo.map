@@ -4202,3 +4202,59 @@
 ( 704 8192 192 ) ( 704 8320 192 ) ( 704 8320 32 ) marble_trim 0 0 0 0.5 0.5
 }
 }
+// entity 130
+{
+"classname" "misc_model"
+"origin" "1088 8000 40"
+"model" "knight.iqm"
+"angle" "315"
+}
+// entity 131
+{
+"classname" "misc_model"
+"origin" "960 8000 40"
+"model" "knight.iqm"
+"angle" "45"
+}
+// entity 132
+{
+"classname" "misc_model"
+"origin" "960 7872 40"
+"model" "knight.iqm"
+"angle" "135"
+}
+// entity 133
+{
+"classname" "misc_model"
+"origin" "1088 7872 40"
+"model" "knight.iqm"
+"angle" "225"
+}
+// entity 134
+{
+"classname" "misc_model"
+"origin" "1096 4008 152"
+"model" "wormbeak.iqm"
+"angle" "0"
+}
+// entity 135
+{
+"classname" "misc_model"
+"origin" "-1336 4488 40"
+"model" "necrobot.iqm"
+"angle" "0"
+}
+// entity 136
+{
+"classname" "misc_model"
+"origin" "-1192 5208 40"
+"model" "necrobot.iqm"
+"angle" "0"
+}
+// entity 137
+{
+"classname" "misc_model"
+"origin" "-568 4872 40"
+"model" "necrobot.iqm"
+"angle" "0"
+}
