@@ -54,7 +54,7 @@ impl Game
 
 		let mut ecs = hecs::World::new();
 		let mut physics = test_game_physics::TestGamePhysics::new(map.clone());
-		world_spawn::spawn_regular_entities(&mut ecs, &mut physics, &map);
+		world_spawn::spawn_regular_entities(&mut ecs, &mut physics, &mut resources_manager.lock().unwrap(), &map);
 		let player_entity = world_spawn::spawn_player(&mut ecs, &mut physics, &map);
 
 		Self {

@@ -328,6 +328,12 @@
 	target(string) : "First stop target"
 	targetname(target_source) : "Name"
 ]
+@PointClass base(Angle, Appearflags) color(255 128 64) = misc_model : "Generic placeholder for inserting models to map"
+[
+	model(string) : "Path/name of model to use"
+	modelscale(integer) : "Uniform Scale" : 1
+	modelscale_vec(string) : "Scale XYZ" : "1 1 1"
+]
 @PointClass base(Appearflags, Targetname) color(220 150 150) = trap_spikeshooter : "Triggered shooter"
 [
 	spawnflags(Flags) =

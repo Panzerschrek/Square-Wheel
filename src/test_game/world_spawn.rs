@@ -1,14 +1,19 @@
-use super::{components::*, frame_info::*, test_game_physics::*};
+use super::{components::*, frame_info::*, resources_manager::*, test_game_physics::*};
 use square_wheel_lib::common::{
-	bbox::*, bsp_map_compact, camera_rotation_controller::*, map_file_common, math_types::*,
+	bbox::*, bsp_map_compact, camera_rotation_controller::*, map_file_common, material, math_types::*,
 };
 
-pub fn spawn_regular_entities(ecs: &mut hecs::World, physics: &mut TestGamePhysics, map: &bsp_map_compact::BSPMap)
+pub fn spawn_regular_entities(
+	ecs: &mut hecs::World,
+	physics: &mut TestGamePhysics,
+	resources_manager: &mut ResourcesManager,
+	map: &bsp_map_compact::BSPMap,
+)
 {
 	// Skip world entity.
 	for map_entity in &map.entities[1 ..]
 	{
-		spawn_regular_entity(ecs, physics, map, map_entity);
+		spawn_regular_entity(ecs, physics, resources_manager, map, map_entity);
 	}
 
 	prepare_linked_doors(ecs, map);
@@ -17,6 +22,7 @@ pub fn spawn_regular_entities(ecs: &mut hecs::World, physics: &mut TestGamePhysi
 fn spawn_regular_entity(
 	ecs: &mut hecs::World,
 	physics: &mut TestGamePhysics,
+	resources_manager: &mut ResourcesManager,
 	map: &bsp_map_compact::BSPMap,
 	map_entity: &bsp_map_compact::Entity,
 )
@@ -36,22 +42,19 @@ fn spawn_regular_entity(
 		},
 		Some("path_corner") =>
 		{
-			if let Some(origin_str) = get_entity_key_value(map_entity, map, "origin")
+			if let Some(origin) = get_entity_origin(map_entity, map)
 			{
-				if let Ok(origin) = map_file_common::parse_vec3(origin_str)
-				{
-					let entity = ecs.spawn((
-						LocationComponent {
-							position: origin,
-							rotation: QuaternionF::one(),
-						},
-						WaitComponent {
-							wait: get_entity_f32(map_entity, map, "wait").unwrap_or(0.0),
-						},
-					));
+				let entity = ecs.spawn((
+					LocationComponent {
+						position: origin,
+						rotation: QuaternionF::one(),
+					},
+					WaitComponent {
+						wait: get_entity_f32(map_entity, map, "wait").unwrap_or(0.0),
+					},
+				));
 
-					add_entity_common_components(ecs, map, map_entity, entity);
-				}
+				add_entity_common_components(ecs, map, map_entity, entity);
 			}
 		},
 		Some("func_plat") =>
@@ -289,6 +292,54 @@ fn spawn_regular_entity(
 				add_entity_common_components(ecs, map, map_entity, entity);
 			}
 		},
+		Some("misc_model") =>
+		{
+			if let (Some(model_file_name), Some(origin)) = (
+				get_entity_key_value(map_entity, map, "model"),
+				get_entity_origin(map_entity, map),
+			)
+			{
+				let model_file_name = model_file_name.to_string();
+
+				let model = resources_manager.get_model(&model_file_name);
+
+				// TODO - load texture more wisely.
+				let mut texture_file_name = String::new();
+				for mesh in &model.meshes
+				{
+					if !mesh.material_name.is_empty()
+					{
+						texture_file_name = mesh.material_name.clone();
+						break;
+					}
+				}
+
+				let texture = resources_manager.get_texture_lite(&texture_file_name);
+
+				let position = origin;
+				let rotation = QuaternionF::from_angle_z(Rad(get_entity_angle_rad(map_entity, map)));
+
+				ecs.spawn((
+					SimpleAnimationComponent {},
+					LocationComponent { position, rotation },
+					ModelEntityLocationLinkComponent {},
+					ModelEntity {
+						position,
+						rotation,
+						animation: AnimationPoint {
+							frames: [0, 0],
+							lerp: 0.0,
+						},
+						model,
+						texture,
+						blending_mode: material::BlendingMode::None,
+						lighting: ModelLighting::Default,
+						is_view_model: false,
+						ordering_custom_bbox: None,
+					},
+				));
+			}
+		},
 		// Process unknown entities with submodels as "func_detal".
 		Some("func_detail") | _ =>
 		{
@@ -348,17 +399,12 @@ pub fn spawn_player(ecs: &mut hecs::World, physics: &mut TestGamePhysics, map: &
 	let mut position_source = PlayerPositionSource::Noclip(Vec3f::zero());
 	if let Some(spawn_entity) = spawn_entity
 	{
-		if let Some(origin_str) = get_entity_key_value(spawn_entity, map, "origin")
+		if let Some(origin) = get_entity_origin(spawn_entity, map)
 		{
-			if let Ok(origin) = map_file_common::parse_vec3(origin_str)
-			{
-				position_source =
-					PlayerPositionSource::Phys(create_player_phys_object(physics, player_entity, &origin));
-			}
+			position_source = PlayerPositionSource::Phys(create_player_phys_object(physics, player_entity, &origin));
 		}
 
-		let angle = get_entity_f32(spawn_entity, map, "angle").unwrap_or(0.0);
-		let angle_rad = angle * (std::f32::consts::PI / 180.0);
+		let angle_rad = get_entity_angle_rad(spawn_entity, map);
 		rotation_controller.set_angles(angle_rad - 0.5 * std::f32::consts::PI, 0.0, 0.0);
 	}
 
@@ -527,9 +573,26 @@ fn find_first_entity_of_given_class<'a>(
 	None
 }
 
+fn get_entity_angle_rad(entity: &bsp_map_compact::Entity, map: &bsp_map_compact::BSPMap) -> f32
+{
+	get_entity_f32(entity, map, "angle").unwrap_or(0.0) * (std::f32::consts::PI / 180.0)
+}
+
 fn get_entity_f32(entity: &bsp_map_compact::Entity, map: &bsp_map_compact::BSPMap, key: &str) -> Option<f32>
 {
 	get_entity_key_value(entity, map, key).unwrap_or("").parse::<f32>().ok()
+}
+
+fn get_entity_origin(entity: &bsp_map_compact::Entity, map: &bsp_map_compact::BSPMap) -> Option<Vec3f>
+{
+	if let Some(origin_str) = get_entity_key_value(entity, map, "origin")
+	{
+		map_file_common::parse_vec3(origin_str).ok()
+	}
+	else
+	{
+		None
+	}
 }
 
 fn get_entity_classname<'a>(entity: &bsp_map_compact::Entity, map: &'a bsp_map_compact::BSPMap) -> Option<&'a str>
