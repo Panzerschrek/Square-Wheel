@@ -9,3 +9,7 @@ necrobot.blend:
 wormbeak.blend:
 	https://opengameart.org/content/fps-character-worm
 	This model was created by Trym Horgen (https://theonian.tumblr.com/)
+
+weapons:
+	https://opengameart.org/content/low-poly-animated-guns
+	quaternius
