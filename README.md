@@ -1,6 +1,6 @@
 # SquareWheel
 
-This is a project of software renderer for video games, that utilizes a lot of features of modern CPUs.
+This is a project of software renderer for video games, that uses power of modern CPUs.
 
 
 ## Why?
@@ -66,7 +66,8 @@ SDL2 library is used for window creation/input processing.
 Install Rust and [SDL2](https://crates.io/crates/sdl2) library.
 Build project, using "cargo" or by using one of build scripts in _src_ directory.
 
-Windows and GNU/Linux OS are supported. But other platforms may be supported too (this is not tested).
+Windows and GNU/Linux OS are supported.
+But other platforms may be supported too (this is not tested).
 
 SquareWheel projects consists of several components:
 
@@ -77,6 +78,10 @@ SquareWheel projects consists of several components:
 
 Test game projects includes _Rapier_ physical engine and _hecs_ library.
 You may use them too in your game code and use test game code as base for your game.
+
+It's recommended to build your own game using Rust and including SquareWheel library as dependency.
+But you can also use other languages, like C++ or even script languages like Lua.
+In order to do this you need to write proper FFI bindings.
 
 
 ## Mapping
@@ -186,6 +191,21 @@ Such approach may produce bad results for large decals, so, avoid using large de
 But for small decals (like bullet holes) which size is comparable with lightmap texel size per-vertex lighting looks fine.
 
 
+### Skybox
+
+If material of a polygon contains "skybox" property, this polygon will not be drawn as usual.
+Instead it is just used to calculate visible sky region bounds (in screen space).
+Skybox is rendered prior to all world geometry.
+It is clipped with region of all skybox-marked polygons in order to reduce overdraw.
+
+There are some skyboxes limitations.
+First, it's not possible to see more than one skybox in one frame.
+But it is possible to use different skyboxes on different parts of the map.
+Second, it's not possible to draw properly polygons directly behind skybox polygons.
+Skybox brush in the middle of a room will not be displayed properly.
+But it's still possible to mark as skybox wall polygon of a room with other room behind it, as soon, as visibility determination code rejects all polygons of other room.
+
+
 ### Multithreading
 
 It's absolutely necessary to use multithreading in order to achieve acceptable performance.
@@ -214,7 +234,6 @@ SquareWheel loads all materials from current material directory.
 
 ### CPU-specific code
 
-
 SquareWheel uses x86_64 intrinsics in order to speed-up some computations.
 This includes integer/floating point vector instructions, some fast approximate instructions.
 
@@ -223,9 +242,14 @@ _f32::mul_add_ function is used in critical for performance places, because it i
 In order to achieve maximum performance you need to build the project targeting modern processors with support of instructions sets SSE2, SSE3, SSE4.1, SSE4.2, FMA.
 These instructions are supported by Intel processors starting with Haswell and AMD processors starting with Ryzen.
 
+
 ## Authors
 
+SquareWheel code:
 Copyright © 2022 Artöm "Panzerscrek" Kunç.
 
-SquareWheel uses a lot of third-party libraries, like _SDL2_, _Rapier_, _hecs_, _serde_, _cgmath_ and other.
+IQM library:
+Copyright (c) 2010-2019 Lee Salzman.
+
+SquareWheel uses a lot of third-party libraries, like _SDL2_, _Rapier_, _hecs_, _serde_, _cgmath_ and others.
 See list of dependencies in _src/Carto.toml_ file for more details.
