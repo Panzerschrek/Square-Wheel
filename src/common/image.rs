@@ -99,11 +99,11 @@ pub fn make_stub() -> Image
 		{
 			let color = if (((x >> 3) ^ (y >> 3)) & 1) != 0
 			{
-				Color32::from_rgb(224, 224, 224)
+				Color32::from_rgba(224, 224, 224, 255)
 			}
 			else
 			{
-				Color32::from_rgb(160, 160, 160)
+				Color32::from_rgba(160, 160, 160, 128)
 			};
 			result.pixels[(x + y * result.size[0]) as usize] = color;
 		}
