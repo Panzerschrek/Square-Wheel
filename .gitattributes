@@ -1,2 +1,7 @@
-* text eol=lf
-* text eol=lf
+* text=auto
+*.map text eol=lf
+*.bat text eol=lf
+*.blend -text
+*.rs text eol=lf
+*.sh text eol=lf
+*.toml text eol=lf
