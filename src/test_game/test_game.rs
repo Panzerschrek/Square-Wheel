@@ -392,7 +392,7 @@ impl Game
 				},
 				model,
 				texture,
-				blending_mode: material::BlendingMode::Average,
+				blending_mode: material::BlendingMode::None,
 				lighting: ModelLighting::Default,
 				is_view_model: true,
 				ordering_custom_bbox: None,
