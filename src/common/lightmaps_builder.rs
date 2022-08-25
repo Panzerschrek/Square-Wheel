@@ -1857,27 +1857,6 @@ fn calculate_light_for_grid_point(
 			);
 		} // for primary lights
 
-		for sun_light in sun_lights
-		{
-			let shadow_factor = get_sun_shadow_factor(&pos, &sun_light.dir, map, opacity_table, sky_flag_table);
-			if shadow_factor <= 0.0
-			{
-				// In shadow.
-				continue;
-			}
-
-			// Do not use agle cos because we add light into light sphere.
-			let light_scale = shadow_factor;
-			out_light_cube.add_light_sample(
-				&sun_light.dir,
-				&[
-					sun_light.color[0] * light_scale,
-					sun_light.color[1] * light_scale,
-					sun_light.color[2] * light_scale,
-				],
-			);
-		} // for sun lights
-
 		let light_source_leaf = &map.leafs[light_source_leaf_index as usize];
 		let light_source_leaf_polygons_range = light_source_leaf.first_polygon as usize ..
 			(light_source_leaf.first_polygon + light_source_leaf.num_polygons) as usize;
@@ -1940,6 +1919,27 @@ fn calculate_light_for_grid_point(
 			} // for visible leaf polygons.
 		} // for light sets.
 	} // for BSP leafs.
+
+	for sun_light in sun_lights
+	{
+		let shadow_factor = get_sun_shadow_factor(&pos, &sun_light.dir, map, opacity_table, sky_flag_table);
+		if shadow_factor <= 0.0
+		{
+			// In shadow.
+			continue;
+		}
+
+		// Do not use agle cos because we add light into light sphere.
+		let light_scale = shadow_factor;
+		out_light_cube.add_light_sample(
+			&sun_light.dir,
+			&[
+				sun_light.color[0] * light_scale,
+				sun_light.color[1] * light_scale,
+				sun_light.color[2] * light_scale,
+			],
+		);
+	} // for sun lights
 }
 
 fn correct_light_grid_sample_position(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> Option<Vec3f>
