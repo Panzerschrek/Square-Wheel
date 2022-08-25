@@ -107,7 +107,7 @@ impl Postprocessor
 
 		if use_bloom
 		{
-			if num_threads == 1 || !self.config.use_multithreadig
+			if num_threads == 1 || !self.config.use_multithreading
 			{
 				self.perform_tonemapping_with_bloom(
 					pixels,
@@ -146,7 +146,7 @@ impl Postprocessor
 		}
 		else
 		{
-			let colors_sum = if num_threads == 1 || !self.config.use_multithreadig
+			let colors_sum = if num_threads == 1 || !self.config.use_multithreading
 			{
 				self.perform_tonemapping(pixels, surface_info, 0, surface_size[1], tonemapping_function)
 			}
