@@ -654,6 +654,16 @@ pub fn update_submodels_locations(ecs: &mut hecs::World)
 	}
 }
 
+pub fn update_decals_locations(ecs: &mut hecs::World)
+{
+	for (_id, (_decal_location_component, location_component, decal)) in
+		ecs.query_mut::<(&DecalLocationLinkComponent, &LocationComponent, &mut Decal)>()
+	{
+		decal.position = location_component.position;
+		decal.rotation = location_component.rotation;
+	}
+}
+
 fn move_towards_target(position: &Vec3f, target_position: &Vec3f, speed: f32, time_delta: f32) -> Vec3f
 {
 	let step = speed * time_delta;

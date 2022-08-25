@@ -60,6 +60,9 @@ pub struct ModelEntityLocationLinkComponent {}
 // Component that sets SubmodelEntityWithIndex position/rotation using LocationComponent.
 pub struct SubmodelEntityWithIndexLocationLinkComponent {}
 
+// Component that sets Decal position/rotation using LocationComponent.
+pub struct DecalLocationLinkComponent {}
+
 // Just play animation consisting of all model frames.
 pub struct SimpleAnimationComponent {}
 

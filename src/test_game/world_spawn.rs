@@ -366,8 +366,12 @@ fn spawn_regular_entity(
 	}
 }
 
-pub fn spawn_player(ecs: &mut hecs::World, physics: &mut TestGamePhysics, map: &bsp_map_compact::BSPMap)
-	-> hecs::Entity
+pub fn spawn_player(
+	ecs: &mut hecs::World,
+	physics: &mut TestGamePhysics,
+	resources_manager: &mut ResourcesManager,
+	map: &bsp_map_compact::BSPMap,
+) -> hecs::Entity
 {
 	let mut spawn_entity = None;
 	for classname in [
@@ -417,7 +421,37 @@ pub fn spawn_player(ecs: &mut hecs::World, physics: &mut TestGamePhysics, map: &
 	)
 	.ok();
 
+	spawn_player_shadow(ecs, resources_manager, player_entity);
+
 	player_entity
+}
+
+fn spawn_player_shadow(ecs: &mut hecs::World, resources_manager: &mut ResourcesManager, player_entity: hecs::Entity)
+{
+	let position = Vec3f::zero();
+	let rotation = QuaternionF::one();
+
+	ecs.spawn((
+		TestDecalComponent {},
+		LocationComponent { position, rotation },
+		OtherEntityLocationComponent {
+			entity: player_entity,
+			relative_position: Vec3f::new(0.0, 0.0, -28.0),
+			relative_rotation: QuaternionF::from_angle_y(Rad(std::f32::consts::PI * 0.5)),
+		},
+		DecalLocationLinkComponent {},
+		Decal {
+			position,
+			rotation,
+			scale: Vec3f::new(32.0, 32.0, 32.0),
+			// Shadow blob is totally-black textue with variable alpha.
+			// So, use no lighting for it and alpha-blending in otder to darken polygons in shadow.
+			texture: resources_manager.get_texture_lite(&"shadow_blob.png".to_string()),
+			blending_mode: material::BlendingMode::AlphaBlend,
+			lightmap_light_scale: 0.0,
+			light_add: [0.0; 3],
+		},
+	));
 }
 
 pub fn create_player_phys_object(
