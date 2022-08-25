@@ -114,5 +114,9 @@
 	{
 		"diffuse": "wooden_planks.png",
 		"normal_map": "wooden_planks_normal.png"
+	},
+	"wooden_plate_with_rusty_metal":
+	{
+		"diffuse": "wooden_plate_with_rusty_metal.png"
 	}
 }

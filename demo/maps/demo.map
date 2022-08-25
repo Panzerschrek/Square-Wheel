@@ -2316,7 +2316,7 @@
 {
 ( 448 8448 640 ) ( 448 7424 640 ) ( 448 7424 512 ) __TB_empty 0 0 0 0.5 0.5
 ( 448 7424 640 ) ( 1472 7424 640 ) ( 1472 7424 512 ) __TB_empty 0 0 0 0.5 0.5
-( 1472 7424 512 ) ( 1472 8448 512 ) ( 448 8448 512 ) wooden_planks 0 0 0 0.5 0.5
+( 1472 7424 512 ) ( 1472 8448 512 ) ( 448 8448 512 ) sky 0 0 0 0.5 0.5
 ( 448 8448 640 ) ( 1472 8448 640 ) ( 1472 7424 640 ) __TB_empty 0 0 0 0.5 0.5
 ( 1472 8448 512 ) ( 1472 8448 640 ) ( 448 8448 640 ) __TB_empty 0 0 0 0.5 0.5
 ( 1472 7424 640 ) ( 1472 8448 640 ) ( 1472 8448 512 ) __TB_empty 0 0 0 0.5 0.5
@@ -2595,7 +2595,8 @@
 // entity 1
 {
 "classname" "info_player_start"
-"origin" "0 16 104"
+"origin" "8 40 104"
+"angle" "90"
 }
 // entity 2
 {
@@ -3899,4 +3900,361 @@
 "classname" "light"
 "origin" "-800 6976 224"
 "light" "1000"
+}
+// entity 107
+{
+"classname" "func_train"
+"target" "stop0"
+// brush 0
+{
+( -1248 -800 64 ) ( -1248 -799 64 ) ( -1248 -800 65 ) marble_trim 0 0 0 0.5 0.5
+( -1248 -800 64 ) ( -1248 -800 65 ) ( -1247 -800 64 ) marble_trim 0 0 0 0.5 0.5
+( -1248 -800 64 ) ( -1247 -800 64 ) ( -1248 -799 64 ) marble_trim 0 0 0 0.5 0.5
+( -1184 -736 96 ) ( -1184 -735 96 ) ( -1183 -736 96 ) marble_trim 0 0 0 0.5 0.5
+( -1184 -736 96 ) ( -1183 -736 96 ) ( -1184 -736 97 ) marble_trim 0 0 0 0.5 0.5
+( -1184 -736 96 ) ( -1184 -736 97 ) ( -1184 -735 96 ) marble_trim 0 0 0 0.5 0.5
+}
+// brush 1
+{
+( -1280 -832 96 ) ( -1280 -831 96 ) ( -1280 -832 97 ) marble_trim 0 0 0 0.5 0.5
+( -1280 -832 96 ) ( -1280 -832 97 ) ( -1279 -832 96 ) marble_trim 0 0 0 0.5 0.5
+( -1280 -832 96 ) ( -1279 -832 96 ) ( -1280 -831 96 ) marble_trim 0 0 0 0.5 0.5
+( -1152 -704 128 ) ( -1152 -703 128 ) ( -1151 -704 128 ) marble_trim 0 0 0 0.5 0.5
+( -1152 -704 128 ) ( -1151 -704 128 ) ( -1152 -704 129 ) marble_trim 0 0 0 0.5 0.5
+( -1152 -704 128 ) ( -1152 -704 129 ) ( -1152 -703 128 ) marble_trim 0 0 0 0.5 0.5
+}
+// brush 2
+{
+( -1248 -800 128 ) ( -1248 -799 128 ) ( -1248 -800 129 ) marble_trim 0 0 0 0.5 0.5
+( -1248 -800 128 ) ( -1248 -800 129 ) ( -1247 -800 128 ) marble_trim 0 0 0 0.5 0.5
+( -1248 -800 128 ) ( -1247 -800 128 ) ( -1248 -799 128 ) marble_trim 0 0 0 0.5 0.5
+( -1184 -736 160 ) ( -1184 -735 160 ) ( -1183 -736 160 ) marble_trim 0 0 0 0.5 0.5
+( -1184 -736 160 ) ( -1183 -736 160 ) ( -1184 -736 161 ) marble_trim 0 0 0 0.5 0.5
+( -1184 -736 160 ) ( -1184 -736 161 ) ( -1184 -735 160 ) marble_trim 0 0 0 0.5 0.5
+}
+}
+// entity 108
+{
+"classname" "path_corner"
+"origin" "-1272 -824 72"
+"targetname" "stop0"
+"target" "stop1"
+}
+// entity 109
+{
+"classname" "path_corner"
+"origin" "-1272 1608 72"
+"targetname" "stop1"
+"target" "stop2"
+}
+// entity 110
+{
+"classname" "path_corner"
+"origin" "1160 1608 72"
+"targetname" "stop2"
+"target" "stop3"
+}
+// entity 111
+{
+"classname" "path_corner"
+"origin" "1160 -824 72"
+"targetname" "stop3"
+"target" "stop0"
+}
+// entity 112
+{
+"classname" "func_door"
+// brush 0
+{
+( 0 2016 384 ) ( 0 1952 384 ) ( 0 1952 32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 0 1952 384 ) ( 160 1952 384 ) ( 160 1952 32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 160 1952 32 ) ( 160 2016 32 ) ( 0 2016 32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 0 2016 384 ) ( 160 2016 384 ) ( 160 1952 384 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 160 2016 32 ) ( 160 2016 384 ) ( 0 2016 384 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 160 1952 384 ) ( 160 2016 384 ) ( 160 2016 32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+}
+}
+// entity 113
+{
+"classname" "func_door"
+"angle" "180"
+// brush 0
+{
+( -160 1952 32 ) ( -160 1953 32 ) ( -160 1952 33 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( -160 1952 32 ) ( -160 1952 33 ) ( -159 1952 32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( -160 1952 32 ) ( -159 1952 32 ) ( -160 1953 32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 0 2016 384 ) ( 0 2017 384 ) ( 1 2016 384 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 0 2016 384 ) ( 1 2016 384 ) ( 0 2016 385 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 0 2016 384 ) ( 0 2016 385 ) ( 0 2017 384 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+}
+}
+// entity 114
+{
+"classname" "func_door"
+"angle" "-1"
+// brush 0
+{
+( 224 3712 32 ) ( 224 3713 32 ) ( 224 3712 33 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 224 3712 32 ) ( 224 3712 33 ) ( 225 3712 32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 224 3712 32 ) ( 225 3712 32 ) ( 224 3713 32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 288 3968 384 ) ( 288 3969 384 ) ( 289 3968 384 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 288 3968 384 ) ( 289 3968 384 ) ( 288 3968 385 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 288 3968 384 ) ( 288 3968 385 ) ( 288 3969 384 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+}
+}
+// entity 115
+{
+"classname" "func_door"
+"angle" "-1"
+"targetname" "buttoned_door"
+// brush 0
+{
+( -288 4736 32 ) ( -288 4737 32 ) ( -288 4736 33 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( -288 4736 32 ) ( -288 4736 33 ) ( -287 4736 32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( -288 4736 32 ) ( -287 4736 32 ) ( -288 4737 32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( -224 4992 384 ) ( -224 4993 384 ) ( -223 4992 384 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( -224 4992 384 ) ( -223 4992 384 ) ( -224 4992 385 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( -224 4992 384 ) ( -224 4992 385 ) ( -224 4993 384 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+}
+}
+// entity 116
+{
+"classname" "func_door"
+"angle" "-1"
+// brush 0
+{
+( 224 5760 32 ) ( 224 5761 32 ) ( 224 5760 33 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 224 5760 32 ) ( 224 5760 33 ) ( 225 5760 32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 224 5760 32 ) ( 225 5760 32 ) ( 224 5761 32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 288 6016 384 ) ( 288 6017 384 ) ( 289 6016 384 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 288 6016 384 ) ( 289 6016 384 ) ( 288 6016 385 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 288 6016 384 ) ( 288 6016 385 ) ( 288 6017 384 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+}
+}
+// entity 117
+{
+"classname" "func_door"
+"angle" "-1"
+// brush 0
+{
+( -288 6784 32 ) ( -288 6785 32 ) ( -288 6784 33 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( -288 6784 32 ) ( -288 6784 33 ) ( -287 6784 32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( -288 6784 32 ) ( -287 6784 32 ) ( -288 6785 32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( -224 7040 384 ) ( -224 7041 384 ) ( -223 7040 384 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( -224 7040 384 ) ( -223 7040 384 ) ( -224 7040 385 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( -224 7040 384 ) ( -224 7040 385 ) ( -224 7041 384 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+}
+}
+// entity 118
+{
+"classname" "func_door"
+"angle" "-1"
+// brush 0
+{
+( 224 7808 32 ) ( 224 7809 32 ) ( 224 7808 33 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 224 7808 32 ) ( 224 7808 33 ) ( 225 7808 32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 224 7808 32 ) ( 225 7808 32 ) ( 224 7809 32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 288 8064 384 ) ( 288 8065 384 ) ( 289 8064 384 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 288 8064 384 ) ( 289 8064 384 ) ( 288 8064 385 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 288 8064 384 ) ( 288 8064 385 ) ( 288 8065 384 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+}
+}
+// entity 119
+{
+"classname" "func_button"
+"target" "buttoned_door"
+"angle" "180"
+// brush 0
+{
+( -192 4608 64 ) ( -192 4609 64 ) ( -192 4608 65 ) marble_trim 0 0 0 0.5 0.5
+( -192 4608 64 ) ( -192 4608 65 ) ( -191 4608 64 ) marble_trim 0 0 0 0.5 0.5
+( -192 4608 64 ) ( -191 4608 64 ) ( -192 4609 64 ) marble_trim 0 0 0 0.5 0.5
+( -160 4672 128 ) ( -160 4673 128 ) ( -159 4672 128 ) marble_trim 0 0 0 0.5 0.5
+( -160 4672 128 ) ( -159 4672 128 ) ( -160 4672 129 ) marble_trim 0 0 0 0.5 0.5
+( -160 4672 128 ) ( -160 4672 129 ) ( -160 4673 128 ) marble_trim 0 0 0 0.5 0.5
+}
+}
+// entity 120
+{
+"classname" "func_plat"
+// brush 0
+{
+( 896 8192 160 ) ( 896 8193 160 ) ( 896 8192 161 ) marble_tiles 0 0 0 0.5 0.5
+( 896 8192 160 ) ( 896 8192 161 ) ( 897 8192 160 ) marble_tiles 0 0 0 0.5 0.5
+( 896 8192 160 ) ( 897 8192 160 ) ( 896 8193 160 ) marble_tiles 0 0 0 0.5 0.5
+( 1024 8320 192 ) ( 1024 8321 192 ) ( 1025 8320 192 ) marble_tiles 0 0 0 0.5 0.5
+( 1024 8320 192 ) ( 1025 8320 192 ) ( 1024 8320 193 ) marble_tiles 0 0 0 0.5 0.5
+( 1024 8320 192 ) ( 1024 8320 193 ) ( 1024 8321 192 ) marble_tiles 0 0 0 0.5 0.5
+}
+// brush 1
+{
+( 928 8224 32 ) ( 928 8225 32 ) ( 928 8224 33 ) marble_trim 0 0 0 0.5 0.5
+( 928 8224 32 ) ( 928 8224 33 ) ( 929 8224 32 ) marble_trim 0 0 0 0.5 0.5
+( 928 8224 32 ) ( 929 8224 32 ) ( 928 8225 32 ) marble_trim 0 0 0 0.5 0.5
+( 992 8288 160 ) ( 992 8289 160 ) ( 993 8288 160 ) marble_trim 0 0 0 0.5 0.5
+( 992 8288 160 ) ( 993 8288 160 ) ( 992 8288 161 ) marble_trim 0 0 0 0.5 0.5
+( 992 8288 160 ) ( 992 8288 161 ) ( 992 8289 160 ) marble_trim 0 0 0 0.5 0.5
+}
+}
+// entity 121
+{
+"classname" "func_plat"
+// brush 0
+{
+( 640 7488 32 ) ( 640 7489 32 ) ( 640 7488 33 ) marble_trim 0 0 0 0.5 0.5
+( 640 7488 32 ) ( 640 7488 33 ) ( 641 7488 32 ) marble_trim 0 0 0 0.5 0.5
+( 640 7488 32 ) ( 641 7488 32 ) ( 640 7489 32 ) marble_trim 0 0 0 0.5 0.5
+( 768 7616 64 ) ( 768 7617 64 ) ( 769 7616 64 ) marble_trim 0 0 0 0.5 0.5
+( 768 7616 64 ) ( 769 7616 64 ) ( 768 7616 65 ) marble_trim 0 0 0 0.5 0.5
+( 768 7616 64 ) ( 768 7616 65 ) ( 768 7617 64 ) marble_trim 0 0 0 0.5 0.5
+}
+}
+// entity 122
+{
+"classname" "func_plat"
+// brush 0
+{
+( 800 7488 32 ) ( 800 7489 32 ) ( 800 7488 33 ) marble_trim 0 0 0 0.5 0.5
+( 800 7488 32 ) ( 800 7488 33 ) ( 801 7488 32 ) marble_trim 0 0 0 0.5 0.5
+( 800 7488 32 ) ( 801 7488 32 ) ( 800 7489 32 ) marble_trim 0 0 0 0.5 0.5
+( 928 7616 96 ) ( 928 7617 96 ) ( 929 7616 96 ) marble_trim 0 0 0 0.5 0.5
+( 928 7616 96 ) ( 929 7616 96 ) ( 928 7616 97 ) marble_trim 0 0 0 0.5 0.5
+( 928 7616 96 ) ( 928 7616 97 ) ( 928 7617 96 ) marble_trim 0 0 0 0.5 0.5
+}
+}
+// entity 123
+{
+"classname" "func_plat"
+// brush 0
+{
+( 960 7488 32 ) ( 960 7489 32 ) ( 960 7488 33 ) marble_trim 0 0 0 0.5 0.5
+( 960 7488 32 ) ( 960 7488 33 ) ( 961 7488 32 ) marble_trim 0 0 0 0.5 0.5
+( 960 7488 32 ) ( 961 7488 32 ) ( 960 7489 32 ) marble_trim 0 0 0 0.5 0.5
+( 1088 7616 128 ) ( 1088 7617 128 ) ( 1089 7616 128 ) marble_trim 0 0 0 0.5 0.5
+( 1088 7616 128 ) ( 1089 7616 128 ) ( 1088 7616 129 ) marble_trim 0 0 0 0.5 0.5
+( 1088 7616 128 ) ( 1088 7616 129 ) ( 1088 7617 128 ) marble_trim 0 0 0 0.5 0.5
+}
+}
+// entity 124
+{
+"classname" "func_plat"
+// brush 0
+{
+( 1120 7488 32 ) ( 1120 7489 32 ) ( 1120 7488 33 ) marble_trim 0 0 0 0.5 0.5
+( 1120 7488 32 ) ( 1120 7488 33 ) ( 1121 7488 32 ) marble_trim 0 0 0 0.5 0.5
+( 1120 7488 32 ) ( 1121 7488 32 ) ( 1120 7489 32 ) marble_trim 0 0 0 0.5 0.5
+( 1248 7616 160 ) ( 1248 7617 160 ) ( 1249 7616 160 ) marble_trim 0 0 0 0.5 0.5
+( 1248 7616 160 ) ( 1249 7616 160 ) ( 1248 7616 161 ) marble_trim 0 0 0 0.5 0.5
+( 1248 7616 160 ) ( 1248 7616 161 ) ( 1248 7617 160 ) marble_trim 0 0 0 0.5 0.5
+}
+}
+// entity 125
+{
+"classname" "func_plat"
+// brush 0
+{
+( 1280 7488 32 ) ( 1280 7489 32 ) ( 1280 7488 33 ) marble_trim 0 0 0 0.5 0.5
+( 1280 7488 32 ) ( 1280 7488 33 ) ( 1281 7488 32 ) marble_trim 0 0 0 0.5 0.5
+( 1280 7488 32 ) ( 1281 7488 32 ) ( 1280 7489 32 ) marble_trim 0 0 0 0.5 0.5
+( 1408 7616 192 ) ( 1408 7617 192 ) ( 1409 7616 192 ) marble_trim 0 0 0 0.5 0.5
+( 1408 7616 192 ) ( 1409 7616 192 ) ( 1408 7616 193 ) marble_trim 0 0 0 0.5 0.5
+( 1408 7616 192 ) ( 1408 7616 193 ) ( 1408 7617 192 ) marble_trim 0 0 0 0.5 0.5
+}
+}
+// entity 126
+{
+"classname" "func_button"
+"target" "buttoned_door"
+// brush 0
+{
+( -480 4608 64 ) ( -480 4609 64 ) ( -480 4608 65 ) marble_trim 0 0 0 0.5 0.5
+( -480 4608 64 ) ( -480 4608 65 ) ( -479 4608 64 ) marble_trim 0 0 0 0.5 0.5
+( -480 4608 64 ) ( -479 4608 64 ) ( -480 4609 64 ) marble_trim 0 0 0 0.5 0.5
+( -448 4672 128 ) ( -448 4673 128 ) ( -447 4672 128 ) marble_trim 0 0 0 0.5 0.5
+( -448 4672 128 ) ( -447 4672 128 ) ( -448 4672 129 ) marble_trim 0 0 0 0.5 0.5
+( -448 4672 128 ) ( -448 4672 129 ) ( -448 4673 128 ) marble_trim 0 0 0 0.5 0.5
+}
+}
+// entity 127
+{
+"classname" "light"
+"origin" "-120 4640 96"
+"light" "300"
+"color" "255 128 255"
+}
+// entity 128
+{
+"classname" "light"
+"origin" "-520 4640 96"
+"light" "300"
+"color" "255 128 255"
+}
+// entity 129
+{
+"classname" "func_plat"
+// brush 0
+{
+( 576 8320 192 ) ( 576 8192 192 ) ( 576 8192 32 ) marble_trim 0 0 0 0.5 0.5
+( 576 8192 192 ) ( 704 8192 192 ) ( 704 8192 32 ) marble_trim 0 0 0 0.5 0.5
+( 704 8192 32 ) ( 704 8320 32 ) ( 576 8320 32 ) marble_trim 0 0 0 0.5 0.5
+( 576 8320 192 ) ( 704 8320 192 ) ( 704 8192 192 ) marble_trim 0 0 0 0.5 0.5
+( 704 8320 32 ) ( 704 8320 192 ) ( 576 8320 192 ) marble_trim 0 0 0 0.5 0.5
+( 704 8192 192 ) ( 704 8320 192 ) ( 704 8320 32 ) marble_trim 0 0 0 0.5 0.5
+}
+}
+// entity 130
+{
+"classname" "misc_model"
+"origin" "1088 8000 40"
+"model" "knight.iqm"
+"angle" "315"
+}
+// entity 131
+{
+"classname" "misc_model"
+"origin" "960 8000 40"
+"model" "knight.iqm"
+"angle" "45"
+}
+// entity 132
+{
+"classname" "misc_model"
+"origin" "960 7872 40"
+"model" "knight.iqm"
+"angle" "135"
+}
+// entity 133
+{
+"classname" "misc_model"
+"origin" "1088 7872 40"
+"model" "knight.iqm"
+"angle" "225"
+}
+// entity 134
+{
+"classname" "misc_model"
+"origin" "1096 4008 152"
+"model" "wormbeak.iqm"
+"angle" "0"
+}
+// entity 135
+{
+"classname" "misc_model"
+"origin" "-1336 4488 40"
+"model" "necrobot.iqm"
+"angle" "0"
+}
+// entity 136
+{
+"classname" "misc_model"
+"origin" "-1192 5208 40"
+"model" "necrobot.iqm"
+"angle" "0"
+}
+// entity 137
+{
+"classname" "misc_model"
+"origin" "-568 4872 40"
+"model" "necrobot.iqm"
+"angle" "0"
 }
