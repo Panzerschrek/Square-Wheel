@@ -170,7 +170,7 @@ Triangles must be transformed and sorted.
 These  computations are performed in separate step.
 During rasterization rasterizer uses prepared later vertices/triangles.
 
-Models pre-processing as separate step is needed because same models may be drawn multiple times in several BSP leafs.
+Models pre-processing as separate step is needed to avoid duplication of this calculations because same models may be drawn multiple times in several BSP leafs.
 
 
 ### Decals
@@ -188,7 +188,7 @@ Large decals triangles may be tessellated in order to reduce affine texture coor
 Lightmap data is used to calculate light for decals.
 Lightmap fetch is performed per-vertex and with linear interpolation.
 Such approach may produce bad results for large decals, so, avoid using large decals, unless you disable lightmap fetch for decal at all and use constant light instead.
-But for small decals (like bullet holes) which size is comparable with lightmap texel size per-vertex lighting looks fine.
+But for small decals (like bullet holes) which size is comparable to lightmap texel size per-vertex lighting looks fine.
 
 
 ### Skybox
