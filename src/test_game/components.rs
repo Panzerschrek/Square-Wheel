@@ -45,6 +45,15 @@ pub struct OtherEntityLocationComponent
 	pub relative_rotation: QuaternionF,
 }
 
+// Take location from player controller camera.
+pub struct PlayerControllerCameraLocationComponent
+{
+	pub entity: hecs::Entity,
+	pub camera_view_offset: Vec3f,
+	pub relative_position: Vec3f,
+	pub relative_rotation: QuaternionF,
+}
+
 // Component that sets ModelEntity position/rotation using LocationComponent.
 pub struct ModelEntityLocationLinkComponent {}
 

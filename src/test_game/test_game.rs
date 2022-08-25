@@ -80,12 +80,19 @@ impl Game
 
 	fn get_camera_location(&self) -> (Vec3f, QuaternionF)
 	{
-		let mut q = self.ecs.query_one::<(&LocationComponent,)>(self.player_entity).unwrap();
-		let (location_component,) = q.get().unwrap();
+		let mut q = self
+			.ecs
+			.query_one::<(&PlayerControllerComponent,)>(self.player_entity)
+			.unwrap();
+		let (player_controller_component,) = q.get().unwrap();
 
 		(
-			location_component.position + self.camera_view_offset,
-			location_component.rotation,
+			match player_controller_component.position_source
+			{
+				PlayerPositionSource::Noclip(p) => p,
+				PlayerPositionSource::Phys(handle) => self.physics.get_object_location(handle).0,
+			} + self.camera_view_offset,
+			player_controller_component.rotation_controller.get_rotation(),
 		)
 	}
 
@@ -367,8 +374,9 @@ impl Game
 
 		let view_model_entity = self.ecs.spawn((
 			SimpleAnimationComponent {},
-			OtherEntityLocationComponent {
+			PlayerControllerCameraLocationComponent {
 				entity: self.player_entity,
+				camera_view_offset: self.camera_view_offset,
 				relative_position: Vec3f::new(16.0, -8.0, -10.0),
 				relative_rotation: QuaternionF::one(),
 			},
@@ -493,6 +501,7 @@ impl GameInterface for Game
 		world_update::update_phys_model_locations(&mut self.ecs, &self.physics);
 		// Take locations from other entities. This is needed for entities, attached to other entities.
 		world_update::update_other_entity_locations(&mut self.ecs);
+		world_update::update_player_controller_camera_locations(&mut self.ecs, &self.physics);
 
 		// Update locations of visible models.
 		world_update::update_models_locations(&mut self.ecs);

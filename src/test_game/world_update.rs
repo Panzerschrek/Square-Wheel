@@ -566,7 +566,10 @@ pub fn update_player_controller_locations(ecs: &mut hecs::World, physics: &TestG
 			PlayerPositionSource::Phys(handle) => physics.get_object_location(handle).0,
 		};
 
-		location.rotation = player_controller.rotation_controller.get_rotation();
+		// Use only Z angle (do not rotate whole player up and down).
+		location.rotation = QuaternionF::from_angle_z(
+			player_controller.rotation_controller.get_azimuth() + Rad(std::f32::consts::PI * 0.5),
+		);
 	}
 }
 
@@ -598,6 +601,32 @@ pub fn update_other_entity_locations(ecs: &mut hecs::World)
 				.rotate_vector(other_entity_location_component.relative_position);
 		location_component.rotation =
 			src_location_component.rotation * other_entity_location_component.relative_rotation;
+	}
+}
+
+pub fn update_player_controller_camera_locations(ecs: &mut hecs::World, physics: &TestGamePhysics)
+{
+	for (_id, (player_controller_camera_location_component, location_component)) in ecs
+		.query::<(&PlayerControllerCameraLocationComponent, &mut LocationComponent)>()
+		.into_iter()
+	{
+		let mut q = ecs
+			.query_one::<(&PlayerControllerComponent,)>(player_controller_camera_location_component.entity)
+			.unwrap();
+		let (player_controller,) = q.get().unwrap();
+
+		let camera_position = match player_controller.position_source
+		{
+			PlayerPositionSource::Noclip(p) => p,
+			PlayerPositionSource::Phys(handle) => physics.get_object_location(handle).0,
+		} + player_controller_camera_location_component.camera_view_offset;
+
+		let camera_rotation = player_controller.rotation_controller.get_rotation();
+
+		location_component.position = camera_position +
+			camera_rotation.rotate_vector(player_controller_camera_location_component.relative_position);
+		location_component.rotation = player_controller.rotation_controller.get_rotation() *
+			player_controller_camera_location_component.relative_rotation;
 	}
 }
 
