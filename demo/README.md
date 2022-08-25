@@ -9,24 +9,31 @@ It contains single demo map with demonstration of various engine features.
 ### System requirements
 
 * CPU  - Intel Haswell or newer, AMD Bulldozer or newer.
-* OS - 64bit Windows 7 or newer. But it's possible to build the engine from source code for other platforms.
+* OS - 64bit Windows 7 or newer or any modern GNU/Linux distribution with SDL2 libraries installed. But it's possible to build the engine from source code for other platforms.
 * 1Gb of RAM.
-* Keyboard.
+* Keyboard, mouse.
+
+
+### Running
+
+Use one of "run_demo" scripts.
+Use script with "i686" suffix on 32-bit system, use script with "_generic" suffix on old x86_64 CPUs.
 
 
 ### Controls
 
-* "W" - fly forward
-* "S" - fly backward
-* "A" - fly left
-* "D" - fly right
-* "SPACE" - fly up
-* "C" - fly down
+* "W" - move forward
+* "S" - move backward
+* "A" - move left
+* "D" - move right
+* "SPACE" - jump
+* "C" - fly down (in noclip mode)
 * "↑" - turn up
 * "↓" - turn down
 * "←" - turn left
 * "→" - turn right
 * "~" - toggle console
+* Mouse - move camera
 * "ESC" - quit
 
 
@@ -35,6 +42,7 @@ It contains single demo map with demonstration of various engine features.
 * "resize_window" - set specific window size.
 * "quit" - quit demo.
 * "map" - load specified map.
+* "noclip" - toggle noclip mode.
 
 
 ### Useful consloe variables
@@ -51,6 +59,7 @@ It contains single demo map with demonstration of various engine features.
 * Build engine itself. Rust compiler and SDL2 libraries are required.
 * Generate textures, using "export_textures.py" script. MaterialMaker v 0.99 (https://github.com/RodZill4/material-maker/) and GIMP 2.10 are required.
 * Compile demo map using "map_compiler" executable and build lightmaps, using "lightmapper" executable.
+* Export models, using blender and newest IQM export script (see iqm directory in repository root).
 * Package engine executables, demo map, textures, materials and config file together.
 
 
@@ -58,3 +67,5 @@ It contains single demo map with demonstration of various engine features.
 
 (c) Copyright 2022 "Panzerschrek"
 Source code: https://github.com/Panzerschrek/Square-Wheel
+
+Models: Trym Horgen, quaternius
