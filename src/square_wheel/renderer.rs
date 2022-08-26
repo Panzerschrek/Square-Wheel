@@ -101,11 +101,19 @@ struct DrawPolygonData
 	surface_tc_min: [i32; 2],
 }
 
+// Calculate matrices once for frame and use them during polygons preparation, sorting and polygons ordering.
+#[derive(Copy, Clone)]
+struct VisibleSubmodelMatrices
+{
+	// Planes matrix for transformation of submodel planes into current position of submodel within the world.
+	world_planes_matrix: Mat4f,
+	camera_matrices: CameraMatrices,
+}
+
 #[derive(Default, Copy, Clone)]
 struct VisibleSubmodelInfo
 {
-	// Calculate matrices once for frame and use them during polygons reparation, sorting and polygons ordering.
-	camera_matrices: Option<CameraMatrices>,
+	matrices: Option<VisibleSubmodelMatrices>,
 }
 
 struct VisibleDynamicMeshInfo
@@ -417,14 +425,16 @@ impl Renderer
 
 		for (index, submodel_info) in self.submodels_info.iter_mut().enumerate()
 		{
-			submodel_info.camera_matrices = if let Some(model_matrix) =
-				self.inline_models_index.get_model_matrix(index as u32)
+			submodel_info.matrices = if let Some(model_matrix) = self.inline_models_index.get_model_matrix(index as u32)
 			{
 				let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
-				Some(CameraMatrices {
-					view_matrix: camera_matrices.view_matrix * model_matrix,
-					planes_matrix: camera_matrices.planes_matrix * model_matrix_inverse,
-					position: camera_matrices.position,
+				Some(VisibleSubmodelMatrices {
+					world_planes_matrix: model_matrix_inverse,
+					camera_matrices: CameraMatrices {
+						view_matrix: camera_matrices.view_matrix * model_matrix,
+						planes_matrix: camera_matrices.planes_matrix * model_matrix_inverse,
+						position: camera_matrices.position,
+					},
 				})
 			}
 			else
@@ -754,7 +764,7 @@ impl Renderer
 		// Do this only for sumbodels located in visible leafs.
 		for index in 0 .. self.map.submodels.len()
 		{
-			let submodel_camera_matrices = if let Some(m) = self.submodels_info[index].camera_matrices
+			let submodel_matrices = if let Some(m) = self.submodels_info[index].matrices
 			{
 				m
 			}
@@ -789,14 +799,53 @@ impl Renderer
 			};
 
 			let submodel = &self.map.submodels[index];
-			for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
+			for polygon_index in
+				submodel.first_polygon as usize .. (submodel.first_polygon + submodel.num_polygons) as usize
 			{
 				self.prepare_polygon_surface(
-					&submodel_camera_matrices,
+					&submodel_matrices.camera_matrices,
 					&clip_planes,
 					&mut surfaces_pixels_accumulated_offset,
-					polygon_index as usize,
+					polygon_index,
 				);
+
+				// If this submodel polygon is visible in current frame - recalculate it's basis vecs, using transformations of submodel.
+				// This is needed for specular and/or dynamic ligting.
+				let polygon_data = &mut self.polygons_data[polygon_index];
+				if polygon_data.visible_frame == self.current_frame
+				{
+					let polygon = &self.map.polygons[polygon_index];
+
+					let plane_transformed_vec =
+						submodel_matrices.world_planes_matrix * polygon.plane.vec.extend(-polygon.plane.dist);
+					let tc_equation_transformed_vecs = [
+						submodel_matrices.world_planes_matrix *
+							polygon.tex_coord_equation[0]
+								.vec
+								.extend(polygon.tex_coord_equation[0].dist),
+						submodel_matrices.world_planes_matrix *
+							polygon.tex_coord_equation[1]
+								.vec
+								.extend(polygon.tex_coord_equation[1].dist),
+					];
+
+					polygon_data.basis_vecs = PolygonBasisVecs::form_plane_and_tex_coord_equation(
+						&Plane {
+							vec: plane_transformed_vec.truncate(),
+							dist: -plane_transformed_vec.w,
+						},
+						&[
+							Plane {
+								vec: tc_equation_transformed_vecs[0].truncate(),
+								dist: tc_equation_transformed_vecs[0].w,
+							},
+							Plane {
+								vec: tc_equation_transformed_vecs[1].truncate(),
+								dist: tc_equation_transformed_vecs[1].w,
+							},
+						],
+					);
+				}
 			}
 		}
 
@@ -1486,13 +1535,13 @@ impl Renderer
 
 		for (&model_index, model_for_sorting) in leaf_submodels.iter().zip(models_for_sorting.iter_mut())
 		{
-			if let Some(submodel_camera_matrices) = &self.submodels_info[model_index as usize].camera_matrices
+			if let Some(submodel_matrices) = &self.submodels_info[model_index as usize].matrices
 			{
 				*model_for_sorting = (
 					model_index,
 					draw_ordering::project_bbox(
 						&self.inline_models_index.get_model_bbox_for_ordering(model_index),
-						&submodel_camera_matrices,
+						&submodel_matrices.camera_matrices,
 					),
 				);
 			}
@@ -1850,13 +1899,13 @@ impl Renderer
 		submodel_index: u32,
 	)
 	{
-		if let Some(submodel_camera_matrices) = &self.submodels_info[submodel_index as usize].camera_matrices
+		if let Some(submodel_matrices) = &self.submodels_info[submodel_index as usize].matrices
 		{
 			let submodel = &self.map.submodels[submodel_index as usize];
 			self.draw_submodel_bsp_node_r(
 				rasterizer,
 				frame_info,
-				&submodel_camera_matrices.planes_matrix,
+				&submodel_matrices.camera_matrices.planes_matrix,
 				clip_planes,
 				leaf_clip_planes,
 				leaf_decals,
