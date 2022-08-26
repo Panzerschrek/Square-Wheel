@@ -85,11 +85,14 @@ fn run_with_measure<F: FnOnce()>(f: F, performanc_counter: &mut PerformanceCount
 }
 
 // Mutable data associated with map polygon.
-#[derive(Default, Copy, Clone)]
+#[derive(Copy, Clone)]
 struct DrawPolygonData
 {
+	// Precalculaed basis vecs for mip 0
+	basis_vecs: PolygonBasisVecs,
 	// Frame last time this polygon was visible.
 	visible_frame: FrameNumber,
+	// Projected equations for current frame.
 	depth_equation: DepthEquation,
 	tex_coord_equation: TexCoordEquation,
 	surface_pixels_offset: usize,
@@ -98,11 +101,19 @@ struct DrawPolygonData
 	surface_tc_min: [i32; 2],
 }
 
+// Calculate matrices once for frame and use them during polygons preparation, sorting and polygons ordering.
+#[derive(Copy, Clone)]
+struct VisibleSubmodelMatrices
+{
+	// Planes matrix for transformation of submodel planes into current position of submodel within the world.
+	world_planes_matrix: Mat4f,
+	camera_matrices: CameraMatrices,
+}
+
 #[derive(Default, Copy, Clone)]
 struct VisibleSubmodelInfo
 {
-	// Calculate matrices once for frame and use them during polygons reparation, sorting and polygons ordering.
-	camera_matrices: Option<CameraMatrices>,
+	matrices: Option<VisibleSubmodelMatrices>,
 }
 
 struct VisibleDynamicMeshInfo
@@ -139,12 +150,28 @@ impl Renderer
 
 		let materials_processor = MapMaterialsProcessor::new(resources_manager, &*map);
 
+		let polygons_data = map
+			.polygons
+			.iter()
+			.map(|p| DrawPolygonData {
+				// Pre-calculate basis vecs and use them each frame.
+				basis_vecs: PolygonBasisVecs::form_plane_and_tex_coord_equation(&p.plane, &p.tex_coord_equation),
+				visible_frame: Default::default(),
+				depth_equation: Default::default(),
+				tex_coord_equation: Default::default(),
+				surface_pixels_offset: 0,
+				surface_size: [0, 0],
+				mip: 0,
+				surface_tc_min: [0, 0],
+			})
+			.collect();
+
 		Renderer {
 			app_config,
 			config: config_parsed,
 			config_is_durty: false,
 			current_frame: FrameNumber::default(),
-			polygons_data: vec![DrawPolygonData::default(); map.polygons.len()],
+			polygons_data,
 			vertices_transformed: vec![Vec3f::new(0.0, 0.0, 0.0); map.vertices.len()],
 			surfaces_pixels: Vec::new(),
 			num_visible_surfaces_pixels: 0,
@@ -398,14 +425,16 @@ impl Renderer
 
 		for (index, submodel_info) in self.submodels_info.iter_mut().enumerate()
 		{
-			submodel_info.camera_matrices = if let Some(model_matrix) =
-				self.inline_models_index.get_model_matrix(index as u32)
+			submodel_info.matrices = if let Some(model_matrix) = self.inline_models_index.get_model_matrix(index as u32)
 			{
 				let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
-				Some(CameraMatrices {
-					view_matrix: camera_matrices.view_matrix * model_matrix,
-					planes_matrix: camera_matrices.planes_matrix * model_matrix_inverse,
-					position: camera_matrices.position,
+				Some(VisibleSubmodelMatrices {
+					world_planes_matrix: model_matrix_inverse,
+					camera_matrices: CameraMatrices {
+						view_matrix: camera_matrices.view_matrix * model_matrix,
+						planes_matrix: camera_matrices.planes_matrix * model_matrix_inverse,
+						position: camera_matrices.position,
+					},
 				})
 			}
 			else
@@ -735,7 +764,7 @@ impl Renderer
 		// Do this only for sumbodels located in visible leafs.
 		for index in 0 .. self.map.submodels.len()
 		{
-			let submodel_camera_matrices = if let Some(m) = self.submodels_info[index].camera_matrices
+			let submodel_matrices = if let Some(m) = self.submodels_info[index].matrices
 			{
 				m
 			}
@@ -770,14 +799,53 @@ impl Renderer
 			};
 
 			let submodel = &self.map.submodels[index];
-			for polygon_index in submodel.first_polygon .. (submodel.first_polygon + submodel.num_polygons)
+			for polygon_index in
+				submodel.first_polygon as usize .. (submodel.first_polygon + submodel.num_polygons) as usize
 			{
 				self.prepare_polygon_surface(
-					&submodel_camera_matrices,
+					&submodel_matrices.camera_matrices,
 					&clip_planes,
 					&mut surfaces_pixels_accumulated_offset,
-					polygon_index as usize,
+					polygon_index,
 				);
+
+				// If this submodel polygon is visible in current frame - recalculate its basis vecs, using transformations of submodel.
+				// This is needed for specular and/or dynamic ligting.
+				let polygon_data = &mut self.polygons_data[polygon_index];
+				if polygon_data.visible_frame == self.current_frame
+				{
+					let polygon = &self.map.polygons[polygon_index];
+
+					let plane_transformed_vec =
+						submodel_matrices.world_planes_matrix * polygon.plane.vec.extend(-polygon.plane.dist);
+					let tc_equation_transformed_vecs = [
+						submodel_matrices.world_planes_matrix *
+							polygon.tex_coord_equation[0]
+								.vec
+								.extend(polygon.tex_coord_equation[0].dist),
+						submodel_matrices.world_planes_matrix *
+							polygon.tex_coord_equation[1]
+								.vec
+								.extend(polygon.tex_coord_equation[1].dist),
+					];
+
+					polygon_data.basis_vecs = PolygonBasisVecs::form_plane_and_tex_coord_equation(
+						&Plane {
+							vec: plane_transformed_vec.truncate(),
+							dist: -plane_transformed_vec.w,
+						},
+						&[
+							Plane {
+								vec: tc_equation_transformed_vecs[0].truncate(),
+								dist: tc_equation_transformed_vecs[0].w,
+							},
+							Plane {
+								vec: tc_equation_transformed_vecs[1].truncate(),
+								dist: tc_equation_transformed_vecs[1].w,
+							},
+						],
+					);
+				}
 			}
 		}
 
@@ -996,23 +1064,13 @@ impl Renderer
 			let polygon_data = &polygons_data[polygon_index as usize];
 			let surface_size = polygon_data.surface_size;
 
+			let basis_vecs_scaled = polygon_data.basis_vecs.get_basis_vecs_for_mip(polygon_data.mip);
+
 			let texture = &materials_processor.get_texture(polygon.texture)[polygon_data.mip as usize];
 			let surface_data = unsafe {
 				&mut surfaces_pixels_shared.get()[polygon_data.surface_pixels_offset ..
 					polygon_data.surface_pixels_offset + (surface_size[0] * surface_size[1]) as usize]
 			};
-
-			let mip_scale = 1.0 / (1 << polygon_data.mip) as f32;
-			let tex_coord_equation_scaled = [
-				Plane {
-					vec: polygon.tex_coord_equation[0].vec * mip_scale,
-					dist: polygon.tex_coord_equation[0].dist * mip_scale,
-				},
-				Plane {
-					vec: polygon.tex_coord_equation[1].vec * mip_scale,
-					dist: polygon.tex_coord_equation[1].dist * mip_scale,
-				},
-			];
 
 			let mut lightmap_tc_shift: [u32; 2] = [0, 0];
 			for i in 0 .. 2
@@ -1039,8 +1097,7 @@ impl Renderer
 					&[]
 				};
 				build_surface_directional_lightmap(
-					&polygon.plane,
-					&tex_coord_equation_scaled,
+					&basis_vecs_scaled,
 					surface_size,
 					polygon_data.surface_tc_min,
 					texture,
@@ -1065,8 +1122,7 @@ impl Renderer
 					&[]
 				};
 				build_surface_simple_lightmap(
-					&polygon.plane,
-					&tex_coord_equation_scaled,
+					&basis_vecs_scaled,
 					surface_size,
 					polygon_data.surface_tc_min,
 					texture,
@@ -1479,13 +1535,13 @@ impl Renderer
 
 		for (&model_index, model_for_sorting) in leaf_submodels.iter().zip(models_for_sorting.iter_mut())
 		{
-			if let Some(submodel_camera_matrices) = &self.submodels_info[model_index as usize].camera_matrices
+			if let Some(submodel_matrices) = &self.submodels_info[model_index as usize].matrices
 			{
 				*model_for_sorting = (
 					model_index,
 					draw_ordering::project_bbox(
 						&self.inline_models_index.get_model_bbox_for_ordering(model_index),
-						&submodel_camera_matrices,
+						&submodel_matrices.camera_matrices,
 					),
 				);
 			}
@@ -1843,13 +1899,13 @@ impl Renderer
 		submodel_index: u32,
 	)
 	{
-		if let Some(submodel_camera_matrices) = &self.submodels_info[submodel_index as usize].camera_matrices
+		if let Some(submodel_matrices) = &self.submodels_info[submodel_index as usize].matrices
 		{
 			let submodel = &self.map.submodels[submodel_index as usize];
 			self.draw_submodel_bsp_node_r(
 				rasterizer,
 				frame_info,
-				&submodel_camera_matrices.planes_matrix,
+				&submodel_matrices.camera_matrices.planes_matrix,
 				clip_planes,
 				leaf_clip_planes,
 				leaf_decals,
