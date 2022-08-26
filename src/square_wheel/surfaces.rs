@@ -454,6 +454,7 @@ fn build_surface_impl_6_static_params<
 {
 	let u_vec = &basis_vecs.u;
 	let v_vec = &basis_vecs.v;
+	// Add 0.5 to get position for pixel centers.
 	let start_pos =
 		basis_vecs.start + u_vec * ((surface_tc_min[0]) as f32 + 0.5) + v_vec * ((surface_tc_min[1]) as f32 + 0.5);
 

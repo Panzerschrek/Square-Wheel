@@ -809,7 +809,7 @@ impl Renderer
 					polygon_index,
 				);
 
-				// If this submodel polygon is visible in current frame - recalculate it's basis vecs, using transformations of submodel.
+				// If this submodel polygon is visible in current frame - recalculate its basis vecs, using transformations of submodel.
 				// This is needed for specular and/or dynamic ligting.
 				let polygon_data = &mut self.polygons_data[polygon_index];
 				if polygon_data.visible_frame == self.current_frame
