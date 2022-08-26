@@ -3,9 +3,70 @@ use crate::common::{bsp_map_compact, lightmap, math_types::*, plane::*};
 
 pub type LightWithShadowMap<'a, 'b> = (&'a PointLight, &'b CubeShadowMap);
 
+// Basis vecs, that are used to reconstruct world position of surface texel.
+// This also includes normalized normal, that is used for dynamic lighting.
+#[derive(Copy, Clone)]
+pub struct PolygonBasisVecs
+{
+	pub u: Vec3f,
+	pub v: Vec3f,
+	pub start: Vec3f,
+	// Normalized
+	pub normal: Vec3f,
+}
+
+impl PolygonBasisVecs
+{
+	pub fn form_plane_and_tex_coord_equation(plane: &Plane, tex_coord_equation: &[Plane; 2]) -> Self
+	{
+		// Calculate inverse matrix for tex_coord equation and plane equation in order to calculate world position for UV.
+		let tex_coord_basis = Mat4f::from_cols(
+			tex_coord_equation[0].vec.extend(tex_coord_equation[0].dist),
+			tex_coord_equation[1].vec.extend(tex_coord_equation[1].dist),
+			plane.vec.extend(-plane.dist),
+			Vec4f::new(0.0, 0.0, 0.0, 1.0),
+		);
+		let tex_coord_basis_inverted = if let Some(t) = tex_coord_basis.transpose().invert()
+		{
+			t
+		}
+		else
+		{
+			return PolygonBasisVecs {
+				u: Vec3f::unit_x(),
+				v: Vec3f::unit_y(),
+				start: Vec3f::zero(),
+				normal: Vec3f::unit_z(),
+			};
+		};
+
+		Self {
+			u: tex_coord_basis_inverted.x.truncate(),
+			v: tex_coord_basis_inverted.y.truncate(),
+			start: tex_coord_basis_inverted.w.truncate(),
+			normal: plane.vec / plane.vec.magnitude().max(MIN_POSITIVE_VALUE),
+		}
+	}
+
+	pub fn get_basis_vecs_for_mip(&self, mip: u32) -> Self
+	{
+		if mip == 0
+		{
+			return *self;
+		}
+
+		let scale = (1 << mip) as f32;
+		Self {
+			u: self.u * scale,
+			v: self.v * scale,
+			start: self.start,
+			normal: self.normal,
+		}
+	}
+}
+
 pub fn build_surface_simple_lightmap<ColorT: AbstractColor>(
-	plane: &Plane,
-	tex_coord_equation: &[Plane; 2],
+	basis_vecs: &PolygonBasisVecs,
 	surface_size: [u32; 2],
 	surface_tc_min: [i32; 2],
 	texture: &textures::Texture,
@@ -19,8 +80,7 @@ pub fn build_surface_simple_lightmap<ColorT: AbstractColor>(
 )
 {
 	build_surface_impl_2_static_params::<ColorT, LightmapElementOpsSimple>(
-		plane,
-		tex_coord_equation,
+		basis_vecs,
 		surface_size,
 		surface_tc_min,
 		texture,
@@ -35,8 +95,7 @@ pub fn build_surface_simple_lightmap<ColorT: AbstractColor>(
 }
 
 pub fn build_surface_directional_lightmap<ColorT: AbstractColor>(
-	plane: &Plane,
-	tex_coord_equation: &[Plane; 2],
+	basis_vecs: &PolygonBasisVecs,
 	surface_size: [u32; 2],
 	surface_tc_min: [i32; 2],
 	texture: &textures::Texture,
@@ -50,8 +109,7 @@ pub fn build_surface_directional_lightmap<ColorT: AbstractColor>(
 )
 {
 	build_surface_impl_2_static_params::<ColorT, LightmapElementOpsDirectional>(
-		plane,
-		tex_coord_equation,
+		basis_vecs,
 		surface_size,
 		surface_tc_min,
 		texture,
@@ -66,8 +124,7 @@ pub fn build_surface_directional_lightmap<ColorT: AbstractColor>(
 }
 
 fn build_surface_impl_2_static_params<ColorT: AbstractColor, LightmapElementOpsT: LightmapElementOps>(
-	plane: &Plane,
-	tex_coord_equation: &[Plane; 2],
+	basis_vecs: &PolygonBasisVecs,
 	surface_size: [u32; 2],
 	surface_tc_min: [i32; 2],
 	texture: &textures::Texture,
@@ -85,8 +142,7 @@ fn build_surface_impl_2_static_params<ColorT: AbstractColor, LightmapElementOpsT
 	if lightmap_data.is_empty()
 	{
 		build_surface_impl_3_static_params::<ColorT, LightmapElementOpsT, NO_LIGHTMAP_SCALE>(
-			plane,
-			tex_coord_equation,
+			basis_vecs,
 			surface_size,
 			surface_tc_min,
 			texture,
@@ -101,8 +157,7 @@ fn build_surface_impl_2_static_params<ColorT: AbstractColor, LightmapElementOpsT
 	else if lightmap_scale_log2 == 0
 	{
 		build_surface_impl_3_static_params::<ColorT, LightmapElementOpsT, 0>(
-			plane,
-			tex_coord_equation,
+			basis_vecs,
 			surface_size,
 			surface_tc_min,
 			texture,
@@ -117,8 +172,7 @@ fn build_surface_impl_2_static_params<ColorT: AbstractColor, LightmapElementOpsT
 	else if lightmap_scale_log2 == 1
 	{
 		build_surface_impl_3_static_params::<ColorT, LightmapElementOpsT, 1>(
-			plane,
-			tex_coord_equation,
+			basis_vecs,
 			surface_size,
 			surface_tc_min,
 			texture,
@@ -133,8 +187,7 @@ fn build_surface_impl_2_static_params<ColorT: AbstractColor, LightmapElementOpsT
 	else if lightmap_scale_log2 == 2
 	{
 		build_surface_impl_3_static_params::<ColorT, LightmapElementOpsT, 2>(
-			plane,
-			tex_coord_equation,
+			basis_vecs,
 			surface_size,
 			surface_tc_min,
 			texture,
@@ -149,8 +202,7 @@ fn build_surface_impl_2_static_params<ColorT: AbstractColor, LightmapElementOpsT
 	else if lightmap_scale_log2 == 3
 	{
 		build_surface_impl_3_static_params::<ColorT, LightmapElementOpsT, 3>(
-			plane,
-			tex_coord_equation,
+			basis_vecs,
 			surface_size,
 			surface_tc_min,
 			texture,
@@ -165,8 +217,7 @@ fn build_surface_impl_2_static_params<ColorT: AbstractColor, LightmapElementOpsT
 	else if lightmap_scale_log2 == 4
 	{
 		build_surface_impl_3_static_params::<ColorT, LightmapElementOpsT, 4>(
-			plane,
-			tex_coord_equation,
+			basis_vecs,
 			surface_size,
 			surface_tc_min,
 			texture,
@@ -189,8 +240,7 @@ fn build_surface_impl_3_static_params<
 	LightmapElementOpsT: LightmapElementOps,
 	const LIGHTAP_SCALE_LOG2: u32,
 >(
-	plane: &Plane,
-	tex_coord_equation: &[Plane; 2],
+	basis_vecs: &PolygonBasisVecs,
 	surface_size: [u32; 2],
 	surface_tc_min: [i32; 2],
 	texture: &textures::Texture,
@@ -205,8 +255,7 @@ fn build_surface_impl_3_static_params<
 	if dynamic_lights.is_empty()
 	{
 		build_surface_impl_4_static_params::<ColorT, LightmapElementOpsT, LIGHTAP_SCALE_LOG2, false>(
-			plane,
-			tex_coord_equation,
+			basis_vecs,
 			surface_size,
 			surface_tc_min,
 			texture,
@@ -221,8 +270,7 @@ fn build_surface_impl_3_static_params<
 	else
 	{
 		build_surface_impl_4_static_params::<ColorT, LightmapElementOpsT, LIGHTAP_SCALE_LOG2, true>(
-			plane,
-			tex_coord_equation,
+			basis_vecs,
 			surface_size,
 			surface_tc_min,
 			texture,
@@ -242,8 +290,7 @@ fn build_surface_impl_4_static_params<
 	const LIGHTAP_SCALE_LOG2: u32,
 	const USE_DYNAMIC_LIGHTS: bool,
 >(
-	plane: &Plane,
-	tex_coord_equation: &[Plane; 2],
+	basis_vecs: &PolygonBasisVecs,
 	surface_size: [u32; 2],
 	surface_tc_min: [i32; 2],
 	texture: &textures::Texture,
@@ -258,8 +305,7 @@ fn build_surface_impl_4_static_params<
 	if texture.has_normal_map
 	{
 		build_surface_impl_5_static_params::<ColorT, LightmapElementOpsT, LIGHTAP_SCALE_LOG2, USE_DYNAMIC_LIGHTS, true>(
-			plane,
-			tex_coord_equation,
+			basis_vecs,
 			surface_size,
 			surface_tc_min,
 			texture,
@@ -274,8 +320,7 @@ fn build_surface_impl_4_static_params<
 	else
 	{
 		build_surface_impl_5_static_params::<ColorT, LightmapElementOpsT, LIGHTAP_SCALE_LOG2, USE_DYNAMIC_LIGHTS, false>(
-			plane,
-			tex_coord_equation,
+			basis_vecs,
 			surface_size,
 			surface_tc_min,
 			texture,
@@ -296,8 +341,7 @@ fn build_surface_impl_5_static_params<
 	const USE_DYNAMIC_LIGHTS: bool,
 	const USE_NORMAL_MAP: bool,
 >(
-	plane: &Plane,
-	tex_coord_equation: &[Plane; 2],
+	basis_vecs: &PolygonBasisVecs,
 	surface_size: [u32; 2],
 	surface_tc_min: [i32; 2],
 	texture: &textures::Texture,
@@ -321,8 +365,7 @@ fn build_surface_impl_5_static_params<
 				USE_NORMAL_MAP,
 				SPECULAR_TYPE_METAL,
 			>(
-				plane,
-				tex_coord_equation,
+				basis_vecs,
 				surface_size,
 				surface_tc_min,
 				texture,
@@ -344,8 +387,7 @@ fn build_surface_impl_5_static_params<
 				USE_NORMAL_MAP,
 				SPECULAR_TYPE_DIELECTRIC,
 			>(
-				plane,
-				tex_coord_equation,
+				basis_vecs,
 				surface_size,
 				surface_tc_min,
 				texture,
@@ -368,8 +410,7 @@ fn build_surface_impl_5_static_params<
 			USE_NORMAL_MAP,
 			SPECULAR_TYPE_NONE,
 		>(
-			plane,
-			tex_coord_equation,
+			basis_vecs,
 			surface_size,
 			surface_tc_min,
 			texture,
@@ -399,8 +440,7 @@ fn build_surface_impl_6_static_params<
 	const USE_NORMAL_MAP: bool,
 	const SPECULAR_TYPE: u32,
 >(
-	plane: &Plane,
-	tex_coord_equation: &[Plane; 2],
+	basis_vecs: &PolygonBasisVecs,
 	surface_size: [u32; 2],
 	surface_tc_min: [i32; 2],
 	texture: &textures::Texture,
@@ -412,28 +452,10 @@ fn build_surface_impl_6_static_params<
 	out_surface_data: &mut [ColorT],
 )
 {
-	// Calculate inverse matrix for tex_coord equation and plane equation in order to calculate world position for UV.
-	// TODO - project tc equation to surface plane?
-	let tex_coord_basis = Mat4f::from_cols(
-		tex_coord_equation[0].vec.extend(tex_coord_equation[0].dist),
-		tex_coord_equation[1].vec.extend(tex_coord_equation[1].dist),
-		plane.vec.extend(-plane.dist),
-		Vec4f::new(0.0, 0.0, 0.0, 1.0),
-	);
-	let tex_coord_basis_inverted_opt = tex_coord_basis.transpose().invert();
-	if tex_coord_basis_inverted_opt.is_none()
-	{
-		return;
-	}
-	let tex_coord_basis_inverted = tex_coord_basis_inverted_opt.unwrap();
-
-	let u_vec = tex_coord_basis_inverted.x.truncate();
-	let v_vec = tex_coord_basis_inverted.y.truncate();
-	let start_pos = tex_coord_basis_inverted.w.truncate() +
-		u_vec * ((surface_tc_min[0]) as f32 + 0.5) +
-		v_vec * ((surface_tc_min[1]) as f32 + 0.5);
-
-	let plane_normal_normalized = plane.vec * inv_sqrt_fast(vec3_len2(&plane.vec));
+	let u_vec = &basis_vecs.u;
+	let v_vec = &basis_vecs.v;
+	let start_pos =
+		basis_vecs.start + u_vec * ((surface_tc_min[0]) as f32 + 0.5) + v_vec * ((surface_tc_min[1]) as f32 + 0.5);
 
 	// Use texture basis vectors as basis for normal transformation.
 	// This may be inaccurate if texture is non-uniformly stretched or shifted, but it is still fine for most cases.
@@ -564,7 +586,7 @@ fn build_surface_impl_6_static_params<
 					let vec_to_camera_texture_space = Vec3f::new(
 						vec3_dot(&vec_to_camera, &u_vec_normalized),
 						vec3_dot(&vec_to_camera, &v_vec_normalized),
-						vec3_dot(&vec_to_camera, &plane_normal_normalized),
+						vec3_dot(&vec_to_camera, &basis_vecs.normal),
 					);
 
 					let vec_to_camera_normal_dot = vec3_dot(&vec_to_camera_texture_space, &normal);
@@ -666,35 +688,23 @@ fn build_surface_impl_6_static_params<
 						f32_mul_add(
 							texel_normal.x,
 							u_vec_normalized.x,
-							f32_mul_add(
-								texel_normal.y,
-								v_vec_normalized.x,
-								texel_normal.z * plane_normal_normalized.x,
-							),
+							f32_mul_add(texel_normal.y, v_vec_normalized.x, texel_normal.z * basis_vecs.normal.x),
 						),
 						f32_mul_add(
 							texel_normal.x,
 							u_vec_normalized.y,
-							f32_mul_add(
-								texel_normal.y,
-								v_vec_normalized.y,
-								texel_normal.z * plane_normal_normalized.y,
-							),
+							f32_mul_add(texel_normal.y, v_vec_normalized.y, texel_normal.z * basis_vecs.normal.y),
 						),
 						f32_mul_add(
 							texel_normal.x,
 							u_vec_normalized.z,
-							f32_mul_add(
-								texel_normal.y,
-								v_vec_normalized.z,
-								texel_normal.z * plane_normal_normalized.z,
-							),
+							f32_mul_add(texel_normal.y, v_vec_normalized.z, texel_normal.z * basis_vecs.normal.z),
 						),
 					)
 				}
 				else
 				{
-					plane_normal_normalized
+					basis_vecs.normal
 				};
 
 				let vec_to_camera_reflected;

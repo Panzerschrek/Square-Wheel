@@ -85,11 +85,14 @@ fn run_with_measure<F: FnOnce()>(f: F, performanc_counter: &mut PerformanceCount
 }
 
 // Mutable data associated with map polygon.
-#[derive(Default, Copy, Clone)]
+#[derive(Copy, Clone)]
 struct DrawPolygonData
 {
+	// Precalculaed basis vecs for mip 0
+	basis_vecs: PolygonBasisVecs,
 	// Frame last time this polygon was visible.
 	visible_frame: FrameNumber,
+	// Projected equations for current frame.
 	depth_equation: DepthEquation,
 	tex_coord_equation: TexCoordEquation,
 	surface_pixels_offset: usize,
@@ -139,12 +142,28 @@ impl Renderer
 
 		let materials_processor = MapMaterialsProcessor::new(resources_manager, &*map);
 
+		let polygons_data = map
+			.polygons
+			.iter()
+			.map(|p| DrawPolygonData {
+				// Pre-calculate basis vecs and use them each frame.
+				basis_vecs: PolygonBasisVecs::form_plane_and_tex_coord_equation(&p.plane, &p.tex_coord_equation),
+				visible_frame: Default::default(),
+				depth_equation: Default::default(),
+				tex_coord_equation: Default::default(),
+				surface_pixels_offset: 0,
+				surface_size: [0, 0],
+				mip: 0,
+				surface_tc_min: [0, 0],
+			})
+			.collect();
+
 		Renderer {
 			app_config,
 			config: config_parsed,
 			config_is_durty: false,
 			current_frame: FrameNumber::default(),
-			polygons_data: vec![DrawPolygonData::default(); map.polygons.len()],
+			polygons_data,
 			vertices_transformed: vec![Vec3f::new(0.0, 0.0, 0.0); map.vertices.len()],
 			surfaces_pixels: Vec::new(),
 			num_visible_surfaces_pixels: 0,
@@ -996,23 +1015,13 @@ impl Renderer
 			let polygon_data = &polygons_data[polygon_index as usize];
 			let surface_size = polygon_data.surface_size;
 
+			let basis_vecs_scaled = polygon_data.basis_vecs.get_basis_vecs_for_mip(polygon_data.mip);
+
 			let texture = &materials_processor.get_texture(polygon.texture)[polygon_data.mip as usize];
 			let surface_data = unsafe {
 				&mut surfaces_pixels_shared.get()[polygon_data.surface_pixels_offset ..
 					polygon_data.surface_pixels_offset + (surface_size[0] * surface_size[1]) as usize]
 			};
-
-			let mip_scale = 1.0 / (1 << polygon_data.mip) as f32;
-			let tex_coord_equation_scaled = [
-				Plane {
-					vec: polygon.tex_coord_equation[0].vec * mip_scale,
-					dist: polygon.tex_coord_equation[0].dist * mip_scale,
-				},
-				Plane {
-					vec: polygon.tex_coord_equation[1].vec * mip_scale,
-					dist: polygon.tex_coord_equation[1].dist * mip_scale,
-				},
-			];
 
 			let mut lightmap_tc_shift: [u32; 2] = [0, 0];
 			for i in 0 .. 2
@@ -1039,8 +1048,7 @@ impl Renderer
 					&[]
 				};
 				build_surface_directional_lightmap(
-					&polygon.plane,
-					&tex_coord_equation_scaled,
+					&basis_vecs_scaled,
 					surface_size,
 					polygon_data.surface_tc_min,
 					texture,
@@ -1065,8 +1073,7 @@ impl Renderer
 					&[]
 				};
 				build_surface_simple_lightmap(
-					&polygon.plane,
-					&tex_coord_equation_scaled,
+					&basis_vecs_scaled,
 					surface_size,
 					polygon_data.surface_tc_min,
 					texture,
