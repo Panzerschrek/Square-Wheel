@@ -51,7 +51,7 @@ impl DynamicModelsIndex
 		self.clear();
 
 		// Position new models.
-		self.models_info.resize(models.len(), ModelInfo::default());
+		self.allocate_models.resize(models.len());
 		for (index, model) in models.iter().enumerate()
 		{
 			if model.is_view_model
@@ -77,7 +77,7 @@ impl DynamicModelsIndex
 		self.clear();
 
 		// Position new decals.
-		self.models_info.resize(decals.len(), ModelInfo::default());
+		self.allocate_models(decals.len());
 		for (index, decal) in decals.iter().enumerate()
 		{
 			self.position_model_bbox(
@@ -136,12 +136,25 @@ impl DynamicModelsIndex
 		}
 	}
 
+	fn allocate_models(&mut self, num_models: usize)
+	{
+		// Do not reize down to preserve internal allocations.
+		if self.models_info.len() < num_models
+		{
+			self.models_info.resize(num_models, ModelInfo::default());
+		}
+	}
+
 	fn clear(&mut self)
 	{
 		for leafs_info in &mut self.leafs_info
 		{
 			leafs_info.models.clear();
 		}
-		self.models_info.clear();
+		// Do not clear models_info vector itself to preserve allocations in interlal vectors and avoid reallocations.
+		for model_info in &mut self.models_info
+		{
+			model_info.leafs.clear();
+		}
 	}
 }
