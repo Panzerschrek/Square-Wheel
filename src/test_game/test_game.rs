@@ -1,5 +1,5 @@
 use super::{
-	commands_processor, commands_queue, components::*, config, console, frame_info::*, game_interface::*, light::*,
+	commands_processor, commands_queue, components::*, config, console, frame_info::*, game_interface::*,
 	resources_manager::*, test_game_physics, world_spawn, world_update,
 };
 use square_wheel_lib::common::{bsp_map_compact, color::*, material, math_types::*, matrix::*, system_window};
@@ -228,9 +228,10 @@ impl Game
 		{
 			self.ecs.spawn((
 				TestLightComponent {},
-				PointLight {
-					pos: self.get_camera_location().0,
+				DynamicLight {
+					position: self.get_camera_location().0,
 					color: [r * 1024.0, g * 1024.0, b * 1024.0],
+					radius: 256.0,
 				},
 			));
 		}

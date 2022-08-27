@@ -223,7 +223,7 @@ impl Renderer
 			for side in 0 .. 6
 			{
 				let depth_matrices = calculate_cube_shadow_map_side_matrices(
-					light.pos,
+					light.position,
 					depth_map_size as f32,
 					int_to_cubemap_side(side).unwrap(),
 				);
@@ -271,7 +271,12 @@ impl Renderer
 				let mut lights_with_shadow_maps = Vec::new();
 				for (light, shadow_map) in frame_info.lights.iter().zip(test_lights_shadow_maps.iter())
 				{
-					lights_with_shadow_maps.push((light, shadow_map));
+					lights_with_shadow_maps.push(SurfaceDynamicLight {
+						position: light.position,
+						radius: light.radius,
+						color: light.color,
+						shadow_map: Some(shadow_map),
+					});
 				}
 				self.build_polygons_surfaces::<ColorT>(&frame_info.camera_matrices, &lights_with_shadow_maps);
 			},
@@ -1039,7 +1044,7 @@ impl Renderer
 	fn build_polygons_surfaces<ColorT: AbstractColor>(
 		&mut self,
 		camera_matrices: &CameraMatrices,
-		lights: &[LightWithShadowMap],
+		lights: &[SurfaceDynamicLight],
 	)
 	{
 		// Perform parallel surfaces building.

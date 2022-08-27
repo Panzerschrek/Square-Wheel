@@ -1,4 +1,4 @@
-use super::{light::*, resources_manager::*, textures::*, triangle_model::*};
+use super::{resources_manager::*, textures::*, triangle_model::*};
 use crate::common::{bbox::*, material, math_types::*, matrix::*};
 
 pub struct FrameInfo
@@ -9,7 +9,7 @@ pub struct FrameInfo
 	pub submodel_entities: Vec<SubmodelEntityOpt>,
 	pub model_entities: Vec<ModelEntity>,
 	pub decals: Vec<Decal>,
-	pub lights: Vec<PointLight>,
+	pub lights: Vec<DynamicLight>,
 	pub skybox_rotation: QuaternionF,
 }
 
@@ -83,4 +83,12 @@ pub struct Decal
 	pub blending_mode: material::BlendingMode,
 	pub lightmap_light_scale: f32,
 	pub light_add: [f32; 3],
+}
+
+#[derive(Copy, Clone)]
+pub struct DynamicLight
+{
+	pub position: Vec3f,
+	pub radius: f32,
+	pub color: [f32; 3],
 }

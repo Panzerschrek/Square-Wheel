@@ -1,7 +1,5 @@
-use super::{abstract_color::*, fast_math::*, light::*, shadow_map::*, textures};
+use super::{abstract_color::*, fast_math::*, shadow_map::*, textures};
 use crate::common::{bsp_map_compact, lightmap, math_types::*, plane::*};
-
-pub type LightWithShadowMap<'a, 'b> = (&'a PointLight, &'b CubeShadowMap);
 
 // Basis vecs, that are used to reconstruct world position of surface texel.
 // This also includes normalized normal, that is used for dynamic lighting.
@@ -65,6 +63,14 @@ impl PolygonBasisVecs
 	}
 }
 
+pub struct SurfaceDynamicLight<'a>
+{
+	pub position: Vec3f,
+	pub radius: f32,
+	pub color: [f32; 3],
+	pub shadow_map: Option<&'a CubeShadowMap>,
+}
+
 pub fn build_surface_simple_lightmap<ColorT: AbstractColor>(
 	basis_vecs: &PolygonBasisVecs,
 	surface_size: [u32; 2],
@@ -74,7 +80,7 @@ pub fn build_surface_simple_lightmap<ColorT: AbstractColor>(
 	lightmap_scale_log2: u32,
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[bsp_map_compact::LightmapElement],
-	dynamic_lights: &[LightWithShadowMap],
+	dynamic_lights: &[SurfaceDynamicLight],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [ColorT],
 )
@@ -103,7 +109,7 @@ pub fn build_surface_directional_lightmap<ColorT: AbstractColor>(
 	lightmap_scale_log2: u32,
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[bsp_map_compact::DirectionalLightmapElement],
-	dynamic_lights: &[LightWithShadowMap],
+	dynamic_lights: &[SurfaceDynamicLight],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [ColorT],
 )
@@ -132,7 +138,7 @@ fn build_surface_impl_2_static_params<ColorT: AbstractColor, LightmapElementOpsT
 	lightmap_scale_log2: u32,
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[LightmapElementOpsT::LightmapElement],
-	dynamic_lights: &[LightWithShadowMap],
+	dynamic_lights: &[SurfaceDynamicLight],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [ColorT],
 )
@@ -247,7 +253,7 @@ fn build_surface_impl_3_static_params<
 	lightmap_size: [u32; 2],
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[LightmapElementOpsT::LightmapElement],
-	dynamic_lights: &[LightWithShadowMap],
+	dynamic_lights: &[SurfaceDynamicLight],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [ColorT],
 )
@@ -297,7 +303,7 @@ fn build_surface_impl_4_static_params<
 	lightmap_size: [u32; 2],
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[LightmapElementOpsT::LightmapElement],
-	dynamic_lights: &[LightWithShadowMap],
+	dynamic_lights: &[SurfaceDynamicLight],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [ColorT],
 )
@@ -348,7 +354,7 @@ fn build_surface_impl_5_static_params<
 	lightmap_size: [u32; 2],
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[LightmapElementOpsT::LightmapElement],
-	dynamic_lights: &[LightWithShadowMap],
+	dynamic_lights: &[SurfaceDynamicLight],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [ColorT],
 )
@@ -447,7 +453,7 @@ fn build_surface_impl_6_static_params<
 	lightmap_size: [u32; 2],
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[LightmapElementOpsT::LightmapElement],
-	dynamic_lights: &[LightWithShadowMap],
+	dynamic_lights: &[SurfaceDynamicLight],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [ColorT],
 )
@@ -749,11 +755,11 @@ fn build_surface_impl_6_static_params<
 					inv_roughness = 0.0;
 				}
 
-				for (light, shadow_cube_map) in dynamic_lights
+				for light in dynamic_lights
 				{
-					let vec_to_light = light.pos - pos;
+					let vec_to_light = light.position - pos;
 
-					let shadow_factor = cube_shadow_map_fetch(shadow_cube_map, &vec_to_light);
+					let shadow_factor = get_light_shadow_factor(light, &vec_to_light);
 					let vec_to_light_len2 = vec3_len2(&vec_to_light).max(MIN_POSITIVE_VALUE);
 					let shadow_distance_factor = shadow_factor * inv_fast(vec_to_light_len2);
 
@@ -962,6 +968,15 @@ impl LightmapElementOps for LightmapElementOpsDirectional
 			deviation: el.directional_light_deviation,
 			color: el.directional_light_color,
 		})
+	}
+}
+
+fn get_light_shadow_factor(light: &SurfaceDynamicLight, vec: &Vec3f) -> f32
+{
+	match light.shadow_map
+	{
+		Some(cube_shadow_map) => cube_shadow_map_fetch(cube_shadow_map, vec),
+		None => 1.0,
 	}
 }
 
