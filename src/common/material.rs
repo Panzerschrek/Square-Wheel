@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
-pub type MaterialsMap = std::collections::HashMap<String, Material>;
+pub type MaterialsMap = HashMap<String, Material>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Material
@@ -67,6 +68,12 @@ pub struct Material
 	/// If some - this is a skybox.
 	#[serde(default)]
 	pub skybox: Option<SkyboxParams>,
+
+	// Other fields of material.
+	// May be used to store game-specific material properties.
+	// Keep it last here.
+	#[serde(flatten)]
+	pub extra: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
@@ -135,6 +142,7 @@ impl Default for Material
 			blending_mode: BlendingMode::None,
 			turb: None,
 			skybox: None,
+			extra: HashMap::new(),
 		}
 	}
 }
