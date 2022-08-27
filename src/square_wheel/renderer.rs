@@ -1,5 +1,5 @@
 use super::{
-	abstract_color::*, config, debug_stats_printer::*, depth_renderer::*, draw_ordering, dynamic_models_index::*,
+	abstract_color::*, config, debug_stats_printer::*, depth_renderer::*, draw_ordering, dynamic_objects_index::*,
 	equations::*, fast_math::*, frame_info::*, frame_number::*, inline_models_index::*, map_materials_processor::*,
 	map_visibility_calculator::*, performance_counter::*, rasterizer::*, rect_splitting, renderer_config::*,
 	resources_manager::*, shadow_map::*, surfaces::*, textures::*, triangle_model::*, triangle_models_rendering::*,
@@ -37,8 +37,8 @@ pub struct Renderer
 	materials_processor: MapMaterialsProcessor,
 	performance_counters: Arc<Mutex<RendererPerformanceCounters>>,
 	// TODO - maybe extract dynamic models-related stuff into separate class?
-	dynamic_models_index: DynamicModelsIndex,
-	decals_index: DynamicModelsIndex,
+	dynamic_models_index: DynamicObjectsIndex,
+	decals_index: DynamicObjectsIndex,
 	// Store transformed models vertices and triangles in separate buffer.
 	// This is needed to avoid transforming/sorting model's vertices/triangles in each BSP leaf where this model is located.
 	visible_dynamic_meshes_list: Vec<VisibleDynamicMeshInfo>,
@@ -185,8 +185,8 @@ impl Renderer
 			map: map.clone(),
 			materials_processor,
 			performance_counters: Arc::new(Mutex::new(RendererPerformanceCounters::new())),
-			dynamic_models_index: DynamicModelsIndex::new(map.clone()),
-			decals_index: DynamicModelsIndex::new(map),
+			dynamic_models_index: DynamicObjectsIndex::new(map.clone()),
+			decals_index: DynamicObjectsIndex::new(map),
 			visible_dynamic_meshes_list: Vec::new(),
 			dynamic_model_to_dynamic_meshes_index: Vec::new(),
 			dynamic_meshes_vertices: Vec::new(),
@@ -335,7 +335,7 @@ impl Renderer
 			{
 				num_visible_leafs += 1;
 				num_visible_submodels_parts += self.inline_models_index.get_leaf_models(leaf_index as u32).len();
-				num_visible_meshes_parts += self.dynamic_models_index.get_leaf_models(leaf_index as u32).len();
+				num_visible_meshes_parts += self.dynamic_models_index.get_leaf_objects(leaf_index as u32).len();
 			}
 		}
 
@@ -360,7 +360,7 @@ impl Renderer
 		for i in 0 .. frame_info.decals.len()
 		{
 			let mut visible = false;
-			for leaf_index in self.decals_index.get_model_leafs(i)
+			for leaf_index in self.decals_index.get_object_leafs(i)
 			{
 				if self
 					.visibility_calculator
@@ -487,7 +487,7 @@ impl Renderer
 			};
 
 			let mut visible = model.is_view_model;
-			for leaf_index in self.dynamic_models_index.get_model_leafs(entity_index)
+			for leaf_index in self.dynamic_models_index.get_object_leafs(entity_index)
 			{
 				if let Some(mut leaf_clipping_polygon) =
 					self.visibility_calculator.get_current_frame_leaf_bounds(*leaf_index)
@@ -1392,7 +1392,7 @@ impl Renderer
 		}
 
 		// Draw decals after all leaf polygons.
-		let leaf_decals = self.decals_index.get_leaf_models(leaf_index);
+		let leaf_decals = self.decals_index.get_leaf_objects(leaf_index);
 		if !leaf_decals.is_empty()
 		{
 			for polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
@@ -1411,7 +1411,7 @@ impl Renderer
 		// Draw contents of leaf - submodels and triangle models.
 
 		let leaf_submodels = self.inline_models_index.get_leaf_models(leaf_index);
-		let leaf_dynamic_models = self.dynamic_models_index.get_leaf_models(leaf_index);
+		let leaf_dynamic_models = self.dynamic_models_index.get_leaf_objects(leaf_index);
 		if leaf_submodels.is_empty() && leaf_dynamic_models.is_empty()
 		{
 			return;
@@ -1620,7 +1620,7 @@ impl Renderer
 		clip_planes: &ClippingPolygonPlanes,
 		polygon_index: u32,
 		decals: &[Decal],
-		current_decals: &[ModelId],
+		current_decals: &[DynamicObjectId],
 	)
 	{
 		let polygon_data = &self.polygons_data[polygon_index as usize];
@@ -1895,7 +1895,7 @@ impl Renderer
 		frame_info: &FrameInfo,
 		clip_planes: &ClippingPolygonPlanes,
 		leaf_clip_planes: &[Plane],
-		leaf_decals: &[ModelId],
+		leaf_decals: &[DynamicObjectId],
 		submodel_index: u32,
 	)
 	{
@@ -1921,7 +1921,7 @@ impl Renderer
 		submodel_planes_matrix: &Mat4f,
 		clip_planes: &ClippingPolygonPlanes,
 		leaf_clip_planes: &[Plane],
-		leaf_decals: &[ModelId],
+		leaf_decals: &[DynamicObjectId],
 		node_index: u32,
 	)
 	{
