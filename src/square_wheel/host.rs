@@ -195,10 +195,6 @@ impl Host
 		{
 			self.window.set_fullscreen();
 		}
-		else
-		{
-			self.config.fullscreen_mode = 0;
-		}
 	}
 
 	fn process_commands(&mut self)
@@ -214,14 +210,19 @@ impl Host
 		self.config = HostConfig::from_app_config(&self.app_config);
 
 		// Make sure that config values are reasonable.
-		let mut config_is_durty = false;
+		let mut config_is_dirty = false;
 		if self.config.max_fps < 0.0
 		{
 			self.config.max_fps = 0.0;
-			config_is_durty = true;
+			config_is_dirty = true;
+		}
+		if self.config.fullscreen_mode > 2
+		{
+			self.config.fullscreen_mode = 0;
+			config_is_dirty = true;
 		}
 
-		if config_is_durty
+		if config_is_dirty
 		{
 			self.config.update_app_config(&self.app_config);
 		}

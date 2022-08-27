@@ -15,7 +15,6 @@ pub struct Renderer
 {
 	app_config: config::ConfigSharedPtr,
 	config: RendererConfig,
-	config_is_durty: bool,
 
 	current_frame: FrameNumber,
 	map: Arc<bsp_map_compact::BSPMap>,
@@ -169,7 +168,6 @@ impl Renderer
 		Renderer {
 			app_config,
 			config: config_parsed,
-			config_is_durty: false,
 			current_frame: FrameNumber::default(),
 			polygons_data,
 			vertices_transformed: vec![Vec3f::new(0.0, 0.0, 0.0); map.vertices.len()],
@@ -2269,26 +2267,24 @@ impl Renderer
 
 	fn synchronize_config(&mut self)
 	{
-		if self.config_is_durty
-		{
-			self.config_is_durty = false;
-			self.config.update_app_config(&self.app_config);
-		}
-		else
-		{
-			self.config = RendererConfig::from_app_config(&self.app_config);
-		}
+		self.config = RendererConfig::from_app_config(&self.app_config);
 
 		// Make sure that config values are reasonable.
+		let mut config_is_dirty = false;
 		if self.config.textures_mip_bias < -1.0
 		{
 			self.config.textures_mip_bias = -1.0;
-			self.config_is_durty = true;
+			config_is_dirty = true;
 		}
 		if self.config.textures_mip_bias > 2.0
 		{
 			self.config.textures_mip_bias = 2.0;
-			self.config_is_durty = true;
+			config_is_dirty = true;
+		}
+
+		if config_is_dirty
+		{
+			self.config.update_app_config(&self.app_config);
 		}
 	}
 }
