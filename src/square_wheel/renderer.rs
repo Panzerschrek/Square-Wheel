@@ -286,6 +286,7 @@ impl Renderer
 				{
 					lights_with_shadow_maps.push(SurfaceDynamicLight {
 						position: light.position,
+						radius: light.radius,
 						inv_square_radius: 1.0 / (light.radius * light.radius),
 						color: light.color,
 						shadow_map: match light.shadow_type
@@ -1067,6 +1068,7 @@ impl Renderer
 		// Used only to initialize references.
 		let dummy_light = SurfaceDynamicLight {
 			position: Vec3f::zero(),
+			radius: 1.0,
 			inv_square_radius: 1.0,
 			color: [0.0; 3],
 			shadow_map: None,
@@ -1096,12 +1098,17 @@ impl Renderer
 			// Collect lights, affecting this polygon.
 			let mut polygon_lights = [&dummy_light; MAX_POLYGON_LIGHTS];
 			let mut num_polygon_lights = 0;
-
-			for (src_light, dst_light) in lights.iter().zip(polygon_lights.iter_mut())
+			for light in lights
 			{
-				*dst_light = src_light;
-				// TODO - filet-out some lights.
-				num_polygon_lights += 1;
+				if polygon_is_affected_by_light(polygon, &polygon_data.basis_vecs, light)
+				{
+					polygon_lights[num_polygon_lights] = light;
+					num_polygon_lights += 1;
+					if num_polygon_lights == MAX_POLYGON_LIGHTS
+					{
+						break;
+					}
+				}
 			}
 
 			let basis_vecs_scaled = polygon_data.basis_vecs.get_basis_vecs_for_mip(polygon_data.mip);
@@ -2399,6 +2406,61 @@ fn get_polygon_lightap_light(
 	}
 
 	total_light
+}
+
+fn polygon_is_affected_by_light(
+	polygon: &bsp_map_compact::Polygon,
+	basis_vecs: &PolygonBasisVecs,
+	light: &SurfaceDynamicLight,
+) -> bool
+{
+	// TODO - check mathemathics here.
+
+	let vec_from_light_position_to_plane_point = light.position - basis_vecs.start;
+	let signed_dinstance_to_polygon_plane = vec_from_light_position_to_plane_point.dot(basis_vecs.normal);
+	if signed_dinstance_to_polygon_plane <= 0.0
+	{
+		// This light is behind polygon plane.
+		return false;
+	}
+
+	let square_radius_at_polygon_plane =
+		light.radius * light.radius - signed_dinstance_to_polygon_plane * signed_dinstance_to_polygon_plane;
+	if square_radius_at_polygon_plane <= 0.0
+	{
+		// This light is too far from polygon plane.
+		return false;
+	}
+
+	// Calculate texture coordinates at point of projection of light position to polygon plane.
+	let light_position_projected_to_polygon_plane =
+		light.position - signed_dinstance_to_polygon_plane * basis_vecs.normal;
+	let tc_at_projected_light_position = [
+		light_position_projected_to_polygon_plane.dot(polygon.tex_coord_equation[0].vec) +
+			polygon.tex_coord_equation[0].dist,
+		light_position_projected_to_polygon_plane.dot(polygon.tex_coord_equation[1].vec) +
+			polygon.tex_coord_equation[1].dist,
+	];
+
+	// Check min/max texture coordinates of projected circle agains polygon min/max texture coordinates.
+	// This is inexact check (not proper polygon check) but it gives good enough result.
+	let radius_at_polygon_plane = square_radius_at_polygon_plane.sqrt();
+	let u_radius = radius_at_polygon_plane * inv_sqrt_fast(basis_vecs.u.magnitude2());
+	let v_radius = radius_at_polygon_plane * inv_sqrt_fast(basis_vecs.v.magnitude2());
+
+	if tc_at_projected_light_position[0] + u_radius < (polygon.tex_coord_min[0] as f32) ||
+		tc_at_projected_light_position[1] + v_radius < (polygon.tex_coord_min[1] as f32) ||
+		tc_at_projected_light_position[0] - u_radius > (polygon.tex_coord_max[0] as f32) ||
+		tc_at_projected_light_position[1] - v_radius > (polygon.tex_coord_max[1] as f32)
+	{
+		// Light porjection circle is outside polygon borders.
+		false
+	}
+	else
+	{
+		// Light affects this polygon.
+		true
+	}
 }
 
 fn draw_background<ColorT: Copy + Send + Sync>(pixels: &mut [ColorT], color: ColorT)

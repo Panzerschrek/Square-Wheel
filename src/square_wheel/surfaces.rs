@@ -66,6 +66,7 @@ impl PolygonBasisVecs
 pub struct SurfaceDynamicLight<'a>
 {
 	pub position: Vec3f,
+	pub radius: f32,
 	pub inv_square_radius: f32,
 	pub color: [f32; 3],
 	pub shadow_map: Option<&'a CubeShadowMap>,
