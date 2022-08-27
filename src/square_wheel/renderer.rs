@@ -220,19 +220,32 @@ impl Renderer
 				size: depth_map_size,
 				sides: [Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()],
 			};
-			for side in 0 .. 6
+
+			match light.shadow_type
 			{
-				let depth_matrices = calculate_cube_shadow_map_side_matrices(
-					light.position,
-					depth_map_size as f32,
-					int_to_cubemap_side(side).unwrap(),
-				);
+				DynamicLightShadowType::None =>
+				{},
+				DynamicLightShadowType::Cubemap =>
+				{
+					for side in 0 .. 6
+					{
+						let depth_matrices = calculate_cube_shadow_map_side_matrices(
+							light.position,
+							depth_map_size as f32,
+							int_to_cubemap_side(side).unwrap(),
+						);
 
-				let mut depth_data = vec![0.0; (depth_map_size * depth_map_size) as usize];
-				self.shadows_maps_renderer
-					.draw_map(&mut depth_data, depth_map_size, depth_map_size, &depth_matrices);
+						let mut depth_data = vec![0.0; (depth_map_size * depth_map_size) as usize];
+						self.shadows_maps_renderer.draw_map(
+							&mut depth_data,
+							depth_map_size,
+							depth_map_size,
+							&depth_matrices,
+						);
 
-				cube_shadow_map.sides[side as usize] = depth_data;
+						cube_shadow_map.sides[side as usize] = depth_data;
+					}
+				},
 			}
 			test_lights_shadow_maps.push(cube_shadow_map);
 		}
@@ -275,7 +288,11 @@ impl Renderer
 						position: light.position,
 						radius: light.radius,
 						color: light.color,
-						shadow_map: Some(shadow_map),
+						shadow_map: match light.shadow_type
+						{
+							DynamicLightShadowType::None => None,
+							DynamicLightShadowType::Cubemap => Some(shadow_map),
+						},
 					});
 				}
 				self.build_polygons_surfaces::<ColorT>(&frame_info.camera_matrices, &lights_with_shadow_maps);

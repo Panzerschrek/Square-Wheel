@@ -91,4 +91,12 @@ pub struct DynamicLight
 	pub position: Vec3f,
 	pub radius: f32,
 	pub color: [f32; 3],
+	pub shadow_type: DynamicLightShadowType,
+}
+
+#[derive(Copy, Clone)]
+pub enum DynamicLightShadowType
+{
+	None,
+	Cubemap,
 }

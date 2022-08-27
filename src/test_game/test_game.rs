@@ -220,7 +220,10 @@ impl Game
 	{
 		if args.len() < 3
 		{
-			self.console.lock().unwrap().add_text("Expected 3 args".to_string());
+			self.console
+				.lock()
+				.unwrap()
+				.add_text("Expected at least 3 args".to_string());
 			return;
 		}
 
@@ -232,6 +235,14 @@ impl Game
 					position: self.get_camera_location().0,
 					color: [r * 1024.0, g * 1024.0, b * 1024.0],
 					radius: 256.0,
+					shadow_type: if args.len() >= 4 && args[3] == "cube_shadow"
+					{
+						DynamicLightShadowType::Cubemap
+					}
+					else
+					{
+						DynamicLightShadowType::None
+					},
 				},
 			));
 		}
