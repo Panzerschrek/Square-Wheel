@@ -234,7 +234,7 @@ impl Game
 				DynamicLight {
 					position: self.get_camera_location().0,
 					color: [r * 1024.0, g * 1024.0, b * 1024.0],
-					radius: 256.0,
+					radius: 128.0,
 					shadow_type: if args.len() >= 4 && args[3] == "cube_shadow"
 					{
 						DynamicLightShadowType::Cubemap

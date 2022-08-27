@@ -286,7 +286,7 @@ impl Renderer
 				{
 					lights_with_shadow_maps.push(SurfaceDynamicLight {
 						position: light.position,
-						radius: light.radius,
+						inv_square_radius: 1.0 / (light.radius * light.radius),
 						color: light.color,
 						shadow_map: match light.shadow_type
 						{

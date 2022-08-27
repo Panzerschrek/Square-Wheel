@@ -66,7 +66,7 @@ impl PolygonBasisVecs
 pub struct SurfaceDynamicLight<'a>
 {
 	pub position: Vec3f,
-	pub radius: f32,
+	pub inv_square_radius: f32,
 	pub color: [f32; 3],
 	pub shadow_map: Option<&'a CubeShadowMap>,
 }
@@ -761,7 +761,10 @@ fn build_surface_impl_6_static_params<
 
 					let shadow_factor = get_light_shadow_factor(light, &vec_to_light);
 					let vec_to_light_len2 = vec3_len2(&vec_to_light).max(MIN_POSITIVE_VALUE);
-					let shadow_distance_factor = shadow_factor * inv_fast(vec_to_light_len2);
+					// Limit light radius by subtracting intensity at maximum radius.
+					// This is needed to avoid work with lights of infinite radius and instead work with lights with limited size.
+					let distance_factor = (inv_fast(vec_to_light_len2) - light.inv_square_radius).max(0.0);
+					let shadow_distance_factor = shadow_factor * distance_factor;
 
 					let diffuse_intensity = if SPECULAR_TYPE == SPECULAR_TYPE_METAL
 					{
