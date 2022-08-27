@@ -1064,6 +1064,15 @@ impl Renderer
 		lights: &[SurfaceDynamicLight],
 	)
 	{
+		// Used only to initialize references.
+		let dummy_light = SurfaceDynamicLight {
+			position: Vec3f::zero(),
+			inv_square_radius: 1.0,
+			color: [0.0; 3],
+			shadow_map: None,
+		};
+		const MAX_POLYGON_LIGHTS: usize = 6;
+
 		// Perform parallel surfaces building.
 		// Use "unsafe" to write into surfaces data concurrently.
 		// It is fine since each surface uses its own region.
@@ -1083,6 +1092,17 @@ impl Renderer
 			let polygon = &polygons[polygon_index as usize];
 			let polygon_data = &polygons_data[polygon_index as usize];
 			let surface_size = polygon_data.surface_size;
+
+			// Collect lights, affecting this polygon.
+			let mut polygon_lights = [&dummy_light; MAX_POLYGON_LIGHTS];
+			let mut num_polygon_lights = 0;
+
+			for (src_light, dst_light) in lights.iter().zip(polygon_lights.iter_mut())
+			{
+				*dst_light = src_light;
+				// TODO - filet-out some lights.
+				num_polygon_lights += 1;
+			}
 
 			let basis_vecs_scaled = polygon_data.basis_vecs.get_basis_vecs_for_mip(polygon_data.mip);
 
@@ -1125,7 +1145,7 @@ impl Renderer
 					lightmap_scale_log2,
 					lightmap_tc_shift,
 					polygon_lightmap_data,
-					lights,
+					&polygon_lights[.. num_polygon_lights],
 					&camera_matrices.position,
 					surface_data,
 				);
@@ -1150,7 +1170,7 @@ impl Renderer
 					lightmap_scale_log2,
 					lightmap_tc_shift,
 					polygon_lightmap_data,
-					lights,
+					&polygon_lights[.. num_polygon_lights],
 					&camera_matrices.position,
 					surface_data,
 				);

@@ -80,7 +80,7 @@ pub fn build_surface_simple_lightmap<ColorT: AbstractColor>(
 	lightmap_scale_log2: u32,
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[bsp_map_compact::LightmapElement],
-	dynamic_lights: &[SurfaceDynamicLight],
+	dynamic_lights: &[&SurfaceDynamicLight],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [ColorT],
 )
@@ -109,7 +109,7 @@ pub fn build_surface_directional_lightmap<ColorT: AbstractColor>(
 	lightmap_scale_log2: u32,
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[bsp_map_compact::DirectionalLightmapElement],
-	dynamic_lights: &[SurfaceDynamicLight],
+	dynamic_lights: &[&SurfaceDynamicLight],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [ColorT],
 )
@@ -138,7 +138,7 @@ fn build_surface_impl_2_static_params<ColorT: AbstractColor, LightmapElementOpsT
 	lightmap_scale_log2: u32,
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[LightmapElementOpsT::LightmapElement],
-	dynamic_lights: &[SurfaceDynamicLight],
+	dynamic_lights: &[&SurfaceDynamicLight],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [ColorT],
 )
@@ -253,7 +253,7 @@ fn build_surface_impl_3_static_params<
 	lightmap_size: [u32; 2],
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[LightmapElementOpsT::LightmapElement],
-	dynamic_lights: &[SurfaceDynamicLight],
+	dynamic_lights: &[&SurfaceDynamicLight],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [ColorT],
 )
@@ -303,7 +303,7 @@ fn build_surface_impl_4_static_params<
 	lightmap_size: [u32; 2],
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[LightmapElementOpsT::LightmapElement],
-	dynamic_lights: &[SurfaceDynamicLight],
+	dynamic_lights: &[&SurfaceDynamicLight],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [ColorT],
 )
@@ -354,7 +354,7 @@ fn build_surface_impl_5_static_params<
 	lightmap_size: [u32; 2],
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[LightmapElementOpsT::LightmapElement],
-	dynamic_lights: &[SurfaceDynamicLight],
+	dynamic_lights: &[&SurfaceDynamicLight],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [ColorT],
 )
@@ -453,7 +453,7 @@ fn build_surface_impl_6_static_params<
 	lightmap_size: [u32; 2],
 	lightmap_tc_shift: [u32; 2],
 	lightmap_data: &[LightmapElementOpsT::LightmapElement],
-	dynamic_lights: &[SurfaceDynamicLight],
+	dynamic_lights: &[&SurfaceDynamicLight],
 	cam_pos: &Vec3f,
 	out_surface_data: &mut [ColorT],
 )
