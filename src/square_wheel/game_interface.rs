@@ -1,4 +1,4 @@
-use super::{commands_processor::*, console::*, frame_info::*, resources_manager::*};
+use super::{commands_processor::*, config::*, console::*, frame_info::*, resources_manager::*};
 use crate::common::{bsp_map_compact::*, color::*, system_window};
 use std::sync::Arc;
 
@@ -23,5 +23,10 @@ pub trait GameInterface: Send + Sync
 
 pub type GameInterfacePtr = Box<dyn GameInterface>;
 
-pub type GameCreationFunction =
-	fn(CommandsProcessorPtr, ConsoleSharedPtr, ResourcesManagerSharedPtr, Arc<BSPMap>) -> GameInterfacePtr;
+pub type GameCreationFunction = fn(
+	ConfigSharedPtr,
+	CommandsProcessorPtr,
+	ConsoleSharedPtr,
+	ResourcesManagerSharedPtr,
+	Arc<BSPMap>,
+) -> GameInterfacePtr;

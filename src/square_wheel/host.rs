@@ -473,6 +473,7 @@ impl Host
 			let game_creation_function = self.game_creation_function;
 			self.active_map = Some(ActiveMap {
 				game: game_creation_function(
+					self.app_config.clone(),
 					self.commands_processor.clone(),
 					self.console.clone(),
 					self.resources_manager.clone(),

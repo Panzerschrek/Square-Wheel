@@ -1,5 +1,5 @@
 use super::{
-	commands_processor, commands_queue, components::*, console, frame_info::*, game_interface::*, light::*,
+	commands_processor, commands_queue, components::*, config, console, frame_info::*, game_interface::*, light::*,
 	resources_manager::*, test_game_physics, world_spawn, world_update,
 };
 use square_wheel_lib::common::{bsp_map_compact, color::*, material, math_types::*, matrix::*, system_window};
@@ -24,6 +24,7 @@ pub struct Game
 impl Game
 {
 	pub fn new(
+		_config: config::ConfigSharedPtr,
 		commands_processor: commands_processor::CommandsProcessorPtr,
 		console: console::ConsoleSharedPtr,
 		resources_manager: ResourcesManagerSharedPtr,

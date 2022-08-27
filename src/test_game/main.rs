@@ -28,7 +28,7 @@ pub fn main()
 	let mut h = host::Host::new(
 		opt.config.unwrap_or_else(|| PathBuf::from("config.json")),
 		opt.exec,
-		|a, b, c, d| Box::new(test_game::Game::new(a, b, c, d)),
+		|a, b, c, d, e| Box::new(test_game::Game::new(a, b, c, d, e)),
 	);
 	loop
 	{
