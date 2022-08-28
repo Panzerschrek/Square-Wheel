@@ -7,100 +7,179 @@ pub fn update_player_entity(
 	player_entity: hecs::Entity,
 	keyboard_state: &system_window::KeyboardState,
 	events: &[sdl2::event::Event],
+	game_time: f32,
 	time_delta_s: f32,
 )
 {
-	if let Ok(mut q) = ecs.query_one::<(&mut PlayerControllerComponent,)>(player_entity)
+	let mut q = if let Ok(q) = ecs.query_one::<(&mut PlayerControllerComponent,)>(player_entity)
 	{
-		let (player_controller,) = q.get().unwrap();
-		player_controller
+		q
+	}
+	else
+	{
+		return;
+	};
+
+	let (player_controller,) = q.get().unwrap();
+	player_controller
+		.rotation_controller
+		.update(keyboard_state, events, time_delta_s);
+
+	let azimuth = player_controller.rotation_controller.get_angles().0;
+	let forward_vector = Vec3f::new(-(azimuth.sin()), azimuth.cos(), 0.0);
+	let left_vector = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0);
+	let mut move_vector = Vec3f::new(0.0, 0.0, 0.0);
+
+	use sdl2::keyboard::Scancode;
+	if keyboard_state.contains(&Scancode::W)
+	{
+		move_vector += forward_vector;
+	}
+	if keyboard_state.contains(&Scancode::S)
+	{
+		move_vector -= forward_vector;
+	}
+	if keyboard_state.contains(&Scancode::D)
+	{
+		move_vector += left_vector;
+	}
+	if keyboard_state.contains(&Scancode::A)
+	{
+		move_vector -= left_vector;
+	}
+
+	let move_vector_length = move_vector.magnitude();
+	if move_vector_length > 0.0
+	{
+		move_vector = move_vector / move_vector_length;
+	}
+
+	match &mut player_controller.position_source
+	{
+		PlayerPositionSource::Noclip(position) =>
+		{
+			let speed = 256.0;
+			let jump_speed = 0.8 * speed;
+
+			*position += move_vector * (time_delta_s * speed);
+
+			if keyboard_state.contains(&Scancode::Space)
+			{
+				position.z += time_delta_s * jump_speed;
+			}
+			if keyboard_state.contains(&Scancode::C)
+			{
+				position.z -= time_delta_s * jump_speed;
+			}
+		},
+		PlayerPositionSource::Phys(phys_handle) =>
+		{
+			let ground_acceleration = 2048.0;
+			let air_acceleration = 512.0;
+			let max_velocity = 400.0;
+			let jump_velocity_add = 256.0;
+
+			let cur_velocity = physics.get_object_velocity(*phys_handle);
+			let on_ground = physics.is_object_on_ground(*phys_handle);
+
+			let acceleration: f32 = if on_ground
+			{
+				ground_acceleration
+			}
+			else
+			{
+				air_acceleration
+			};
+
+			let mut velocity_add = Vec3f::zero();
+
+			// Limit maximum velocity.
+			let velocity_projection_to_move_vector = move_vector.dot(cur_velocity);
+			if velocity_projection_to_move_vector < max_velocity
+			{
+				let max_can_add = max_velocity - velocity_projection_to_move_vector;
+				velocity_add = move_vector * (acceleration * time_delta_s).min(max_can_add);
+			}
+
+			if keyboard_state.contains(&Scancode::Space) && on_ground && cur_velocity.z <= 1.0
+			{
+				velocity_add.z = jump_velocity_add;
+			}
+
+			physics.add_object_velocity(*phys_handle, &velocity_add);
+		},
+	}
+
+	let mut has_mouse_down = false;
+	for event in events
+	{
+		match event
+		{
+			sdl2::event::Event::MouseButtonDown { .. } =>
+			{
+				has_mouse_down = true;
+				break;
+			},
+			_ =>
+			{},
+		}
+	}
+
+	if has_mouse_down
+	{
+		let position = match player_controller.position_source
+		{
+			PlayerPositionSource::Noclip(p) => p,
+			PlayerPositionSource::Phys(handle) => physics.get_object_location(handle).0,
+		};
+
+		let rotation = QuaternionF::one();
+		let camera_vector = player_controller
 			.rotation_controller
-			.update(keyboard_state, events, time_delta_s);
+			.get_rotation()
+			.rotate_vector(Vec3f::unit_x());
 
-		let azimuth = player_controller.rotation_controller.get_angles().0;
-		let forward_vector = Vec3f::new(-(azimuth.sin()), azimuth.cos(), 0.0);
-		let left_vector = Vec3f::new(azimuth.cos(), azimuth.sin(), 0.0);
-		let mut move_vector = Vec3f::new(0.0, 0.0, 0.0);
+		drop(q);
 
-		use sdl2::keyboard::Scancode;
-		if keyboard_state.contains(&Scancode::W)
-		{
-			move_vector += forward_vector;
-		}
-		if keyboard_state.contains(&Scancode::S)
-		{
-			move_vector -= forward_vector;
-		}
-		if keyboard_state.contains(&Scancode::D)
-		{
-			move_vector += left_vector;
-		}
-		if keyboard_state.contains(&Scancode::A)
-		{
-			move_vector -= left_vector;
-		}
-
-		let move_vector_length = move_vector.magnitude();
-		if move_vector_length > 0.0
-		{
-			move_vector = move_vector / move_vector_length;
-		}
-
-		match &mut player_controller.position_source
-		{
-			PlayerPositionSource::Noclip(position) =>
-			{
-				let speed = 256.0;
-				let jump_speed = 0.8 * speed;
-
-				*position += move_vector * (time_delta_s * speed);
-
-				if keyboard_state.contains(&Scancode::Space)
-				{
-					position.z += time_delta_s * jump_speed;
-				}
-				if keyboard_state.contains(&Scancode::C)
-				{
-					position.z -= time_delta_s * jump_speed;
-				}
+		ecs.spawn((
+			LocationComponent { position, rotation },
+			DynamicLightLocationLinkComponent {},
+			DynamicLight {
+				position,
+				radius: 128.0,
+				color: [32.0 * 1024.0, 64.0 * 1024.0, 32.0 * 1024.0],
+				shadow_type: DynamicLightShadowType::Cubemap,
 			},
-			PlayerPositionSource::Phys(phys_handle) =>
-			{
-				let ground_acceleration = 2048.0;
-				let air_acceleration = 512.0;
-				let max_velocity = 400.0;
-				let jump_velocity_add = 256.0;
-
-				let cur_velocity = physics.get_object_velocity(*phys_handle);
-				let on_ground = physics.is_object_on_ground(*phys_handle);
-
-				let acceleration: f32 = if on_ground
-				{
-					ground_acceleration
-				}
-				else
-				{
-					air_acceleration
-				};
-
-				let mut velocity_add = Vec3f::zero();
-
-				// Limit maximum velocity.
-				let velocity_projection_to_move_vector = move_vector.dot(cur_velocity);
-				if velocity_projection_to_move_vector < max_velocity
-				{
-					let max_can_add = max_velocity - velocity_projection_to_move_vector;
-					velocity_add = move_vector * (acceleration * time_delta_s).min(max_can_add);
-				}
-
-				if keyboard_state.contains(&Scancode::Space) && on_ground && cur_velocity.z <= 1.0
-				{
-					velocity_add.z = jump_velocity_add;
-				}
-
-				physics.add_object_velocity(*phys_handle, &velocity_add);
+			TimedDespawnComponent {
+				despawn_time: game_time + 5.0,
 			},
+			TestProjectileComponent {
+				velocity: camera_vector * 256.0,
+			},
+		));
+	}
+}
+
+pub fn despawn_timed_entites(ecs: &mut hecs::World, ecs_command_buffer: &mut hecs::CommandBuffer, game_time: f32)
+{
+	for (id, (timed_despawn_component,)) in ecs.query_mut::<(&TimedDespawnComponent,)>()
+	{
+		if game_time >= timed_despawn_component.despawn_time
+		{
+			// TODO - free external resources here?
+			ecs_command_buffer.despawn(id);
 		}
+	}
+
+	ecs_command_buffer.run_on(ecs);
+}
+
+pub fn update_test_projectiles(ecs: &mut hecs::World, time_delta_s: f32)
+{
+	for (_id, (test_projectile_component, location_component)) in
+		ecs.query_mut::<(&TestProjectileComponent, &mut LocationComponent)>()
+	{
+		location_component.position += test_projectile_component.velocity * time_delta_s;
 	}
 }
 
@@ -661,6 +740,18 @@ pub fn update_decals_locations(ecs: &mut hecs::World)
 	{
 		decal.position = location_component.position;
 		decal.rotation = location_component.rotation;
+	}
+}
+
+pub fn update_dynamic_lights_locations(ecs: &mut hecs::World)
+{
+	for (_id, (_decal_location_component, location_component, dynamic_light)) in ecs.query_mut::<(
+		&DynamicLightLocationLinkComponent,
+		&LocationComponent,
+		&mut DynamicLight,
+	)>()
+	{
+		dynamic_light.position = location_component.position;
 	}
 }
 

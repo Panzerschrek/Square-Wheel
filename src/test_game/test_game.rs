@@ -1,5 +1,5 @@
 use super::{
-	commands_processor, commands_queue, components::*, config, console, frame_info::*, game_interface::*, light::*,
+	commands_processor, commands_queue, components::*, config, console, frame_info::*, game_interface::*,
 	resources_manager::*, test_game_physics, world_spawn, world_update,
 };
 use square_wheel_lib::common::{bsp_map_compact, color::*, material, math_types::*, matrix::*, system_window};
@@ -220,7 +220,10 @@ impl Game
 	{
 		if args.len() < 3
 		{
-			self.console.lock().unwrap().add_text("Expected 3 args".to_string());
+			self.console
+				.lock()
+				.unwrap()
+				.add_text("Expected at least 3 args".to_string());
 			return;
 		}
 
@@ -228,9 +231,18 @@ impl Game
 		{
 			self.ecs.spawn((
 				TestLightComponent {},
-				PointLight {
-					pos: self.get_camera_location().0,
+				DynamicLight {
+					position: self.get_camera_location().0,
 					color: [r * 1024.0, g * 1024.0, b * 1024.0],
+					radius: 128.0,
+					shadow_type: if args.len() >= 4 && args[3] == "cube_shadow"
+					{
+						DynamicLightShadowType::Cubemap
+					}
+					else
+					{
+						DynamicLightShadowType::None
+					},
 				},
 			));
 		}
@@ -479,8 +491,11 @@ impl GameInterface for Game
 			self.player_entity,
 			keyboard_state,
 			events,
+			self.game_time,
 			time_delta_s,
 		);
+		world_update::despawn_timed_entites(&mut self.ecs, &mut self.ecs_command_buffer, self.game_time);
+		world_update::update_test_projectiles(&mut self.ecs, time_delta_s);
 		world_update::update_plates(&mut self.ecs, self.game_time, time_delta_s);
 		world_update::update_doors(&mut self.ecs, self.game_time, time_delta_s);
 		world_update::update_buttons(&mut self.ecs, self.game_time, time_delta_s);
@@ -509,6 +524,7 @@ impl GameInterface for Game
 		world_update::update_models_locations(&mut self.ecs);
 		world_update::update_submodels_locations(&mut self.ecs);
 		world_update::update_decals_locations(&mut self.ecs);
+		world_update::update_dynamic_lights_locations(&mut self.ecs);
 	}
 
 	fn grab_mouse_input(&self) -> bool

@@ -91,6 +91,21 @@ impl DynamicObjectsIndex
 		}
 	}
 
+	// Reset internal state and position new set of dynamic lights.
+	pub fn position_dynamic_lights(&mut self, lights: &[DynamicLight])
+	{
+		// Clear previous lights.
+		self.clear();
+
+		// Position new lights.
+		self.allocate_objects(lights.len());
+		for (index, light) in lights.iter().enumerate()
+		{
+			let root_node = bsp_map_compact::get_root_node_index(&self.map);
+			self.position_object_sphere_r(index as DynamicObjectId, &light.position, light.radius, root_node);
+		}
+	}
+
 	fn position_object_bbox(&mut self, id: DynamicObjectId, bbox: &BBox, transform_matrix: &Mat4f)
 	{
 		// transform bbox vertices.
@@ -100,11 +115,11 @@ impl DynamicObjectsIndex
 
 		// Place bbox in leafs.
 		let root_node = bsp_map_compact::get_root_node_index(&self.map);
-		self.position_object_r(id, &bbox_vertices, root_node);
+		self.position_object_bbox_r(id, &bbox_vertices, root_node);
 	}
 
 	// Recursively place object in leafs. Perform bounding box vertices check against BPS node planes in order to do this.
-	fn position_object_r(&mut self, id: DynamicObjectId, bbox_vertices: &[Vec3f; 8], node_index: u32)
+	fn position_object_bbox_r(&mut self, id: DynamicObjectId, bbox_vertices: &[Vec3f; 8], node_index: u32)
 	{
 		if node_index >= bsp_map_compact::FIRST_LEAF_INDEX
 		{
@@ -129,11 +144,47 @@ impl DynamicObjectsIndex
 
 			if vertices_front > 0
 			{
-				self.position_object_r(id, bbox_vertices, node_children[0]);
+				self.position_object_bbox_r(id, bbox_vertices, node_children[0]);
 			}
 			if vertices_front < bbox_vertices.len()
 			{
-				self.position_object_r(id, bbox_vertices, node_children[1]);
+				self.position_object_bbox_r(id, bbox_vertices, node_children[1]);
+			}
+		}
+	}
+
+	// Recursively place object in leafs. Perform sphere check against BPS node planes in order to do this.
+	fn position_object_sphere_r(
+		&mut self,
+		id: DynamicObjectId,
+		sphere_center: &Vec3f,
+		sphere_radius: f32,
+		node_index: u32,
+	)
+	{
+		if node_index >= bsp_map_compact::FIRST_LEAF_INDEX
+		{
+			let leaf_index = node_index - bsp_map_compact::FIRST_LEAF_INDEX;
+			self.leafs_info[leaf_index as usize].objects.push(id);
+			self.objects_info[id as usize].leafs.push(leaf_index);
+		}
+		else
+		{
+			let node = &self.map.nodes[node_index as usize];
+			let plane = node.plane;
+			let node_children = node.children;
+
+			// Scale sphere radius because plane vector may be unnormalized.
+			let scaled_radius = sphere_radius * plane.vec.magnitude();
+			let scaled_dist = sphere_center.dot(plane.vec);
+
+			if scaled_dist + scaled_radius >= plane.dist
+			{
+				self.position_object_sphere_r(id, sphere_center, sphere_radius, node_children[0]);
+			}
+			if scaled_dist - scaled_radius <= plane.dist
+			{
+				self.position_object_sphere_r(id, sphere_center, sphere_radius, node_children[1]);
 			}
 		}
 	}

@@ -5,8 +5,8 @@ use super::{
 	resources_manager::*, shadow_map::*, surfaces::*, textures::*, triangle_model::*, triangle_models_rendering::*,
 };
 use crate::common::{
-	bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, material, math_types::*, matrix::*,
-	plane::*, shared_mut_slice::*, system_window,
+	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, material, math_types::*,
+	matrix::*, plane::*, shared_mut_slice::*, system_window,
 };
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
@@ -35,9 +35,12 @@ pub struct Renderer
 	current_sky: Option<(u32, ClippingPolygon)>,
 	materials_processor: MapMaterialsProcessor,
 	performance_counters: Arc<Mutex<RendererPerformanceCounters>>,
-	// TODO - maybe extract dynamic models-related stuff into separate class?
+	dynamic_lights_info: Vec<DynamicLightInfo>,
+	shadow_maps_data: Vec<ShadowMapElement>,
 	dynamic_models_index: DynamicObjectsIndex,
 	decals_index: DynamicObjectsIndex,
+	dynamic_lights_index: DynamicObjectsIndex,
+	// TODO - maybe extract dynamic models-related stuff into separate class?
 	// Store transformed models vertices and triangles in separate buffer.
 	// This is needed to avoid transforming/sorting model's vertices/triangles in each BSP leaf where this model is located.
 	visible_dynamic_meshes_list: Vec<VisibleDynamicMeshInfo>,
@@ -52,6 +55,7 @@ struct RendererPerformanceCounters
 	visible_leafs_search: PerformanceCounter,
 	triangle_models_preparation: PerformanceCounter,
 	surfaces_preparation: PerformanceCounter,
+	shadow_maps_building: PerformanceCounter,
 	background_fill: PerformanceCounter,
 	rasterization: PerformanceCounter,
 }
@@ -66,6 +70,7 @@ impl RendererPerformanceCounters
 			visible_leafs_search: PerformanceCounter::new(window_size),
 			triangle_models_preparation: PerformanceCounter::new(window_size),
 			surfaces_preparation: PerformanceCounter::new(window_size),
+			shadow_maps_building: PerformanceCounter::new(window_size),
 			background_fill: PerformanceCounter::new(window_size),
 			rasterization: PerformanceCounter::new(window_size),
 		}
@@ -87,6 +92,8 @@ fn run_with_measure<F: FnOnce()>(f: F, performanc_counter: &mut PerformanceCount
 #[derive(Copy, Clone)]
 struct DrawPolygonData
 {
+	// Leaf index where this polygon is located or submodel index.
+	parent: DrawPolygonParent,
 	// Precalculaed basis vecs for mip 0
 	basis_vecs: PolygonBasisVecs,
 	// Frame last time this polygon was visible.
@@ -100,6 +107,13 @@ struct DrawPolygonData
 	surface_tc_min: [i32; 2],
 }
 
+#[derive(Copy, Clone)]
+enum DrawPolygonParent
+{
+	Leaf(u32),
+	Submodel(u32),
+}
+
 // Calculate matrices once for frame and use them during polygons preparation, sorting and polygons ordering.
 #[derive(Copy, Clone)]
 struct VisibleSubmodelMatrices
@@ -109,10 +123,12 @@ struct VisibleSubmodelMatrices
 	camera_matrices: CameraMatrices,
 }
 
-#[derive(Default, Copy, Clone)]
+#[derive(Default, Clone)]
 struct VisibleSubmodelInfo
 {
 	matrices: Option<VisibleSubmodelMatrices>,
+	// Dynamic lights that affects this submodel.
+	dynamic_lights: Vec<DynamicObjectId>,
 }
 
 struct VisibleDynamicMeshInfo
@@ -136,6 +152,16 @@ struct DynamicModelInfo
 	num_visible_meshes: u32,
 }
 
+#[derive(Default, Copy, Clone)]
+struct DynamicLightInfo
+{
+	// Light is not visible if all leafs where it is located are not visible.
+	visible: bool,
+	shadow_map_data_offset: usize,
+	// Cubemap side size or projector shadowmap size.
+	shadow_map_size: u32,
+}
+
 impl Renderer
 {
 	pub fn new(
@@ -149,10 +175,11 @@ impl Renderer
 
 		let materials_processor = MapMaterialsProcessor::new(resources_manager, &*map);
 
-		let polygons_data = map
+		let mut polygons_data: Vec<DrawPolygonData> = map
 			.polygons
 			.iter()
 			.map(|p| DrawPolygonData {
+				parent: DrawPolygonParent::Leaf(0), // Set later
 				// Pre-calculate basis vecs and use them each frame.
 				basis_vecs: PolygonBasisVecs::form_plane_and_tex_coord_equation(&p.plane, &p.tex_coord_equation),
 				visible_frame: Default::default(),
@@ -164,6 +191,23 @@ impl Renderer
 				surface_tc_min: [0, 0],
 			})
 			.collect();
+
+		// Setup relations between leafs and polygons.
+		for (leaf_index, leaf) in map.leafs.iter().enumerate()
+		{
+			for polygon_index in leaf.first_polygon .. leaf.first_polygon + leaf.num_polygons
+			{
+				polygons_data[polygon_index as usize].parent = DrawPolygonParent::Leaf(leaf_index as u32);
+			}
+		}
+		// Setup relations between submodels and polygons.
+		for (submodel_index, submodel) in map.submodels.iter().enumerate()
+		{
+			for polygon_index in submodel.first_polygon .. submodel.first_polygon + submodel.num_polygons
+			{
+				polygons_data[polygon_index as usize].parent = DrawPolygonParent::Submodel(submodel_index as u32);
+			}
+		}
 
 		Renderer {
 			app_config,
@@ -183,8 +227,11 @@ impl Renderer
 			map: map.clone(),
 			materials_processor,
 			performance_counters: Arc::new(Mutex::new(RendererPerformanceCounters::new())),
+			dynamic_lights_info: Vec::new(),
+			shadow_maps_data: Vec::new(),
 			dynamic_models_index: DynamicObjectsIndex::new(map.clone()),
-			decals_index: DynamicObjectsIndex::new(map),
+			decals_index: DynamicObjectsIndex::new(map.clone()),
+			dynamic_lights_index: DynamicObjectsIndex::new(map),
 			visible_dynamic_meshes_list: Vec::new(),
 			dynamic_model_to_dynamic_meshes_index: Vec::new(),
 			dynamic_meshes_vertices: Vec::new(),
@@ -211,32 +258,6 @@ impl Renderer
 			&mut performance_counters.materials_update,
 		);
 
-		let depth_map_size = 256;
-		let mut test_lights_shadow_maps = Vec::with_capacity(frame_info.lights.len());
-		// TODO - perform parallel shadowmaps build.
-		for light in &frame_info.lights
-		{
-			let mut cube_shadow_map = CubeShadowMap {
-				size: depth_map_size,
-				sides: [Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()],
-			};
-			for side in 0 .. 6
-			{
-				let depth_matrices = calculate_cube_shadow_map_side_matrices(
-					light.pos,
-					depth_map_size as f32,
-					int_to_cubemap_side(side).unwrap(),
-				);
-
-				let mut depth_data = vec![0.0; (depth_map_size * depth_map_size) as usize];
-				self.shadows_maps_renderer
-					.draw_map(&mut depth_data, depth_map_size, depth_map_size, &depth_matrices);
-
-				cube_shadow_map.sides[side as usize] = depth_data;
-			}
-			test_lights_shadow_maps.push(cube_shadow_map);
-		}
-
 		run_with_measure(
 			|| {
 				// TODO - before preparing frame try to shift camera a little bit away from all planes of BSP nodes before current leaf.
@@ -250,7 +271,15 @@ impl Renderer
 			&mut performance_counters.visible_leafs_search,
 		);
 
-		self.prepare_submodels(&frame_info.camera_matrices, &frame_info.submodel_entities);
+		self.prepare_dynamic_lights(&frame_info.lights);
+		run_with_measure(
+			|| {
+				self.build_shadow_maps(&frame_info.lights);
+			},
+			&mut performance_counters.shadow_maps_building,
+		);
+
+		self.prepare_submodels(frame_info);
 
 		run_with_measure(
 			|| {
@@ -267,13 +296,7 @@ impl Renderer
 				self.prepare_polygons_surfaces(&frame_info.camera_matrices);
 				self.allocate_surfaces_pixels::<ColorT>();
 
-				// TODO - avoid allocation.
-				let mut lights_with_shadow_maps = Vec::new();
-				for (light, shadow_map) in frame_info.lights.iter().zip(test_lights_shadow_maps.iter())
-				{
-					lights_with_shadow_maps.push((light, shadow_map));
-				}
-				self.build_polygons_surfaces::<ColorT>(&frame_info.camera_matrices, &lights_with_shadow_maps);
+				self.build_polygons_surfaces::<ColorT>(&frame_info.camera_matrices, &frame_info.lights);
 			},
 			&mut performance_counters.surfaces_preparation,
 		);
@@ -392,6 +415,10 @@ impl Renderer
 			performance_counters.surfaces_preparation.get_average_value() * 1000.0
 		));
 		debug_stats_printer.add_line(format!(
+			"shadow maps building: {:04.2}ms",
+			performance_counters.shadow_maps_building.get_average_value() * 1000.0
+		));
+		debug_stats_printer.add_line(format!(
 			"background fill: {:04.2}ms",
 			performance_counters.background_fill.get_average_value() * 1000.0
 		));
@@ -417,21 +444,121 @@ impl Renderer
 		debug_stats_printer.add_line(format!("mip bias: {}", self.mip_bias));
 	}
 
-	fn prepare_submodels(&mut self, camera_matrices: &CameraMatrices, submodels: &[SubmodelEntityOpt])
+	fn prepare_dynamic_lights(&mut self, lights: &[DynamicLight])
 	{
-		self.inline_models_index.position_models(submodels);
+		self.dynamic_lights_index.position_dynamic_lights(lights);
+
+		self.dynamic_lights_info
+			.resize(lights.len(), DynamicLightInfo::default());
+
+		// Allocate storage for shadowmaps.
+		let mut shadow_map_data_offset = 0;
+		for (index, (light, light_info)) in lights.iter().zip(self.dynamic_lights_info.iter_mut()).enumerate()
+		{
+			light_info.visible = false;
+			for leaf_index in self.dynamic_lights_index.get_object_leafs(index)
+			{
+				if self
+					.visibility_calculator
+					.get_current_frame_leaf_bounds(*leaf_index)
+					.is_some()
+				{
+					light_info.visible = true;
+					break;
+				}
+			}
+
+			if !light_info.visible
+			{
+				continue;
+			}
+
+			let mut shadow_map_data_size = 0;
+			match light.shadow_type
+			{
+				DynamicLightShadowType::None =>
+				{
+					light_info.shadow_map_size = 0;
+				},
+				DynamicLightShadowType::Cubemap =>
+				{
+					light_info.shadow_map_size = 256; // TODO - make configurable.
+					shadow_map_data_size = light_info.shadow_map_size * light_info.shadow_map_size * 6;
+				},
+			}
+
+			light_info.shadow_map_data_offset = shadow_map_data_offset;
+			shadow_map_data_offset += shadow_map_data_size as usize;
+		}
+
+		// Avoid resizing down to avoid refill.
+		if self.shadow_maps_data.len() < shadow_map_data_offset
+		{
+			self.shadow_maps_data.resize(shadow_map_data_offset, 0.0);
+		}
+	}
+
+	// Call this only after dynamic lights preparation.
+	fn build_shadow_maps(&mut self, lights: &[DynamicLight])
+	{
+		// TODO - use multithreading.
+		for (light, light_info) in lights.iter().zip(self.dynamic_lights_info.iter_mut())
+		{
+			if !light_info.visible
+			{
+				continue;
+			}
+
+			match light.shadow_type
+			{
+				DynamicLightShadowType::None =>
+				{},
+				DynamicLightShadowType::Cubemap =>
+				{
+					let side_data_size = light_info.shadow_map_size * light_info.shadow_map_size;
+					let depth_data = &mut self.shadow_maps_data[light_info.shadow_map_data_offset ..
+						light_info.shadow_map_data_offset + (side_data_size * 6) as usize];
+
+					for side in 0 .. 6
+					{
+						let depth_matrices = calculate_cube_shadow_map_side_matrices(
+							light.position,
+							light_info.shadow_map_size as f32,
+							int_to_cubemap_side(side).unwrap(),
+						);
+
+						let side_depth_data =
+							&mut depth_data[(side * side_data_size) as usize .. ((side + 1) * side_data_size) as usize];
+
+						self.shadows_maps_renderer.draw_map(
+							side_depth_data,
+							light_info.shadow_map_size,
+							light_info.shadow_map_size,
+							&depth_matrices,
+						);
+					}
+				},
+			}
+		}
+	}
+
+	fn prepare_submodels(&mut self, frame_info: &FrameInfo)
+	{
+		self.inline_models_index.position_models(&frame_info.submodel_entities);
 
 		for (index, submodel_info) in self.submodels_info.iter_mut().enumerate()
 		{
-			submodel_info.matrices = if let Some(model_matrix) = self.inline_models_index.get_model_matrix(index as u32)
+			let model_matrix_opt = self.inline_models_index.get_model_matrix(index as u32);
+
+			submodel_info.matrices = if let Some(model_matrix) = model_matrix_opt
 			{
 				let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
 				Some(VisibleSubmodelMatrices {
 					world_planes_matrix: model_matrix_inverse,
 					camera_matrices: CameraMatrices {
-						view_matrix: camera_matrices.view_matrix * model_matrix,
-						planes_matrix: camera_matrices.planes_matrix * model_matrix_inverse,
-						position: camera_matrices.position,
+						view_matrix: frame_info.camera_matrices.view_matrix * model_matrix,
+						planes_matrix: frame_info.camera_matrices.planes_matrix * model_matrix_inverse,
+						position: frame_info.camera_matrices.position,
 					},
 				})
 			}
@@ -439,6 +566,39 @@ impl Renderer
 			{
 				None
 			};
+
+			// Search for dynamic lights, affecting this submodel.
+			submodel_info.dynamic_lights.clear();
+			if let Some(model_matrix) = model_matrix_opt
+			{
+				// Get initial bounding box, transformm its vertices and obtain new bounding box (around transformed vertices).
+				let bbox_vertices_transformed = self
+					.inline_models_index
+					.get_model_bbox_initial(index as u32)
+					.get_corners_vertices()
+					.map(|v| (model_matrix * v.extend(1.0)).truncate());
+
+				let mut bbox_world_space = BBox::from_point(&bbox_vertices_transformed[0]);
+				for v in &bbox_vertices_transformed[1 ..]
+				{
+					bbox_world_space.extend_with_point(v);
+				}
+
+				// For each light check intersection against bbox of transformed model.
+				for (index, light) in frame_info.lights.iter().enumerate()
+				{
+					if light.position.x - light.radius > bbox_world_space.max.x ||
+						light.position.x + light.radius < bbox_world_space.min.x ||
+						light.position.y - light.radius > bbox_world_space.max.y ||
+						light.position.y + light.radius < bbox_world_space.min.y ||
+						light.position.z - light.radius > bbox_world_space.max.z ||
+						light.position.z + light.radius < bbox_world_space.min.z
+					{
+						continue;
+					}
+					submodel_info.dynamic_lights.push(index as DynamicObjectId);
+				}
+			}
 		}
 	}
 
@@ -1039,9 +1199,63 @@ impl Renderer
 	fn build_polygons_surfaces<ColorT: AbstractColor>(
 		&mut self,
 		camera_matrices: &CameraMatrices,
-		lights: &[LightWithShadowMap],
+		dynamic_lights: &[DynamicLight],
 	)
 	{
+		// Prepare array of dynamic lights with shadowmaps.
+		// TODO - avoid allocation.
+		let dynamic_lights_info = &self.dynamic_lights_info;
+		let shadow_maps_data = &self.shadow_maps_data;
+		let lights: Vec<SurfaceDynamicLight> = dynamic_lights
+			.iter()
+			.zip(dynamic_lights_info.iter())
+			.map(|(light, light_info)| SurfaceDynamicLight {
+				position: light.position,
+				radius: light.radius,
+				inv_square_radius: 1.0 / (light.radius * light.radius),
+				color: light.color,
+				shadow_map: match light.shadow_type
+				{
+					DynamicLightShadowType::None => None,
+					DynamicLightShadowType::Cubemap =>
+					{
+						if light_info.visible
+						{
+							let side_data_size = (light_info.shadow_map_size * light_info.shadow_map_size) as usize;
+							let shadow_map_data = &shadow_maps_data[light_info.shadow_map_data_offset ..
+								light_info.shadow_map_data_offset + side_data_size * 6];
+
+							Some(CubeShadowMap {
+								size: light_info.shadow_map_size,
+								sides: [
+									&shadow_map_data[0 * side_data_size .. 1 * side_data_size],
+									&shadow_map_data[1 * side_data_size .. 2 * side_data_size],
+									&shadow_map_data[2 * side_data_size .. 3 * side_data_size],
+									&shadow_map_data[3 * side_data_size .. 4 * side_data_size],
+									&shadow_map_data[4 * side_data_size .. 5 * side_data_size],
+									&shadow_map_data[5 * side_data_size .. 6 * side_data_size],
+								],
+							})
+						}
+						else
+						{
+							None
+						}
+					},
+				},
+			})
+			.collect();
+
+		// Used only to initialize references.
+		let dummy_light = SurfaceDynamicLight {
+			position: Vec3f::zero(),
+			radius: 1.0,
+			inv_square_radius: 1.0,
+			color: [0.0; 3],
+			shadow_map: None,
+		};
+		const MAX_POLYGON_LIGHTS: usize = 6;
+
 		// Perform parallel surfaces building.
 		// Use "unsafe" to write into surfaces data concurrently.
 		// It is fine since each surface uses its own region.
@@ -1061,6 +1275,37 @@ impl Renderer
 			let polygon = &polygons[polygon_index as usize];
 			let polygon_data = &polygons_data[polygon_index as usize];
 			let surface_size = polygon_data.surface_size;
+
+			// Collect lights, affecting this polygon.
+			let mut polygon_lights = [&dummy_light; MAX_POLYGON_LIGHTS];
+			let mut num_polygon_lights = 0;
+
+			let lights_list = match polygon_data.parent
+			{
+				DrawPolygonParent::Leaf(leaf_index) =>
+				{
+					// Check only lights, located inside leaf of this polygon.
+					self.dynamic_lights_index.get_leaf_objects(leaf_index)
+				},
+				DrawPolygonParent::Submodel(submodel_index) =>
+				{
+					// Check only lights, affecting this submodel.
+					&self.submodels_info[submodel_index as usize].dynamic_lights
+				},
+			};
+			for light_index in lights_list
+			{
+				let light = &lights[*light_index as usize];
+				if polygon_is_affected_by_light(polygon, &polygon_data.basis_vecs, light)
+				{
+					polygon_lights[num_polygon_lights] = light;
+					num_polygon_lights += 1;
+					if num_polygon_lights == MAX_POLYGON_LIGHTS
+					{
+						break;
+					}
+				}
+			}
 
 			let basis_vecs_scaled = polygon_data.basis_vecs.get_basis_vecs_for_mip(polygon_data.mip);
 
@@ -1103,7 +1348,7 @@ impl Renderer
 					lightmap_scale_log2,
 					lightmap_tc_shift,
 					polygon_lightmap_data,
-					lights,
+					&polygon_lights[.. num_polygon_lights],
 					&camera_matrices.position,
 					surface_data,
 				);
@@ -1128,7 +1373,7 @@ impl Renderer
 					lightmap_scale_log2,
 					lightmap_tc_shift,
 					polygon_lightmap_data,
-					lights,
+					&polygon_lights[.. num_polygon_lights],
 					&camera_matrices.position,
 					surface_data,
 				);
@@ -2357,6 +2602,66 @@ fn get_polygon_lightap_light(
 	}
 
 	total_light
+}
+
+fn polygon_is_affected_by_light(
+	polygon: &bsp_map_compact::Polygon,
+	basis_vecs: &PolygonBasisVecs,
+	light: &SurfaceDynamicLight,
+) -> bool
+{
+	// TODO - check mathemathics here.
+
+	let vec_from_light_position_to_tc_start_point = light.position - basis_vecs.start;
+	let signed_dinstance_to_polygon_plane = vec_from_light_position_to_tc_start_point.dot(basis_vecs.normal);
+	if signed_dinstance_to_polygon_plane <= 0.0
+	{
+		// This light is behind polygon plane.
+		return false;
+	}
+
+	let square_radius_at_polygon_plane =
+		light.radius * light.radius - signed_dinstance_to_polygon_plane * signed_dinstance_to_polygon_plane;
+	if square_radius_at_polygon_plane <= 0.0
+	{
+		// This light is too far from polygon plane.
+		return false;
+	}
+
+	// Calculate texture coordinates at point of projection of light position to polygon plane.
+	let mat = if let Some(m) = Mat3f::from_cols(basis_vecs.u, basis_vecs.v, basis_vecs.normal).invert()
+	{
+		m.transpose()
+	}
+	else
+	{
+		return false;
+	};
+	let tc_at_projected_light_position = [
+		vec_from_light_position_to_tc_start_point.dot(mat.x),
+		vec_from_light_position_to_tc_start_point.dot(mat.y),
+	];
+
+	// Check min/max texture coordinates of projected circle agains polygon min/max texture coordinates.
+	// This is inexact check (not proper polygon check) but it gives good enough result.
+	let radius_at_polygon_plane = square_radius_at_polygon_plane.sqrt();
+	let u_radius = radius_at_polygon_plane * inv_sqrt_fast(basis_vecs.u.magnitude2());
+	let v_radius = radius_at_polygon_plane * inv_sqrt_fast(basis_vecs.v.magnitude2());
+
+	if tc_at_projected_light_position[0] + u_radius < (polygon.tex_coord_min[0] as f32) ||
+		tc_at_projected_light_position[1] + v_radius < (polygon.tex_coord_min[1] as f32) ||
+		tc_at_projected_light_position[0] - u_radius > (polygon.tex_coord_max[0] as f32) ||
+		tc_at_projected_light_position[1] - v_radius > (polygon.tex_coord_max[1] as f32)
+	{
+		// Light porjection circle is outside polygon borders.
+		false
+	}
+	else
+	{
+		// Light affects this polygon.
+		// TODO - maybe process corner cases here (literally, check intersection with corners)?
+		true
+	}
 }
 
 fn draw_background<ColorT: Copy + Send + Sync>(pixels: &mut [ColorT], color: ColorT)
