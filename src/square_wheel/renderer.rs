@@ -5,8 +5,8 @@ use super::{
 	resources_manager::*, shadow_map::*, surfaces::*, textures::*, triangle_model::*, triangle_models_rendering::*,
 };
 use crate::common::{
-	bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, material, math_types::*, matrix::*,
-	plane::*, shared_mut_slice::*, system_window,
+	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, material, math_types::*,
+	matrix::*, plane::*, shared_mut_slice::*, system_window,
 };
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
@@ -88,8 +88,8 @@ fn run_with_measure<F: FnOnce()>(f: F, performanc_counter: &mut PerformanceCount
 #[derive(Copy, Clone)]
 struct DrawPolygonData
 {
-	// Leaf index where this polygon is located. TODO - support submodel index fof non-leaf polygons.
-	leaf_index: u32,
+	// Leaf index where this polygon is located or submodel index.
+	parent: DrawPolygonParent,
 	// Precalculaed basis vecs for mip 0
 	basis_vecs: PolygonBasisVecs,
 	// Frame last time this polygon was visible.
@@ -103,6 +103,13 @@ struct DrawPolygonData
 	surface_tc_min: [i32; 2],
 }
 
+#[derive(Copy, Clone)]
+enum DrawPolygonParent
+{
+	Leaf(u32),
+	Submodel(u32),
+}
+
 // Calculate matrices once for frame and use them during polygons preparation, sorting and polygons ordering.
 #[derive(Copy, Clone)]
 struct VisibleSubmodelMatrices
@@ -112,10 +119,12 @@ struct VisibleSubmodelMatrices
 	camera_matrices: CameraMatrices,
 }
 
-#[derive(Default, Copy, Clone)]
+#[derive(Default, Clone)]
 struct VisibleSubmodelInfo
 {
 	matrices: Option<VisibleSubmodelMatrices>,
+	// Dynamic lights that affects this submodel.
+	dynamic_lights: Vec<DynamicObjectId>,
 }
 
 struct VisibleDynamicMeshInfo
@@ -156,7 +165,7 @@ impl Renderer
 			.polygons
 			.iter()
 			.map(|p| DrawPolygonData {
-				leaf_index: 0, // Set later
+				parent: DrawPolygonParent::Leaf(0), // Set later
 				// Pre-calculate basis vecs and use them each frame.
 				basis_vecs: PolygonBasisVecs::form_plane_and_tex_coord_equation(&p.plane, &p.tex_coord_equation),
 				visible_frame: Default::default(),
@@ -174,7 +183,15 @@ impl Renderer
 		{
 			for polygon_index in leaf.first_polygon .. leaf.first_polygon + leaf.num_polygons
 			{
-				polygons_data[polygon_index as usize].leaf_index = leaf_index as u32;
+				polygons_data[polygon_index as usize].parent = DrawPolygonParent::Leaf(leaf_index as u32);
+			}
+		}
+		// Setup relations between submodels and polygons.
+		for (submodel_index, submodel) in map.submodels.iter().enumerate()
+		{
+			for polygon_index in submodel.first_polygon .. submodel.first_polygon + submodel.num_polygons
+			{
+				polygons_data[polygon_index as usize].parent = DrawPolygonParent::Submodel(submodel_index as u32);
 			}
 		}
 
@@ -277,7 +294,9 @@ impl Renderer
 			&mut performance_counters.visible_leafs_search,
 		);
 
-		self.prepare_submodels(&frame_info.camera_matrices, &frame_info.submodel_entities);
+		self.dynamic_lights_index.position_dynamic_lights(&frame_info.lights);
+
+		self.prepare_submodels(frame_info);
 
 		run_with_measure(
 			|| {
@@ -288,7 +307,6 @@ impl Renderer
 		);
 
 		self.decals_index.position_decals(&frame_info.decals);
-		self.dynamic_lights_index.position_dynamic_lights(&frame_info.lights);
 
 		run_with_measure(
 			|| {
@@ -455,21 +473,23 @@ impl Renderer
 		debug_stats_printer.add_line(format!("mip bias: {}", self.mip_bias));
 	}
 
-	fn prepare_submodels(&mut self, camera_matrices: &CameraMatrices, submodels: &[SubmodelEntityOpt])
+	fn prepare_submodels(&mut self, frame_info: &FrameInfo)
 	{
-		self.inline_models_index.position_models(submodels);
+		self.inline_models_index.position_models(&frame_info.submodel_entities);
 
 		for (index, submodel_info) in self.submodels_info.iter_mut().enumerate()
 		{
-			submodel_info.matrices = if let Some(model_matrix) = self.inline_models_index.get_model_matrix(index as u32)
+			let model_matrix_opt = self.inline_models_index.get_model_matrix(index as u32);
+
+			submodel_info.matrices = if let Some(model_matrix) = model_matrix_opt
 			{
 				let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
 				Some(VisibleSubmodelMatrices {
 					world_planes_matrix: model_matrix_inverse,
 					camera_matrices: CameraMatrices {
-						view_matrix: camera_matrices.view_matrix * model_matrix,
-						planes_matrix: camera_matrices.planes_matrix * model_matrix_inverse,
-						position: camera_matrices.position,
+						view_matrix: frame_info.camera_matrices.view_matrix * model_matrix,
+						planes_matrix: frame_info.camera_matrices.planes_matrix * model_matrix_inverse,
+						position: frame_info.camera_matrices.position,
 					},
 				})
 			}
@@ -477,6 +497,39 @@ impl Renderer
 			{
 				None
 			};
+
+			// Search for dynamic lights, affecting this submodel.
+			submodel_info.dynamic_lights.clear();
+			if let Some(model_matrix) = model_matrix_opt
+			{
+				// Get initial bounding box, transformm its vertices and obtain new bounding box (around transformed vertices).
+				let bbox_vertices_transformed = self
+					.inline_models_index
+					.get_model_bbox_initial(index as u32)
+					.get_corners_vertices()
+					.map(|v| (model_matrix * v.extend(1.0)).truncate());
+
+				let mut bbox_world_space = BBox::from_point(&bbox_vertices_transformed[0]);
+				for v in &bbox_vertices_transformed[1 ..]
+				{
+					bbox_world_space.extend_with_point(v);
+				}
+
+				// For each light check intersection against bbox of transformed model.
+				for (index, light) in frame_info.lights.iter().enumerate()
+				{
+					if light.position.x - light.radius > bbox_world_space.max.x ||
+						light.position.x + light.radius < bbox_world_space.min.x ||
+						light.position.y - light.radius > bbox_world_space.max.y ||
+						light.position.y + light.radius < bbox_world_space.min.y ||
+						light.position.z - light.radius > bbox_world_space.max.z ||
+						light.position.z + light.radius < bbox_world_space.min.z
+					{
+						continue;
+					}
+					submodel_info.dynamic_lights.push(index as DynamicObjectId);
+				}
+			}
 		}
 	}
 
@@ -1111,10 +1164,23 @@ impl Renderer
 			let surface_size = polygon_data.surface_size;
 
 			// Collect lights, affecting this polygon.
-			// Check only lights, located inside leaf of this polygon.
 			let mut polygon_lights = [&dummy_light; MAX_POLYGON_LIGHTS];
 			let mut num_polygon_lights = 0;
-			for light_index in self.dynamic_lights_index.get_leaf_objects(polygon_data.leaf_index)
+
+			let lights_list = match polygon_data.parent
+			{
+				DrawPolygonParent::Leaf(leaf_index) =>
+				{
+					// Check only lights, located inside leaf of this polygon.
+					self.dynamic_lights_index.get_leaf_objects(leaf_index)
+				},
+				DrawPolygonParent::Submodel(submodel_index) =>
+				{
+					// Check only lights, affecting this submodel.
+					&self.submodels_info[submodel_index as usize].dynamic_lights
+				},
+			};
+			for light_index in lights_list
 			{
 				let light = &lights[*light_index as usize];
 				if polygon_is_affected_by_light(polygon, &polygon_data.basis_vecs, light)

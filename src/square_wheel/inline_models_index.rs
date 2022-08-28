@@ -57,6 +57,12 @@ impl InlineModelsIndex
 		&self.models_info[model_index as usize].leafs
 	}
 
+	// Return ininital untransformed bbox.
+	pub fn get_model_bbox_initial(&self, model_index: u32) -> BBox
+	{
+		self.models_info[model_index as usize].bbox
+	}
+
 	pub fn get_model_bbox_for_ordering(&self, model_index: u32) -> BBox
 	{
 		// Reduce slightly bbox of inline models that is used for ordering to fix some glitches in cases with touching models.
