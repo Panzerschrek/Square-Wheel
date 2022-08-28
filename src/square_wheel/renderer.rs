@@ -35,6 +35,8 @@ pub struct Renderer
 	current_sky: Option<(u32, ClippingPolygon)>,
 	materials_processor: MapMaterialsProcessor,
 	performance_counters: Arc<Mutex<RendererPerformanceCounters>>,
+	dynamic_lights_info: Vec<DynamicLightInfo>,
+	shadow_maps_data: Vec<ShadowMapElement>,
 	dynamic_models_index: DynamicObjectsIndex,
 	decals_index: DynamicObjectsIndex,
 	dynamic_lights_index: DynamicObjectsIndex,
@@ -148,6 +150,14 @@ struct DynamicModelInfo
 	num_visible_meshes: u32,
 }
 
+#[derive(Default, Copy, Clone)]
+struct DynamicLightInfo
+{
+	shadow_map_data_offset: usize,
+	// Cubemap side size or projector shadowmap size.
+	shadow_map_size: u32,
+}
+
 impl Renderer
 {
 	pub fn new(
@@ -213,6 +223,8 @@ impl Renderer
 			map: map.clone(),
 			materials_processor,
 			performance_counters: Arc::new(Mutex::new(RendererPerformanceCounters::new())),
+			dynamic_lights_info: Vec::new(),
+			shadow_maps_data: Vec::new(),
 			dynamic_models_index: DynamicObjectsIndex::new(map.clone()),
 			decals_index: DynamicObjectsIndex::new(map.clone()),
 			dynamic_lights_index: DynamicObjectsIndex::new(map),
@@ -242,45 +254,6 @@ impl Renderer
 			&mut performance_counters.materials_update,
 		);
 
-		let depth_map_size = 256;
-		let mut test_lights_shadow_maps = Vec::with_capacity(frame_info.lights.len());
-		// TODO - perform parallel shadowmaps build.
-		for light in &frame_info.lights
-		{
-			let mut cube_shadow_map = CubeShadowMap {
-				size: depth_map_size,
-				sides: [Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()],
-			};
-
-			match light.shadow_type
-			{
-				DynamicLightShadowType::None =>
-				{},
-				DynamicLightShadowType::Cubemap =>
-				{
-					for side in 0 .. 6
-					{
-						let depth_matrices = calculate_cube_shadow_map_side_matrices(
-							light.position,
-							depth_map_size as f32,
-							int_to_cubemap_side(side).unwrap(),
-						);
-
-						let mut depth_data = vec![0.0; (depth_map_size * depth_map_size) as usize];
-						self.shadows_maps_renderer.draw_map(
-							&mut depth_data,
-							depth_map_size,
-							depth_map_size,
-							&depth_matrices,
-						);
-
-						cube_shadow_map.sides[side as usize] = depth_data;
-					}
-				},
-			}
-			test_lights_shadow_maps.push(cube_shadow_map);
-		}
-
 		run_with_measure(
 			|| {
 				// TODO - before preparing frame try to shift camera a little bit away from all planes of BSP nodes before current leaf.
@@ -294,8 +267,7 @@ impl Renderer
 			&mut performance_counters.visible_leafs_search,
 		);
 
-		self.dynamic_lights_index.position_dynamic_lights(&frame_info.lights);
-
+		self.prepare_dynamic_lights(&frame_info.lights);
 		self.prepare_submodels(frame_info);
 
 		run_with_measure(
@@ -313,23 +285,7 @@ impl Renderer
 				self.prepare_polygons_surfaces(&frame_info.camera_matrices);
 				self.allocate_surfaces_pixels::<ColorT>();
 
-				// TODO - avoid allocation.
-				let mut lights_with_shadow_maps = Vec::new();
-				for (light, shadow_map) in frame_info.lights.iter().zip(test_lights_shadow_maps.iter())
-				{
-					lights_with_shadow_maps.push(SurfaceDynamicLight {
-						position: light.position,
-						radius: light.radius,
-						inv_square_radius: 1.0 / (light.radius * light.radius),
-						color: light.color,
-						shadow_map: match light.shadow_type
-						{
-							DynamicLightShadowType::None => None,
-							DynamicLightShadowType::Cubemap => Some(shadow_map),
-						},
-					});
-				}
-				self.build_polygons_surfaces::<ColorT>(&frame_info.camera_matrices, &lights_with_shadow_maps);
+				self.build_polygons_surfaces::<ColorT>(&frame_info.camera_matrices, &frame_info.lights);
 			},
 			&mut performance_counters.surfaces_preparation,
 		);
@@ -471,6 +427,78 @@ impl Renderer
 			(self.num_visible_surfaces_pixels + 1023) / 1024
 		));
 		debug_stats_printer.add_line(format!("mip bias: {}", self.mip_bias));
+	}
+
+	fn prepare_dynamic_lights(&mut self, lights: &[DynamicLight])
+	{
+		self.dynamic_lights_index.position_dynamic_lights(lights);
+
+		self.dynamic_lights_info
+			.resize(lights.len(), DynamicLightInfo::default());
+
+		// Allocate storage for shadowmaps.
+		let mut shadow_map_data_offset = 0;
+		for (light, light_info) in lights.iter().zip(self.dynamic_lights_info.iter_mut())
+		{
+			let mut shadow_map_data_size = 0;
+			match light.shadow_type
+			{
+				DynamicLightShadowType::None =>
+				{
+					light_info.shadow_map_size = 0;
+				},
+				DynamicLightShadowType::Cubemap =>
+				{
+					light_info.shadow_map_size = 256; // TODO - make configurable.
+					shadow_map_data_size = light_info.shadow_map_size * light_info.shadow_map_size * 6;
+				},
+			}
+
+			light_info.shadow_map_data_offset = shadow_map_data_offset;
+			shadow_map_data_offset += shadow_map_data_size as usize;
+		}
+
+		// Avoid resizing down to avoid refill.
+		if self.shadow_maps_data.len() < shadow_map_data_offset
+		{
+			self.shadow_maps_data.resize(shadow_map_data_offset, 0.0);
+		}
+
+		// Build shadowmaps.
+		// TODO - use multithreading.
+		for (light, light_info) in lights.iter().zip(self.dynamic_lights_info.iter_mut())
+		{
+			match light.shadow_type
+			{
+				DynamicLightShadowType::None =>
+				{},
+				DynamicLightShadowType::Cubemap =>
+				{
+					let side_data_size = light_info.shadow_map_size * light_info.shadow_map_size;
+					let depth_data = &mut self.shadow_maps_data[light_info.shadow_map_data_offset ..
+						light_info.shadow_map_data_offset + (side_data_size * 6) as usize];
+
+					for side in 0 .. 6
+					{
+						let depth_matrices = calculate_cube_shadow_map_side_matrices(
+							light.position,
+							light_info.shadow_map_size as f32,
+							int_to_cubemap_side(side).unwrap(),
+						);
+
+						let side_depth_data =
+							&mut depth_data[(side * side_data_size) as usize .. ((side + 1) * side_data_size) as usize];
+
+						self.shadows_maps_renderer.draw_map(
+							side_depth_data,
+							light_info.shadow_map_size,
+							light_info.shadow_map_size,
+							&depth_matrices,
+						);
+					}
+				},
+			}
+		}
 	}
 
 	fn prepare_submodels(&mut self, frame_info: &FrameInfo)
@@ -1130,9 +1158,44 @@ impl Renderer
 	fn build_polygons_surfaces<ColorT: AbstractColor>(
 		&mut self,
 		camera_matrices: &CameraMatrices,
-		lights: &[SurfaceDynamicLight],
+		dynamic_lights: &[DynamicLight],
 	)
 	{
+		// Prepare array of dynamic lights with shadowmaps.
+		// TODO - avoid allocation.
+		let mut lights = Vec::new();
+		for (light, light_info) in dynamic_lights.iter().zip(self.dynamic_lights_info.iter_mut())
+		{
+			lights.push(SurfaceDynamicLight {
+				position: light.position,
+				radius: light.radius,
+				inv_square_radius: 1.0 / (light.radius * light.radius),
+				color: light.color,
+				shadow_map: match light.shadow_type
+				{
+					DynamicLightShadowType::None => None,
+					DynamicLightShadowType::Cubemap =>
+					{
+						let side_data_size = (light_info.shadow_map_size * light_info.shadow_map_size) as usize;
+						let shadow_map_data = &self.shadow_maps_data[light_info.shadow_map_data_offset ..
+							light_info.shadow_map_data_offset + side_data_size * 6];
+
+						Some(CubeShadowMap {
+							size: light_info.shadow_map_size,
+							sides: [
+								&shadow_map_data[0 * side_data_size .. 1 * side_data_size],
+								&shadow_map_data[1 * side_data_size .. 2 * side_data_size],
+								&shadow_map_data[2 * side_data_size .. 3 * side_data_size],
+								&shadow_map_data[3 * side_data_size .. 4 * side_data_size],
+								&shadow_map_data[4 * side_data_size .. 5 * side_data_size],
+								&shadow_map_data[5 * side_data_size .. 6 * side_data_size],
+							],
+						})
+					},
+				},
+			});
+		}
+
 		// Used only to initialize references.
 		let dummy_light = SurfaceDynamicLight {
 			position: Vec3f::zero(),

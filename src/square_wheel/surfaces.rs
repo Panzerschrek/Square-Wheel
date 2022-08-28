@@ -69,7 +69,7 @@ pub struct SurfaceDynamicLight<'a>
 	pub radius: f32,
 	pub inv_square_radius: f32,
 	pub color: [f32; 3],
-	pub shadow_map: Option<&'a CubeShadowMap>,
+	pub shadow_map: Option<CubeShadowMap<'a>>,
 }
 
 pub fn build_surface_simple_lightmap<ColorT: AbstractColor>(
@@ -977,7 +977,7 @@ impl LightmapElementOps for LightmapElementOpsDirectional
 
 fn get_light_shadow_factor(light: &SurfaceDynamicLight, vec: &Vec3f) -> f32
 {
-	match light.shadow_map
+	match &light.shadow_map
 	{
 		Some(cube_shadow_map) => cube_shadow_map_fetch(cube_shadow_map, vec),
 		None => 1.0,

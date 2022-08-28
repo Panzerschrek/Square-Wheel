@@ -26,10 +26,12 @@ pub fn int_to_cubemap_side(i: u32) -> Option<CubeMapSide>
 	}
 }
 
-pub struct CubeShadowMap
+pub type ShadowMapElement = f32;
+
+pub struct CubeShadowMap<'a>
 {
 	pub size: u32,
-	pub sides: [Vec<f32>; 6],
+	pub sides: [&'a [ShadowMapElement]; 6],
 }
 
 pub fn calculate_cube_shadow_map_side_matrices(
