@@ -35,9 +35,10 @@ pub struct Renderer
 	current_sky: Option<(u32, ClippingPolygon)>,
 	materials_processor: MapMaterialsProcessor,
 	performance_counters: Arc<Mutex<RendererPerformanceCounters>>,
-	// TODO - maybe extract dynamic models-related stuff into separate class?
 	dynamic_models_index: DynamicObjectsIndex,
 	decals_index: DynamicObjectsIndex,
+	dynamic_lights_index: DynamicObjectsIndex,
+	// TODO - maybe extract dynamic models-related stuff into separate class?
 	// Store transformed models vertices and triangles in separate buffer.
 	// This is needed to avoid transforming/sorting model's vertices/triangles in each BSP leaf where this model is located.
 	visible_dynamic_meshes_list: Vec<VisibleDynamicMeshInfo>,
@@ -87,6 +88,8 @@ fn run_with_measure<F: FnOnce()>(f: F, performanc_counter: &mut PerformanceCount
 #[derive(Copy, Clone)]
 struct DrawPolygonData
 {
+	// Leaf index where this polygon is located. TODO - support submodel index fof non-leaf polygons.
+	leaf_index: u32,
 	// Precalculaed basis vecs for mip 0
 	basis_vecs: PolygonBasisVecs,
 	// Frame last time this polygon was visible.
@@ -149,10 +152,11 @@ impl Renderer
 
 		let materials_processor = MapMaterialsProcessor::new(resources_manager, &*map);
 
-		let polygons_data = map
+		let mut polygons_data: Vec<DrawPolygonData> = map
 			.polygons
 			.iter()
 			.map(|p| DrawPolygonData {
+				leaf_index: 0, // Set later
 				// Pre-calculate basis vecs and use them each frame.
 				basis_vecs: PolygonBasisVecs::form_plane_and_tex_coord_equation(&p.plane, &p.tex_coord_equation),
 				visible_frame: Default::default(),
@@ -164,6 +168,15 @@ impl Renderer
 				surface_tc_min: [0, 0],
 			})
 			.collect();
+
+		// Setup relations between leafs and polygons.
+		for (leaf_index, leaf) in map.leafs.iter().enumerate()
+		{
+			for polygon_index in leaf.first_polygon .. leaf.first_polygon + leaf.num_polygons
+			{
+				polygons_data[polygon_index as usize].leaf_index = leaf_index as u32;
+			}
+		}
 
 		Renderer {
 			app_config,
@@ -184,7 +197,8 @@ impl Renderer
 			materials_processor,
 			performance_counters: Arc::new(Mutex::new(RendererPerformanceCounters::new())),
 			dynamic_models_index: DynamicObjectsIndex::new(map.clone()),
-			decals_index: DynamicObjectsIndex::new(map),
+			decals_index: DynamicObjectsIndex::new(map.clone()),
+			dynamic_lights_index: DynamicObjectsIndex::new(map),
 			visible_dynamic_meshes_list: Vec::new(),
 			dynamic_model_to_dynamic_meshes_index: Vec::new(),
 			dynamic_meshes_vertices: Vec::new(),
@@ -274,6 +288,7 @@ impl Renderer
 		);
 
 		self.decals_index.position_decals(&frame_info.decals);
+		self.dynamic_lights_index.position_dynamic_lights(&frame_info.lights);
 
 		run_with_measure(
 			|| {
@@ -1096,10 +1111,12 @@ impl Renderer
 			let surface_size = polygon_data.surface_size;
 
 			// Collect lights, affecting this polygon.
+			// Check only lights, located inside leaf of this polygon.
 			let mut polygon_lights = [&dummy_light; MAX_POLYGON_LIGHTS];
 			let mut num_polygon_lights = 0;
-			for light in lights
+			for light_index in self.dynamic_lights_index.get_leaf_objects(polygon_data.leaf_index)
 			{
+				let light = &lights[*light_index as usize];
 				if polygon_is_affected_by_light(polygon, &polygon_data.basis_vecs, light)
 				{
 					polygon_lights[num_polygon_lights] = light;
