@@ -2432,21 +2432,23 @@ fn polygon_is_affected_by_light(
 		return false;
 	}
 
+	let u_vec_square_len = basis_vecs.u.magnitude2();
+	let v_vec_square_len = basis_vecs.v.magnitude2();
 	// Calculate texture coordinates at point of projection of light position to polygon plane.
 	let light_position_projected_to_polygon_plane =
 		light.position - signed_dinstance_to_polygon_plane * basis_vecs.normal;
+	let light_position_projected_releative_to_basis_center =
+		light_position_projected_to_polygon_plane - basis_vecs.start;
 	let tc_at_projected_light_position = [
-		light_position_projected_to_polygon_plane.dot(polygon.tex_coord_equation[0].vec) +
-			polygon.tex_coord_equation[0].dist,
-		light_position_projected_to_polygon_plane.dot(polygon.tex_coord_equation[1].vec) +
-			polygon.tex_coord_equation[1].dist,
+		(light_position_projected_releative_to_basis_center.dot(basis_vecs.u)) / u_vec_square_len,
+		(light_position_projected_releative_to_basis_center.dot(basis_vecs.v)) / v_vec_square_len,
 	];
 
 	// Check min/max texture coordinates of projected circle agains polygon min/max texture coordinates.
 	// This is inexact check (not proper polygon check) but it gives good enough result.
 	let radius_at_polygon_plane = square_radius_at_polygon_plane.sqrt();
-	let u_radius = radius_at_polygon_plane * inv_sqrt_fast(basis_vecs.u.magnitude2());
-	let v_radius = radius_at_polygon_plane * inv_sqrt_fast(basis_vecs.v.magnitude2());
+	let u_radius = radius_at_polygon_plane * inv_sqrt_fast(u_vec_square_len);
+	let v_radius = radius_at_polygon_plane * inv_sqrt_fast(v_vec_square_len);
 
 	if tc_at_projected_light_position[0] + u_radius < (polygon.tex_coord_min[0] as f32) ||
 		tc_at_projected_light_position[1] + v_radius < (polygon.tex_coord_min[1] as f32) ||
@@ -2459,6 +2461,7 @@ fn polygon_is_affected_by_light(
 	else
 	{
 		// Light affects this polygon.
+		// TODO - maybe process corner cases here (literally, check intersection with corners)?
 		true
 	}
 }
