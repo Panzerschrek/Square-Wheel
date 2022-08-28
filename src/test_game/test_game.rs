@@ -491,8 +491,11 @@ impl GameInterface for Game
 			self.player_entity,
 			keyboard_state,
 			events,
+			self.game_time,
 			time_delta_s,
 		);
+		world_update::despawn_timed_entites(&mut self.ecs, &mut self.ecs_command_buffer, self.game_time);
+		world_update::update_test_projectiles(&mut self.ecs, time_delta_s);
 		world_update::update_plates(&mut self.ecs, self.game_time, time_delta_s);
 		world_update::update_doors(&mut self.ecs, self.game_time, time_delta_s);
 		world_update::update_buttons(&mut self.ecs, self.game_time, time_delta_s);
@@ -521,6 +524,7 @@ impl GameInterface for Game
 		world_update::update_models_locations(&mut self.ecs);
 		world_update::update_submodels_locations(&mut self.ecs);
 		world_update::update_decals_locations(&mut self.ecs);
+		world_update::update_dynamic_lights_locations(&mut self.ecs);
 	}
 
 	fn grab_mouse_input(&self) -> bool

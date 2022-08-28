@@ -10,6 +10,11 @@ pub struct TestModelComponent {}
 pub struct TestDecalComponent {}
 pub struct TestLightComponent {}
 
+pub struct TestProjectileComponent
+{
+	pub velocity: Vec3f,
+}
+
 // Drawable submodel with index.
 // Store index in order to fill result vector of submodels.
 pub struct SubmodelEntityWithIndex
@@ -23,6 +28,12 @@ pub struct LocationComponent
 {
 	pub position: Vec3f,
 	pub rotation: QuaternionF,
+}
+
+// Despawn entities with such component when despawn time is reached.
+pub struct TimedDespawnComponent
+{
+	pub despawn_time: f32,
 }
 
 // Take location from player controller.
@@ -62,6 +73,9 @@ pub struct SubmodelEntityWithIndexLocationLinkComponent {}
 
 // Component that sets Decal position/rotation using LocationComponent.
 pub struct DecalLocationLinkComponent {}
+
+// Component that sets DynamicLight position/rotation using LocationComponent.
+pub struct DynamicLightLocationLinkComponent {}
 
 // Just play animation consisting of all model frames.
 pub struct SimpleAnimationComponent {}
