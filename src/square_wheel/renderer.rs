@@ -2612,8 +2612,8 @@ fn polygon_is_affected_by_light(
 {
 	// TODO - check mathemathics here.
 
-	let vec_from_light_position_to_plane_point = light.position - basis_vecs.start;
-	let signed_dinstance_to_polygon_plane = vec_from_light_position_to_plane_point.dot(basis_vecs.normal);
+	let vec_from_light_position_to_tc_start_point = light.position - basis_vecs.start;
+	let signed_dinstance_to_polygon_plane = vec_from_light_position_to_tc_start_point.dot(basis_vecs.normal);
 	if signed_dinstance_to_polygon_plane <= 0.0
 	{
 		// This light is behind polygon plane.
@@ -2628,23 +2628,25 @@ fn polygon_is_affected_by_light(
 		return false;
 	}
 
-	let u_vec_square_len = basis_vecs.u.magnitude2();
-	let v_vec_square_len = basis_vecs.v.magnitude2();
 	// Calculate texture coordinates at point of projection of light position to polygon plane.
-	let light_position_projected_to_polygon_plane =
-		light.position - signed_dinstance_to_polygon_plane * basis_vecs.normal;
-	let light_position_projected_releative_to_basis_center =
-		light_position_projected_to_polygon_plane - basis_vecs.start;
+	let mat = if let Some(m) = Mat3f::from_cols(basis_vecs.u, basis_vecs.v, basis_vecs.normal).invert()
+	{
+		m.transpose()
+	}
+	else
+	{
+		return false;
+	};
 	let tc_at_projected_light_position = [
-		(light_position_projected_releative_to_basis_center.dot(basis_vecs.u)) / u_vec_square_len,
-		(light_position_projected_releative_to_basis_center.dot(basis_vecs.v)) / v_vec_square_len,
+		vec_from_light_position_to_tc_start_point.dot(mat.x),
+		vec_from_light_position_to_tc_start_point.dot(mat.y),
 	];
 
 	// Check min/max texture coordinates of projected circle agains polygon min/max texture coordinates.
 	// This is inexact check (not proper polygon check) but it gives good enough result.
 	let radius_at_polygon_plane = square_radius_at_polygon_plane.sqrt();
-	let u_radius = radius_at_polygon_plane * inv_sqrt_fast(u_vec_square_len);
-	let v_radius = radius_at_polygon_plane * inv_sqrt_fast(v_vec_square_len);
+	let u_radius = radius_at_polygon_plane * inv_sqrt_fast(basis_vecs.u.magnitude2());
+	let v_radius = radius_at_polygon_plane * inv_sqrt_fast(basis_vecs.v.magnitude2());
 
 	if tc_at_projected_light_position[0] + u_radius < (polygon.tex_coord_min[0] as f32) ||
 		tc_at_projected_light_position[1] + v_radius < (polygon.tex_coord_min[1] as f32) ||
