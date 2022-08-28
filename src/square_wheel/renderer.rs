@@ -55,6 +55,7 @@ struct RendererPerformanceCounters
 	visible_leafs_search: PerformanceCounter,
 	triangle_models_preparation: PerformanceCounter,
 	surfaces_preparation: PerformanceCounter,
+	shadow_maps_building: PerformanceCounter,
 	background_fill: PerformanceCounter,
 	rasterization: PerformanceCounter,
 }
@@ -69,6 +70,7 @@ impl RendererPerformanceCounters
 			visible_leafs_search: PerformanceCounter::new(window_size),
 			triangle_models_preparation: PerformanceCounter::new(window_size),
 			surfaces_preparation: PerformanceCounter::new(window_size),
+			shadow_maps_building: PerformanceCounter::new(window_size),
 			background_fill: PerformanceCounter::new(window_size),
 			rasterization: PerformanceCounter::new(window_size),
 		}
@@ -153,6 +155,8 @@ struct DynamicModelInfo
 #[derive(Default, Copy, Clone)]
 struct DynamicLightInfo
 {
+	// Light is not visible if all leafs where it is located are not visible.
+	visible: bool,
 	shadow_map_data_offset: usize,
 	// Cubemap side size or projector shadowmap size.
 	shadow_map_size: u32,
@@ -268,6 +272,13 @@ impl Renderer
 		);
 
 		self.prepare_dynamic_lights(&frame_info.lights);
+		run_with_measure(
+			|| {
+				self.build_shadow_maps(&frame_info.lights);
+			},
+			&mut performance_counters.shadow_maps_building,
+		);
+
 		self.prepare_submodels(frame_info);
 
 		run_with_measure(
@@ -404,6 +415,10 @@ impl Renderer
 			performance_counters.surfaces_preparation.get_average_value() * 1000.0
 		));
 		debug_stats_printer.add_line(format!(
+			"shadow maps building: {:04.2}ms",
+			performance_counters.shadow_maps_building.get_average_value() * 1000.0
+		));
+		debug_stats_printer.add_line(format!(
 			"background fill: {:04.2}ms",
 			performance_counters.background_fill.get_average_value() * 1000.0
 		));
@@ -438,8 +453,26 @@ impl Renderer
 
 		// Allocate storage for shadowmaps.
 		let mut shadow_map_data_offset = 0;
-		for (light, light_info) in lights.iter().zip(self.dynamic_lights_info.iter_mut())
+		for (index, (light, light_info)) in lights.iter().zip(self.dynamic_lights_info.iter_mut()).enumerate()
 		{
+			light_info.visible = false;
+			for leaf_index in self.dynamic_lights_index.get_object_leafs(index)
+			{
+				if self
+					.visibility_calculator
+					.get_current_frame_leaf_bounds(*leaf_index)
+					.is_some()
+				{
+					light_info.visible = true;
+					break;
+				}
+			}
+
+			if !light_info.visible
+			{
+				continue;
+			}
+
 			let mut shadow_map_data_size = 0;
 			match light.shadow_type
 			{
@@ -463,11 +496,19 @@ impl Renderer
 		{
 			self.shadow_maps_data.resize(shadow_map_data_offset, 0.0);
 		}
+	}
 
-		// Build shadowmaps.
+	// Call this only after dynamic lights preparation.
+	fn build_shadow_maps(&mut self, lights: &[DynamicLight])
+	{
 		// TODO - use multithreading.
 		for (light, light_info) in lights.iter().zip(self.dynamic_lights_info.iter_mut())
 		{
+			if !light_info.visible
+			{
+				continue;
+			}
+
 			match light.shadow_type
 			{
 				DynamicLightShadowType::None =>
@@ -1163,10 +1204,12 @@ impl Renderer
 	{
 		// Prepare array of dynamic lights with shadowmaps.
 		// TODO - avoid allocation.
-		let mut lights = Vec::new();
-		for (light, light_info) in dynamic_lights.iter().zip(self.dynamic_lights_info.iter_mut())
-		{
-			lights.push(SurfaceDynamicLight {
+		let dynamic_lights_info = &self.dynamic_lights_info;
+		let shadow_maps_data = &self.shadow_maps_data;
+		let lights: Vec<SurfaceDynamicLight> = dynamic_lights
+			.iter()
+			.zip(dynamic_lights_info.iter())
+			.map(|(light, light_info)| SurfaceDynamicLight {
 				position: light.position,
 				radius: light.radius,
 				inv_square_radius: 1.0 / (light.radius * light.radius),
@@ -1176,25 +1219,32 @@ impl Renderer
 					DynamicLightShadowType::None => None,
 					DynamicLightShadowType::Cubemap =>
 					{
-						let side_data_size = (light_info.shadow_map_size * light_info.shadow_map_size) as usize;
-						let shadow_map_data = &self.shadow_maps_data[light_info.shadow_map_data_offset ..
-							light_info.shadow_map_data_offset + side_data_size * 6];
+						if light_info.visible
+						{
+							let side_data_size = (light_info.shadow_map_size * light_info.shadow_map_size) as usize;
+							let shadow_map_data = &shadow_maps_data[light_info.shadow_map_data_offset ..
+								light_info.shadow_map_data_offset + side_data_size * 6];
 
-						Some(CubeShadowMap {
-							size: light_info.shadow_map_size,
-							sides: [
-								&shadow_map_data[0 * side_data_size .. 1 * side_data_size],
-								&shadow_map_data[1 * side_data_size .. 2 * side_data_size],
-								&shadow_map_data[2 * side_data_size .. 3 * side_data_size],
-								&shadow_map_data[3 * side_data_size .. 4 * side_data_size],
-								&shadow_map_data[4 * side_data_size .. 5 * side_data_size],
-								&shadow_map_data[5 * side_data_size .. 6 * side_data_size],
-							],
-						})
+							Some(CubeShadowMap {
+								size: light_info.shadow_map_size,
+								sides: [
+									&shadow_map_data[0 * side_data_size .. 1 * side_data_size],
+									&shadow_map_data[1 * side_data_size .. 2 * side_data_size],
+									&shadow_map_data[2 * side_data_size .. 3 * side_data_size],
+									&shadow_map_data[3 * side_data_size .. 4 * side_data_size],
+									&shadow_map_data[4 * side_data_size .. 5 * side_data_size],
+									&shadow_map_data[5 * side_data_size .. 6 * side_data_size],
+								],
+							})
+						}
+						else
+						{
+							None
+						}
 					},
 				},
-			});
-		}
+			})
+			.collect();
 
 		// Used only to initialize references.
 		let dummy_light = SurfaceDynamicLight {
