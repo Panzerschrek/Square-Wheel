@@ -459,41 +459,7 @@ fn get_model_dynamic_light(
 	{
 		ModelLighting::Default =>
 		{
-			let bbox = get_current_triangle_model_bbox(&model.model, &model.animation);
-			let bbox_center = bbox.get_center();
-
-			// Calculage light for several positions within model bbox.
-			// Obtain positions in half-way between bbox center and bbox vertices.
-			// TODO - use also bbox  center as sample position.
-			let sample_positions = bbox
-				.get_corners_vertices()
-				.map(|v| (model_matrix * ((v + bbox_center) * 0.5).extend(1.0)).truncate());
-
-			let min_square_distance = bbox.get_size().magnitude2() * 0.25;
-
-			for light in lights
-			{
-				for position in &sample_positions
-				{
-					let vec_to_light = light.position - position;
-					let square_dist = vec_to_light.magnitude2().max(min_square_distance);
-					let inv_square_dist = 1.0 / square_dist;
-					let light_inv_square_radius = 1.0 / (light.radius * light.radius);
-					if inv_square_dist < light_inv_square_radius
-					{
-						continue;
-					}
-					// TODO - fetch shadow map, if needed.
-
-					let scale = inv_square_dist - light_inv_square_radius;
-					light_cube.add_light_sample(
-						&vec_to_light,
-						&[light.color[0] * scale, light.color[1] * scale, light.color[2] * scale],
-					);
-				}
-			}
-
-			light_cube.scale(1.0 / (sample_positions.len() as f32));
+			calculate_model_dynamic_light_cube(lights, model, model_matrix, &mut light_cube);
 		},
 		ModelLighting::ConstantLight(l) =>
 		{
@@ -502,14 +468,62 @@ fn get_model_dynamic_light(
 		ModelLighting::AdvancedLight {
 			grid_light_scale,
 			light_add,
-			position,
+			position: _,
 		} =>
 		{
-			// TODO
+			// Do not use custom position here, because it is nearly useless for dynamic lighting.
+
+			calculate_model_dynamic_light_cube(lights, model, model_matrix, &mut light_cube);
+			light_cube.scale(grid_light_scale);
+			light_cube.add_constant_light(&light_add);
 		},
 	}
 
 	light_cube.convert_into_light_grid_sample()
+}
+
+fn calculate_model_dynamic_light_cube(
+	lights: &[DynamicLight],
+	model: &ModelEntity,
+	model_matrix: &Mat4f,
+	light_cube: &mut LightCube,
+)
+{
+	let bbox = get_current_triangle_model_bbox(&model.model, &model.animation);
+	let bbox_center = bbox.get_center();
+
+	// Calculage light for several positions within model bbox.
+	// Obtain positions in between bbox center and bbox vertices.
+	// TODO - use also bbox  center as sample position.
+	let sample_positions = bbox
+		.get_corners_vertices()
+		.map(|v| (model_matrix * ((v + bbox_center) * 0.5).extend(1.0)).truncate());
+
+	let min_square_distance = bbox.get_size().magnitude2() * 0.25;
+
+	for light in lights
+	{
+		for position in &sample_positions
+		{
+			let vec_to_light = light.position - position;
+			let square_dist = vec_to_light.magnitude2().max(min_square_distance);
+			let inv_square_dist = 1.0 / square_dist;
+			let light_inv_square_radius = 1.0 / (light.radius * light.radius);
+			if inv_square_dist < light_inv_square_radius
+			{
+				continue;
+			}
+			// TODO - fetch shadow map, if needed.
+
+			let scale = inv_square_dist - light_inv_square_radius;
+			light_cube.add_light_sample(
+				&vec_to_light,
+				&[light.color[0] * scale, light.color[1] * scale, light.color[2] * scale],
+			);
+		}
+	}
+
+	light_cube.scale(1.0 / (sample_positions.len() as f32));
 }
 
 fn get_model_static_light(map: &bsp_map_compact::BSPMap, model: &ModelEntity) -> bsp_map_compact::LightGridElement
