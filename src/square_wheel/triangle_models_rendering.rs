@@ -439,42 +439,61 @@ pub fn get_model_light(
 	map: &bsp_map_compact::BSPMap,
 	dynamic_lights: &[DynamicLight],
 	model: &ModelEntity,
+	model_matrix: &Mat4f,
 ) -> ModelLightData
 {
 	ModelLightData::from_two_light_grid_elements(&[
 		get_model_static_light(map, model),
-		get_model_dynamic_light(dynamic_lights, model),
+		get_model_dynamic_light(dynamic_lights, model, model_matrix),
 	])
 }
 
-fn get_model_dynamic_light(lights: &[DynamicLight], model: &ModelEntity) -> bsp_map_compact::LightGridElement
+fn get_model_dynamic_light(
+	lights: &[DynamicLight],
+	model: &ModelEntity,
+	model_matrix: &Mat4f,
+) -> bsp_map_compact::LightGridElement
 {
 	let mut light_cube = LightCube::new();
 	match model.lighting
 	{
 		ModelLighting::Default =>
 		{
+			let bbox = get_current_triangle_model_bbox(&model.model, &model.animation);
+			let bbox_center = bbox.get_center();
+
+			// Calculage light for several positions within model bbox.
+			// Obtain positions in half-way between bbox center and bbox vertices.
+			// TODO - use also bbox  center as sample position.
+			let sample_positions = bbox
+				.get_corners_vertices()
+				.map(|v| (model_matrix * ((v + bbox_center) * 0.5).extend(1.0)).truncate());
+
+			let min_square_distance = bbox.get_size().magnitude2() * 0.25;
+
 			for light in lights
 			{
-				// TODO - perform multisampling - calculatr light for several points inside model bbox.
-
-				let vec_to_light = light.position - model.position;
-				// TODO - limit minimum square_dist.
-				let square_dist = vec_to_light.magnitude2();
-				let inv_square_dist = 1.0 / square_dist;
-				let light_inv_square_radius = 1.0 / (light.radius * light.radius);
-				if inv_square_dist < light_inv_square_radius
+				for position in &sample_positions
 				{
-					continue;
-				}
-				// TODO - fetch shadow map, if needed.
+					let vec_to_light = light.position - position;
+					let square_dist = vec_to_light.magnitude2().max(min_square_distance);
+					let inv_square_dist = 1.0 / square_dist;
+					let light_inv_square_radius = 1.0 / (light.radius * light.radius);
+					if inv_square_dist < light_inv_square_radius
+					{
+						continue;
+					}
+					// TODO - fetch shadow map, if needed.
 
-				let scale = inv_square_dist - light_inv_square_radius;
-				light_cube.add_light_sample(
-					&vec_to_light,
-					&[light.color[0] * scale, light.color[1] * scale, light.color[2] * scale],
-				);
+					let scale = inv_square_dist - light_inv_square_radius;
+					light_cube.add_light_sample(
+						&vec_to_light,
+						&[light.color[0] * scale, light.color[1] * scale, light.color[2] * scale],
+					);
+				}
 			}
+
+			light_cube.scale(1.0 / (sample_positions.len() as f32));
 		},
 		ModelLighting::ConstantLight(l) =>
 		{
