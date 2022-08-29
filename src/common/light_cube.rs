@@ -69,6 +69,14 @@ impl LightCube
 		}
 	}
 
+	pub fn add_constant_light(&mut self, light: &[f32; 3])
+	{
+		for side in &mut self.light_cube
+		{
+			*side = *light;
+		}
+	}
+
 	pub fn scale(&mut self, scale: f32)
 	{
 		for side in &mut self.light_cube

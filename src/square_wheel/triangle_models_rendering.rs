@@ -1,5 +1,7 @@
 use super::{fast_math::*, frame_info::*, textures::*, triangle_model::*};
-use crate::common::{bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, plane::*};
+use crate::common::{
+	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, light_cube::*, math_types::*, plane::*,
+};
 
 pub fn animate_and_transform_triangle_mesh_vertices(
 	model: &TriangleModel,
@@ -382,6 +384,52 @@ pub fn triangle_vertex_debug_checked_fetch<VertexT: Copy>(vertices: &[VertexT], 
 	unsafe {
 		*vertices.get_unchecked(index_s)
 	}
+}
+
+pub fn get_model_dynamic_light(lights: &[DynamicLight], model: &ModelEntity) -> bsp_map_compact::LightGridElement
+{
+	let mut light_cube = LightCube::new();
+	match model.lighting
+	{
+		ModelLighting::Default =>
+		{
+			for light in lights
+			{
+				// TODO - perform multisampling - calculatr light for several points inside model bbox.
+
+				let vec_to_light = light.position - model.position;
+				// TODO - limit minimum square_dist.
+				let square_dist = vec_to_light.magnitude2();
+				let inv_square_dist = 1.0 / square_dist;
+				let light_inv_square_radius = 1.0 / (light.radius * light.radius);
+				if inv_square_dist < light_inv_square_radius
+				{
+					continue;
+				}
+				// TODO - fetch shadow map, if needed.
+
+				let scale = inv_square_dist - light_inv_square_radius;
+				light_cube.add_light_sample(
+					&vec_to_light,
+					&[light.color[0] * scale, light.color[1] * scale, light.color[2] * scale],
+				);
+			}
+		},
+		ModelLighting::ConstantLight(l) =>
+		{
+			light_cube.add_constant_light(&l);
+		},
+		ModelLighting::AdvancedLight {
+			_grid_light_scale,
+			_light_add,
+			_position,
+		} =>
+		{
+			// TODO
+		},
+	}
+
+	light_cube.convert_into_light_grid_sample()
 }
 
 pub fn get_model_light(map: &bsp_map_compact::BSPMap, model: &ModelEntity) -> bsp_map_compact::LightGridElement

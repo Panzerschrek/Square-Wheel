@@ -284,7 +284,7 @@ impl Renderer
 		run_with_measure(
 			|| {
 				self.prepare_dynamic_models(&frame_info.camera_matrices, &frame_info.model_entities);
-				self.build_dynamic_models_buffers(&frame_info.model_entities);
+				self.build_dynamic_models_buffers(&frame_info.lights, &frame_info.model_entities);
 			},
 			&mut performance_counters.triangle_models_preparation,
 		);
@@ -718,7 +718,7 @@ impl Renderer
 		}
 	}
 
-	fn build_dynamic_models_buffers(&mut self, models: &[ModelEntity])
+	fn build_dynamic_models_buffers(&mut self, dynamic_lights: &[DynamicLight], models: &[ModelEntity])
 	{
 		// It is safe to share vertices and triangle buffers since each mesh uses its own region.
 		let dst_vertices_shared = SharedMutSlice::new(&mut self.dynamic_meshes_vertices);
@@ -744,11 +744,15 @@ impl Renderer
 			// Perform vertices transformation.
 			let dst_mesh_vertices = unsafe { &mut dst_vertices_shared.get()[visible_dynamic_mesh.vertices_offset ..] };
 
+			let static_light = get_model_light(map, model);
+			let dynamic_light = get_model_dynamic_light(dynamic_lights, model);
+			// TODO - combine two lights togethrer.
+
 			animate_and_transform_triangle_mesh_vertices(
 				&model.model,
 				mesh,
 				animation,
-				&get_model_light(map, &model),
+				&dynamic_light,
 				&visible_dynamic_mesh.model_matrix,
 				&visible_dynamic_mesh.camera_matrices.view_matrix,
 				&Vec2f::new(texture.size[0] as f32, texture.size[1] as f32),
