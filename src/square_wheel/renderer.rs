@@ -744,15 +744,11 @@ impl Renderer
 			// Perform vertices transformation.
 			let dst_mesh_vertices = unsafe { &mut dst_vertices_shared.get()[visible_dynamic_mesh.vertices_offset ..] };
 
-			let static_light = get_model_light(map, model);
-			let dynamic_light = get_model_dynamic_light(dynamic_lights, model);
-			// TODO - combine two lights togethrer.
-
 			animate_and_transform_triangle_mesh_vertices(
 				&model.model,
 				mesh,
 				animation,
-				&dynamic_light,
+				&get_model_light(map, dynamic_lights, model),
 				&visible_dynamic_mesh.model_matrix,
 				&visible_dynamic_mesh.camera_matrices.view_matrix,
 				&Vec2f::new(texture.size[0] as f32, texture.size[1] as f32),
