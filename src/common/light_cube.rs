@@ -73,7 +73,10 @@ impl LightCube
 	{
 		for side in &mut self.light_cube
 		{
-			*side = *light;
+			for i in 0 .. 3
+			{
+				side[i] += light[i];
+			}
 		}
 	}
 
