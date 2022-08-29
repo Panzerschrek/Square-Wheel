@@ -1,4 +1,4 @@
-use super::{fast_math::*, frame_info::*, textures::*, triangle_model::*};
+use super::{fast_math::*, frame_info::*, light::*, textures::*, triangle_model::*};
 use crate::common::{
 	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, light_cube::*, math_types::*, plane::*,
 };
@@ -437,7 +437,7 @@ impl ModeLightDirectionalComponent
 
 pub fn get_model_light(
 	map: &bsp_map_compact::BSPMap,
-	dynamic_lights: &[DynamicLight],
+	dynamic_lights: &[SurfaceDynamicLight],
 	model: &ModelEntity,
 	model_matrix: &Mat4f,
 ) -> ModelLightData
@@ -449,7 +449,7 @@ pub fn get_model_light(
 }
 
 fn get_model_dynamic_light(
-	lights: &[DynamicLight],
+	lights: &[SurfaceDynamicLight],
 	model: &ModelEntity,
 	model_matrix: &Mat4f,
 ) -> bsp_map_compact::LightGridElement
@@ -483,7 +483,7 @@ fn get_model_dynamic_light(
 }
 
 fn calculate_model_dynamic_light_cube(
-	lights: &[DynamicLight],
+	lights: &[SurfaceDynamicLight],
 	model: &ModelEntity,
 	model_matrix: &Mat4f,
 	light_cube: &mut LightCube,
@@ -508,14 +508,17 @@ fn calculate_model_dynamic_light_cube(
 			let vec_to_light = light.position - position;
 			let square_dist = vec_to_light.magnitude2().max(min_square_distance);
 			let inv_square_dist = 1.0 / square_dist;
-			let light_inv_square_radius = 1.0 / (light.radius * light.radius);
-			if inv_square_dist < light_inv_square_radius
+			if inv_square_dist < light.inv_square_radius
 			{
 				continue;
 			}
-			// TODO - fetch shadow map, if needed.
+			let shadow_factor = get_light_shadow_factor(light, &vec_to_light);
+			if shadow_factor <= 0.0
+			{
+				continue;
+			}
 
-			let scale = inv_square_dist - light_inv_square_radius;
+			let scale = shadow_factor * (inv_square_dist - light.inv_square_radius);
 			light_cube.add_light_sample(
 				&vec_to_light,
 				&[light.color[0] * scale, light.color[1] * scale, light.color[2] * scale],

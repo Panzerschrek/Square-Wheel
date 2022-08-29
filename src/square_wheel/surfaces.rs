@@ -1,4 +1,4 @@
-use super::{abstract_color::*, fast_math::*, shadow_map::*, textures};
+use super::{abstract_color::*, fast_math::*, light::*, textures};
 use crate::common::{bsp_map_compact, lightmap, math_types::*, plane::*};
 
 // Basis vecs, that are used to reconstruct world position of surface texel.
@@ -61,15 +61,6 @@ impl PolygonBasisVecs
 			normal: self.normal,
 		}
 	}
-}
-
-pub struct SurfaceDynamicLight<'a>
-{
-	pub position: Vec3f,
-	pub radius: f32,
-	pub inv_square_radius: f32,
-	pub color: [f32; 3],
-	pub shadow_map: Option<CubeShadowMap<'a>>,
 }
 
 pub fn build_surface_simple_lightmap<ColorT: AbstractColor>(
@@ -975,81 +966,6 @@ impl LightmapElementOps for LightmapElementOpsDirectional
 	}
 }
 
-fn get_light_shadow_factor(light: &SurfaceDynamicLight, vec: &Vec3f) -> f32
-{
-	match &light.shadow_map
-	{
-		Some(cube_shadow_map) => cube_shadow_map_fetch(cube_shadow_map, vec),
-		None => 1.0,
-	}
-}
-
-// Returns 1 if in light, 0 if in shadow.
-fn cube_shadow_map_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f) -> f32
-{
-	let vec_abs = Vec3f::new(vec.x.abs(), vec.y.abs(), vec.z.abs());
-	if vec_abs.x >= vec_abs.y && vec_abs.x >= vec_abs.z
-	{
-		if vec.x >= 0.0
-		{
-			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(-vec.y, vec.z, vec_abs.x), 1)
-		}
-		else
-		{
-			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(vec.y, vec.z, vec_abs.x), 0)
-		}
-	}
-	else if vec_abs.y >= vec_abs.x && vec_abs.y >= vec_abs.z
-	{
-		if vec.y >= 0.0
-		{
-			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(vec.x, vec.z, vec_abs.y), 3)
-		}
-		else
-		{
-			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(-vec.x, vec.z, vec_abs.y), 2)
-		}
-	}
-	else
-	{
-		if vec.z >= 0.0
-		{
-			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(-vec.x, vec.y, vec_abs.z), 5)
-		}
-		else
-		{
-			cube_shadow_map_side_fetch(cube_shadow_map, &Vec3f::new(-vec.x, -vec.y, vec_abs.z), 4)
-		}
-	}
-}
-
-// Returns 1 if in light, 0 if in shadow.
-fn cube_shadow_map_side_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f, side: u32) -> f32
-{
-	const ONE_MINUS_EPS: f32 = 1.0 - 1.0 / 65536.0;
-	let cubemap_size_f = cube_shadow_map.size as f32;
-
-	let depth = inv_fast(vec.z.max(MIN_POSITIVE_VALUE));
-	let half_depth = 0.5 * depth;
-	let u_f = f32_mul_add(vec.x, half_depth, 0.5).max(0.0).min(ONE_MINUS_EPS) * cubemap_size_f;
-	let v_f = f32_mul_add(vec.y, half_depth, 0.5).max(0.0).min(ONE_MINUS_EPS) * cubemap_size_f;
-	// It is safe to use "unsafe" f32 to int conversion, since NaN and Inf is not possible here.
-	let u = unsafe { u_f.to_int_unchecked::<u32>() };
-	let v = unsafe { v_f.to_int_unchecked::<u32>() };
-	debug_assert!(u < cube_shadow_map.size);
-	debug_assert!(v < cube_shadow_map.size);
-	let texel_address = (u + v * cube_shadow_map.size) as usize;
-	let value = unsafe { debug_only_checked_fetch(&cube_shadow_map.sides[side as usize], texel_address) };
-	if depth >= value
-	{
-		1.0
-	}
-	else
-	{
-		0.0
-	}
-}
-
 fn get_specular_intensity(vec_to_camera_reflected_light_angle_cos: f32, inv_roughness: f32) -> f32
 {
 	if false
@@ -1114,8 +1030,6 @@ fn get_specular_k_metal(fresnel_factor_base: f32, roughness: f32) -> f32
 	)
 }
 
-const MIN_POSITIVE_VALUE: f32 = 1.0 / ((1 << 30) as f32);
-
 const DIELECTRIC_ZERO_REFLECTIVITY: f32 = 0.04;
 const DIELECTRIC_AVERAGE_REFLECTIVITY: f32 = DIELECTRIC_ZERO_REFLECTIVITY * 3.0;
 const METAL_AVERAGE_SCHLICK_FACTOR: f32 = 0.5;
@@ -1139,19 +1053,4 @@ fn vec3_scalar_mul_add(a: &Vec3f, scalar: f32, b: &Vec3f) -> Vec3f
 fn vec3_len2(v: &Vec3f) -> f32
 {
 	vec3_dot(v, v)
-}
-
-unsafe fn debug_only_checked_fetch<T: Copy>(data: &[T], address: usize) -> T
-{
-	// operator [] checks bounds and calls panic! handler in case if index is out of bounds.
-	// This check is useless here since we clamp coordnates properly.
-	// So, use "get_unchecked" in release mode.
-	#[cfg(debug_assertions)]
-	{
-		data[address]
-	}
-	#[cfg(not(debug_assertions))]
-	{
-		*data.get_unchecked(address)
-	}
 }
