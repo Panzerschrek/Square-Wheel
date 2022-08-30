@@ -66,75 +66,39 @@ fn get_cube_map_side_matrix(side: CubeMapSide) -> Mat4f
 	{
 		CubeMapSide::XPlus =>
 		{
-			mat.x.x = 0.0;
-			mat.x.y = 0.0;
-			mat.x.z = 1.0;
-			mat.y.x = -1.0;
-			mat.y.y = 0.0;
-			mat.y.z = 0.0;
-			mat.z.x = 0.0;
-			mat.z.y = -1.0;
-			mat.z.z = 0.0;
+			mat.x = Vec4f::unit_z();
+			mat.y = -Vec4f::unit_x();
+			mat.z = -Vec4f::unit_y();
 		},
 		CubeMapSide::XMinus =>
 		{
-			mat.x.x = 0.0;
-			mat.x.y = 0.0;
-			mat.x.z = -1.0;
-			mat.y.x = 1.0;
-			mat.y.y = 0.0;
-			mat.y.z = 0.0;
-			mat.z.x = 0.0;
-			mat.z.y = -1.0;
-			mat.z.z = 0.0;
+			mat.x = -Vec4f::unit_z();
+			mat.y = Vec4f::unit_x();
+			mat.z = -Vec4f::unit_y();
 		},
 		CubeMapSide::YPlus =>
 		{
-			mat.x.x = 1.0;
-			mat.x.y = 0.0;
-			mat.x.z = 0.0;
-			mat.y.x = 0.0;
-			mat.y.y = 0.0;
-			mat.y.z = 1.0;
-			mat.z.x = 0.0;
-			mat.z.y = -1.0;
-			mat.z.z = 0.0;
+			mat.x = Vec4f::unit_x();
+			mat.y = Vec4f::unit_z();
+			mat.z = -Vec4f::unit_y();
 		},
 		CubeMapSide::YMinus =>
 		{
-			mat.x.x = -1.0;
-			mat.x.y = 0.0;
-			mat.x.z = 0.0;
-			mat.y.x = 0.0;
-			mat.y.y = 0.0;
-			mat.y.z = -1.0;
-			mat.z.x = 0.0;
-			mat.z.y = -1.0;
-			mat.z.z = 0.0;
+			mat.x = -Vec4f::unit_x();
+			mat.y = -Vec4f::unit_z();
+			mat.z = -Vec4f::unit_y();
 		},
 		CubeMapSide::ZPlus =>
 		{
-			mat.x.x = 1.0;
-			mat.x.y = 0.0;
-			mat.x.z = 0.0;
-			mat.y.x = 0.0;
-			mat.y.y = 1.0;
-			mat.y.z = 0.0;
-			mat.z.x = 0.0;
-			mat.z.y = 0.0;
-			mat.z.z = 1.0;
+			mat.x = Vec4f::unit_x();
+			mat.y = Vec4f::unit_y();
+			mat.z = Vec4f::unit_z();
 		},
 		CubeMapSide::ZMinus =>
 		{
-			mat.x.x = 1.0;
-			mat.x.y = 0.0;
-			mat.x.z = 0.0;
-			mat.y.x = 0.0;
-			mat.y.y = -1.0;
-			mat.y.z = 0.0;
-			mat.z.x = 0.0;
-			mat.z.y = 0.0;
-			mat.z.z = -1.0;
+			mat.x = Vec4f::unit_x();
+			mat.y = -Vec4f::unit_y();
+			mat.z = -Vec4f::unit_z();
 		},
 	}
 	mat
