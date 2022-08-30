@@ -168,7 +168,7 @@ struct DynamicLightInfo
 struct DecalInfo
 {
 	camera_planes_matrix: Mat4f,
-	light: bsp_map_compact::LightGridElement,
+	dynamic_light: bsp_map_compact::LightGridElement,
 }
 
 impl Renderer
@@ -627,31 +627,36 @@ impl Renderer
 				frame_info.camera_matrices.planes_matrix * decal_matrix.transpose().invert().unwrap();
 
 			// Calculate light cube for this decal.
+			// Do it only for one position within decal.
+			// Such approach gives good results for small decals.
 			let mut light_cube = LightCube::new();
-			let min_square_distance = decal.scale.magnitude2() * 0.25;
-			for light in &frame_info.lights
+			if decal.lightmap_light_scale > 0.0
 			{
-				let vec_to_light = light.position - decal.position;
-				let square_dist = vec_to_light.magnitude2().max(min_square_distance);
-				let inv_square_dist = 1.0 / square_dist;
-				let light_inv_square_radius = 1.0 / (light.radius * light.radius);
-				if inv_square_dist < light_inv_square_radius
+				let min_square_distance = decal.scale.magnitude2() * 0.25;
+				for light in &frame_info.lights
 				{
-					continue;
+					let vec_to_light = light.position - decal.position;
+					let square_dist = vec_to_light.magnitude2().max(min_square_distance);
+					let inv_square_dist = 1.0 / square_dist;
+					let light_inv_square_radius = 1.0 / (light.radius * light.radius);
+					if inv_square_dist < light_inv_square_radius
+					{
+						continue;
+					}
+
+					// TODO - perform also shadowmap fetch.
+
+					let scale = inv_square_dist - light_inv_square_radius;
+					light_cube.add_light_sample(
+						&vec_to_light,
+						&[light.color[0] * scale, light.color[1] * scale, light.color[2] * scale],
+					);
 				}
-
-				// TODO - perform also shadowmap fetch.
-
-				let scale = inv_square_dist - light_inv_square_radius;
-				light_cube.add_light_sample(
-					&vec_to_light,
-					&[light.color[0] * scale, light.color[1] * scale, light.color[2] * scale],
-				);
 			}
 
 			let decal_info = DecalInfo {
 				camera_planes_matrix,
-				light: light_cube.convert_into_light_grid_sample(),
+				dynamic_light: light_cube.convert_into_light_grid_sample(),
 			};
 			self.decals_info.push(decal_info);
 		}
@@ -1998,6 +2003,19 @@ impl Renderer
 			];
 			let polygon_lightmap_eqution = polygon_data.tex_coord_equation * polygon_lightmap_coord_scale;
 
+			// Calculate dynamic light based on normal of current polygon.
+			let mut dynamic_light =
+				get_light_cube_light(&decal_info.dynamic_light.light_cube, &polygon_data.basis_vecs.normal);
+			let dynamic_light_dir_normal_dot = polygon_data
+				.basis_vecs
+				.normal
+				.dot(decal_info.dynamic_light.light_direction_vector_scaled)
+				.max(0.0);
+			for i in 0 .. 3
+			{
+				dynamic_light[i] += dynamic_light_dir_normal_dot * decal_info.dynamic_light.directional_light_color[i];
+			}
+
 			for t in 0 .. num_vertices - 2
 			{
 				self.subdivide_and_draw_decal_triangle(
@@ -2014,6 +2032,7 @@ impl Renderer
 						vertices_projected[t + 2],
 					],
 					mip_texture,
+					&dynamic_light,
 					0,
 				);
 			}
@@ -2031,6 +2050,7 @@ impl Renderer
 		polygon_lightmap_coord_shift: &[f32; 2],
 		points: &[Vec2f; 3],
 		texture: &TextureLite,
+		dynamic_light: &[f32; 3],
 		recursion_depth: usize,
 	)
 	{
@@ -2092,6 +2112,7 @@ impl Renderer
 					for i in 0 .. 3
 					{
 						light[i] += lightmap_light[i] * decal.lightmap_light_scale;
+						light[i] += dynamic_light[i];
 					}
 				}
 
@@ -2150,6 +2171,7 @@ impl Renderer
 					&polygon_lightmap_coord_shift,
 					triangle,
 					texture,
+					dynamic_light,
 					recursion_depth + 1,
 				);
 			}

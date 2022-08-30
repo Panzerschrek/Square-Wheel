@@ -695,50 +695,8 @@ fn get_vertex_light(light: &ModelLightData, normal_tranformed: &Vec3f) -> [f32; 
 	// After transformation normal may be unnormalized. Renormalize it.
 	let normal_normalized = normal_tranformed * inv_sqrt_fast(normal_tranformed.magnitude2().max(0.00000001));
 
-	let mut total_light = [0.0, 0.0, 0.0];
 	// Fetch light from cube.
-	if normal_normalized.x <= 0.0
-	{
-		for i in 0 .. 3
-		{
-			total_light[i] += light.light_cube[0][i] * (-normal_normalized.x);
-		}
-	}
-	else
-	{
-		for i in 0 .. 3
-		{
-			total_light[i] += light.light_cube[1][i] * normal_normalized.x;
-		}
-	}
-	if normal_normalized.y <= 0.0
-	{
-		for i in 0 .. 3
-		{
-			total_light[i] += light.light_cube[2][i] * (-normal_normalized.y);
-		}
-	}
-	else
-	{
-		for i in 0 .. 3
-		{
-			total_light[i] += light.light_cube[3][i] * normal_normalized.y;
-		}
-	}
-	if normal_normalized.z <= 0.0
-	{
-		for i in 0 .. 3
-		{
-			total_light[i] += light.light_cube[4][i] * (-normal_normalized.z);
-		}
-	}
-	else
-	{
-		for i in 0 .. 3
-		{
-			total_light[i] += light.light_cube[5][i] * normal_normalized.z;
-		}
-	}
+	let mut total_light = get_light_cube_light(&light.light_cube, &normal_normalized);
 
 	for directional_component in &light.directional_components
 	{

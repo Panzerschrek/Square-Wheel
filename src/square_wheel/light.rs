@@ -178,3 +178,52 @@ fn cube_shadow_map_side_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f, side
 		0.0
 	}
 }
+
+pub fn get_light_cube_light(light_cube: &[[f32; 3]; 6], normal_normalized: &Vec3f) -> [f32; 3]
+{
+	let mut total_light = [0.0, 0.0, 0.0];
+	if normal_normalized.x <= 0.0
+	{
+		for i in 0 .. 3
+		{
+			total_light[i] += light_cube[0][i] * (-normal_normalized.x);
+		}
+	}
+	else
+	{
+		for i in 0 .. 3
+		{
+			total_light[i] += light_cube[1][i] * normal_normalized.x;
+		}
+	}
+	if normal_normalized.y <= 0.0
+	{
+		for i in 0 .. 3
+		{
+			total_light[i] += light_cube[2][i] * (-normal_normalized.y);
+		}
+	}
+	else
+	{
+		for i in 0 .. 3
+		{
+			total_light[i] += light_cube[3][i] * normal_normalized.y;
+		}
+	}
+	if normal_normalized.z <= 0.0
+	{
+		for i in 0 .. 3
+		{
+			total_light[i] += light_cube[4][i] * (-normal_normalized.z);
+		}
+	}
+	else
+	{
+		for i in 0 .. 3
+		{
+			total_light[i] += light_cube[5][i] * normal_normalized.z;
+		}
+	}
+
+	total_light
+}
