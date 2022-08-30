@@ -6,8 +6,8 @@ use super::{
 	triangle_models_rendering::*,
 };
 use crate::common::{
-	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, material, math_types::*,
-	matrix::*, plane::*, shared_mut_slice::*, system_window,
+	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, light_cube::*, lightmap, material,
+	math_types::*, matrix::*, plane::*, shared_mut_slice::*, system_window,
 };
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
@@ -40,6 +40,7 @@ pub struct Renderer
 	shadow_maps_data: Vec<ShadowMapElement>,
 	dynamic_models_index: DynamicObjectsIndex,
 	decals_index: DynamicObjectsIndex,
+	decals_info: Vec<DecalInfo>,
 	dynamic_lights_index: DynamicObjectsIndex,
 	// TODO - maybe extract dynamic models-related stuff into separate class?
 	// Store transformed models vertices and triangles in separate buffer.
@@ -163,6 +164,13 @@ struct DynamicLightInfo
 	shadow_map_size: u32,
 }
 
+#[derive(Copy, Clone)]
+struct DecalInfo
+{
+	camera_planes_matrix: Mat4f,
+	dynamic_light: bsp_map_compact::LightGridElement,
+}
+
 impl Renderer
 {
 	pub fn new(
@@ -232,6 +240,7 @@ impl Renderer
 			shadow_maps_data: Vec::new(),
 			dynamic_models_index: DynamicObjectsIndex::new(map.clone()),
 			decals_index: DynamicObjectsIndex::new(map.clone()),
+			decals_info: Vec::new(),
 			dynamic_lights_index: DynamicObjectsIndex::new(map),
 			visible_dynamic_meshes_list: Vec::new(),
 			dynamic_model_to_dynamic_meshes_index: Vec::new(),
@@ -290,7 +299,7 @@ impl Renderer
 			&mut performance_counters.triangle_models_preparation,
 		);
 
-		self.decals_index.position_decals(&frame_info.decals);
+		self.prepare_decals(frame_info);
 
 		run_with_measure(
 			|| {
@@ -601,6 +610,76 @@ impl Renderer
 				}
 			}
 		}
+	}
+
+	// Call this after lights preparation.
+	fn prepare_decals(&mut self, frame_info: &FrameInfo)
+	{
+		self.decals_index.position_decals(&frame_info.decals);
+
+		self.decals_info.clear();
+		for decal in &frame_info.decals
+		{
+			// TODO - maybe check visibility of decals and skip processing invisible decals?
+
+			let decal_matrix = get_object_matrix(decal.position, decal.rotation) *
+				Mat4f::from_nonuniform_scale(decal.scale.x, decal.scale.y, decal.scale.z);
+
+			let camera_planes_matrix =
+				frame_info.camera_matrices.planes_matrix * decal_matrix.transpose().invert().unwrap();
+
+			// Calculate light cube for this decal.
+			// Do it only for one position within decal.
+			// Such approach gives good results for small decals.
+			let mut light_cube = LightCube::new();
+			if decal.lightmap_light_scale > 0.0
+			{
+				let min_square_distance = decal.scale.magnitude2() * 0.25;
+				for (light, light_info) in frame_info.lights.iter().zip(self.dynamic_lights_info.iter())
+				{
+					if !light_info.visible
+					{
+						continue;
+					}
+
+					let vec_to_light = light.position - decal.position;
+					let square_dist = vec_to_light.magnitude2().max(min_square_distance);
+					let inv_square_dist = 1.0 / square_dist;
+					let light_inv_square_radius = 1.0 / (light.radius * light.radius);
+					if inv_square_dist < light_inv_square_radius
+					{
+						continue;
+					}
+
+					let shadow_factor = match light.shadow_type
+					{
+						DynamicLightShadowType::None => 1.0,
+						DynamicLightShadowType::Cubemap => cube_shadow_map_fetch(
+							&create_dynamic_light_cube_shadow_map(light_info, &self.shadow_maps_data),
+							&vec_to_light,
+						),
+					};
+					if shadow_factor <= 0.0
+					{
+						continue;
+					}
+
+					let scale = shadow_factor * (inv_square_dist - light_inv_square_radius);
+					light_cube.add_light_sample(
+						&vec_to_light,
+						&[light.color[0] * scale, light.color[1] * scale, light.color[2] * scale],
+					);
+				}
+			}
+
+			let decal_info = DecalInfo {
+				camera_planes_matrix,
+				dynamic_light: light_cube.convert_into_light_grid_sample(),
+			};
+			self.decals_info.push(decal_info);
+		}
+
+		debug_assert!(self.decals_info.len() == frame_info.decals.len());
 	}
 
 	// Call this after visible leafs search.
@@ -1617,14 +1696,7 @@ impl Renderer
 		{
 			for polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
 			{
-				self.draw_polygon_decals(
-					rasterizer,
-					&frame_info.camera_matrices,
-					&clip_planes,
-					polygon_index,
-					&frame_info.decals,
-					leaf_decals,
-				);
+				self.draw_polygon_decals(rasterizer, &clip_planes, polygon_index, &frame_info.decals, leaf_decals);
 			}
 		}
 
@@ -1836,7 +1908,6 @@ impl Renderer
 	fn draw_polygon_decals<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
-		camera_matrices: &CameraMatrices,
 		clip_planes: &ClippingPolygonPlanes,
 		polygon_index: u32,
 		decals: &[Decal],
@@ -1876,10 +1947,9 @@ impl Renderer
 		'decals_loop: for &decal_index in current_decals
 		{
 			let decal = &decals[decal_index as usize];
-			let decal_matrix = get_object_matrix(decal.position, decal.rotation) *
-				Mat4f::from_nonuniform_scale(decal.scale.x, decal.scale.y, decal.scale.z);
+			let decal_info = &self.decals_info[decal_index as usize];
 
-			let decal_planes_matrix = camera_matrices.planes_matrix * decal_matrix.transpose().invert().unwrap();
+			let decal_planes_matrix = decal_info.camera_planes_matrix;
 
 			// Use polygon itself for further clipping.
 			let src_vertices = &self.vertices_transformed
@@ -1951,6 +2021,19 @@ impl Renderer
 			];
 			let polygon_lightmap_eqution = polygon_data.tex_coord_equation * polygon_lightmap_coord_scale;
 
+			// Calculate dynamic light based on normal of current polygon.
+			let mut dynamic_light =
+				get_light_cube_light(&decal_info.dynamic_light.light_cube, &polygon_data.basis_vecs.normal);
+			let dynamic_light_dir_normal_dot = polygon_data
+				.basis_vecs
+				.normal
+				.dot(decal_info.dynamic_light.light_direction_vector_scaled)
+				.max(0.0);
+			for i in 0 .. 3
+			{
+				dynamic_light[i] += dynamic_light_dir_normal_dot * decal_info.dynamic_light.directional_light_color[i];
+			}
+
 			for t in 0 .. num_vertices - 2
 			{
 				self.subdivide_and_draw_decal_triangle(
@@ -1967,6 +2050,7 @@ impl Renderer
 						vertices_projected[t + 2],
 					],
 					mip_texture,
+					&dynamic_light,
 					0,
 				);
 			}
@@ -1984,6 +2068,7 @@ impl Renderer
 		polygon_lightmap_coord_shift: &[f32; 2],
 		points: &[Vec2f; 3],
 		texture: &TextureLite,
+		dynamic_light: &[f32; 3],
 		recursion_depth: usize,
 	)
 	{
@@ -2045,6 +2130,7 @@ impl Renderer
 					for i in 0 .. 3
 					{
 						light[i] += lightmap_light[i] * decal.lightmap_light_scale;
+						light[i] += dynamic_light[i];
 					}
 				}
 
@@ -2103,6 +2189,7 @@ impl Renderer
 					&polygon_lightmap_coord_shift,
 					triangle,
 					texture,
+					dynamic_light,
 					recursion_depth + 1,
 				);
 			}
@@ -2177,14 +2264,7 @@ impl Renderer
 
 			if !leaf_decals.is_empty()
 			{
-				self.draw_polygon_decals(
-					rasterizer,
-					&frame_info.camera_matrices,
-					clip_planes,
-					polygon_index,
-					&frame_info.decals,
-					leaf_decals,
-				);
+				self.draw_polygon_decals(rasterizer, clip_planes, polygon_index, &frame_info.decals, leaf_decals);
 			}
 		}
 
@@ -2659,21 +2739,7 @@ fn create_dynamic_light_with_shadow<'a>(
 			{
 				if light_info.visible
 				{
-					let side_data_size = (light_info.shadow_map_size * light_info.shadow_map_size) as usize;
-					let shadow_map_data = &shadow_maps_data
-						[light_info.shadow_map_data_offset .. light_info.shadow_map_data_offset + side_data_size * 6];
-
-					Some(CubeShadowMap {
-						size: light_info.shadow_map_size,
-						sides: [
-							&shadow_map_data[0 * side_data_size .. 1 * side_data_size],
-							&shadow_map_data[1 * side_data_size .. 2 * side_data_size],
-							&shadow_map_data[2 * side_data_size .. 3 * side_data_size],
-							&shadow_map_data[3 * side_data_size .. 4 * side_data_size],
-							&shadow_map_data[4 * side_data_size .. 5 * side_data_size],
-							&shadow_map_data[5 * side_data_size .. 6 * side_data_size],
-						],
-					})
+					Some(create_dynamic_light_cube_shadow_map(light_info, shadow_maps_data))
 				}
 				else
 				{
@@ -2681,6 +2747,28 @@ fn create_dynamic_light_with_shadow<'a>(
 				}
 			},
 		},
+	}
+}
+
+fn create_dynamic_light_cube_shadow_map<'a>(
+	light_info: &DynamicLightInfo,
+	shadow_maps_data: &'a [ShadowMapElement],
+) -> CubeShadowMap<'a>
+{
+	let side_data_size = (light_info.shadow_map_size * light_info.shadow_map_size) as usize;
+	let shadow_map_data =
+		&shadow_maps_data[light_info.shadow_map_data_offset .. light_info.shadow_map_data_offset + side_data_size * 6];
+
+	CubeShadowMap {
+		size: light_info.shadow_map_size,
+		sides: [
+			&shadow_map_data[0 * side_data_size .. 1 * side_data_size],
+			&shadow_map_data[1 * side_data_size .. 2 * side_data_size],
+			&shadow_map_data[2 * side_data_size .. 3 * side_data_size],
+			&shadow_map_data[3 * side_data_size .. 4 * side_data_size],
+			&shadow_map_data[4 * side_data_size .. 5 * side_data_size],
+			&shadow_map_data[5 * side_data_size .. 6 * side_data_size],
+		],
 	}
 }
 
