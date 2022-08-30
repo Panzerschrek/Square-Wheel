@@ -437,7 +437,7 @@ impl ModeLightDirectionalComponent
 
 pub fn get_model_light(
 	map: &bsp_map_compact::BSPMap,
-	dynamic_lights: &[SurfaceDynamicLight],
+	dynamic_lights: &[DynamicLightWithShadow],
 	model: &ModelEntity,
 	model_matrix: &Mat4f,
 ) -> ModelLightData
@@ -449,7 +449,7 @@ pub fn get_model_light(
 }
 
 fn get_model_dynamic_light(
-	lights: &[SurfaceDynamicLight],
+	lights: &[DynamicLightWithShadow],
 	model: &ModelEntity,
 	model_matrix: &Mat4f,
 ) -> bsp_map_compact::LightGridElement
@@ -483,7 +483,7 @@ fn get_model_dynamic_light(
 }
 
 fn calculate_model_dynamic_light_cube(
-	lights: &[SurfaceDynamicLight],
+	lights: &[DynamicLightWithShadow],
 	model: &ModelEntity,
 	model_matrix: &Mat4f,
 	light_cube: &mut LightCube,

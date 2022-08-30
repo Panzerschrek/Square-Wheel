@@ -1,8 +1,7 @@
 use super::fast_math::*;
 use crate::common::{math_types::*, matrix::*};
 
-// TODO - rename this struct.
-pub struct SurfaceDynamicLight<'a>
+pub struct DynamicLightWithShadow<'a>
 {
 	pub position: Vec3f,
 	pub radius: f32,
@@ -141,7 +140,7 @@ fn get_cube_map_side_matrix(side: CubeMapSide) -> Mat4f
 	mat
 }
 
-pub fn get_light_shadow_factor(light: &SurfaceDynamicLight, vec: &Vec3f) -> f32
+pub fn get_light_shadow_factor(light: &DynamicLightWithShadow, vec: &Vec3f) -> f32
 {
 	match &light.shadow_map
 	{

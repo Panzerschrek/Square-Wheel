@@ -725,10 +725,10 @@ impl Renderer
 		// TODO - avoid allocation.
 		let dynamic_lights_info = &self.dynamic_lights_info;
 		let shadow_maps_data = &self.shadow_maps_data;
-		let lights: Vec<SurfaceDynamicLight> = dynamic_lights
+		let lights: Vec<DynamicLightWithShadow> = dynamic_lights
 			.iter()
 			.zip(dynamic_lights_info.iter())
-			.map(|(light, light_info)| create_surface_dynamic_light(light, light_info, shadow_maps_data))
+			.map(|(light, light_info)| create_dynamic_light_with_shadow(light, light_info, shadow_maps_data))
 			.collect();
 
 		// It is safe to share vertices and triangle buffers since each mesh uses its own region.
@@ -1217,14 +1217,14 @@ impl Renderer
 		// TODO - avoid allocation.
 		let dynamic_lights_info = &self.dynamic_lights_info;
 		let shadow_maps_data = &self.shadow_maps_data;
-		let lights: Vec<SurfaceDynamicLight> = dynamic_lights
+		let lights: Vec<DynamicLightWithShadow> = dynamic_lights
 			.iter()
 			.zip(dynamic_lights_info.iter())
-			.map(|(light, light_info)| create_surface_dynamic_light(light, light_info, shadow_maps_data))
+			.map(|(light, light_info)| create_dynamic_light_with_shadow(light, light_info, shadow_maps_data))
 			.collect();
 
 		// Used only to initialize references.
-		let dummy_light = SurfaceDynamicLight {
+		let dummy_light = DynamicLightWithShadow {
 			position: Vec3f::zero(),
 			radius: 1.0,
 			inv_square_radius: 1.0,
@@ -2584,7 +2584,7 @@ fn get_polygon_lightap_light(
 fn polygon_is_affected_by_light(
 	polygon: &bsp_map_compact::Polygon,
 	basis_vecs: &PolygonBasisVecs,
-	light: &SurfaceDynamicLight,
+	light: &DynamicLightWithShadow,
 ) -> bool
 {
 	// TODO - check mathemathics here.
@@ -2641,13 +2641,13 @@ fn polygon_is_affected_by_light(
 	}
 }
 
-fn create_surface_dynamic_light<'a>(
+fn create_dynamic_light_with_shadow<'a>(
 	light: &DynamicLight,
 	light_info: &DynamicLightInfo,
 	shadow_maps_data: &'a [ShadowMapElement],
-) -> SurfaceDynamicLight<'a>
+) -> DynamicLightWithShadow<'a>
 {
-	SurfaceDynamicLight {
+	DynamicLightWithShadow {
 		position: light.position,
 		radius: light.radius,
 		inv_square_radius: 1.0 / (light.radius * light.radius),
