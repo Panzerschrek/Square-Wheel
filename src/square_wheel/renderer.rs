@@ -182,7 +182,7 @@ impl Renderer
 		let config_parsed = RendererConfig::from_app_config(&app_config);
 		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
 
-		let materials_processor = MapMaterialsProcessor::new(resources_manager, &*map);
+		let materials_processor = MapMaterialsProcessor::new(resources_manager.clone(), &*map);
 
 		let mut polygons_data: Vec<DrawPolygonData> = map
 			.polygons
@@ -232,7 +232,7 @@ impl Renderer
 			submodels_info: vec![VisibleSubmodelInfo::default(); map.submodels.len()],
 			current_sky: None,
 			visibility_calculator: MapVisibilityCalculator::new(map.clone()),
-			shadows_maps_renderer: DepthRenderer::new(map.clone()),
+			shadows_maps_renderer: DepthRenderer::new(resources_manager, map.clone()),
 			map: map.clone(),
 			materials_processor,
 			performance_counters: Arc::new(Mutex::new(RendererPerformanceCounters::new())),

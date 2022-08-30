@@ -3,6 +3,7 @@ use super::{
 	map_visibility_calculator::*,
 	rasterizer::*,
 	renderer::{project_and_clip_polygon, MAX_VERTICES},
+	resources_manager::*,
 };
 use crate::common::{bsp_map_compact, clipping_polygon::*, fixed_math::*, math_types::*, matrix::*};
 use std::sync::Arc;
@@ -11,15 +12,51 @@ pub struct DepthRenderer
 {
 	map: Arc<bsp_map_compact::BSPMap>,
 	visibility_calculator: MapVisibilityCalculator,
+	// true - casts shadow, false - otherwice.
+	materials_shadow_table: Vec<bool>,
 }
 
 impl DepthRenderer
 {
-	pub fn new(map: Arc<bsp_map_compact::BSPMap>) -> Self
+	pub fn new(resources_manager: ResourcesManagerSharedPtr, map: Arc<bsp_map_compact::BSPMap>) -> Self
 	{
+		let mut r = resources_manager.lock().unwrap();
+		let all_materials = r.get_materials();
+
+		let materials_shadow_table = map
+			.textures
+			.iter()
+			.map(|texture_name| {
+				let material_name_string = bsp_map_compact::get_texture_string(texture_name);
+				if let Some(material) = all_materials.get(material_name_string)
+				{
+					if !material.shadow
+					{
+						// Shadow is explicitely disabled.
+						false
+					}
+					else if material.blending_mode != BlendingMode::None
+					{
+						// Some blending is enabled. Disable shadows.
+						false
+					}
+					else
+					{
+						// Normal material - cast shadow.
+						true
+					}
+				}
+				else
+				{
+					true
+				}
+			})
+			.collect();
+
 		Self {
 			visibility_calculator: MapVisibilityCalculator::new(map.clone()),
 			map,
+			materials_shadow_table,
 		}
 	}
 
@@ -77,6 +114,10 @@ impl DepthRenderer
 		for polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
 		{
 			let polygon = &self.map.polygons[polygon_index as usize];
+			if !self.materials_shadow_table[polygon.texture as usize]
+			{
+				continue;
+			}
 
 			let plane_transformed = camera_matrices.planes_matrix * polygon.plane.vec.extend(-polygon.plane.dist);
 			// Cull back faces.
