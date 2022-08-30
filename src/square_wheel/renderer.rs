@@ -6,8 +6,8 @@ use super::{
 	triangle_models_rendering::*,
 };
 use crate::common::{
-	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, material, math_types::*,
-	matrix::*, plane::*, shared_mut_slice::*, system_window,
+	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, light_cube::*, lightmap, material,
+	math_types::*, matrix::*, plane::*, shared_mut_slice::*, system_window,
 };
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
@@ -168,6 +168,7 @@ struct DynamicLightInfo
 struct DecalInfo
 {
 	camera_planes_matrix: Mat4f,
+	light: bsp_map_compact::LightGridElement,
 }
 
 impl Renderer
@@ -622,9 +623,35 @@ impl Renderer
 			let decal_matrix = get_object_matrix(decal.position, decal.rotation) *
 				Mat4f::from_nonuniform_scale(decal.scale.x, decal.scale.y, decal.scale.z);
 
+			let camera_planes_matrix =
+				frame_info.camera_matrices.planes_matrix * decal_matrix.transpose().invert().unwrap();
+
+			// Calculate light cube for this decal.
+			let mut light_cube = LightCube::new();
+			let min_square_distance = decal.scale.magnitude2() * 0.25;
+			for light in &frame_info.lights
+			{
+				let vec_to_light = light.position - decal.position;
+				let square_dist = vec_to_light.magnitude2().max(min_square_distance);
+				let inv_square_dist = 1.0 / square_dist;
+				let light_inv_square_radius = 1.0 / (light.radius * light.radius);
+				if inv_square_dist < light_inv_square_radius
+				{
+					continue;
+				}
+
+				// TODO - perform also shadowmap fetch.
+
+				let scale = inv_square_dist - light_inv_square_radius;
+				light_cube.add_light_sample(
+					&vec_to_light,
+					&[light.color[0] * scale, light.color[1] * scale, light.color[2] * scale],
+				);
+			}
+
 			let decal_info = DecalInfo {
-				camera_planes_matrix: frame_info.camera_matrices.planes_matrix *
-					decal_matrix.transpose().invert().unwrap(),
+				camera_planes_matrix,
+				light: light_cube.convert_into_light_grid_sample(),
 			};
 			self.decals_info.push(decal_info);
 		}
