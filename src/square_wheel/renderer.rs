@@ -620,6 +620,8 @@ impl Renderer
 		self.decals_info.clear();
 		for decal in &frame_info.decals
 		{
+			// TODO - maybe check visibility of decals and skip processing invisible decals?
+
 			let decal_matrix = get_object_matrix(decal.position, decal.rotation) *
 				Mat4f::from_nonuniform_scale(decal.scale.x, decal.scale.y, decal.scale.z);
 
@@ -633,8 +635,13 @@ impl Renderer
 			if decal.lightmap_light_scale > 0.0
 			{
 				let min_square_distance = decal.scale.magnitude2() * 0.25;
-				for light in &frame_info.lights
+				for (light, light_info) in frame_info.lights.iter().zip(self.dynamic_lights_info.iter())
 				{
+					if !light_info.visible
+					{
+						continue;
+					}
+
 					let vec_to_light = light.position - decal.position;
 					let square_dist = vec_to_light.magnitude2().max(min_square_distance);
 					let inv_square_dist = 1.0 / square_dist;
@@ -644,9 +651,20 @@ impl Renderer
 						continue;
 					}
 
-					// TODO - perform also shadowmap fetch.
+					let shadow_factor = match light.shadow_type
+					{
+						DynamicLightShadowType::None => 1.0,
+						DynamicLightShadowType::Cubemap => cube_shadow_map_fetch(
+							&create_dynamic_light_cube_shadow_map(light_info, &self.shadow_maps_data),
+							&vec_to_light,
+						),
+					};
+					if shadow_factor <= 0.0
+					{
+						continue;
+					}
 
-					let scale = inv_square_dist - light_inv_square_radius;
+					let scale = shadow_factor * (inv_square_dist - light_inv_square_radius);
 					light_cube.add_light_sample(
 						&vec_to_light,
 						&[light.color[0] * scale, light.color[1] * scale, light.color[2] * scale],
@@ -2721,21 +2739,7 @@ fn create_dynamic_light_with_shadow<'a>(
 			{
 				if light_info.visible
 				{
-					let side_data_size = (light_info.shadow_map_size * light_info.shadow_map_size) as usize;
-					let shadow_map_data = &shadow_maps_data
-						[light_info.shadow_map_data_offset .. light_info.shadow_map_data_offset + side_data_size * 6];
-
-					Some(CubeShadowMap {
-						size: light_info.shadow_map_size,
-						sides: [
-							&shadow_map_data[0 * side_data_size .. 1 * side_data_size],
-							&shadow_map_data[1 * side_data_size .. 2 * side_data_size],
-							&shadow_map_data[2 * side_data_size .. 3 * side_data_size],
-							&shadow_map_data[3 * side_data_size .. 4 * side_data_size],
-							&shadow_map_data[4 * side_data_size .. 5 * side_data_size],
-							&shadow_map_data[5 * side_data_size .. 6 * side_data_size],
-						],
-					})
+					Some(create_dynamic_light_cube_shadow_map(light_info, shadow_maps_data))
 				}
 				else
 				{
@@ -2743,6 +2747,28 @@ fn create_dynamic_light_with_shadow<'a>(
 				}
 			},
 		},
+	}
+}
+
+fn create_dynamic_light_cube_shadow_map<'a>(
+	light_info: &DynamicLightInfo,
+	shadow_maps_data: &'a [ShadowMapElement],
+) -> CubeShadowMap<'a>
+{
+	let side_data_size = (light_info.shadow_map_size * light_info.shadow_map_size) as usize;
+	let shadow_map_data =
+		&shadow_maps_data[light_info.shadow_map_data_offset .. light_info.shadow_map_data_offset + side_data_size * 6];
+
+	CubeShadowMap {
+		size: light_info.shadow_map_size,
+		sides: [
+			&shadow_map_data[0 * side_data_size .. 1 * side_data_size],
+			&shadow_map_data[1 * side_data_size .. 2 * side_data_size],
+			&shadow_map_data[2 * side_data_size .. 3 * side_data_size],
+			&shadow_map_data[3 * side_data_size .. 4 * side_data_size],
+			&shadow_map_data[4 * side_data_size .. 5 * side_data_size],
+			&shadow_map_data[5 * side_data_size .. 6 * side_data_size],
+		],
 	}
 }
 

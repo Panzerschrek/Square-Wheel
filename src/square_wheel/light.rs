@@ -114,7 +114,7 @@ pub fn get_light_shadow_factor(light: &DynamicLightWithShadow, vec: &Vec3f) -> f
 }
 
 // Returns 1 if in light, 0 if in shadow.
-fn cube_shadow_map_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f) -> f32
+pub fn cube_shadow_map_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f) -> f32
 {
 	let vec_abs = Vec3f::new(vec.x.abs(), vec.y.abs(), vec.z.abs());
 	if vec_abs.x >= vec_abs.y && vec_abs.x >= vec_abs.z
