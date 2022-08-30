@@ -1,8 +1,9 @@
 use super::{
 	abstract_color::*, config, debug_stats_printer::*, depth_renderer::*, draw_ordering, dynamic_objects_index::*,
-	equations::*, fast_math::*, frame_info::*, frame_number::*, inline_models_index::*, map_materials_processor::*,
-	map_visibility_calculator::*, performance_counter::*, rasterizer::*, rect_splitting, renderer_config::*,
-	resources_manager::*, shadow_map::*, surfaces::*, textures::*, triangle_model::*, triangle_models_rendering::*,
+	equations::*, fast_math::*, frame_info::*, frame_number::*, inline_models_index::*, light::*,
+	map_materials_processor::*, map_visibility_calculator::*, performance_counter::*, rasterizer::*, rect_splitting,
+	renderer_config::*, resources_manager::*, surfaces::*, textures::*, triangle_model::*,
+	triangle_models_rendering::*,
 };
 use crate::common::{
 	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, lightmap, material, math_types::*,
@@ -284,7 +285,7 @@ impl Renderer
 		run_with_measure(
 			|| {
 				self.prepare_dynamic_models(&frame_info.camera_matrices, &frame_info.model_entities);
-				self.build_dynamic_models_buffers(&frame_info.model_entities);
+				self.build_dynamic_models_buffers(&frame_info.lights, &frame_info.model_entities);
 			},
 			&mut performance_counters.triangle_models_preparation,
 		);
@@ -718,8 +719,18 @@ impl Renderer
 		}
 	}
 
-	fn build_dynamic_models_buffers(&mut self, models: &[ModelEntity])
+	fn build_dynamic_models_buffers(&mut self, dynamic_lights: &[DynamicLight], models: &[ModelEntity])
 	{
+		// Prepare array of dynamic lights with shadowmaps.
+		// TODO - avoid allocation.
+		let dynamic_lights_info = &self.dynamic_lights_info;
+		let shadow_maps_data = &self.shadow_maps_data;
+		let lights: Vec<DynamicLightWithShadow> = dynamic_lights
+			.iter()
+			.zip(dynamic_lights_info.iter())
+			.map(|(light, light_info)| create_dynamic_light_with_shadow(light, light_info, shadow_maps_data))
+			.collect();
+
 		// It is safe to share vertices and triangle buffers since each mesh uses its own region.
 		let dst_vertices_shared = SharedMutSlice::new(&mut self.dynamic_meshes_vertices);
 		let dst_triangles_shared = SharedMutSlice::new(&mut self.dynamic_meshes_triangles);
@@ -748,7 +759,7 @@ impl Renderer
 				&model.model,
 				mesh,
 				animation,
-				&get_model_light(map, &model),
+				&get_model_light(map, &lights, model, &visible_dynamic_mesh.model_matrix),
 				&visible_dynamic_mesh.model_matrix,
 				&visible_dynamic_mesh.camera_matrices.view_matrix,
 				&Vec2f::new(texture.size[0] as f32, texture.size[1] as f32),
@@ -1206,48 +1217,14 @@ impl Renderer
 		// TODO - avoid allocation.
 		let dynamic_lights_info = &self.dynamic_lights_info;
 		let shadow_maps_data = &self.shadow_maps_data;
-		let lights: Vec<SurfaceDynamicLight> = dynamic_lights
+		let lights: Vec<DynamicLightWithShadow> = dynamic_lights
 			.iter()
 			.zip(dynamic_lights_info.iter())
-			.map(|(light, light_info)| SurfaceDynamicLight {
-				position: light.position,
-				radius: light.radius,
-				inv_square_radius: 1.0 / (light.radius * light.radius),
-				color: light.color,
-				shadow_map: match light.shadow_type
-				{
-					DynamicLightShadowType::None => None,
-					DynamicLightShadowType::Cubemap =>
-					{
-						if light_info.visible
-						{
-							let side_data_size = (light_info.shadow_map_size * light_info.shadow_map_size) as usize;
-							let shadow_map_data = &shadow_maps_data[light_info.shadow_map_data_offset ..
-								light_info.shadow_map_data_offset + side_data_size * 6];
-
-							Some(CubeShadowMap {
-								size: light_info.shadow_map_size,
-								sides: [
-									&shadow_map_data[0 * side_data_size .. 1 * side_data_size],
-									&shadow_map_data[1 * side_data_size .. 2 * side_data_size],
-									&shadow_map_data[2 * side_data_size .. 3 * side_data_size],
-									&shadow_map_data[3 * side_data_size .. 4 * side_data_size],
-									&shadow_map_data[4 * side_data_size .. 5 * side_data_size],
-									&shadow_map_data[5 * side_data_size .. 6 * side_data_size],
-								],
-							})
-						}
-						else
-						{
-							None
-						}
-					},
-				},
-			})
+			.map(|(light, light_info)| create_dynamic_light_with_shadow(light, light_info, shadow_maps_data))
 			.collect();
 
 		// Used only to initialize references.
-		let dummy_light = SurfaceDynamicLight {
+		let dummy_light = DynamicLightWithShadow {
 			position: Vec3f::zero(),
 			radius: 1.0,
 			inv_square_radius: 1.0,
@@ -2607,7 +2584,7 @@ fn get_polygon_lightap_light(
 fn polygon_is_affected_by_light(
 	polygon: &bsp_map_compact::Polygon,
 	basis_vecs: &PolygonBasisVecs,
-	light: &SurfaceDynamicLight,
+	light: &DynamicLightWithShadow,
 ) -> bool
 {
 	// TODO - check mathemathics here.
@@ -2661,6 +2638,49 @@ fn polygon_is_affected_by_light(
 		// Light affects this polygon.
 		// TODO - maybe process corner cases here (literally, check intersection with corners)?
 		true
+	}
+}
+
+fn create_dynamic_light_with_shadow<'a>(
+	light: &DynamicLight,
+	light_info: &DynamicLightInfo,
+	shadow_maps_data: &'a [ShadowMapElement],
+) -> DynamicLightWithShadow<'a>
+{
+	DynamicLightWithShadow {
+		position: light.position,
+		radius: light.radius,
+		inv_square_radius: 1.0 / (light.radius * light.radius),
+		color: light.color,
+		shadow_map: match light.shadow_type
+		{
+			DynamicLightShadowType::None => None,
+			DynamicLightShadowType::Cubemap =>
+			{
+				if light_info.visible
+				{
+					let side_data_size = (light_info.shadow_map_size * light_info.shadow_map_size) as usize;
+					let shadow_map_data = &shadow_maps_data
+						[light_info.shadow_map_data_offset .. light_info.shadow_map_data_offset + side_data_size * 6];
+
+					Some(CubeShadowMap {
+						size: light_info.shadow_map_size,
+						sides: [
+							&shadow_map_data[0 * side_data_size .. 1 * side_data_size],
+							&shadow_map_data[1 * side_data_size .. 2 * side_data_size],
+							&shadow_map_data[2 * side_data_size .. 3 * side_data_size],
+							&shadow_map_data[3 * side_data_size .. 4 * side_data_size],
+							&shadow_map_data[4 * side_data_size .. 5 * side_data_size],
+							&shadow_map_data[5 * side_data_size .. 6 * side_data_size],
+						],
+					})
+				}
+				else
+				{
+					None
+				}
+			},
+		},
 	}
 }
 

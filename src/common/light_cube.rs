@@ -69,6 +69,17 @@ impl LightCube
 		}
 	}
 
+	pub fn add_constant_light(&mut self, light: &[f32; 3])
+	{
+		for side in &mut self.light_cube
+		{
+			for i in 0 .. 3
+			{
+				side[i] += light[i];
+			}
+		}
+	}
+
 	pub fn scale(&mut self, scale: f32)
 	{
 		for side in &mut self.light_cube

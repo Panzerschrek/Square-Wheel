@@ -737,3 +737,22 @@ pub fn f32_mul_add(x: f32, y: f32, z: f32) -> f32
 {
 	x * y + z
 }
+
+// Just some common constants and functions.
+
+pub const MIN_POSITIVE_VALUE: f32 = 1.0 / ((1 << 30) as f32);
+
+pub unsafe fn debug_only_checked_fetch<T: Copy>(data: &[T], address: usize) -> T
+{
+	// operator [] checks bounds and calls panic! handler in case if index is out of bounds.
+	// This check is useless here since we clamp coordnates properly.
+	// So, use "get_unchecked" in release mode.
+	#[cfg(debug_assertions)]
+	{
+		data[address]
+	}
+	#[cfg(not(debug_assertions))]
+	{
+		*data.get_unchecked(address)
+	}
+}

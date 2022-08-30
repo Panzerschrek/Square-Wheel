@@ -1,11 +1,13 @@
-use super::{fast_math::*, frame_info::*, textures::*, triangle_model::*};
-use crate::common::{bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, plane::*};
+use super::{fast_math::*, frame_info::*, light::*, textures::*, triangle_model::*};
+use crate::common::{
+	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, light_cube::*, math_types::*, plane::*,
+};
 
 pub fn animate_and_transform_triangle_mesh_vertices(
 	model: &TriangleModel,
 	mesh: &TriangleModelMesh,
 	animation: &AnimationPoint,
-	light: &bsp_map_compact::LightGridElement,
+	light: &ModelLightData,
 	model_matrix: &Mat4f,
 	model_view_matrix: &Mat4f,
 	tc_scale: &Vec2f,
@@ -384,7 +386,150 @@ pub fn triangle_vertex_debug_checked_fetch<VertexT: Copy>(vertices: &[VertexT], 
 	}
 }
 
-pub fn get_model_light(map: &bsp_map_compact::BSPMap, model: &ModelEntity) -> bsp_map_compact::LightGridElement
+pub struct ModelLightData
+{
+	// Same as in LightGridElement
+	light_cube: [[f32; 3]; 6],
+	// Store two directional components - for static and dynamic light.
+	directional_components: [ModeLightDirectionalComponent; 2],
+}
+
+impl ModelLightData
+{
+	fn from_two_light_grid_elements(l: &[bsp_map_compact::LightGridElement; 2]) -> Self
+	{
+		// Combine light cubes together.
+		let mut light_cube = l[0].light_cube;
+		for side in 0 .. 6
+		{
+			for c in 0 .. 3
+			{
+				light_cube[side][c] += l[1].light_cube[side][c];
+			}
+		}
+
+		Self {
+			light_cube,
+			directional_components: [
+				ModeLightDirectionalComponent::from_light_grid_directional_component(&l[0]),
+				ModeLightDirectionalComponent::from_light_grid_directional_component(&l[1]),
+			],
+		}
+	}
+}
+
+struct ModeLightDirectionalComponent
+{
+	vector_scaled: Vec3f,
+	color: [f32; 3],
+}
+
+impl ModeLightDirectionalComponent
+{
+	fn from_light_grid_directional_component(l: &bsp_map_compact::LightGridElement) -> Self
+	{
+		Self {
+			vector_scaled: l.light_direction_vector_scaled,
+			color: l.directional_light_color,
+		}
+	}
+}
+
+pub fn get_model_light(
+	map: &bsp_map_compact::BSPMap,
+	dynamic_lights: &[DynamicLightWithShadow],
+	model: &ModelEntity,
+	model_matrix: &Mat4f,
+) -> ModelLightData
+{
+	ModelLightData::from_two_light_grid_elements(&[
+		get_model_static_light(map, model),
+		get_model_dynamic_light(dynamic_lights, model, model_matrix),
+	])
+}
+
+fn get_model_dynamic_light(
+	lights: &[DynamicLightWithShadow],
+	model: &ModelEntity,
+	model_matrix: &Mat4f,
+) -> bsp_map_compact::LightGridElement
+{
+	let mut light_cube = LightCube::new();
+	match model.lighting
+	{
+		ModelLighting::Default =>
+		{
+			calculate_model_dynamic_light_cube(lights, model, model_matrix, &mut light_cube);
+		},
+		ModelLighting::ConstantLight(l) =>
+		{
+			light_cube.add_constant_light(&l);
+		},
+		ModelLighting::AdvancedLight {
+			grid_light_scale,
+			light_add,
+			position: _,
+		} =>
+		{
+			// Do not use custom position here, because it is nearly useless for dynamic lighting.
+
+			calculate_model_dynamic_light_cube(lights, model, model_matrix, &mut light_cube);
+			light_cube.scale(grid_light_scale);
+			light_cube.add_constant_light(&light_add);
+		},
+	}
+
+	light_cube.convert_into_light_grid_sample()
+}
+
+fn calculate_model_dynamic_light_cube(
+	lights: &[DynamicLightWithShadow],
+	model: &ModelEntity,
+	model_matrix: &Mat4f,
+	light_cube: &mut LightCube,
+)
+{
+	let bbox = get_current_triangle_model_bbox(&model.model, &model.animation);
+	let bbox_center = bbox.get_center();
+
+	// Calculage light for several positions within model bbox.
+	// Obtain positions in between bbox center and bbox vertices.
+	// TODO - use also bbox  center as sample position.
+	let sample_positions = bbox
+		.get_corners_vertices()
+		.map(|v| (model_matrix * ((v + bbox_center) * 0.5).extend(1.0)).truncate());
+
+	let min_square_distance = bbox.get_size().magnitude2() * 0.25;
+
+	for light in lights
+	{
+		for position in &sample_positions
+		{
+			let vec_to_light = light.position - position;
+			let square_dist = vec_to_light.magnitude2().max(min_square_distance);
+			let inv_square_dist = 1.0 / square_dist;
+			if inv_square_dist < light.inv_square_radius
+			{
+				continue;
+			}
+			let shadow_factor = get_light_shadow_factor(light, &vec_to_light);
+			if shadow_factor <= 0.0
+			{
+				continue;
+			}
+
+			let scale = shadow_factor * (inv_square_dist - light.inv_square_radius);
+			light_cube.add_light_sample(
+				&vec_to_light,
+				&[light.color[0] * scale, light.color[1] * scale, light.color[2] * scale],
+			);
+		}
+	}
+
+	light_cube.scale(1.0 / (sample_positions.len() as f32));
+}
+
+fn get_model_static_light(map: &bsp_map_compact::BSPMap, model: &ModelEntity) -> bsp_map_compact::LightGridElement
 {
 	match model.lighting
 	{
@@ -545,7 +690,7 @@ fn fetch_light_from_grid(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> bsp_map_
 	total_light
 }
 
-fn get_vertex_light(light: &bsp_map_compact::LightGridElement, normal_tranformed: &Vec3f) -> [f32; 3]
+fn get_vertex_light(light: &ModelLightData, normal_tranformed: &Vec3f) -> [f32; 3]
 {
 	// After transformation normal may be unnormalized. Renormalize it.
 	let normal_normalized = normal_tranformed * inv_sqrt_fast(normal_tranformed.magnitude2().max(0.00000001));
@@ -595,11 +740,13 @@ fn get_vertex_light(light: &bsp_map_compact::LightGridElement, normal_tranformed
 		}
 	}
 
-	// Use directional component.
-	let light_dir_dot = normal_normalized.dot(light.light_direction_vector_scaled).max(0.0);
-	for i in 0 .. 3
+	for directional_component in &light.directional_components
 	{
-		total_light[i] += light.directional_light_color[i] * light_dir_dot;
+		let light_dir_dot = normal_normalized.dot(directional_component.vector_scaled).max(0.0);
+		for i in 0 .. 3
+		{
+			total_light[i] += directional_component.color[i] * light_dir_dot;
+		}
 	}
 
 	total_light
