@@ -432,7 +432,6 @@ fn spawn_player_shadow(ecs: &mut hecs::World, resources_manager: &mut ResourcesM
 	let rotation = QuaternionF::one();
 
 	ecs.spawn((
-		TestDecalComponent {},
 		LocationComponent { position, rotation },
 		OtherEntityLocationComponent {
 			entity: player_entity,
