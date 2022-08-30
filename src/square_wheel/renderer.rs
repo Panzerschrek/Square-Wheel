@@ -40,6 +40,7 @@ pub struct Renderer
 	shadow_maps_data: Vec<ShadowMapElement>,
 	dynamic_models_index: DynamicObjectsIndex,
 	decals_index: DynamicObjectsIndex,
+	decals_info: Vec<DecalInfo>,
 	dynamic_lights_index: DynamicObjectsIndex,
 	// TODO - maybe extract dynamic models-related stuff into separate class?
 	// Store transformed models vertices and triangles in separate buffer.
@@ -163,6 +164,12 @@ struct DynamicLightInfo
 	shadow_map_size: u32,
 }
 
+#[derive(Copy, Clone)]
+struct DecalInfo
+{
+	camera_planes_matrix: Mat4f,
+}
+
 impl Renderer
 {
 	pub fn new(
@@ -232,6 +239,7 @@ impl Renderer
 			shadow_maps_data: Vec::new(),
 			dynamic_models_index: DynamicObjectsIndex::new(map.clone()),
 			decals_index: DynamicObjectsIndex::new(map.clone()),
+			decals_info: Vec::new(),
 			dynamic_lights_index: DynamicObjectsIndex::new(map),
 			visible_dynamic_meshes_list: Vec::new(),
 			dynamic_model_to_dynamic_meshes_index: Vec::new(),
@@ -290,7 +298,7 @@ impl Renderer
 			&mut performance_counters.triangle_models_preparation,
 		);
 
-		self.decals_index.position_decals(&frame_info.decals);
+		self.prepare_decals(frame_info);
 
 		run_with_measure(
 			|| {
@@ -601,6 +609,27 @@ impl Renderer
 				}
 			}
 		}
+	}
+
+	// Call this after lights preparation.
+	fn prepare_decals(&mut self, frame_info: &FrameInfo)
+	{
+		self.decals_index.position_decals(&frame_info.decals);
+
+		self.decals_info.clear();
+		for decal in &frame_info.decals
+		{
+			let decal_matrix = get_object_matrix(decal.position, decal.rotation) *
+				Mat4f::from_nonuniform_scale(decal.scale.x, decal.scale.y, decal.scale.z);
+
+			let decal_info = DecalInfo {
+				camera_planes_matrix: frame_info.camera_matrices.planes_matrix *
+					decal_matrix.transpose().invert().unwrap(),
+			};
+			self.decals_info.push(decal_info);
+		}
+
+		debug_assert!(self.decals_info.len() == frame_info.decals.len());
 	}
 
 	// Call this after visible leafs search.
@@ -1617,14 +1646,7 @@ impl Renderer
 		{
 			for polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
 			{
-				self.draw_polygon_decals(
-					rasterizer,
-					&frame_info.camera_matrices,
-					&clip_planes,
-					polygon_index,
-					&frame_info.decals,
-					leaf_decals,
-				);
+				self.draw_polygon_decals(rasterizer, &clip_planes, polygon_index, &frame_info.decals, leaf_decals);
 			}
 		}
 
@@ -1836,7 +1858,6 @@ impl Renderer
 	fn draw_polygon_decals<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
-		camera_matrices: &CameraMatrices,
 		clip_planes: &ClippingPolygonPlanes,
 		polygon_index: u32,
 		decals: &[Decal],
@@ -1876,10 +1897,9 @@ impl Renderer
 		'decals_loop: for &decal_index in current_decals
 		{
 			let decal = &decals[decal_index as usize];
-			let decal_matrix = get_object_matrix(decal.position, decal.rotation) *
-				Mat4f::from_nonuniform_scale(decal.scale.x, decal.scale.y, decal.scale.z);
+			let decal_info = &self.decals_info[decal_index as usize];
 
-			let decal_planes_matrix = camera_matrices.planes_matrix * decal_matrix.transpose().invert().unwrap();
+			let decal_planes_matrix = decal_info.camera_planes_matrix;
 
 			// Use polygon itself for further clipping.
 			let src_vertices = &self.vertices_transformed
@@ -2177,14 +2197,7 @@ impl Renderer
 
 			if !leaf_decals.is_empty()
 			{
-				self.draw_polygon_decals(
-					rasterizer,
-					&frame_info.camera_matrices,
-					clip_planes,
-					polygon_index,
-					&frame_info.decals,
-					leaf_decals,
-				);
+				self.draw_polygon_decals(rasterizer, clip_planes, polygon_index, &frame_info.decals, leaf_decals);
 			}
 		}
 
