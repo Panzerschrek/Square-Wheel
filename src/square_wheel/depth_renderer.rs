@@ -1,5 +1,6 @@
 use super::{
 	equations::*,
+	inline_models_index::*,
 	map_visibility_calculator::*,
 	rasterizer::*,
 	renderer::{project_and_clip_polygon, MAX_VERTICES},
@@ -60,7 +61,14 @@ impl DepthRenderer
 		}
 	}
 
-	pub fn draw_map(&mut self, pixels: &mut [f32], width: u32, height: u32, camera_matrices: &CameraMatrices)
+	pub fn draw_map(
+		&mut self,
+		pixels: &mut [f32],
+		width: u32,
+		height: u32,
+		camera_matrices: &CameraMatrices,
+		inline_models_index: &InlineModelsIndex,
+	)
 	{
 		let mut rasterizer = DepthRasterizer::new(pixels, width, height);
 		let root_node = bsp_map_compact::get_root_node_index(&self.map);
@@ -74,6 +82,9 @@ impl DepthRenderer
 
 		// Draw BSP tree in back to front order, skip unreachable leafs.
 		self.draw_tree_r(&mut rasterizer, camera_matrices, root_node);
+
+		// Draw submodels atop of static map geometry (using depth test).
+		self.draw_submodels(&mut rasterizer, camera_matrices, inline_models_index);
 	}
 
 	fn draw_tree_r(&self, rasterizer: &mut DepthRasterizer, camera_matrices: &CameraMatrices, current_index: u32)
@@ -115,6 +126,77 @@ impl DepthRenderer
 		{
 			// Draw leaf polyfons without depth test since we use back to front order.
 			self.draw_polygon::<false>(rasterizer, camera_matrices, &clip_planes, polygon_index);
+		}
+	}
+
+	fn draw_submodels(
+		&self,
+		rasterizer: &mut DepthRasterizer,
+		camera_matrices: &CameraMatrices,
+		inline_models_index: &InlineModelsIndex,
+	)
+	{
+		for submodel_index in 0 .. self.map.submodels.len() as u32
+		{
+			self.draw_submodel(rasterizer, camera_matrices, inline_models_index, submodel_index);
+		}
+	}
+
+	fn draw_submodel(
+		&self,
+		rasterizer: &mut DepthRasterizer,
+		camera_matrices: &CameraMatrices,
+		inline_models_index: &InlineModelsIndex,
+		submodel_index: u32,
+	)
+	{
+		let model_matrix = if let Some(m) = inline_models_index.get_model_matrix(submodel_index)
+		{
+			m
+		}
+		else
+		{
+			return;
+		};
+
+		let mut bounds: Option<ClippingPolygon> = None;
+		for &leaf_index in inline_models_index.get_model_leafs(submodel_index as u32)
+		{
+			if let Some(leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf_index)
+			{
+				if let Some(bounds) = &mut bounds
+				{
+					bounds.extend(&leaf_bounds);
+				}
+				else
+				{
+					bounds = Some(leaf_bounds);
+				}
+			}
+		}
+
+		let clip_planes = if let Some(b) = bounds
+		{
+			b.get_clip_planes()
+		}
+		else
+		{
+			// This submodel is located in leafs invisible from current position.
+			return;
+		};
+
+		let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
+		let submodel_camera_matrices = CameraMatrices {
+			view_matrix: camera_matrices.view_matrix * model_matrix,
+			planes_matrix: camera_matrices.planes_matrix * model_matrix_inverse,
+			position: camera_matrices.position,
+		};
+
+		let submodel = &self.map.submodels[submodel_index as usize];
+		for polygon_index in submodel.first_polygon .. submodel.first_polygon + submodel.num_polygons
+		{
+			// Draw with depth test.
+			self.draw_polygon::<true>(rasterizer, &submodel_camera_matrices, &clip_planes, polygon_index);
 		}
 	}
 
