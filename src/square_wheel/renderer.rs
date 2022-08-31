@@ -408,6 +408,23 @@ impl Renderer
 			}
 		}
 
+		let mut visible_lights = 0;
+		let mut visible_lights_with_shadow = 0;
+		for (light, light_info) in frame_info.lights.iter().zip(self.dynamic_lights_info.iter_mut())
+		{
+			if light_info.visible
+			{
+				visible_lights += 1;
+				if let DynamicLightShadowType::None = light.shadow_type
+				{
+				}
+				else
+				{
+					visible_lights_with_shadow += 1;
+				}
+			}
+		}
+
 		debug_stats_printer.add_line(format!(
 			"materials update: {:04.2}ms",
 			performance_counters.materials_update.get_average_value() * 1000.0
@@ -447,6 +464,10 @@ impl Renderer
 			triangle_vertices
 		));
 		debug_stats_printer.add_line(format!("decals: {}, (parsts in leafs: {})", decals, decals_leafs_parts));
+		debug_stats_printer.add_line(format!(
+			"dynamic lights: {}, (with shadow: {})",
+			visible_lights, visible_lights_with_shadow
+		));
 		debug_stats_printer.add_line(format!(
 			"surfaces pixels: {}k",
 			(self.num_visible_surfaces_pixels + 1023) / 1024
