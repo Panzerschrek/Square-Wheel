@@ -63,16 +63,11 @@ pub struct ProjectorShadowMap<'a>
 pub fn calculate_projector_shadow_map_matrices(
 	position: Vec3f,
 	rotation: QuaternionF,
+	fov: RadiansF,
 	shadow_map_size: f32,
 ) -> CameraMatrices
 {
-	build_view_matrix_with_full_rotation(
-		position,
-		rotation,
-		std::f32::consts::PI * 0.5,
-		shadow_map_size,
-		shadow_map_size,
-	)
+	build_view_matrix_with_full_rotation(position, rotation, fov.0, shadow_map_size, shadow_map_size)
 }
 
 pub fn calculate_cube_shadow_map_side_matrices(

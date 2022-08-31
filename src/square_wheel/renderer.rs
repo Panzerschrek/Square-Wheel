@@ -566,7 +566,7 @@ impl Renderer
 				continue;
 			}
 
-			match light.shadow_type
+			match &light.shadow_type
 			{
 				DynamicLightShadowType::None =>
 				{},
@@ -596,11 +596,12 @@ impl Renderer
 						);
 					}
 				},
-				DynamicLightShadowType::Projector { rotation } =>
+				DynamicLightShadowType::Projector { rotation, fov } =>
 				{
 					let depth_matrices = calculate_projector_shadow_map_matrices(
 						light.position,
-						rotation,
+						*rotation,
+						*fov,
 						light_info.shadow_map_size as f32,
 					);
 
@@ -726,8 +727,13 @@ impl Renderer
 							&create_dynamic_light_cube_shadow_map(light_info, &self.shadow_maps_data),
 							&vec_to_light,
 						),
-						DynamicLightShadowType::Projector { rotation } => projector_shadow_map_fetch(
-							&create_dynamic_light_projector_shadow_map(rotation, light_info, &self.shadow_maps_data),
+						DynamicLightShadowType::Projector { rotation, fov } => projector_shadow_map_fetch(
+							&create_dynamic_light_projector_shadow_map(
+								rotation,
+								*fov,
+								light_info,
+								&self.shadow_maps_data,
+							),
 							&vec_to_light,
 						),
 					};
@@ -2820,12 +2826,13 @@ fn create_dynamic_light_with_shadow<'a>(
 					ShadowMap::None
 				}
 			},
-			DynamicLightShadowType::Projector { rotation } =>
+			DynamicLightShadowType::Projector { rotation, fov } =>
 			{
 				if light_info.visible
 				{
 					ShadowMap::Projector(create_dynamic_light_projector_shadow_map(
 						rotation,
+						*fov,
 						light_info,
 						shadow_maps_data,
 					))
@@ -2863,6 +2870,7 @@ fn create_dynamic_light_cube_shadow_map<'a>(
 
 fn create_dynamic_light_projector_shadow_map<'a>(
 	rotation: &QuaternionF,
+	fov: RadiansF,
 	light_info: &DynamicLightInfo,
 	shadow_maps_data: &'a [ShadowMapElement],
 ) -> ProjectorShadowMap<'a>
@@ -2871,11 +2879,13 @@ fn create_dynamic_light_projector_shadow_map<'a>(
 	let shadow_map_data =
 		&shadow_maps_data[light_info.shadow_map_data_offset .. light_info.shadow_map_data_offset + data_size];
 
+	let inv_half_fov_tan = 1.0 / (fov * 0.5).tan();
+
 	ProjectorShadowMap {
 		size: light_info.shadow_map_size,
 		data: shadow_map_data,
-		basis_x: rotation.rotate_vector(Vec3f::unit_y()),
-		basis_y: rotation.rotate_vector(Vec3f::unit_z()),
+		basis_x: rotation.rotate_vector(Vec3f::unit_y()) * inv_half_fov_tan,
+		basis_y: rotation.rotate_vector(Vec3f::unit_z()) * inv_half_fov_tan,
 		basis_z: rotation.rotate_vector(-Vec3f::unit_x()),
 	}
 }

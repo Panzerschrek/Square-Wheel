@@ -271,13 +271,22 @@ impl Game
 		{
 			let (position, rotation) = self.get_camera_location();
 
+			let mut fov = Rad(std::f32::consts::PI * 0.5);
+			if args.len() >= 4
+			{
+				if let Ok(a) = args[3].parse::<f32>()
+				{
+					fov = Rad(a * (std::f32::consts::PI / 180.0));
+				}
+			}
+
 			self.ecs.spawn((
 				TestLightComponent {},
 				DynamicLight {
 					position,
 					color: [r * 1024.0, g * 1024.0, b * 1024.0],
 					radius: 2048.0,
-					shadow_type: DynamicLightShadowType::Projector { rotation },
+					shadow_type: DynamicLightShadowType::Projector { rotation, fov },
 				},
 			));
 		}

@@ -102,5 +102,6 @@ pub enum DynamicLightShadowType
 	Projector
 	{
 		rotation: QuaternionF,
+		fov: RadiansF,
 	},
 }
