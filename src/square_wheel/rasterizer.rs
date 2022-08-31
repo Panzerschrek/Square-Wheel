@@ -1320,7 +1320,11 @@ impl<'a> DepthRasterizer<'a>
 	}
 
 	// Fill convex clockwise polygon.
-	pub fn fill_polygon(&mut self, vertices: &[PolygonPointProjected], depth_equation: &DepthEquation)
+	pub fn fill_polygon<const DEPTH_TEST: bool>(
+		&mut self,
+		vertices: &[PolygonPointProjected],
+		depth_equation: &DepthEquation,
+	)
 	{
 		// Search for start vertex (with min y).
 		let mut lower_vertex_index = 0;
@@ -1364,7 +1368,7 @@ impl<'a> DepthRasterizer<'a>
 			{
 				let dx_dy_left = fixed16_div(next_left_vertex.x - left_vertex.x, dy_left);
 				let dx_dy_right = fixed16_div(next_right_vertex.x - right_vertex.x, dy_right);
-				self.fill_polygon_part(
+				self.fill_polygon_part::<DEPTH_TEST>(
 					cur_y,
 					next_y,
 					PolygonSide {
@@ -1394,7 +1398,7 @@ impl<'a> DepthRasterizer<'a>
 							next_right_vertex.x - right_vertex.x,
 							dy_right,
 						);
-					self.fill_polygon_part(
+					self.fill_polygon_part::<DEPTH_TEST>(
 						cur_y,
 						next_y,
 						PolygonSide {
@@ -1427,7 +1431,7 @@ impl<'a> DepthRasterizer<'a>
 		}
 	}
 
-	fn fill_polygon_part(
+	fn fill_polygon_part<const DEPTH_TEST: bool>(
 		&mut self,
 		y_start: Fixed16,
 		y_end: Fixed16,
@@ -1459,7 +1463,14 @@ impl<'a> DepthRasterizer<'a>
 				let mut inv_z = line_inv_z + (x_start_int as f32) * depth_equation.d_inv_z_dx;
 				for dst_pixel in line_dst
 				{
-					*dst_pixel = inv_z;
+					if DEPTH_TEST
+					{
+						*dst_pixel = inv_z.max(*dst_pixel);
+					}
+					else
+					{
+						*dst_pixel = inv_z;
+					}
 					inv_z += depth_equation.d_inv_z_dx;
 				} // for span pixels
 			} // if span is non-empty
