@@ -345,6 +345,27 @@ impl Renderer
 		{
 			self.print_debug_stats(frame_info, debug_stats_printer, &performance_counters);
 		}
+
+		if self.config.debug_draw_depth
+		{
+			for light_info in &self.dynamic_lights_info
+			{
+				let data_size = (light_info.shadow_map_size * light_info.shadow_map_size) as usize;
+				let shadow_map_data = &self.shadow_maps_data
+					[light_info.shadow_map_data_offset .. light_info.shadow_map_data_offset + data_size];
+
+				for y in 0 .. light_info.shadow_map_size
+				{
+					for x in 0 .. light_info.shadow_map_size
+					{
+						let depth = shadow_map_data[(x + y * light_info.shadow_map_size) as usize];
+						let z = (0.5 / depth).max(0.0).min(255.0);
+						pixels[(x as usize) + (y as usize) * surface_info.pitch] =
+							ColorVec::from_color_f32x3(&[z, z, z]).into();
+					}
+				}
+			}
+		}
 	}
 
 	fn print_debug_stats(
@@ -1360,7 +1381,7 @@ impl Renderer
 			radius: 1.0,
 			inv_square_radius: 1.0,
 			color: [0.0; 3],
-			shadow_map: None,
+			shadow_map: ShadowMap::None,
 		};
 		const MAX_POLYGON_LIGHTS: usize = 6;
 
@@ -2784,24 +2805,34 @@ fn create_dynamic_light_with_shadow<'a>(
 		radius: light.radius,
 		inv_square_radius: 1.0 / (light.radius * light.radius),
 		color: light.color,
-		shadow_map: match light.shadow_type
+		shadow_map: match &light.shadow_type
 		{
-			DynamicLightShadowType::None => None,
+			DynamicLightShadowType::None => ShadowMap::None,
 			DynamicLightShadowType::Cubemap =>
 			{
 				if light_info.visible
 				{
-					Some(create_dynamic_light_cube_shadow_map(light_info, shadow_maps_data))
+					ShadowMap::Cube(create_dynamic_light_cube_shadow_map(light_info, shadow_maps_data))
 				}
 				else
 				{
-					None
+					ShadowMap::None
 				}
 			},
-			DynamicLightShadowType::Projector { .. } =>
+			DynamicLightShadowType::Projector { rotation } =>
 			{
-				// TODO
-				None
+				if light_info.visible
+				{
+					ShadowMap::Projector(create_dynamic_light_projector_shadow_map(
+						rotation,
+						light_info,
+						shadow_maps_data,
+					))
+				}
+				else
+				{
+					ShadowMap::None
+				}
 			},
 		},
 	}
@@ -2826,6 +2857,25 @@ fn create_dynamic_light_cube_shadow_map<'a>(
 			&shadow_map_data[4 * side_data_size .. 5 * side_data_size],
 			&shadow_map_data[5 * side_data_size .. 6 * side_data_size],
 		],
+	}
+}
+
+fn create_dynamic_light_projector_shadow_map<'a>(
+	rotation: &QuaternionF,
+	light_info: &DynamicLightInfo,
+	shadow_maps_data: &'a [ShadowMapElement],
+) -> ProjectorShadowMap<'a>
+{
+	let data_size = (light_info.shadow_map_size * light_info.shadow_map_size) as usize;
+	let shadow_map_data =
+		&shadow_maps_data[light_info.shadow_map_data_offset .. light_info.shadow_map_data_offset + data_size];
+
+	ProjectorShadowMap {
+		size: light_info.shadow_map_size,
+		data: shadow_map_data,
+		basis_x: rotation.rotate_vector(Vec3f::unit_y()),
+		basis_y: rotation.rotate_vector(Vec3f::unit_z()),
+		basis_z: rotation.rotate_vector(-Vec3f::unit_x()),
 	}
 }
 
