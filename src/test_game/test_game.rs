@@ -37,6 +37,7 @@ impl Game
 			("get_angles", Game::command_get_angles),
 			("set_angles", Game::command_set_angles),
 			("add_test_light", Game::command_add_test_light),
+			("add_test_projector_light", Game::command_add_test_projector_light),
 			("reset_test_lights", Game::command_reset_test_lights),
 			("add_test_model", Game::command_add_test_model),
 			("reset_test_models", Game::command_reset_test_models),
@@ -234,7 +235,7 @@ impl Game
 				DynamicLight {
 					position: self.get_camera_location().0,
 					color: [r * 1024.0, g * 1024.0, b * 1024.0],
-					radius: 128.0,
+					radius: 512.0,
 					shadow_type: if args.len() >= 4 && args[3] == "cube_shadow"
 					{
 						DynamicLightShadowType::Cubemap
@@ -243,6 +244,40 @@ impl Game
 					{
 						DynamicLightShadowType::None
 					},
+				},
+			));
+		}
+		else
+		{
+			self.console
+				.lock()
+				.unwrap()
+				.add_text("Failed to parse args".to_string());
+		}
+	}
+
+	fn command_add_test_projector_light(&mut self, args: commands_queue::CommandArgs)
+	{
+		if args.len() < 3
+		{
+			self.console
+				.lock()
+				.unwrap()
+				.add_text("Expected at least 3 args".to_string());
+			return;
+		}
+
+		if let (Ok(r), Ok(g), Ok(b)) = (args[0].parse::<f32>(), args[1].parse::<f32>(), args[2].parse::<f32>())
+		{
+			let (position, rotation) = self.get_camera_location();
+
+			self.ecs.spawn((
+				TestLightComponent {},
+				DynamicLight {
+					position,
+					color: [r * 1024.0, g * 1024.0, b * 1024.0],
+					radius: 2048.0,
+					shadow_type: DynamicLightShadowType::Projector { rotation },
 				},
 			));
 		}

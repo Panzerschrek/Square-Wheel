@@ -99,4 +99,8 @@ pub enum DynamicLightShadowType
 {
 	None,
 	Cubemap,
+	Projector
+	{
+		rotation: QuaternionF,
+	},
 }

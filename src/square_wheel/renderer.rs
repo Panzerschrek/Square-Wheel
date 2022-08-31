@@ -516,6 +516,11 @@ impl Renderer
 					light_info.shadow_map_size = 256; // TODO - make configurable.
 					shadow_map_data_size = light_info.shadow_map_size * light_info.shadow_map_size * 6;
 				},
+				DynamicLightShadowType::Projector { .. } =>
+				{
+					light_info.shadow_map_size = 256; // TODO - make configurable.
+					shadow_map_data_size = light_info.shadow_map_size * light_info.shadow_map_size;
+				},
 			}
 
 			light_info.shadow_map_data_offset = shadow_map_data_offset;
@@ -569,6 +574,10 @@ impl Renderer
 							&self.inline_models_index,
 						);
 					}
+				},
+				DynamicLightShadowType::Projector { .. } =>
+				{
+					// TODO
 				},
 			}
 		}
@@ -680,6 +689,11 @@ impl Renderer
 							&create_dynamic_light_cube_shadow_map(light_info, &self.shadow_maps_data),
 							&vec_to_light,
 						),
+						DynamicLightShadowType::Projector { .. } =>
+						{
+							// TODO
+							1.0
+						},
 					};
 					if shadow_factor <= 0.0
 					{
@@ -2767,6 +2781,11 @@ fn create_dynamic_light_with_shadow<'a>(
 				{
 					None
 				}
+			},
+			DynamicLightShadowType::Projector { .. } =>
+			{
+				// TODO
+				None
 			},
 		},
 	}

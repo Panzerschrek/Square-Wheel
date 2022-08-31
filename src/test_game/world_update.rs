@@ -752,6 +752,10 @@ pub fn update_dynamic_lights_locations(ecs: &mut hecs::World)
 	)>()
 	{
 		dynamic_light.position = location_component.position;
+		if let DynamicLightShadowType::Projector { rotation } = &mut dynamic_light.shadow_type
+		{
+			*rotation = location_component.rotation;
+		}
 	}
 }
 
