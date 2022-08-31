@@ -391,6 +391,7 @@ pub fn spawn_player(
 	let player_entity = ecs.spawn((
 		PlayerComponent {
 			view_model_entity: hecs::Entity::DANGLING,
+			flashlight_entity: hecs::Entity::DANGLING,
 		},
 		LocationComponent {
 			position: Vec3f::zero(),

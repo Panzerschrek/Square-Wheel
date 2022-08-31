@@ -11,7 +11,7 @@ pub fn update_player_entity(
 	time_delta_s: f32,
 )
 {
-	let mut q = if let Ok(q) = ecs.query_one::<(&mut PlayerControllerComponent,)>(player_entity)
+	let mut q = if let Ok(q) = ecs.query_one::<(&PlayerComponent, &mut PlayerControllerComponent)>(player_entity)
 	{
 		q
 	}
@@ -20,7 +20,7 @@ pub fn update_player_entity(
 		return;
 	};
 
-	let (player_controller,) = q.get().unwrap();
+	let (player_component, player_controller) = q.get().unwrap();
 	player_controller
 		.rotation_controller
 		.update(keyboard_state, events, time_delta_s);
@@ -110,7 +110,20 @@ pub fn update_player_entity(
 		},
 	}
 
+	let player_position = match player_controller.position_source
+	{
+		PlayerPositionSource::Noclip(p) => p,
+		PlayerPositionSource::Phys(handle) => physics.get_object_location(handle).0,
+	};
+
+	let camera_rotation = player_controller.rotation_controller.get_rotation();
+
+	let mut flashlight_entity = player_component.flashlight_entity;
+
+	drop(q);
+
 	let mut has_mouse_down = false;
+	let mut has_flashlight_toggle = false;
 	for event in events
 	{
 		match event
@@ -118,7 +131,13 @@ pub fn update_player_entity(
 			sdl2::event::Event::MouseButtonDown { .. } =>
 			{
 				has_mouse_down = true;
-				break;
+			},
+			sdl2::event::Event::KeyDown {
+				scancode: Some(sdl2::keyboard::Scancode::F),
+				..
+			} =>
+			{
+				has_flashlight_toggle = true;
 			},
 			_ =>
 			{},
@@ -127,22 +146,14 @@ pub fn update_player_entity(
 
 	if has_mouse_down
 	{
-		let position = match player_controller.position_source
-		{
-			PlayerPositionSource::Noclip(p) => p,
-			PlayerPositionSource::Phys(handle) => physics.get_object_location(handle).0,
-		};
-
-		let rotation = QuaternionF::one();
-		let camera_vector = player_controller
-			.rotation_controller
-			.get_rotation()
-			.rotate_vector(Vec3f::unit_x());
-
-		drop(q);
+		let position = player_position;
+		let camera_vector = camera_rotation.rotate_vector(Vec3f::unit_x());
 
 		ecs.spawn((
-			LocationComponent { position, rotation },
+			LocationComponent {
+				position: player_position,
+				rotation: QuaternionF::one(),
+			},
 			DynamicLightLocationLinkComponent {},
 			DynamicLight {
 				position,
@@ -157,6 +168,53 @@ pub fn update_player_entity(
 				velocity: camera_vector * 256.0,
 			},
 		));
+	}
+
+	if has_flashlight_toggle
+	{
+		if flashlight_entity == hecs::Entity::DANGLING
+		{
+			let position = player_position;
+			let rotation = camera_rotation;
+
+			let brightness = 512.0 * 1024.0;
+
+			flashlight_entity = ecs.spawn((
+				LocationComponent { position, rotation },
+				PlayerControllerCameraLocationComponent {
+					entity: player_entity,
+					camera_view_offset: Vec3f::new(0.0, 0.0, 18.0),
+					relative_position: Vec3f::new(0.0, 16.0, -16.0),
+					relative_rotation: QuaternionF::from_angle_z(Rad(-0.05 * std::f32::consts::PI)),
+				},
+				DynamicLightLocationLinkComponent {},
+				DynamicLight {
+					position,
+					radius: 1024.0,
+					color: [brightness, brightness, brightness],
+					shadow_type: DynamicLightShadowType::Projector {
+						rotation,
+						fov: Rad(0.2 * std::f32::consts::PI),
+					},
+				},
+			));
+		}
+		else
+		{
+			ecs.despawn(flashlight_entity).ok();
+			flashlight_entity = hecs::Entity::DANGLING;
+		}
+
+		let mut q = if let Ok(q) = ecs.query_one::<(&mut PlayerComponent,)>(player_entity)
+		{
+			q
+		}
+		else
+		{
+			return;
+		};
+
+		q.get().unwrap().0.flashlight_entity = flashlight_entity;
 	}
 }
 
