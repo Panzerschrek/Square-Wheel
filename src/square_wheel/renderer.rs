@@ -719,18 +719,17 @@ impl Renderer
 						continue;
 					}
 
-					let shadow_factor = match light.shadow_type
+					let shadow_factor = match &light.shadow_type
 					{
 						DynamicLightShadowType::None => 1.0,
 						DynamicLightShadowType::Cubemap => cube_shadow_map_fetch(
 							&create_dynamic_light_cube_shadow_map(light_info, &self.shadow_maps_data),
 							&vec_to_light,
 						),
-						DynamicLightShadowType::Projector { .. } =>
-						{
-							// TODO
-							1.0
-						},
+						DynamicLightShadowType::Projector { rotation } => projector_shadow_map_fetch(
+							&create_dynamic_light_projector_shadow_map(rotation, light_info, &self.shadow_maps_data),
+							&vec_to_light,
+						),
 					};
 					if shadow_factor <= 0.0
 					{
@@ -2741,6 +2740,8 @@ fn polygon_is_affected_by_light(
 ) -> bool
 {
 	// TODO - check mathemathics here.
+
+	// TODO - process projector shadows specially.
 
 	let vec_from_light_position_to_tc_start_point = light.position - basis_vecs.start;
 	let signed_dinstance_to_polygon_plane = vec_from_light_position_to_tc_start_point.dot(basis_vecs.normal);

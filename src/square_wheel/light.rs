@@ -211,7 +211,7 @@ fn cube_shadow_map_side_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f, side
 	}
 }
 
-fn projector_shadow_map_fetch(projector_shadow_map: &ProjectorShadowMap, vec: &Vec3f) -> f32
+pub fn projector_shadow_map_fetch(projector_shadow_map: &ProjectorShadowMap, vec: &Vec3f) -> f32
 {
 	let z = projector_shadow_map.basis_z.dot(*vec);
 	if z <= 0.0
