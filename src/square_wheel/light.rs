@@ -213,7 +213,7 @@ fn cube_shadow_map_side_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f, side
 
 pub fn projector_shadow_map_fetch(projector_shadow_map: &ProjectorShadowMap, vec: &Vec3f) -> f32
 {
-	let z = projector_shadow_map.basis_z.dot(*vec);
+	let z = vec3_dot(&projector_shadow_map.basis_z, vec);
 	if z <= 0.0
 	{
 		return 0.0;
@@ -222,8 +222,8 @@ pub fn projector_shadow_map_fetch(projector_shadow_map: &ProjectorShadowMap, vec
 	let depth = inv_fast(z);
 	let half_depth = 0.5 * depth;
 	let size_f = projector_shadow_map.size as f32;
-	let u_f = f32_mul_add(projector_shadow_map.basis_x.dot(*vec), half_depth, 0.5) * size_f;
-	let v_f = f32_mul_add(projector_shadow_map.basis_y.dot(*vec), half_depth, 0.5) * size_f;
+	let u_f = f32_mul_add(vec3_dot(&projector_shadow_map.basis_x, vec), half_depth, 0.5) * size_f;
+	let v_f = f32_mul_add(vec3_dot(&projector_shadow_map.basis_y, vec), half_depth, 0.5) * size_f;
 	if u_f < 0.0 || v_f < 0.0 || u_f >= size_f || v_f >= size_f
 	{
 		return 0.0;

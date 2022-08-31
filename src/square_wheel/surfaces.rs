@@ -1033,24 +1033,3 @@ fn get_specular_k_metal(fresnel_factor_base: f32, roughness: f32) -> f32
 const DIELECTRIC_ZERO_REFLECTIVITY: f32 = 0.04;
 const DIELECTRIC_AVERAGE_REFLECTIVITY: f32 = DIELECTRIC_ZERO_REFLECTIVITY * 3.0;
 const METAL_AVERAGE_SCHLICK_FACTOR: f32 = 0.5;
-
-// Faster version of dot product, because it uses "mul_add".
-fn vec3_dot(a: &Vec3f, b: &Vec3f) -> f32
-{
-	f32_mul_add(a.x, b.x, f32_mul_add(a.y, b.y, a.z * b.z))
-}
-
-// Faster than naive vec = a * scalar + b, because of "mul_add".
-fn vec3_scalar_mul_add(a: &Vec3f, scalar: f32, b: &Vec3f) -> Vec3f
-{
-	Vec3f::new(
-		f32_mul_add(a.x, scalar, b.x),
-		f32_mul_add(a.y, scalar, b.y),
-		f32_mul_add(a.z, scalar, b.z),
-	)
-}
-
-fn vec3_len2(v: &Vec3f) -> f32
-{
-	vec3_dot(v, v)
-}
