@@ -1,5 +1,6 @@
 use super::{
 	equations::*,
+	inline_models_index::*,
 	map_visibility_calculator::*,
 	rasterizer::*,
 	renderer::{project_and_clip_polygon, MAX_VERTICES},
@@ -60,7 +61,14 @@ impl DepthRenderer
 		}
 	}
 
-	pub fn draw_map(&mut self, pixels: &mut [f32], width: u32, height: u32, camera_matrices: &CameraMatrices)
+	pub fn draw_map(
+		&mut self,
+		pixels: &mut [f32],
+		width: u32,
+		height: u32,
+		camera_matrices: &CameraMatrices,
+		inline_models_index: &InlineModelsIndex,
+	)
 	{
 		let mut rasterizer = DepthRasterizer::new(pixels, width, height);
 		let root_node = bsp_map_compact::get_root_node_index(&self.map);
@@ -74,6 +82,9 @@ impl DepthRenderer
 
 		// Draw BSP tree in back to front order, skip unreachable leafs.
 		self.draw_tree_r(&mut rasterizer, camera_matrices, root_node);
+
+		// Draw submodels atop of static map geometry (using depth test).
+		self.draw_submodels(&mut rasterizer, camera_matrices, inline_models_index);
 	}
 
 	fn draw_tree_r(&self, rasterizer: &mut DepthRasterizer, camera_matrices: &CameraMatrices, current_index: u32)
@@ -113,57 +124,140 @@ impl DepthRenderer
 
 		for polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
 		{
-			let polygon = &self.map.polygons[polygon_index as usize];
-			if !self.materials_shadow_table[polygon.texture as usize]
-			{
-				continue;
-			}
-
-			let plane_transformed = camera_matrices.planes_matrix * polygon.plane.vec.extend(-polygon.plane.dist);
-			// Cull back faces.
-			if plane_transformed.w <= 0.0
-			{
-				continue;
-			}
-
-			let plane_transformed_w = -plane_transformed.w;
-			let d_inv_z_dx = plane_transformed.x / plane_transformed_w;
-			let d_inv_z_dy = plane_transformed.y / plane_transformed_w;
-			// Use depth bias in order to avoid self-shadowing.
-			const DEPTH_BIAS_CONST: f32 = -1.0 / ((1 << 20) as f32);
-			const DEPTH_BIAS_SLOPE: f32 = -1.0;
-			// Scale whole depth equation a bit in order to compensate depth calculation errors in surfaces preparation code.
-			const DEPTH_EQUATION_SCALE: f32 = 1.0 - 1.0 / 1024.0;
-			let depth_equation = DepthEquation {
-				d_inv_z_dx: DEPTH_EQUATION_SCALE * d_inv_z_dx,
-				d_inv_z_dy: DEPTH_EQUATION_SCALE * d_inv_z_dy,
-				k: DEPTH_EQUATION_SCALE *
-					(plane_transformed.z / plane_transformed_w +
-						DEPTH_BIAS_CONST + DEPTH_BIAS_SLOPE * (d_inv_z_dx.abs() + d_inv_z_dy.abs())),
-			};
-
-			let mut vertices_transformed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
-			let vertex_count = std::cmp::min(polygon.num_vertices as usize, MAX_VERTICES);
-			for (in_vertex, out_vertex) in self.map.vertices
-				[(polygon.first_vertex as usize) .. (polygon.first_vertex as usize) + vertex_count]
-				.iter()
-				.zip(vertices_transformed[.. vertex_count].iter_mut())
-			{
-				let vertex_transformed = camera_matrices.view_matrix * in_vertex.extend(1.0);
-				*out_vertex = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
-			}
-
-			draw_depth_polygon(
-				rasterizer,
-				&clip_planes,
-				&vertices_transformed[.. vertex_count],
-				&depth_equation,
-			);
+			// Draw leaf polyfons without depth test since we use back to front order.
+			self.draw_polygon::<false>(rasterizer, camera_matrices, &clip_planes, polygon_index);
 		}
+	}
+
+	fn draw_submodels(
+		&self,
+		rasterizer: &mut DepthRasterizer,
+		camera_matrices: &CameraMatrices,
+		inline_models_index: &InlineModelsIndex,
+	)
+	{
+		for submodel_index in 0 .. self.map.submodels.len() as u32
+		{
+			self.draw_submodel(rasterizer, camera_matrices, inline_models_index, submodel_index);
+		}
+	}
+
+	fn draw_submodel(
+		&self,
+		rasterizer: &mut DepthRasterizer,
+		camera_matrices: &CameraMatrices,
+		inline_models_index: &InlineModelsIndex,
+		submodel_index: u32,
+	)
+	{
+		let model_matrix = if let Some(m) = inline_models_index.get_model_matrix(submodel_index)
+		{
+			m
+		}
+		else
+		{
+			return;
+		};
+
+		let mut bounds: Option<ClippingPolygon> = None;
+		for &leaf_index in inline_models_index.get_model_leafs(submodel_index as u32)
+		{
+			if let Some(leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf_index)
+			{
+				if let Some(bounds) = &mut bounds
+				{
+					bounds.extend(&leaf_bounds);
+				}
+				else
+				{
+					bounds = Some(leaf_bounds);
+				}
+			}
+		}
+
+		let clip_planes = if let Some(b) = bounds
+		{
+			b.get_clip_planes()
+		}
+		else
+		{
+			// This submodel is located in leafs invisible from current position.
+			return;
+		};
+
+		let model_matrix_inverse = model_matrix.transpose().invert().unwrap();
+		let submodel_camera_matrices = CameraMatrices {
+			view_matrix: camera_matrices.view_matrix * model_matrix,
+			planes_matrix: camera_matrices.planes_matrix * model_matrix_inverse,
+			position: camera_matrices.position,
+		};
+
+		let submodel = &self.map.submodels[submodel_index as usize];
+		for polygon_index in submodel.first_polygon .. submodel.first_polygon + submodel.num_polygons
+		{
+			// Draw with depth test.
+			self.draw_polygon::<true>(rasterizer, &submodel_camera_matrices, &clip_planes, polygon_index);
+		}
+	}
+
+	fn draw_polygon<const DEPTH_TEST: bool>(
+		&self,
+		rasterizer: &mut DepthRasterizer,
+		camera_matrices: &CameraMatrices,
+		clip_planes: &ClippingPolygonPlanes,
+		polygon_index: u32,
+	)
+	{
+		let polygon = &self.map.polygons[polygon_index as usize];
+		if !self.materials_shadow_table[polygon.texture as usize]
+		{
+			return;
+		}
+
+		let plane_transformed = camera_matrices.planes_matrix * polygon.plane.vec.extend(-polygon.plane.dist);
+		// Cull back faces.
+		if plane_transformed.w <= 0.0
+		{
+			return;
+		}
+
+		let plane_transformed_w = -plane_transformed.w;
+		let d_inv_z_dx = plane_transformed.x / plane_transformed_w;
+		let d_inv_z_dy = plane_transformed.y / plane_transformed_w;
+		// Use depth bias in order to avoid self-shadowing.
+		const DEPTH_BIAS_CONST: f32 = -1.0 / ((1 << 20) as f32);
+		const DEPTH_BIAS_SLOPE: f32 = -1.0;
+		// Scale whole depth equation a bit in order to compensate depth calculation errors in surfaces preparation code.
+		const DEPTH_EQUATION_SCALE: f32 = 1.0 - 1.0 / 1024.0;
+		let depth_equation = DepthEquation {
+			d_inv_z_dx: DEPTH_EQUATION_SCALE * d_inv_z_dx,
+			d_inv_z_dy: DEPTH_EQUATION_SCALE * d_inv_z_dy,
+			k: DEPTH_EQUATION_SCALE *
+				(plane_transformed.z / plane_transformed_w +
+					DEPTH_BIAS_CONST + DEPTH_BIAS_SLOPE * (d_inv_z_dx.abs() + d_inv_z_dy.abs())),
+		};
+
+		let mut vertices_transformed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
+		let vertex_count = std::cmp::min(polygon.num_vertices as usize, MAX_VERTICES);
+		for (in_vertex, out_vertex) in self.map.vertices
+			[(polygon.first_vertex as usize) .. (polygon.first_vertex as usize) + vertex_count]
+			.iter()
+			.zip(vertices_transformed[.. vertex_count].iter_mut())
+		{
+			let vertex_transformed = camera_matrices.view_matrix * in_vertex.extend(1.0);
+			*out_vertex = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
+		}
+
+		draw_depth_polygon::<DEPTH_TEST>(
+			rasterizer,
+			&clip_planes,
+			&vertices_transformed[.. vertex_count],
+			&depth_equation,
+		);
 	}
 }
 
-fn draw_depth_polygon(
+fn draw_depth_polygon<const DEPTH_TEST: bool>(
 	rasterizer: &mut DepthRasterizer,
 	clip_planes: &ClippingPolygonPlanes,
 	vertices_transformed: &[Vec3f],
@@ -192,5 +286,5 @@ fn draw_depth_polygon(
 		};
 	}
 
-	rasterizer.fill_polygon(&vertices_for_rasterizer[0 .. vertex_count], &depth_equation);
+	rasterizer.fill_polygon::<DEPTH_TEST>(&vertices_for_rasterizer[0 .. vertex_count], &depth_equation);
 }

@@ -545,6 +545,7 @@ impl Renderer
 							light_info.shadow_map_size,
 							light_info.shadow_map_size,
 							&depth_matrices,
+							&self.inline_models_index,
 						);
 					}
 				},

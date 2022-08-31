@@ -20,9 +20,8 @@ Renderer:
 * Animated textures (with N frames)
 * Models rendering improvements - avoid splitting models into pieces for each BSP tree leaf in some cases
 * Dynamic lights with 2D shadowmap (not only cube)
-* Shadows from submodels
+* Variable shadow map size
 * Shadows from triangle models
-* Surfaces that cast no shadows
 * Multithreaded shadowmaps building
 * Emissive textures (lamps, screens)
 * Billboards and sprites
