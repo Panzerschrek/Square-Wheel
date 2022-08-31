@@ -575,9 +575,25 @@ impl Renderer
 						);
 					}
 				},
-				DynamicLightShadowType::Projector { .. } =>
+				DynamicLightShadowType::Projector { rotation } =>
 				{
-					// TODO
+					let depth_matrices = calculate_projector_shadow_map_matrices(
+						light.position,
+						rotation,
+						light_info.shadow_map_size as f32,
+					);
+
+					let data_size = light_info.shadow_map_size * light_info.shadow_map_size;
+					let depth_data = &mut self.shadow_maps_data
+						[light_info.shadow_map_data_offset .. light_info.shadow_map_data_offset + data_size as usize];
+
+					self.shadows_maps_renderer.draw_map(
+						depth_data,
+						light_info.shadow_map_size,
+						light_info.shadow_map_size,
+						&depth_matrices,
+						&self.inline_models_index,
+					);
 				},
 			}
 		}
