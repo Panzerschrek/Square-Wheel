@@ -2817,6 +2817,8 @@ fn create_dynamic_light_with_shadow<'a>(
 			DynamicLightShadowType::None => ShadowMap::None,
 			DynamicLightShadowType::Cubemap =>
 			{
+				// TODO - fix this.
+				// Disabling shadows for invisible lights is wrong because it may affect models.
 				if light_info.visible
 				{
 					ShadowMap::Cube(create_dynamic_light_cube_shadow_map(light_info, shadow_maps_data))

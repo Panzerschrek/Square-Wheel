@@ -102,7 +102,27 @@ impl DynamicObjectsIndex
 		for (index, light) in lights.iter().enumerate()
 		{
 			let root_node = bsp_map_compact::get_root_node_index(&self.map);
-			self.position_object_sphere_r(index as DynamicObjectId, &light.position, light.radius, root_node);
+			if let DynamicLightShadowType::Projector { rotation, fov } = light.shadow_type
+			{
+				// Place projector lights using pyramid vertices.
+				let matrix = get_object_matrix(light.position, rotation);
+				let half_width = light.radius * (fov * 0.5).tan();
+
+				let vertices_transformed = [
+					Vec3f::new(0.0, 0.0, 0.0),
+					Vec3f::new(light.radius, half_width, half_width),
+					Vec3f::new(light.radius, half_width, -half_width),
+					Vec3f::new(light.radius, -half_width, half_width),
+					Vec3f::new(light.radius, -half_width, -half_width),
+				]
+				.map(|v| (matrix * v.extend(1.0)).truncate());
+
+				self.position_object_convex_hull_r(index as DynamicObjectId, &vertices_transformed, root_node);
+			}
+			else
+			{
+				self.position_object_sphere_r(index as DynamicObjectId, &light.position, light.radius, root_node);
+			}
 		}
 	}
 
@@ -115,11 +135,16 @@ impl DynamicObjectsIndex
 
 		// Place bbox in leafs.
 		let root_node = bsp_map_compact::get_root_node_index(&self.map);
-		self.position_object_bbox_r(id, &bbox_vertices, root_node);
+		self.position_object_convex_hull_r(id, &bbox_vertices, root_node);
 	}
 
-	// Recursively place object in leafs. Perform bounding box vertices check against BPS node planes in order to do this.
-	fn position_object_bbox_r(&mut self, id: DynamicObjectId, bbox_vertices: &[Vec3f; 8], node_index: u32)
+	// Recursively place object in leafs. Perform convex hull vertices check against BPS node planes in order to do this.
+	fn position_object_convex_hull_r<const NUM_VERTICES: usize>(
+		&mut self,
+		id: DynamicObjectId,
+		vertices: &[Vec3f; NUM_VERTICES],
+		node_index: u32,
+	)
 	{
 		if node_index >= bsp_map_compact::FIRST_LEAF_INDEX
 		{
@@ -132,7 +157,7 @@ impl DynamicObjectsIndex
 			let node = &self.map.nodes[node_index as usize];
 
 			let mut vertices_front = 0;
-			for &vertex in bbox_vertices
+			for &vertex in vertices
 			{
 				if node.plane.vec.dot(vertex) > node.plane.dist
 				{
@@ -144,11 +169,11 @@ impl DynamicObjectsIndex
 
 			if vertices_front > 0
 			{
-				self.position_object_bbox_r(id, bbox_vertices, node_children[0]);
+				self.position_object_convex_hull_r(id, vertices, node_children[0]);
 			}
-			if vertices_front < bbox_vertices.len()
+			if vertices_front < vertices.len()
 			{
-				self.position_object_bbox_r(id, bbox_vertices, node_children[1]);
+				self.position_object_convex_hull_r(id, vertices, node_children[1]);
 			}
 		}
 	}
