@@ -616,6 +616,8 @@ impl Renderer
 						&depth_matrices,
 						&self.inline_models_index,
 					);
+
+					make_shadow_map_circle(depth_data, light_info.shadow_map_size);
 				},
 			}
 		}

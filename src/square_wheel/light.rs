@@ -130,6 +130,29 @@ fn get_cube_map_side_matrix(side: CubeMapSide) -> Mat4f
 	mat
 }
 
+pub fn make_shadow_map_circle(data: &mut [ShadowMapElement], size: u32)
+{
+	let inf = 1.0e24;
+
+	let size_signed = size as i32;
+	let radius = size_signed / 2;
+	for y in 0 .. size as i32
+	{
+		let dy = y - radius;
+		let dx = radius - (((radius * radius - dy * dy).max(0) as f32).sqrt().ceil() as i32).min(radius);
+
+		let line_data = &mut data[(y * size_signed) as usize .. ((y + 1) * size_signed) as usize];
+		for p in &mut line_data[0 .. (dx as usize)]
+		{
+			*p = inf;
+		}
+		for p in &mut line_data[(size_signed - dx) as usize .. (size_signed as usize)]
+		{
+			*p = inf;
+		}
+	}
+}
+
 pub fn get_light_shadow_factor(light: &DynamicLightWithShadow, vec: &Vec3f) -> f32
 {
 	match &light.shadow_map
