@@ -19,7 +19,6 @@ Renderer:
 * HDR skyboxes
 * Animated textures (with N frames)
 * Models rendering improvements - avoid splitting models into pieces for each BSP tree leaf in some cases
-* Dynamic lights with 2D shadowmap (not only cube)
 * Variable shadow map size
 * Shadows from triangle models
 * Multithreaded shadowmaps building
