@@ -547,7 +547,7 @@ impl Renderer
 					else
 					{
 						// TODO - tune this formula.
-						// TODO - maybe make it dependent on scrren resolution and FOV?
+						// TODO - maybe make it dependent on screen resolution and FOV?
 						let target_size =
 							(128.0 * light.radius / dist_to_closest_point).max(min_shadow_map_size as f32);
 						light_info.shadow_map_size = (1 << (target_size.log2() as u32))
@@ -557,9 +557,53 @@ impl Renderer
 
 					shadow_map_data_size = light_info.shadow_map_size * light_info.shadow_map_size * 6;
 				},
-				DynamicLightShadowType::Projector { .. } =>
+				DynamicLightShadowType::Projector { rotation, fov } =>
 				{
-					light_info.shadow_map_size = 256; // TODO - make configurable.
+					let min_shadow_map_size = 32;
+					let max_shadow_map_size = 1024;
+
+					let half_fov_tan_scaled_by_radius = light.radius * (fov * 0.5).tan();
+
+					let light_matrix = get_object_matrix(light.position, rotation);
+
+					let mut closest_square_dist = 1.0e24 as f32;
+					for v in [
+						Vec3f::new(light.radius, 0.0, 0.0),
+						Vec3f::new(
+							light.radius,
+							half_fov_tan_scaled_by_radius,
+							half_fov_tan_scaled_by_radius,
+						),
+						Vec3f::new(
+							light.radius,
+							half_fov_tan_scaled_by_radius,
+							-half_fov_tan_scaled_by_radius,
+						),
+						Vec3f::new(
+							light.radius,
+							-half_fov_tan_scaled_by_radius,
+							half_fov_tan_scaled_by_radius,
+						),
+						Vec3f::new(
+							light.radius,
+							-half_fov_tan_scaled_by_radius,
+							-half_fov_tan_scaled_by_radius,
+						),
+					]
+					{
+						let v_transformed = (light_matrix * v.extend(1.0)).truncate();
+						closest_square_dist =
+							closest_square_dist.min((frame_info.camera_matrices.position - v_transformed).magnitude2());
+					}
+
+					let closest_dist = closest_square_dist.sqrt();
+
+					let target_size =
+						(1024.0 * half_fov_tan_scaled_by_radius / closest_dist).max(min_shadow_map_size as f32);
+					light_info.shadow_map_size = (1 << (target_size.log2() as u32))
+						.min(max_shadow_map_size)
+						.max(min_shadow_map_size);
+
 					shadow_map_data_size = light_info.shadow_map_size * light_info.shadow_map_size;
 				},
 			}
