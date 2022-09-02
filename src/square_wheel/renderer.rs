@@ -2874,35 +2874,26 @@ fn create_dynamic_light_with_shadow<'a>(
 		shadow_map: match &light.shadow_type
 		{
 			DynamicLightShadowType::None => ShadowMap::None,
-			DynamicLightShadowType::Cubemap =>
-			{
-				// TODO - fix this.
-				// Disabling shadows for invisible lights is wrong because it may affect models.
+			DynamicLightShadowType::Cubemap => ShadowMap::Cube(
 				if light_info.visible
 				{
-					ShadowMap::Cube(create_dynamic_light_cube_shadow_map(light_info, shadow_maps_data))
+					create_dynamic_light_cube_shadow_map(light_info, shadow_maps_data)
 				}
 				else
 				{
-					ShadowMap::None
-				}
-			},
-			DynamicLightShadowType::Projector { rotation, fov } =>
-			{
+					create_dynamic_light_cube_shadow_map_dummy()
+				},
+			),
+			DynamicLightShadowType::Projector { rotation, fov } => ShadowMap::Projector(
 				if light_info.visible
 				{
-					ShadowMap::Projector(create_dynamic_light_projector_shadow_map(
-						rotation,
-						*fov,
-						light_info,
-						shadow_maps_data,
-					))
+					create_dynamic_light_projector_shadow_map(rotation, *fov, light_info, shadow_maps_data)
 				}
 				else
 				{
-					ShadowMap::None
-				}
-			},
+					create_dynamic_light_projector_shadow_map_dummy()
+				},
+			),
 		},
 	}
 }
@@ -2929,6 +2920,23 @@ fn create_dynamic_light_cube_shadow_map<'a>(
 	}
 }
 
+fn create_dynamic_light_cube_shadow_map_dummy() -> CubeShadowMap<'static>
+{
+	const DUMMY_DATA: [ShadowMapElement; 1] = [1.0e24];
+	const DUMMY: CubeShadowMap = CubeShadowMap {
+		size: 1,
+		sides: [
+			&DUMMY_DATA,
+			&DUMMY_DATA,
+			&DUMMY_DATA,
+			&DUMMY_DATA,
+			&DUMMY_DATA,
+			&DUMMY_DATA,
+		],
+	};
+	DUMMY
+}
+
 fn create_dynamic_light_projector_shadow_map<'a>(
 	rotation: &QuaternionF,
 	fov: RadiansF,
@@ -2948,6 +2956,18 @@ fn create_dynamic_light_projector_shadow_map<'a>(
 		basis_x: rotation.rotate_vector(Vec3f::unit_y()) * inv_half_fov_tan,
 		basis_y: rotation.rotate_vector(Vec3f::unit_z()) * inv_half_fov_tan,
 		basis_z: rotation.rotate_vector(-Vec3f::unit_x()),
+	}
+}
+
+fn create_dynamic_light_projector_shadow_map_dummy() -> ProjectorShadowMap<'static>
+{
+	const DUMMY_DATA: [ShadowMapElement; 1] = [1.0e24];
+	ProjectorShadowMap {
+		size: 1,
+		data: &DUMMY_DATA,
+		basis_x: Vec3f::unit_y(),
+		basis_y: Vec3f::unit_z(),
+		basis_z: Vec3f::unit_x(),
 	}
 }
 
