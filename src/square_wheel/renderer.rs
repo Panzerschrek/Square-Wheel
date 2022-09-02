@@ -2749,8 +2749,6 @@ fn polygon_is_affected_by_light(
 {
 	// TODO - check mathemathics here.
 
-	// TODO - process projector shadows specially.
-
 	let vec_from_light_position_to_tc_start_point = light.position - basis_vecs.start;
 	let signed_dinstance_to_polygon_plane = vec_from_light_position_to_tc_start_point.dot(basis_vecs.normal);
 	if signed_dinstance_to_polygon_plane <= 0.0
@@ -2767,39 +2765,88 @@ fn polygon_is_affected_by_light(
 		return false;
 	}
 
-	// Calculate texture coordinates at point of projection of light position to polygon plane.
-	let mat = if let Some(m) = Mat3f::from_cols(basis_vecs.u, basis_vecs.v, basis_vecs.normal).invert()
+	if let ShadowMap::Projector(projector_shadow_map) = &light.shadow_map
 	{
-		m.transpose()
-	}
-	else
-	{
-		return false;
-	};
-	let tc_at_projected_light_position = [
-		vec_from_light_position_to_tc_start_point.dot(mat.x),
-		vec_from_light_position_to_tc_start_point.dot(mat.y),
-	];
+		// Check intersection of light pyramid planes with (approximate) vertices of polygon.
 
-	// Check min/max texture coordinates of projected circle agains polygon min/max texture coordinates.
-	// This is inexact check (not proper polygon check) but it gives good enough result.
-	let radius_at_polygon_plane = square_radius_at_polygon_plane.sqrt();
-	let u_radius = radius_at_polygon_plane * inv_sqrt_fast(basis_vecs.u.magnitude2());
-	let v_radius = radius_at_polygon_plane * inv_sqrt_fast(basis_vecs.v.magnitude2());
+		let u0 = basis_vecs.u * (polygon.tex_coord_min[0] as f32);
+		let u1 = basis_vecs.u * (polygon.tex_coord_max[0] as f32);
+		let v0 = basis_vecs.v * (polygon.tex_coord_min[1] as f32);
+		let v1 = basis_vecs.v * (polygon.tex_coord_max[1] as f32);
+		let vertices = [
+			basis_vecs.start + u0 + v0,
+			basis_vecs.start + u0 + v1,
+			basis_vecs.start + u1 + v0,
+			basis_vecs.start + u1 + v1,
+		];
 
-	if tc_at_projected_light_position[0] + u_radius < (polygon.tex_coord_min[0] as f32) ||
-		tc_at_projected_light_position[1] + v_radius < (polygon.tex_coord_min[1] as f32) ||
-		tc_at_projected_light_position[0] - u_radius > (polygon.tex_coord_max[0] as f32) ||
-		tc_at_projected_light_position[1] - v_radius > (polygon.tex_coord_max[1] as f32)
-	{
-		// Light porjection circle is outside polygon borders.
-		false
-	}
-	else
-	{
-		// Light affects this polygon.
-		// TODO - maybe process corner cases here (literally, check intersection with corners)?
+		let plane_vecs = [
+			projector_shadow_map.basis_z,
+			projector_shadow_map.basis_z - projector_shadow_map.basis_x,
+			projector_shadow_map.basis_z + projector_shadow_map.basis_x,
+			projector_shadow_map.basis_z - projector_shadow_map.basis_y,
+			projector_shadow_map.basis_z + projector_shadow_map.basis_y,
+		];
+
+		for plane_vec in &plane_vecs
+		{
+			let plane = Plane {
+				vec: *plane_vec,
+				dist: plane_vec.dot(light.position),
+			};
+			let mut vertices_front = 0;
+			for vertex in vertices
+			{
+				if plane.vec.dot(vertex) >= plane.dist
+				{
+					vertices_front += 1;
+				}
+			}
+			if vertices_front >= vertices.len()
+			{
+				// Clipped by one of planes.
+				return false;
+			}
+		}
+
 		true
+	}
+	else
+	{
+		// Calculate texture coordinates at point of projection of light position to polygon plane.
+		let mat = if let Some(m) = Mat3f::from_cols(basis_vecs.u, basis_vecs.v, basis_vecs.normal).invert()
+		{
+			m.transpose()
+		}
+		else
+		{
+			return false;
+		};
+		let tc_at_projected_light_position = [
+			vec_from_light_position_to_tc_start_point.dot(mat.x),
+			vec_from_light_position_to_tc_start_point.dot(mat.y),
+		];
+
+		// Check min/max texture coordinates of projected circle agains polygon min/max texture coordinates.
+		// This is inexact check (not proper polygon check) but it gives good enough result.
+		let radius_at_polygon_plane = square_radius_at_polygon_plane.sqrt();
+		let u_radius = radius_at_polygon_plane * inv_sqrt_fast(basis_vecs.u.magnitude2());
+		let v_radius = radius_at_polygon_plane * inv_sqrt_fast(basis_vecs.v.magnitude2());
+
+		if tc_at_projected_light_position[0] + u_radius < (polygon.tex_coord_min[0] as f32) ||
+			tc_at_projected_light_position[1] + v_radius < (polygon.tex_coord_min[1] as f32) ||
+			tc_at_projected_light_position[0] - u_radius > (polygon.tex_coord_max[0] as f32) ||
+			tc_at_projected_light_position[1] - v_radius > (polygon.tex_coord_max[1] as f32)
+		{
+			// Light porjection circle is outside polygon borders.
+			false
+		}
+		else
+		{
+			// Light affects this polygon.
+			// TODO - maybe process corner cases here (literally, check intersection with corners)?
+			true
+		}
 	}
 }
 
