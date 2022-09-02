@@ -177,20 +177,20 @@ pub fn update_player_entity(
 			let position = player_position;
 			let rotation = camera_rotation;
 
-			let brightness = 512.0 * 1024.0;
+			let brightness = 128.0 * 1024.0;
 
 			flashlight_entity = ecs.spawn((
 				LocationComponent { position, rotation },
 				PlayerControllerCameraLocationComponent {
 					entity: player_entity,
-					camera_view_offset: Vec3f::new(0.0, 0.0, 18.0),
-					relative_position: Vec3f::new(0.0, 16.0, -16.0),
-					relative_rotation: QuaternionF::from_angle_z(Rad(-0.05 * std::f32::consts::PI)),
+					camera_view_offset: Vec3f::new(0.0, 0.0, 20.0),
+					relative_position: Vec3f::new(0.0, 12.0, -15.0),
+					relative_rotation: QuaternionF::from_angle_z(Rad(-0.02 * std::f32::consts::PI)),
 				},
 				DynamicLightLocationLinkComponent {},
 				DynamicLight {
 					position,
-					radius: 1024.0,
+					radius: 512.0,
 					color: [brightness, brightness, brightness],
 					shadow_type: DynamicLightShadowType::Projector {
 						rotation,
