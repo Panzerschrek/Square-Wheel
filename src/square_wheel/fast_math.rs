@@ -1,4 +1,5 @@
 // This module contains helper functions, based on various intrinsincs.
+use crate::common::math_types::*;
 
 pub use fast_math_impl::*;
 
@@ -755,4 +756,25 @@ pub unsafe fn debug_only_checked_fetch<T: Copy>(data: &[T], address: usize) -> T
 	{
 		*data.get_unchecked(address)
 	}
+}
+
+// Faster version of dot product, because it uses "mul_add".
+pub fn vec3_dot(a: &Vec3f, b: &Vec3f) -> f32
+{
+	f32_mul_add(a.x, b.x, f32_mul_add(a.y, b.y, a.z * b.z))
+}
+
+// Faster than naive vec = a * scalar + b, because of "mul_add".
+pub fn vec3_scalar_mul_add(a: &Vec3f, scalar: f32, b: &Vec3f) -> Vec3f
+{
+	Vec3f::new(
+		f32_mul_add(a.x, scalar, b.x),
+		f32_mul_add(a.y, scalar, b.y),
+		f32_mul_add(a.z, scalar, b.z),
+	)
+}
+
+pub fn vec3_len2(v: &Vec3f) -> f32
+{
+	vec3_dot(v, v)
 }

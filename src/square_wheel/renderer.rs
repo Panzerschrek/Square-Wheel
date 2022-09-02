@@ -345,6 +345,27 @@ impl Renderer
 		{
 			self.print_debug_stats(frame_info, debug_stats_printer, &performance_counters);
 		}
+
+		if self.config.debug_draw_depth
+		{
+			for light_info in &self.dynamic_lights_info
+			{
+				let data_size = (light_info.shadow_map_size * light_info.shadow_map_size) as usize;
+				let shadow_map_data = &self.shadow_maps_data
+					[light_info.shadow_map_data_offset .. light_info.shadow_map_data_offset + data_size];
+
+				for y in 0 .. light_info.shadow_map_size
+				{
+					for x in 0 .. light_info.shadow_map_size
+					{
+						let depth = shadow_map_data[(x + y * light_info.shadow_map_size) as usize];
+						let z = (0.5 / depth).max(0.0).min(255.0);
+						pixels[(x as usize) + (y as usize) * surface_info.pitch] =
+							ColorVec::from_color_f32x3(&[z, z, z]).into();
+					}
+				}
+			}
+		}
 	}
 
 	fn print_debug_stats(
@@ -516,6 +537,11 @@ impl Renderer
 					light_info.shadow_map_size = 256; // TODO - make configurable.
 					shadow_map_data_size = light_info.shadow_map_size * light_info.shadow_map_size * 6;
 				},
+				DynamicLightShadowType::Projector { .. } =>
+				{
+					light_info.shadow_map_size = 256; // TODO - make configurable.
+					shadow_map_data_size = light_info.shadow_map_size * light_info.shadow_map_size;
+				},
 			}
 
 			light_info.shadow_map_data_offset = shadow_map_data_offset;
@@ -540,7 +566,7 @@ impl Renderer
 				continue;
 			}
 
-			match light.shadow_type
+			match &light.shadow_type
 			{
 				DynamicLightShadowType::None =>
 				{},
@@ -569,6 +595,29 @@ impl Renderer
 							&self.inline_models_index,
 						);
 					}
+				},
+				DynamicLightShadowType::Projector { rotation, fov } =>
+				{
+					let depth_matrices = calculate_projector_shadow_map_matrices(
+						light.position,
+						*rotation,
+						*fov,
+						light_info.shadow_map_size as f32,
+					);
+
+					let data_size = light_info.shadow_map_size * light_info.shadow_map_size;
+					let depth_data = &mut self.shadow_maps_data
+						[light_info.shadow_map_data_offset .. light_info.shadow_map_data_offset + data_size as usize];
+
+					self.shadows_maps_renderer.draw_map(
+						depth_data,
+						light_info.shadow_map_size,
+						light_info.shadow_map_size,
+						&depth_matrices,
+						&self.inline_models_index,
+					);
+
+					make_shadow_map_circle(depth_data, light_info.shadow_map_size);
 				},
 			}
 		}
@@ -673,11 +722,20 @@ impl Renderer
 						continue;
 					}
 
-					let shadow_factor = match light.shadow_type
+					let shadow_factor = match &light.shadow_type
 					{
 						DynamicLightShadowType::None => 1.0,
 						DynamicLightShadowType::Cubemap => cube_shadow_map_fetch(
 							&create_dynamic_light_cube_shadow_map(light_info, &self.shadow_maps_data),
+							&vec_to_light,
+						),
+						DynamicLightShadowType::Projector { rotation, fov } => projector_shadow_map_fetch(
+							&create_dynamic_light_projector_shadow_map(
+								rotation,
+								*fov,
+								light_info,
+								&self.shadow_maps_data,
+							),
 							&vec_to_light,
 						),
 					};
@@ -1330,7 +1388,7 @@ impl Renderer
 			radius: 1.0,
 			inv_square_radius: 1.0,
 			color: [0.0; 3],
-			shadow_map: None,
+			shadow_map: ShadowMap::None,
 		};
 		const MAX_POLYGON_LIGHTS: usize = 6;
 
@@ -2707,39 +2765,88 @@ fn polygon_is_affected_by_light(
 		return false;
 	}
 
-	// Calculate texture coordinates at point of projection of light position to polygon plane.
-	let mat = if let Some(m) = Mat3f::from_cols(basis_vecs.u, basis_vecs.v, basis_vecs.normal).invert()
+	if let ShadowMap::Projector(projector_shadow_map) = &light.shadow_map
 	{
-		m.transpose()
-	}
-	else
-	{
-		return false;
-	};
-	let tc_at_projected_light_position = [
-		vec_from_light_position_to_tc_start_point.dot(mat.x),
-		vec_from_light_position_to_tc_start_point.dot(mat.y),
-	];
+		// Check intersection of light pyramid planes with (approximate) vertices of polygon.
 
-	// Check min/max texture coordinates of projected circle agains polygon min/max texture coordinates.
-	// This is inexact check (not proper polygon check) but it gives good enough result.
-	let radius_at_polygon_plane = square_radius_at_polygon_plane.sqrt();
-	let u_radius = radius_at_polygon_plane * inv_sqrt_fast(basis_vecs.u.magnitude2());
-	let v_radius = radius_at_polygon_plane * inv_sqrt_fast(basis_vecs.v.magnitude2());
+		let u0 = basis_vecs.u * (polygon.tex_coord_min[0] as f32);
+		let u1 = basis_vecs.u * (polygon.tex_coord_max[0] as f32);
+		let v0 = basis_vecs.v * (polygon.tex_coord_min[1] as f32);
+		let v1 = basis_vecs.v * (polygon.tex_coord_max[1] as f32);
+		let vertices = [
+			basis_vecs.start + u0 + v0,
+			basis_vecs.start + u0 + v1,
+			basis_vecs.start + u1 + v0,
+			basis_vecs.start + u1 + v1,
+		];
 
-	if tc_at_projected_light_position[0] + u_radius < (polygon.tex_coord_min[0] as f32) ||
-		tc_at_projected_light_position[1] + v_radius < (polygon.tex_coord_min[1] as f32) ||
-		tc_at_projected_light_position[0] - u_radius > (polygon.tex_coord_max[0] as f32) ||
-		tc_at_projected_light_position[1] - v_radius > (polygon.tex_coord_max[1] as f32)
-	{
-		// Light porjection circle is outside polygon borders.
-		false
-	}
-	else
-	{
-		// Light affects this polygon.
-		// TODO - maybe process corner cases here (literally, check intersection with corners)?
+		let plane_vecs = [
+			projector_shadow_map.basis_z,
+			projector_shadow_map.basis_z - projector_shadow_map.basis_x,
+			projector_shadow_map.basis_z + projector_shadow_map.basis_x,
+			projector_shadow_map.basis_z - projector_shadow_map.basis_y,
+			projector_shadow_map.basis_z + projector_shadow_map.basis_y,
+		];
+
+		for plane_vec in &plane_vecs
+		{
+			let plane = Plane {
+				vec: *plane_vec,
+				dist: plane_vec.dot(light.position),
+			};
+			let mut vertices_front = 0;
+			for vertex in vertices
+			{
+				if plane.vec.dot(vertex) >= plane.dist
+				{
+					vertices_front += 1;
+				}
+			}
+			if vertices_front >= vertices.len()
+			{
+				// Clipped by one of planes.
+				return false;
+			}
+		}
+
 		true
+	}
+	else
+	{
+		// Calculate texture coordinates at point of projection of light position to polygon plane.
+		let mat = if let Some(m) = Mat3f::from_cols(basis_vecs.u, basis_vecs.v, basis_vecs.normal).invert()
+		{
+			m.transpose()
+		}
+		else
+		{
+			return false;
+		};
+		let tc_at_projected_light_position = [
+			vec_from_light_position_to_tc_start_point.dot(mat.x),
+			vec_from_light_position_to_tc_start_point.dot(mat.y),
+		];
+
+		// Check min/max texture coordinates of projected circle agains polygon min/max texture coordinates.
+		// This is inexact check (not proper polygon check) but it gives good enough result.
+		let radius_at_polygon_plane = square_radius_at_polygon_plane.sqrt();
+		let u_radius = radius_at_polygon_plane * inv_sqrt_fast(basis_vecs.u.magnitude2());
+		let v_radius = radius_at_polygon_plane * inv_sqrt_fast(basis_vecs.v.magnitude2());
+
+		if tc_at_projected_light_position[0] + u_radius < (polygon.tex_coord_min[0] as f32) ||
+			tc_at_projected_light_position[1] + v_radius < (polygon.tex_coord_min[1] as f32) ||
+			tc_at_projected_light_position[0] - u_radius > (polygon.tex_coord_max[0] as f32) ||
+			tc_at_projected_light_position[1] - v_radius > (polygon.tex_coord_max[1] as f32)
+		{
+			// Light porjection circle is outside polygon borders.
+			false
+		}
+		else
+		{
+			// Light affects this polygon.
+			// TODO - maybe process corner cases here (literally, check intersection with corners)?
+			true
+		}
 	}
 }
 
@@ -2754,18 +2861,36 @@ fn create_dynamic_light_with_shadow<'a>(
 		radius: light.radius,
 		inv_square_radius: 1.0 / (light.radius * light.radius),
 		color: light.color,
-		shadow_map: match light.shadow_type
+		shadow_map: match &light.shadow_type
 		{
-			DynamicLightShadowType::None => None,
+			DynamicLightShadowType::None => ShadowMap::None,
 			DynamicLightShadowType::Cubemap =>
 			{
+				// TODO - fix this.
+				// Disabling shadows for invisible lights is wrong because it may affect models.
 				if light_info.visible
 				{
-					Some(create_dynamic_light_cube_shadow_map(light_info, shadow_maps_data))
+					ShadowMap::Cube(create_dynamic_light_cube_shadow_map(light_info, shadow_maps_data))
 				}
 				else
 				{
-					None
+					ShadowMap::None
+				}
+			},
+			DynamicLightShadowType::Projector { rotation, fov } =>
+			{
+				if light_info.visible
+				{
+					ShadowMap::Projector(create_dynamic_light_projector_shadow_map(
+						rotation,
+						*fov,
+						light_info,
+						shadow_maps_data,
+					))
+				}
+				else
+				{
+					ShadowMap::None
 				}
 			},
 		},
@@ -2791,6 +2916,28 @@ fn create_dynamic_light_cube_shadow_map<'a>(
 			&shadow_map_data[4 * side_data_size .. 5 * side_data_size],
 			&shadow_map_data[5 * side_data_size .. 6 * side_data_size],
 		],
+	}
+}
+
+fn create_dynamic_light_projector_shadow_map<'a>(
+	rotation: &QuaternionF,
+	fov: RadiansF,
+	light_info: &DynamicLightInfo,
+	shadow_maps_data: &'a [ShadowMapElement],
+) -> ProjectorShadowMap<'a>
+{
+	let data_size = (light_info.shadow_map_size * light_info.shadow_map_size) as usize;
+	let shadow_map_data =
+		&shadow_maps_data[light_info.shadow_map_data_offset .. light_info.shadow_map_data_offset + data_size];
+
+	let inv_half_fov_tan = 1.0 / (fov * 0.5).tan();
+
+	ProjectorShadowMap {
+		size: light_info.shadow_map_size,
+		data: shadow_map_data,
+		basis_x: rotation.rotate_vector(Vec3f::unit_y()) * inv_half_fov_tan,
+		basis_y: rotation.rotate_vector(Vec3f::unit_z()) * inv_half_fov_tan,
+		basis_z: rotation.rotate_vector(-Vec3f::unit_x()),
 	}
 }
 

@@ -84,6 +84,7 @@ pub struct SimpleAnimationComponent {}
 pub struct PlayerComponent
 {
 	pub view_model_entity: hecs::Entity,
+	pub flashlight_entity: hecs::Entity,
 }
 
 // Component for player controlling.
