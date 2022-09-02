@@ -19,6 +19,10 @@ pub struct RendererConfig
 	#[serde(default)]
 	pub dynamic_mip_bias: bool,
 
+	#[serde(default)]
+	// In range [-1; 1]
+	pub shadows_quality: f32,
+
 	#[serde(default = "default_true")]
 	pub use_directional_lightmaps: bool,
 }

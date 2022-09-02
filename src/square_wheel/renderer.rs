@@ -548,9 +548,9 @@ impl Renderer
 					{
 						// TODO - tune this formula.
 						// TODO - maybe make it dependent on screen resolution and FOV?
-						let target_size =
-							(128.0 * light.radius / dist_to_closest_point).max(min_shadow_map_size as f32);
-						light_info.shadow_map_size = (1 << (target_size.log2() as u32))
+						let target_size = 128.0 * light.radius / dist_to_closest_point;
+						light_info.shadow_map_size = (1 <<
+							(target_size.log2() + self.config.shadows_quality).max(0.0) as u32)
 							.min(max_shadow_map_size)
 							.max(min_shadow_map_size);
 					}
@@ -598,9 +598,9 @@ impl Renderer
 
 					let closest_dist = closest_square_dist.sqrt();
 
-					let target_size =
-						(1024.0 * half_fov_tan_scaled_by_radius / closest_dist).max(min_shadow_map_size as f32);
-					light_info.shadow_map_size = (1 << (target_size.log2() as u32))
+					let target_size = 1024.0 * half_fov_tan_scaled_by_radius / closest_dist;
+					light_info.shadow_map_size = (1 <<
+						((target_size.log2() + self.config.shadows_quality).max(0.0) as u32))
 						.min(max_shadow_map_size)
 						.max(min_shadow_map_size);
 
@@ -2735,6 +2735,17 @@ impl Renderer
 		if self.config.textures_mip_bias > 2.0
 		{
 			self.config.textures_mip_bias = 2.0;
+			config_is_dirty = true;
+		}
+
+		if self.config.shadows_quality < -1.0
+		{
+			self.config.shadows_quality = -1.0;
+			config_is_dirty = true;
+		}
+		if self.config.shadows_quality > 1.0
+		{
+			self.config.shadows_quality = 1.0;
 			config_is_dirty = true;
 		}
 
