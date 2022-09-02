@@ -281,7 +281,7 @@ impl Renderer
 			&mut performance_counters.visible_leafs_search,
 		);
 
-		self.prepare_dynamic_lights(&frame_info.lights);
+		self.prepare_dynamic_lights(frame_info);
 		run_with_measure(
 			|| {
 				self.build_shadow_maps(&frame_info.lights);
@@ -496,8 +496,10 @@ impl Renderer
 		debug_stats_printer.add_line(format!("mip bias: {}", self.mip_bias));
 	}
 
-	fn prepare_dynamic_lights(&mut self, lights: &[DynamicLight])
+	fn prepare_dynamic_lights(&mut self, frame_info: &FrameInfo)
 	{
+		let lights = &frame_info.lights;
+
 		self.dynamic_lights_index.position_dynamic_lights(lights);
 
 		self.dynamic_lights_info
@@ -534,7 +536,25 @@ impl Renderer
 				},
 				DynamicLightShadowType::Cubemap =>
 				{
-					light_info.shadow_map_size = 256; // TODO - make configurable.
+					let dist_from_camera = (frame_info.camera_matrices.position - light.position).magnitude();
+					let dist_to_closest_point = dist_from_camera - light.radius;
+					let min_shadow_map_size = 64;
+					let max_shadow_map_size = 256;
+					if dist_to_closest_point <= 0.0
+					{
+						light_info.shadow_map_size = max_shadow_map_size;
+					}
+					else
+					{
+						// TODO - tune this formula.
+						// TODO - maybe make it dependent on scrren resolution and FOV?
+						let target_size =
+							(128.0 * light.radius / dist_to_closest_point).max(min_shadow_map_size as f32);
+						light_info.shadow_map_size = (1 << (target_size.log2() as u32))
+							.min(max_shadow_map_size)
+							.max(min_shadow_map_size);
+					}
+
 					shadow_map_data_size = light_info.shadow_map_size * light_info.shadow_map_size * 6;
 				},
 				DynamicLightShadowType::Projector { .. } =>
