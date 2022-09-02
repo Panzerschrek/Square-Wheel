@@ -623,6 +623,7 @@ impl Renderer
 		}
 	}
 
+	// Call this only after dynamic lights preparation.
 	fn prepare_submodels(&mut self, frame_info: &FrameInfo)
 	{
 		self.inline_models_index.position_models(&frame_info.submodel_entities);
@@ -666,8 +667,17 @@ impl Renderer
 				}
 
 				// For each light check intersection against bbox of transformed model.
-				for (index, light) in frame_info.lights.iter().enumerate()
+				for (index, (light, light_info)) in frame_info
+					.lights
+					.iter()
+					.zip(self.dynamic_lights_info.iter())
+					.enumerate()
 				{
+					if !light_info.visible
+					{
+						continue;
+					}
+
 					if light.position.x - light.radius > bbox_world_space.max.x ||
 						light.position.x + light.radius < bbox_world_space.min.x ||
 						light.position.y - light.radius > bbox_world_space.max.y ||
