@@ -1,6 +1,7 @@
 use super::{camera_rotation_controller::*, math_types::*, system_window};
 use sdl2::keyboard::Scancode;
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct CameraController
 {
 	pos: Vec3f,

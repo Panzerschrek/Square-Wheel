@@ -1,6 +1,7 @@
 use super::{math_types::*, system_window};
 use sdl2::keyboard::Scancode;
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct CameraRotationController
 {
 	azimuth: RadiansF,

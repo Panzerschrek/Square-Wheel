@@ -1,15 +1,19 @@
 use super::{frame_info::*, test_game_physics};
+use serde::{Deserialize, Serialize};
 use square_wheel_lib::common::{bbox::*, camera_rotation_controller::*, math_types::*};
 
 // This file contains various ECS components.
 //
 
 // Various components for test things identification.
-
+#[derive(Serialize, Deserialize)]
 pub struct TestModelComponent {}
+#[derive(Serialize, Deserialize)]
 pub struct TestDecalComponent {}
+#[derive(Serialize, Deserialize)]
 pub struct TestLightComponent {}
 
+#[derive(Serialize, Deserialize)]
 pub struct TestProjectileComponent
 {
 	pub velocity: Vec3f,
@@ -24,6 +28,7 @@ pub struct SubmodelEntityWithIndex
 }
 
 // Component for entities that have some location.
+#[derive(Serialize, Deserialize)]
 pub struct LocationComponent
 {
 	pub position: Vec3f,
@@ -31,24 +36,28 @@ pub struct LocationComponent
 }
 
 // Despawn entities with such component when despawn time is reached.
+#[derive(Serialize, Deserialize)]
 pub struct TimedDespawnComponent
 {
 	pub despawn_time: f32,
 }
 
 // Take location from player controller.
+#[derive(Serialize, Deserialize)]
 pub struct PlayerControllerLocationComponent {}
 
 // Location will be taken from physics engine.
 pub type PhysicsLocationComponent = test_game_physics::ObjectHandle;
 
 // Component for physics object, which location will be updated according to location component.
+#[derive(Serialize, Deserialize)]
 pub struct LocationKinematicPhysicsObjectComponent
 {
 	pub phys_handle: test_game_physics::ObjectHandle,
 }
 
 // Calculate location relative other entity.
+#[derive(Serialize, Deserialize)]
 pub struct OtherEntityLocationComponent
 {
 	pub entity: hecs::Entity,
@@ -57,6 +66,7 @@ pub struct OtherEntityLocationComponent
 }
 
 // Take location from player controller camera.
+#[derive(Serialize, Deserialize)]
 pub struct PlayerControllerCameraLocationComponent
 {
 	pub entity: hecs::Entity,
@@ -66,21 +76,27 @@ pub struct PlayerControllerCameraLocationComponent
 }
 
 // Component that sets ModelEntity position/rotation using LocationComponent.
+#[derive(Serialize, Deserialize)]
 pub struct ModelEntityLocationLinkComponent {}
 
 // Component that sets SubmodelEntityWithIndex position/rotation using LocationComponent.
+#[derive(Serialize, Deserialize)]
 pub struct SubmodelEntityWithIndexLocationLinkComponent {}
 
 // Component that sets Decal position/rotation using LocationComponent.
+#[derive(Serialize, Deserialize)]
 pub struct DecalLocationLinkComponent {}
 
 // Component that sets DynamicLight position/rotation using LocationComponent.
+#[derive(Serialize, Deserialize)]
 pub struct DynamicLightLocationLinkComponent {}
 
 // Just play animation consisting of all model frames.
+#[derive(Serialize, Deserialize)]
 pub struct SimpleAnimationComponent {}
 
 // General pplayer component.
+#[derive(Serialize, Deserialize)]
 pub struct PlayerComponent
 {
 	pub view_model_entity: hecs::Entity,
@@ -88,6 +104,7 @@ pub struct PlayerComponent
 }
 
 // Component for player controlling.
+#[derive(Serialize, Deserialize)]
 pub struct PlayerControllerComponent
 {
 	pub rotation_controller: CameraRotationController,
@@ -95,6 +112,7 @@ pub struct PlayerControllerComponent
 }
 
 // Variants of player controlling.
+#[derive(Serialize, Deserialize)]
 pub enum PlayerPositionSource
 {
 	Noclip(Vec3f),
@@ -102,41 +120,48 @@ pub enum PlayerPositionSource
 }
 
 // Trigger than can be activated by touching.
+#[derive(Serialize, Deserialize)]
 pub struct TouchTriggerComponent
 {
 	pub bbox: BBox,
 }
 
 // Component of trigger entity to trigger single target.
+#[derive(Serialize, Deserialize)]
 pub struct TriggerSingleTargetComponent
 {
 	pub target: hecs::Entity,
 }
 
 // Name of triggerable object(s) for buttons, triggers.
+#[derive(Serialize, Deserialize)]
 pub struct TargetNameComponent
 {
 	pub name: String,
 }
 
 // Name of triggerable object, used by buttons, triggers.
+#[derive(Serialize, Deserialize)]
 pub struct NamedTargetComponent
 {
 	pub name: String,
 }
 
 // Used for various entites with "wait" field.
+#[derive(Serialize, Deserialize)]
 pub struct WaitComponent
 {
 	pub wait: f32,
 }
 
 // Component for entities that may be activated.
+#[derive(Serialize, Deserialize)]
 pub struct EntityActivationComponent
 {
 	pub activated: bool,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct PlateComponent
 {
 	pub speed: f32,
@@ -145,6 +170,7 @@ pub struct PlateComponent
 	pub state: PlateState,
 }
 
+#[derive(Serialize, Deserialize)]
 pub enum PlateState
 {
 	TargetUp,
@@ -155,6 +181,7 @@ pub enum PlateState
 	},
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct DoorComponent
 {
 	pub speed: f32,
@@ -165,6 +192,7 @@ pub struct DoorComponent
 	pub slave_doors: Vec<hecs::Entity>,
 }
 
+#[derive(Serialize, Deserialize)]
 pub enum DoorState
 {
 	TargetOpened,
@@ -175,6 +203,7 @@ pub enum DoorState
 	},
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct ButtonComponent
 {
 	pub speed: f32,
@@ -184,6 +213,7 @@ pub struct ButtonComponent
 	pub state: ButtonState,
 }
 
+#[derive(Serialize, Deserialize)]
 pub enum ButtonState
 {
 	TargetPressed,
@@ -194,6 +224,7 @@ pub enum ButtonState
 	},
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct TrainComponent
 {
 	pub speed: f32,
@@ -202,6 +233,7 @@ pub struct TrainComponent
 	pub target: hecs::Entity,
 }
 
+#[derive(Serialize, Deserialize)]
 pub enum TrainState
 {
 	SearchForInitialPosition,

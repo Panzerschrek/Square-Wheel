@@ -98,6 +98,7 @@ checksum = "1a98d30140e3296250832bbaaff83b27dcd6fa3cc70fb6f1f3e5c9c0023b5317"
 dependencies = [
  "approx 0.4.0",
  "num-traits",
+ "serde",
 ]
 
 [[package]]
@@ -596,6 +597,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_type_name"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92acc4cd6ae20767c54d6cf1a075624e7f4d9e99d7ebc685398ff243144d8714"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "simba"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -653,6 +663,7 @@ dependencies = [
  "sdl2",
  "serde",
  "serde_json",
+ "serde_type_name",
  "structopt",
 ]
 

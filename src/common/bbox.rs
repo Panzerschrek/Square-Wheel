@@ -1,6 +1,6 @@
 use super::math_types::*;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, serde::Serialize, serde::Deserialize)]
 pub struct BBox
 {
 	pub min: Vec3f,

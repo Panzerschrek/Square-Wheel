@@ -12,12 +12,13 @@ lto = true
 rasterizer_unchecked_div = []
 
 [dependencies]
-cgmath = "0.18"
+cgmath = { version = "0.18", features = ["serde" ] }
 hecs = { version = "0.9.0", features = ["column-serialize", "row-serialize" ] }
 num_cpus = "1.13.1"
 rayon = "1.5.3"
 sdl2 = { version = "0.35", features = ["image"] }
 serde = { version = "1.0", features = ["derive"] }
+serde_type_name = "0.2.0"
 serde_json = "1.0"
 structopt = "0.3"
 
