@@ -1,9 +1,13 @@
 use super::{components::*, frame_info::*, resources_manager, textures, triangle_model};
-use serde::{Deserialize, Serialize};
+use serde::{ser::SerializeMap, Deserialize, Serialize, Serializer};
 use square_wheel_lib::common::{bbox::*, material, math_types::*};
 use std::collections::HashMap;
 
-pub fn save_world(ecs: &hecs::World, file_path: &std::path::Path)
+pub fn save_world(
+	ecs: &hecs::World,
+	file_path: &std::path::Path,
+	resources_manager: &resources_manager::ResourcesManager,
+)
 {
 	let file = std::fs::OpenOptions::new()
 		.read(true)
@@ -18,8 +22,38 @@ pub fn save_world(ecs: &hecs::World, file_path: &std::path::Path)
 	let mut context = SerializeContext {
 		shared_resources: &mut shared_resources,
 	};
+
 	let mut serializer = serde_json::Serializer::pretty(file);
 	hecs::serialize::row::serialize(ecs, &mut context, &mut serializer).unwrap();
+
+	// TODO - fix this mess.
+	// serde_json is stupid - it can't serialize map while serializing map.
+	{
+		let mut seq = serializer.serialize_map(Some(shared_resources.models.len())).unwrap();
+		for (_, model) in &shared_resources.models
+		{
+			if let Some(name) = resources_manager.get_model_name(model)
+			{
+				seq.serialize_key(&ResourceSerializationKey::from_resource_unchecked(model));
+				seq.serialize_value(name);
+			}
+		}
+		seq.end();
+	}
+	{
+		let mut seq = serializer
+			.serialize_map(Some(shared_resources.lite_textures.len()))
+			.unwrap();
+		for (_, texture) in &shared_resources.lite_textures
+		{
+			if let Some(name) = resources_manager.get_texture_lite_name(texture)
+			{
+				seq.serialize_key(&ResourceSerializationKey::from_resource_unchecked(texture));
+				seq.serialize_value(name);
+			}
+		}
+		seq.end();
+	}
 }
 
 struct SerializeContext<'a>
@@ -147,6 +181,11 @@ impl ResourceSerializationKey
 		}
 
 		Self(ptr as usize as u64)
+	}
+
+	fn from_resource_unchecked<T>(resource: &resources_manager::SharedResourcePtr<T>) -> Self
+	{
+		Self(std::sync::Arc::as_ptr(resource) as usize as u64)
 	}
 
 	fn to_resource<T>(self, resources: &ResourcesMap<T>) -> Option<resources_manager::SharedResourcePtr<T>>

@@ -23,10 +23,17 @@ pub struct ResourcesManager
 
 	models: ResourcesMap<triangle_model::TriangleModel>,
 	stub_model: SharedResourcePtr<triangle_model::TriangleModel>,
+	models_names: ResourcesNameMap,
+
 	images: ResourcesMap<image::Image>,
 	stub_image: SharedResourcePtr<image::Image>,
+	images_names: ResourcesNameMap,
+
 	material_textures: ResourcesMap<TextureWithMips>,
+
 	lite_textures: ResourcesMap<TextureLiteWithMips>,
+	lite_textures_names: ResourcesNameMap,
+
 	skybox_textures_32: ResourcesMap<SkyboxTextures<Color32>>,
 	skybox_textures_64: ResourcesMap<SkyboxTextures<Color64>>,
 }
@@ -38,6 +45,21 @@ pub type SharedResourcePtr<T> = Arc<T>;
 pub type ResourceKey = String;
 
 type ResourcesMap<T> = HashMap<String, SharedResourcePtr<T>>;
+
+// Use pointer to name map in order to obtain name for given resource.
+// Use "usize" to avoid problems with sharing.
+type ResourcesNameMap = HashMap<ResourcePtrInt, String>;
+
+#[derive(std::cmp::PartialEq, std::cmp::Eq, std::hash::Hash, Copy, Clone)]
+struct ResourcePtrInt(usize);
+
+impl ResourcePtrInt
+{
+	fn new<T>(resource: &SharedResourcePtr<T>) -> Self
+	{
+		Self(Arc::as_ptr(resource) as usize)
+	}
+}
 
 impl ResourcesManager
 {
@@ -56,10 +78,13 @@ impl ResourcesManager
 			last_map: None,
 			models: ResourcesMap::new(),
 			stub_model: SharedResourcePtr::new(make_stub_model()),
+			models_names: ResourcesNameMap::new(),
 			images: ResourcesMap::new(),
+			images_names: ResourcesNameMap::new(),
 			stub_image: SharedResourcePtr::new(image::make_stub()),
 			material_textures: ResourcesMap::new(),
 			lite_textures: ResourcesMap::new(),
+			lite_textures_names: ResourcesNameMap::new(),
 			skybox_textures_32: ResourcesMap::new(),
 			skybox_textures_64: ResourcesMap::new(),
 		}))
@@ -145,7 +170,13 @@ impl ResourcesManager
 		};
 
 		self.models.insert(key.clone(), ptr.clone());
+		self.models_names.insert(ResourcePtrInt::new(&ptr), key.clone());
 		ptr
+	}
+
+	pub fn get_model_name<'a>(&'a self, model: &SharedResourcePtr<triangle_model::TriangleModel>) -> Option<&'a str>
+	{
+		self.models_names.get(&ResourcePtrInt::new(model)).map(|s| s.as_str())
 	}
 
 	pub fn get_image(&mut self, key: &ResourceKey) -> SharedResourcePtr<image::Image>
@@ -165,7 +196,13 @@ impl ResourcesManager
 		};
 
 		self.images.insert(key.clone(), ptr.clone());
+		self.images_names.insert(ResourcePtrInt::new(&ptr), key.clone());
 		ptr
+	}
+
+	pub fn get_image_name<'a>(&'a self, model: &SharedResourcePtr<image::Image>) -> Option<&'a str>
+	{
+		self.images_names.get(&ResourcePtrInt::new(model)).map(|s| s.as_str())
 	}
 
 	pub fn get_material_texture(&mut self, key: &ResourceKey) -> SharedResourcePtr<TextureWithMips>
@@ -202,7 +239,15 @@ impl ResourcesManager
 		let ptr = SharedResourcePtr::new(make_texture_lite_mips(mip0));
 
 		self.lite_textures.insert(key.clone(), ptr.clone());
+		self.lite_textures_names.insert(ResourcePtrInt::new(&ptr), key.clone());
 		ptr
+	}
+
+	pub fn get_texture_lite_name<'a>(&'a self, model: &SharedResourcePtr<TextureLiteWithMips>) -> Option<&'a str>
+	{
+		self.lite_textures_names
+			.get(&ResourcePtrInt::new(model))
+			.map(|s| s.as_str())
 	}
 
 	pub fn get_skybox_textures_32(&mut self, key: &ResourceKey) -> SharedResourcePtr<SkyboxTextures<Color32>>
