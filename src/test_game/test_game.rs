@@ -526,6 +526,7 @@ impl Game
 
 		crate::save_load::save_world(
 			&self.ecs,
+			&self.physics,
 			&std::path::PathBuf::from(&args[0]),
 			&self.resources_manager.lock().unwrap(),
 		);

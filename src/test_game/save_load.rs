@@ -1,10 +1,11 @@
-use super::{components::*, frame_info::*, resources_manager, textures, triangle_model};
+use super::{components::*, frame_info::*, resources_manager, test_game_physics, textures, triangle_model};
 use serde::{ser::SerializeMap, Deserialize, Serialize, Serializer};
 use square_wheel_lib::common::{bbox::*, material, math_types::*};
 use std::collections::HashMap;
 
 pub fn save_world(
 	ecs: &hecs::World,
+	physics: &test_game_physics::TestGamePhysics,
 	file_path: &std::path::Path,
 	resources_manager: &resources_manager::ResourcesManager,
 )
@@ -54,6 +55,8 @@ pub fn save_world(
 		}
 		seq.end();
 	}
+
+	serializer.serialize_some(physics);
 }
 
 struct SerializeContext<'a>
