@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use square_wheel_lib::common::{bbox::*, camera_rotation_controller::*, math_types::*};
 
 // This file contains various ECS components.
+// Do not forget to update save/load code while adding new components!
 //
 
 // Various components for test things identification.
@@ -21,6 +22,7 @@ pub struct TestProjectileComponent
 
 // Drawable submodel with index.
 // Store index in order to fill result vector of submodels.
+#[derive(Serialize, Deserialize)]
 pub struct SubmodelEntityWithIndex
 {
 	pub index: usize,

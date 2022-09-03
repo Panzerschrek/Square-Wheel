@@ -1,4 +1,4 @@
-use super::components::*;
+use super::{components::*, frame_info::*};
 
 pub fn save_world(ecs: &hecs::World, file_path: &std::path::Path)
 {
@@ -75,7 +75,11 @@ impl hecs::serialize::row::SerializeContext for SerializeContext
 		self.try_serialize_component::<ButtonComponent, S>(entity, &mut map);
 		self.try_serialize_component::<TrainComponent, S>(entity, &mut map);
 
-		// TODO - add drawable components.
+		// Non-special drawable components.
+		self.try_serialize_component::<SubmodelEntityWithIndex, S>(entity, &mut map);
+		self.try_serialize_component::<DynamicLight, S>(entity, &mut map);
+
+		// TODO - process drawable components with shared resources.
 
 		map.end()
 	}
