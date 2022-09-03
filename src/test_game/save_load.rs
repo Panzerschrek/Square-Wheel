@@ -10,7 +10,7 @@ pub fn save_world(
 	resources_manager: &resources_manager::ResourcesManager,
 )
 {
-	let file = std::fs::OpenOptions::new()
+	let mut file = std::fs::OpenOptions::new()
 		.read(true)
 		.write(true)
 		.create(true)
@@ -18,6 +18,15 @@ pub fn save_world(
 		.open(file_path)
 		.unwrap();
 
+	// TODO - remember size of each block of save file in a header.
+
+	let shared_resources = save_ecs(ecs, &mut file);
+	save_shared_resources(&shared_resources, resources_manager, &mut file);
+	save_physics(physics, &mut file);
+}
+
+fn save_ecs(ecs: &hecs::World, file: &mut std::fs::File) -> SharedResources
+{
 	let mut shared_resources = SharedResources::default();
 
 	let mut context = SerializeContext {
@@ -27,35 +36,49 @@ pub fn save_world(
 	let mut serializer = serde_json::Serializer::pretty(file);
 	hecs::serialize::row::serialize(ecs, &mut context, &mut serializer).unwrap();
 
-	// TODO - fix this mess.
-	// serde_json is stupid - it can't serialize map while serializing map.
+	shared_resources
+}
+
+fn save_shared_resources(
+	shared_resources: &SharedResources,
+	resources_manager: &resources_manager::ResourcesManager,
+	file: &mut std::fs::File,
+)
+{
+	let mut models = serde_json::Map::with_capacity(shared_resources.models.len());
+	for (_, model) in &shared_resources.models
 	{
-		let mut seq = serializer.serialize_map(Some(shared_resources.models.len())).unwrap();
-		for (_, model) in &shared_resources.models
+		if let Some(name) = resources_manager.get_model_name(model)
 		{
-			if let Some(name) = resources_manager.get_model_name(model)
-			{
-				seq.serialize_key(&ResourceSerializationKey::from_resource_unchecked(model));
-				seq.serialize_value(name);
-			}
+			models.insert(
+				ResourceSerializationKey::from_resource_unchecked(model).as_string(),
+				serde_json::Value::from(name),
+			);
 		}
-		seq.end();
-	}
-	{
-		let mut seq = serializer
-			.serialize_map(Some(shared_resources.lite_textures.len()))
-			.unwrap();
-		for (_, texture) in &shared_resources.lite_textures
-		{
-			if let Some(name) = resources_manager.get_texture_lite_name(texture)
-			{
-				seq.serialize_key(&ResourceSerializationKey::from_resource_unchecked(texture));
-				seq.serialize_value(name);
-			}
-		}
-		seq.end();
 	}
 
+	let mut lite_textures = serde_json::Map::with_capacity(shared_resources.lite_textures.len());
+	for (_, texture) in &shared_resources.lite_textures
+	{
+		if let Some(name) = resources_manager.get_texture_lite_name(texture)
+		{
+			lite_textures.insert(
+				ResourceSerializationKey::from_resource_unchecked(texture).as_string(),
+				serde_json::Value::from(name),
+			);
+		}
+	}
+
+	let mut map = serde_json::Map::with_capacity(2);
+	map.insert("models".to_string(), serde_json::Value::from(models));
+	map.insert("lite_textures".to_string(), serde_json::Value::from(lite_textures));
+
+	serde_json::to_writer_pretty(file, &serde_json::Value::from(map));
+}
+
+fn save_physics(physics: &test_game_physics::TestGamePhysics, file: &mut std::fs::File)
+{
+	let mut serializer = serde_json::Serializer::new(file);
 	serializer.serialize_some(physics);
 }
 
@@ -189,6 +212,11 @@ impl ResourceSerializationKey
 	fn from_resource_unchecked<T>(resource: &resources_manager::SharedResourcePtr<T>) -> Self
 	{
 		Self(std::sync::Arc::as_ptr(resource) as usize as u64)
+	}
+
+	fn as_string(self) -> String
+	{
+		format!("{}", self.0)
 	}
 
 	fn to_resource<T>(self, resources: &ResourcesMap<T>) -> Option<resources_manager::SharedResourcePtr<T>>
