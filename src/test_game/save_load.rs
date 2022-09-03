@@ -1,14 +1,19 @@
 use super::{components::*, frame_info::*, resources_manager, test_game_physics, textures, triangle_model};
-use serde::{ser::SerializeMap, Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 use square_wheel_lib::common::{bbox::*, material, math_types::*};
-use std::collections::HashMap;
+use std::{
+	collections::HashMap,
+	io::{Seek, Write},
+};
 
-pub fn save_world(
+pub fn save(
 	ecs: &hecs::World,
 	physics: &test_game_physics::TestGamePhysics,
+	game_time: f32,
+	player_entity: hecs::Entity,
 	file_path: &std::path::Path,
 	resources_manager: &resources_manager::ResourcesManager,
-)
+) -> Result<(), std::io::Error>
 {
 	let mut file = std::fs::OpenOptions::new()
 		.read(true)
@@ -18,11 +23,74 @@ pub fn save_world(
 		.open(file_path)
 		.unwrap();
 
-	// TODO - remember size of each block of save file in a header.
+	let mut header = SaveHeader {
+		id: SAVE_ID,
+		version: SAVE_VERSION,
+		common_data_offset: 0,
+		ecs_data_offset: 0,
+		resources_data_offset: 0,
+		physics_data_offset: 0,
+	};
+
+	// Write header first time to advance current file position.
+	let header_bytes = unsafe {
+		std::slice::from_raw_parts(
+			(&header) as *const SaveHeader as *const u8,
+			std::mem::size_of::<SaveHeader>(),
+		)
+	};
+	file.write_all(header_bytes)?;
+
+	save_common_data(game_time, player_entity, &mut file);
+	header.common_data_offset = file.stream_position()? as u32;
 
 	let shared_resources = save_ecs(ecs, &mut file);
+	header.ecs_data_offset = file.stream_position()? as u32;
+
 	save_shared_resources(&shared_resources, resources_manager, &mut file);
+	header.resources_data_offset = file.stream_position()? as u32;
+
 	save_physics(physics, &mut file);
+	header.physics_data_offset = file.stream_position()? as u32;
+
+	// Write header again to update offsets.
+	file.seek(std::io::SeekFrom::Start(0))?;
+	file.write_all(header_bytes)?;
+	file.sync_data()?;
+
+	Ok(())
+}
+
+#[repr(C)]
+struct SaveHeader
+{
+	id: [u8; 4],
+	version: u32,
+	common_data_offset: u32,
+	ecs_data_offset: u32,
+	resources_data_offset: u32,
+	physics_data_offset: u32,
+}
+
+const SAVE_ID: [u8; 4] = ['S' as u8, 'q' as u8, 'w' as u8, 'S' as u8];
+const SAVE_VERSION: u32 = 1; // Change each time when format is changed!
+
+fn save_common_data(game_time: f32, player_entity: hecs::Entity, file: &mut std::fs::File)
+{
+	serde_json::to_writer_pretty(
+		file,
+		&CommonData {
+			game_time,
+			player_entity,
+		},
+	);
+}
+
+#[derive(Serialize, Deserialize)]
+struct CommonData
+{
+	game_time: f32,
+	player_entity: hecs::Entity,
 }
 
 fn save_ecs(ecs: &hecs::World, file: &mut std::fs::File) -> SharedResources
@@ -33,6 +101,7 @@ fn save_ecs(ecs: &hecs::World, file: &mut std::fs::File) -> SharedResources
 		shared_resources: &mut shared_resources,
 	};
 
+	// TODO - maybe use binary serialization instead?
 	let mut serializer = serde_json::Serializer::pretty(file);
 	hecs::serialize::row::serialize(ecs, &mut context, &mut serializer).unwrap();
 
@@ -78,7 +147,8 @@ fn save_shared_resources(
 
 fn save_physics(physics: &test_game_physics::TestGamePhysics, file: &mut std::fs::File)
 {
-	let mut serializer = serde_json::Serializer::new(file);
+	// Use binary format for physics, because it is too heavy.
+	let mut serializer = serde_cbor::Serializer::new(serde_cbor::ser::IoWrite::new(file));
 	serializer.serialize_some(physics);
 }
 

@@ -524,9 +524,11 @@ impl Game
 			return;
 		}
 
-		crate::save_load::save_world(
+		crate::save_load::save(
 			&self.ecs,
 			&self.physics,
+			self.game_time,
+			self.player_entity,
 			&std::path::PathBuf::from(&args[0]),
 			&self.resources_manager.lock().unwrap(),
 		);
