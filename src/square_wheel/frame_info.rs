@@ -46,7 +46,7 @@ pub struct ModelEntity
 
 // Two frames with interpolation fator between them.
 // value = frames[0] * lerp + frames[1] * (1.0 - lerp)
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct AnimationPoint
 {
 	pub frames: [u32; 2],
