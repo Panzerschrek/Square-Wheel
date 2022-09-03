@@ -1,4 +1,4 @@
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct Color32(u32);
 
 impl Color32

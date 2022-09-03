@@ -1,12 +1,13 @@
 use super::{abstract_color::*, fast_math::*};
 use crate::common::{color::*, image, math_types::*};
+use serde::{Deserialize, Serialize};
 
 // MAX_MIP must be not greater, than LIGHTMAP_SCALE_LOG2
 pub const MAX_MIP: usize = 3;
 pub const NUM_MIPS: usize = MAX_MIP + 1;
 pub type TextureWithMips = [Texture; NUM_MIPS];
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 pub struct Texture
 {
 	pub size: [u32; 2],
@@ -16,7 +17,7 @@ pub struct Texture
 	pub is_metal: bool,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 #[repr(C, align(8))] // TODO - tune usage of alignment.
 pub struct TextureElement
 {
@@ -24,7 +25,7 @@ pub struct TextureElement
 	pub packed_normal_roughness: PackedNormalRoughness,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct PackedNormalRoughness(i32);
 
 impl PackedNormalRoughness

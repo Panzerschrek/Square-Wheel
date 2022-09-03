@@ -161,35 +161,57 @@ fn save_shared_resources(
 	file: &mut std::fs::File,
 )
 {
-	let mut models = serde_json::Map::with_capacity(shared_resources.models.len());
+	let mut r = ResourcesForSerialization::default();
+
 	for (_, model) in &shared_resources.models
 	{
-		if let Some(name) = resources_manager.get_model_name(model)
-		{
-			models.insert(
-				ResourceSerializationKey::from_resource_unchecked(model).as_string(),
-				serde_json::Value::from(name),
-			);
-		}
+		r.models.insert(
+			ResourceSerializationKey::from_resource_unchecked(model).as_string(),
+			if let Some(name) = resources_manager.get_model_name(model)
+			{
+				ResourceForSerialization::Named(name.to_string())
+			}
+			else
+			{
+				ResourceForSerialization::Direct((**model).clone())
+			},
+		);
 	}
 
-	let mut lite_textures = serde_json::Map::with_capacity(shared_resources.lite_textures.len());
 	for (_, texture) in &shared_resources.lite_textures
 	{
-		if let Some(name) = resources_manager.get_texture_lite_name(texture)
-		{
-			lite_textures.insert(
-				ResourceSerializationKey::from_resource_unchecked(texture).as_string(),
-				serde_json::Value::from(name),
-			);
-		}
+		r.lite_textures.insert(
+			ResourceSerializationKey::from_resource_unchecked(texture).as_string(),
+			if let Some(name) = resources_manager.get_texture_lite_name(texture)
+			{
+				ResourceForSerialization::Named(name.to_string())
+			}
+			else
+			{
+				ResourceForSerialization::Direct((**texture).clone())
+			},
+		);
 	}
 
-	let mut map = serde_json::Map::with_capacity(2);
-	map.insert("models".to_string(), serde_json::Value::from(models));
-	map.insert("lite_textures".to_string(), serde_json::Value::from(lite_textures));
+	// Use binary format in case of huge direct resources.
+	serde_cbor::to_writer(file, &r);
+}
 
-	serde_json::to_writer_pretty(file, &serde_json::Value::from(map));
+#[derive(Serialize, Deserialize)]
+enum ResourceForSerialization<T>
+{
+	// Save only name, request resource from ResourcesManager during deserialization.
+	Named(String),
+	// Save resource directly.
+	// It is possible for generated resources or othrer resources, obtained not via ResourcesManager.
+	Direct(T),
+}
+
+#[derive(Default, Serialize, Deserialize)]
+struct ResourcesForSerialization
+{
+	models: HashMap<String, ResourceForSerialization<triangle_model::TriangleModel>>,
+	lite_textures: HashMap<String, ResourceForSerialization<textures::TextureLiteWithMips>>,
 }
 
 fn save_physics(physics: &test_game_physics::TestGamePhysics, file: &mut std::fs::File)
