@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use square_wheel_lib::common::{bbox::*, material, math_types::*};
 use std::{
 	collections::HashMap,
-	io::{Seek, Write},
+	io::{Read, Seek, Write},
 };
 
 pub fn save(
@@ -44,14 +44,14 @@ pub fn save(
 	save_common_data(game_time, player_entity, &mut file);
 	header.common_data_offset = file.stream_position()? as u32;
 
-	let shared_resources = save_ecs(ecs, &mut file);
 	header.ecs_data_offset = file.stream_position()? as u32;
+	let shared_resources = save_ecs(ecs, &mut file);
 
-	save_shared_resources(&shared_resources, resources_manager, &mut file);
 	header.resources_data_offset = file.stream_position()? as u32;
+	save_shared_resources(&shared_resources, resources_manager, &mut file);
 
-	save_physics(physics, &mut file);
 	header.physics_data_offset = file.stream_position()? as u32;
+	save_physics(physics, &mut file);
 
 	// Write header again to update offsets.
 	file.seek(std::io::SeekFrom::Start(0))?;
@@ -59,6 +59,44 @@ pub fn save(
 	file.sync_data()?;
 
 	Ok(())
+}
+
+pub fn load(file_path: &std::path::Path) -> Result<Option<hecs::World>, std::io::Error>
+{
+	let mut file = std::fs::OpenOptions::new()
+		.read(true)
+		.write(false)
+		.create(false)
+		.open(file_path)?;
+
+	let header_size = std::mem::size_of::<SaveHeader>();
+	let mut header = unsafe { std::mem::zeroed::<SaveHeader>() };
+	let header_bytes =
+		unsafe { std::slice::from_raw_parts_mut((&mut header) as *mut SaveHeader as *mut u8, header_size) };
+
+	if file.read(header_bytes)? != header_size
+	{
+		println!("Can't read save header");
+		return Ok(None);
+	}
+
+	if header.id != SAVE_ID
+	{
+		println!("File is not a valid save");
+		return Ok(None);
+	}
+	if header.version != SAVE_VERSION
+	{
+		println!(
+			"Can't load incompatible save version: {}, expected {}",
+			header.version, SAVE_VERSION
+		);
+		return Ok(None);
+	}
+
+	file.seek(std::io::SeekFrom::Start(header.ecs_data_offset as u64))?;
+
+	Ok(Some(load_ecs(&SharedResources::default(), &mut file)))
 }
 
 #[repr(C)]
@@ -106,6 +144,15 @@ fn save_ecs(ecs: &hecs::World, file: &mut std::fs::File) -> SharedResources
 	hecs::serialize::row::serialize(ecs, &mut context, &mut serializer).unwrap();
 
 	shared_resources
+}
+
+fn load_ecs(shared_resources: &SharedResources, file: &mut std::fs::File) -> hecs::World
+{
+	let mut context = DeserializeContext { shared_resources };
+
+	// TODO - maybe use binary serialization instead?
+	let mut deserializer = serde_json::Deserializer::new(serde_json::de::IoRead::new(file));
+	hecs::serialize::row::deserialize(&mut context, &mut deserializer).unwrap()
 }
 
 fn save_shared_resources(
@@ -167,6 +214,7 @@ impl<'a> SerializeContext<'a>
 		if let Some(c) = entity.get::<&T>()
 		{
 			// TODO - hanlde errors properly.
+			// TODO - use serde-name instead.
 			let type_name = serde_type_name::type_name(&*c).unwrap();
 			map.serialize_entry(type_name, &*c).unwrap();
 		}
@@ -251,6 +299,96 @@ impl<'a> hecs::serialize::row::SerializeContext for SerializeContext<'a>
 	}
 }
 
+struct DeserializeContext<'a>
+{
+	shared_resources: &'a SharedResources,
+}
+
+impl<'a> DeserializeContext<'a>
+{
+	fn try_deserialize_component<'de, T, M>(
+		&'a self,
+		key: &str,
+		map: &mut M,
+		entity: &mut hecs::EntityBuilder,
+	) -> Result<(), M::Error>
+	where
+		T: hecs::Component + Deserialize<'de>,
+		M: serde::de::MapAccess<'de>,
+	{
+		if Some(key) == serde_name::trace_name::<T>()
+		{
+			entity.add::<T>(map.next_value()?);
+		}
+
+		Ok(())
+	}
+}
+
+impl<'a> hecs::serialize::row::DeserializeContext for DeserializeContext<'a>
+{
+	fn deserialize_entity<'de, M>(&mut self, mut map: M, entity: &mut hecs::EntityBuilder) -> Result<(), M::Error>
+	where
+		M: serde::de::MapAccess<'de>,
+	{
+		while let Some(key) = map.next_key::<String>()?
+		{
+			self.try_deserialize_component::<TestModelComponent, M>(&key, &mut map, entity);
+			self.try_deserialize_component::<TestDecalComponent, M>(&key, &mut map, entity);
+			self.try_deserialize_component::<TestLightComponent, M>(&key, &mut map, entity);
+			self.try_deserialize_component::<TestProjectileComponent, M>(&key, &mut map, entity);
+
+			self.try_deserialize_component::<LocationComponent, M>(&key, &mut map, entity);
+			self.try_deserialize_component::<TimedDespawnComponent, M>(&key, &mut map, entity);
+
+			self.try_deserialize_component::<PlayerControllerLocationComponent, M>(&key, &mut map, entity);
+			self.try_deserialize_component::<PhysicsLocationComponent, M>(&key, &mut map, entity);
+			self.try_deserialize_component::<LocationKinematicPhysicsObjectComponent, M>(&key, &mut map, entity);
+			self.try_deserialize_component::<OtherEntityLocationComponent, M>(&key, &mut map, entity);
+			self.try_deserialize_component::<PlayerControllerCameraLocationComponent, M>(&key, &mut map, entity);
+
+			self.try_deserialize_component::<ModelEntityLocationLinkComponent, M>(&key, &mut map, entity);
+			self.try_deserialize_component::<SubmodelEntityWithIndexLocationLinkComponent, M>(&key, &mut map, entity);
+			self.try_deserialize_component::<DecalLocationLinkComponent, M>(&key, &mut map, entity);
+			self.try_deserialize_component::<DynamicLightLocationLinkComponent, M>(&key, &mut map, entity);
+
+			self.try_deserialize_component::<SimpleAnimationComponent, M>(&key, &mut map, entity);
+
+			self.try_deserialize_component::<PlayerComponent, M>(&key, &mut map, entity);
+			self.try_deserialize_component::<PlayerControllerComponent, M>(&key, &mut map, entity);
+
+			self.try_deserialize_component::<TouchTriggerComponent, M>(&key, &mut map, entity);
+			self.try_deserialize_component::<TriggerSingleTargetComponent, M>(&key, &mut map, entity);
+			self.try_deserialize_component::<TargetNameComponent, M>(&key, &mut map, entity);
+			self.try_deserialize_component::<NamedTargetComponent, M>(&key, &mut map, entity);
+			self.try_deserialize_component::<WaitComponent, M>(&key, &mut map, entity);
+			self.try_deserialize_component::<EntityActivationComponent, M>(&key, &mut map, entity);
+
+			self.try_deserialize_component::<PlateComponent, M>(&key, &mut map, entity);
+			self.try_deserialize_component::<DoorComponent, M>(&key, &mut map, entity);
+			self.try_deserialize_component::<ButtonComponent, M>(&key, &mut map, entity);
+			self.try_deserialize_component::<TrainComponent, M>(&key, &mut map, entity);
+
+			// Non-special drawable components.
+			self.try_deserialize_component::<SubmodelEntityWithIndex, M>(&key, &mut map, entity);
+			self.try_deserialize_component::<DynamicLight, M>(&key, &mut map, entity);
+
+			// Drawable components with shared resources.
+			// TODO - fix this.
+			if Some(key.as_str()) == serde_name::trace_name::<ModelEntityProxy>()
+			{
+				map.next_value::<ModelEntityProxy>()?;
+			}
+			if Some(key.as_str()) == serde_name::trace_name::<DecalProxy>()
+			{
+				map.next_value::<DecalProxy>()?;
+			}
+		}
+
+		Ok(())
+	}
+}
+
 #[derive(Default)]
 struct SharedResources
 {
@@ -306,13 +444,7 @@ struct ModelEntityProxy
 	texture: ResourceSerializationKey,
 	blending_mode: material::BlendingMode,
 	lighting: ModelLighting,
-
-	// Weapon or thing in player's hands.
-	// Draw it always and after any other models.
 	is_view_model: bool,
-
-	// Use it to override bbox (in object-space) to improve models ordering.
-	// For example, use bbox with size reduced relative to true model bbox.
 	ordering_custom_bbox: Option<BBox>,
 }
 

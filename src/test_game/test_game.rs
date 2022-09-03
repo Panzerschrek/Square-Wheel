@@ -47,6 +47,7 @@ impl Game
 			("reset_view_model", Game::command_reset_view_model),
 			("noclip", Game::command_noclip),
 			("save", Game::command_save),
+			("load", Game::command_load),
 		]);
 
 		let commands_queue_dyn = commands_queue.clone() as commands_queue::CommandsQueueDynPtr;
@@ -532,6 +533,17 @@ impl Game
 			&std::path::PathBuf::from(&args[0]),
 			&self.resources_manager.lock().unwrap(),
 		);
+	}
+
+	fn command_load(&mut self, args: commands_queue::CommandArgs)
+	{
+		if args.len() < 1
+		{
+			self.console.lock().unwrap().add_text("Expected 1 arg".to_string());
+			return;
+		}
+
+		crate::save_load::load(&std::path::PathBuf::from(&args[0]));
 	}
 }
 
