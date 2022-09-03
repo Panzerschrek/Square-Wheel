@@ -1,13 +1,17 @@
 use rapier3d::prelude as r3d;
+use serde::{Deserialize, Serialize};
 use square_wheel_lib::common::{bbox::*, bsp_map_compact, math_types::*};
 use std::sync::Arc;
 
+#[derive(Serialize, Deserialize)]
 pub struct TestGamePhysics
 {
 	rigid_body_set: r3d::RigidBodySet,
 	collider_set: r3d::ColliderSet,
 
+	#[serde(skip)]
 	physics_pipeline: r3d::PhysicsPipeline,
+
 	query_pipeline: r3d::QueryPipeline,
 	island_manager: r3d::IslandManager,
 	broad_phase: r3d::BroadPhase,
@@ -339,6 +343,7 @@ fn quaternion_to_ang_vector(quat: &QuaternionF) -> r3d::AngVector<r3d::Real>
 	r3d::AngVector::new(axis_angle_scaled.x, axis_angle_scaled.y, axis_angle_scaled.z)
 }
 
+#[derive(Serialize, Deserialize)]
 struct PhysicsHooks {}
 
 impl PhysicsHooks
@@ -389,6 +394,7 @@ impl r3d::PhysicsHooks for PhysicsHooks
 	}
 }
 
+#[derive(Serialize, Deserialize)]
 struct EventHandler {}
 
 impl r3d::EventHandler for EventHandler
