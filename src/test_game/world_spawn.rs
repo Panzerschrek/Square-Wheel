@@ -101,7 +101,7 @@ fn spawn_regular_entity(
 						LocationKinematicPhysicsObjectComponent {
 							phys_handle: physics.add_submodel_object(
 								entity,
-								index,
+								&bbox,
 								&Vec3f::new(0.0, 0.0, -height),
 								&rotation,
 							),
@@ -176,7 +176,7 @@ fn spawn_regular_entity(
 						LocationKinematicPhysicsObjectComponent {
 							phys_handle: physics.add_submodel_object(
 								entity,
-								index,
+								&bbox,
 								&(bbox.get_center() - position_closed),
 								&rotation,
 							),
@@ -230,7 +230,7 @@ fn spawn_regular_entity(
 						LocationKinematicPhysicsObjectComponent {
 							phys_handle: physics.add_submodel_object(
 								entity,
-								index,
+								&bbox,
 								&(bbox.get_center() - position_released),
 								&rotation,
 							),
@@ -281,7 +281,7 @@ fn spawn_regular_entity(
 						},
 						// Update physics object using location component.
 						LocationKinematicPhysicsObjectComponent {
-							phys_handle: physics.add_submodel_object(entity, index, &Vec3f::zero(), &rotation),
+							phys_handle: physics.add_submodel_object(entity, &bbox, &Vec3f::zero(), &rotation),
 						},
 						// Update draw model location, using location component.
 						SubmodelEntityWithIndexLocationLinkComponent {},
@@ -347,6 +347,8 @@ fn spawn_regular_entity(
 			let index = map_entity.submodel_index as usize;
 			if index < map.submodels.len()
 			{
+				let bbox = bsp_map_compact::get_submodel_bbox(map, &map.submodels[index]);
+
 				let entity = ecs.spawn((SubmodelEntityWithIndex {
 					index,
 					submodel_entity: SubmodelEntity {
@@ -356,7 +358,7 @@ fn spawn_regular_entity(
 				},));
 				ecs.insert_one(
 					entity,
-					physics.add_submodel_object(entity, index, &Vec3f::zero(), &QuaternionF::one()),
+					physics.add_submodel_object(entity, &bbox, &Vec3f::zero(), &QuaternionF::one()),
 				)
 				.ok();
 

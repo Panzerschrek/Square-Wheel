@@ -4,8 +4,6 @@ use std::sync::Arc;
 
 pub struct TestGamePhysics
 {
-	map: Arc<bsp_map_compact::BSPMap>,
-
 	rigid_body_set: r3d::RigidBodySet,
 	collider_set: r3d::ColliderSet,
 
@@ -34,7 +32,6 @@ impl TestGamePhysics
 		collider_set.insert(make_map_collider(&map));
 
 		Self {
-			map,
 			rigid_body_set,
 			collider_set,
 			physics_pipeline: r3d::PhysicsPipeline::new(),
@@ -86,13 +83,11 @@ impl TestGamePhysics
 	pub fn add_submodel_object(
 		&mut self,
 		entity: hecs::Entity,
-		submodel_index: usize,
+		bbox: &BBox,
 		shift: &Vec3f,
 		rotation: &QuaternionF,
 	) -> ObjectHandle
 	{
-		let submodel = &self.map.submodels[submodel_index];
-		let bbox = bsp_map_compact::get_submodel_bbox(&self.map, submodel);
 		let bbox_half_size = bbox.get_size() * 0.5;
 		let bbox_center = bbox.get_center();
 
