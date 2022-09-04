@@ -1,5 +1,6 @@
 use super::{resources_manager::*, textures::*, triangle_model::*};
 use crate::common::{bbox::*, material, math_types::*, matrix::*};
+use serde::{Deserialize, Serialize};
 
 pub struct FrameInfo
 {
@@ -15,7 +16,7 @@ pub struct FrameInfo
 
 pub type SubmodelEntityOpt = Option<SubmodelEntity>;
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SubmodelEntity
 {
 	// Position of Bbox center.
@@ -45,14 +46,14 @@ pub struct ModelEntity
 
 // Two frames with interpolation fator between them.
 // value = frames[0] * lerp + frames[1] * (1.0 - lerp)
-#[derive(Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct AnimationPoint
 {
 	pub frames: [u32; 2],
 	pub lerp: f32,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub enum ModelLighting
 {
 	// Use just light from grid
@@ -85,7 +86,7 @@ pub struct Decal
 	pub light_add: [f32; 3],
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct DynamicLight
 {
 	pub position: Vec3f,
@@ -94,7 +95,7 @@ pub struct DynamicLight
 	pub shadow_type: DynamicLightShadowType,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub enum DynamicLightShadowType
 {
 	None,

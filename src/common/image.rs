@@ -1,7 +1,7 @@
 use super::color::*;
 use sdl2::image::{LoadSurface, SaveSurface};
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Image
 {
 	pub size: [u32; 2],

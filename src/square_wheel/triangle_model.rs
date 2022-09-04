@@ -1,5 +1,7 @@
 use crate::common::{bbox::*, math_types::*};
+use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TriangleModel
 {
 	pub animations: Vec<TriangleModelAnimation>,
@@ -12,6 +14,7 @@ pub struct TriangleModel
 	pub tc_shift: Vec2f,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TriangleModelAnimation
 {
 	pub name: String,
@@ -21,23 +24,26 @@ pub struct TriangleModelAnimation
 	pub looped: bool,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TriangleModelFrameInfo
 {
 	pub bbox: BBox,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TriangleModelBoneInfo
 {
 	pub name: String,
 	pub parent: u32, // invalid index if has no parent
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct TriangleModelBoneFrame
 {
 	pub matrix: Mat4f,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TriangleModelMesh
 {
 	pub name: String,
@@ -53,6 +59,7 @@ pub type Triangle = [VertexIndex; 3];
 
 pub type VertexIndex = u16;
 
+#[derive(Clone, Serialize, Deserialize)]
 pub enum VertexData
 {
 	NonAnimated(Vec<VertexNonAnimated>),
@@ -65,7 +72,7 @@ pub enum VertexData
 	SkeletonAnimated(Vec<SkeletonAnimatedVertex>),
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct VertexNonAnimated
 {
 	pub position: Vec3f,
@@ -73,20 +80,20 @@ pub struct VertexNonAnimated
 	pub tex_coord: [f32; 2],
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct VertexAnimatedVertexConstant
 {
 	pub tex_coord: [f32; 2],
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct VertexAnimatedVertexVariable
 {
 	pub position: Vec3f,
 	pub normal: Vec3f,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct SkeletonAnimatedVertex
 {
 	pub tex_coord: [f32; 2],
@@ -95,7 +102,7 @@ pub struct SkeletonAnimatedVertex
 	pub bones_description: [VertexBoneDescription; 4],
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct VertexBoneDescription
 {
 	pub bone_index: u8,

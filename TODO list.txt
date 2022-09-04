@@ -36,5 +36,5 @@ Map compiler:
 * Bezier curves support (perform tesselation during map compilation)
 
 Test game:
-* Save/Load (including serialization of resource handles)
+* Load proper map while loading game
 * Materials without collisions, with collision filters (pass bulletes, but not player, etc.)
