@@ -616,15 +616,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_type_name"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92acc4cd6ae20767c54d6cf1a075624e7f4d9e99d7ebc685398ff243144d8714"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "simba"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -684,7 +675,6 @@ dependencies = [
  "serde",
  "serde-name",
  "serde_json",
- "serde_type_name",
  "structopt",
 ]
 

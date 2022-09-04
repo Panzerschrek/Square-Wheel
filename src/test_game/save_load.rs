@@ -301,18 +301,21 @@ struct SerializeContext<'a>
 
 impl<'a> SerializeContext<'a>
 {
-	fn try_serialize_component<T, S>(&self, entity: hecs::EntityRef, map: &mut S)
+	fn try_serialize_component<'de, T, S>(
+		&self,
+		entity: hecs::EntityRef,
+		map: &mut S,
+	) -> Result<Option<S::Ok>, S::Error>
 	where
-		T: hecs::Component + serde::Serialize,
+		T: hecs::Component + serde::Serialize + serde::Deserialize<'de>,
 		S: serde::ser::SerializeMap,
 	{
 		if let Some(c) = entity.get::<&T>()
 		{
-			// TODO - hanlde errors properly.
-			// TODO - use serde-name instead.
-			let type_name = serde_type_name::type_name(&*c).unwrap();
-			map.serialize_entry(type_name, &*c).unwrap();
+			map.serialize_entry(get_component_name::<T>(), &*c)?;
 		}
+
+		Ok(None)
 	}
 }
 
@@ -322,45 +325,45 @@ impl<'a> hecs::serialize::row::SerializeContext for SerializeContext<'a>
 	where
 		S: serde::ser::SerializeMap,
 	{
-		self.try_serialize_component::<TestModelComponent, S>(entity, &mut map);
-		self.try_serialize_component::<TestDecalComponent, S>(entity, &mut map);
-		self.try_serialize_component::<TestLightComponent, S>(entity, &mut map);
-		self.try_serialize_component::<TestProjectileComponent, S>(entity, &mut map);
+		self.try_serialize_component::<TestModelComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<TestDecalComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<TestLightComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<TestProjectileComponent, S>(entity, &mut map)?;
 
-		self.try_serialize_component::<LocationComponent, S>(entity, &mut map);
-		self.try_serialize_component::<TimedDespawnComponent, S>(entity, &mut map);
+		self.try_serialize_component::<LocationComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<TimedDespawnComponent, S>(entity, &mut map)?;
 
-		self.try_serialize_component::<PlayerControllerLocationComponent, S>(entity, &mut map);
-		self.try_serialize_component::<PhysicsLocationComponent, S>(entity, &mut map);
-		self.try_serialize_component::<LocationKinematicPhysicsObjectComponent, S>(entity, &mut map);
-		self.try_serialize_component::<OtherEntityLocationComponent, S>(entity, &mut map);
-		self.try_serialize_component::<PlayerControllerCameraLocationComponent, S>(entity, &mut map);
+		self.try_serialize_component::<PlayerControllerLocationComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<PhysicsLocationComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<LocationKinematicPhysicsObjectComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<OtherEntityLocationComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<PlayerControllerCameraLocationComponent, S>(entity, &mut map)?;
 
-		self.try_serialize_component::<ModelEntityLocationLinkComponent, S>(entity, &mut map);
-		self.try_serialize_component::<SubmodelEntityWithIndexLocationLinkComponent, S>(entity, &mut map);
-		self.try_serialize_component::<DecalLocationLinkComponent, S>(entity, &mut map);
-		self.try_serialize_component::<DynamicLightLocationLinkComponent, S>(entity, &mut map);
+		self.try_serialize_component::<ModelEntityLocationLinkComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<SubmodelEntityWithIndexLocationLinkComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<DecalLocationLinkComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<DynamicLightLocationLinkComponent, S>(entity, &mut map)?;
 
-		self.try_serialize_component::<SimpleAnimationComponent, S>(entity, &mut map);
+		self.try_serialize_component::<SimpleAnimationComponent, S>(entity, &mut map)?;
 
-		self.try_serialize_component::<PlayerComponent, S>(entity, &mut map);
-		self.try_serialize_component::<PlayerControllerComponent, S>(entity, &mut map);
+		self.try_serialize_component::<PlayerComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<PlayerControllerComponent, S>(entity, &mut map)?;
 
-		self.try_serialize_component::<TouchTriggerComponent, S>(entity, &mut map);
-		self.try_serialize_component::<TriggerSingleTargetComponent, S>(entity, &mut map);
-		self.try_serialize_component::<TargetNameComponent, S>(entity, &mut map);
-		self.try_serialize_component::<NamedTargetComponent, S>(entity, &mut map);
-		self.try_serialize_component::<WaitComponent, S>(entity, &mut map);
-		self.try_serialize_component::<EntityActivationComponent, S>(entity, &mut map);
+		self.try_serialize_component::<TouchTriggerComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<TriggerSingleTargetComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<TargetNameComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<NamedTargetComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<WaitComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<EntityActivationComponent, S>(entity, &mut map)?;
 
-		self.try_serialize_component::<PlateComponent, S>(entity, &mut map);
-		self.try_serialize_component::<DoorComponent, S>(entity, &mut map);
-		self.try_serialize_component::<ButtonComponent, S>(entity, &mut map);
-		self.try_serialize_component::<TrainComponent, S>(entity, &mut map);
+		self.try_serialize_component::<PlateComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<DoorComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<ButtonComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<TrainComponent, S>(entity, &mut map)?;
 
 		// Non-special drawable components.
-		self.try_serialize_component::<SubmodelEntityWithIndex, S>(entity, &mut map);
-		self.try_serialize_component::<DynamicLight, S>(entity, &mut map);
+		self.try_serialize_component::<SubmodelEntityWithIndex, S>(entity, &mut map)?;
+		self.try_serialize_component::<DynamicLight, S>(entity, &mut map)?;
 
 		// Perform serialization of components with shared resources, using proxy structs with identical content but changed resource fields.
 		// Collect shared resources and serialize them later.
@@ -373,16 +376,14 @@ impl<'a> hecs::serialize::row::SerializeContext for SerializeContext<'a>
 				&mut self.shared_resources.models,
 				&mut self.shared_resources.lite_textures,
 			);
-			let type_name = serde_type_name::type_name(&proxy).unwrap();
-			map.serialize_entry(type_name, &proxy)?;
+			map.serialize_entry(get_component_name::<ModelEntityProxy>(), &proxy)?;
 		}
 
 		if let Some(c) = entity.get::<&Decal>()
 		{
 			// TODO - hanlde errors properly.
 			let proxy = DecalProxy::new(&*c, &mut self.shared_resources.lite_textures);
-			let type_name = serde_type_name::type_name(&proxy).unwrap();
-			map.serialize_entry(type_name, &proxy)?;
+			map.serialize_entry(get_component_name::<DecalProxy>(), &proxy)?;
 		}
 
 		map.end()
@@ -411,7 +412,7 @@ impl<'a> DeserializeContext<'a>
 		T: hecs::Component + Deserialize<'de>,
 		M: serde::de::MapAccess<'de>,
 	{
-		if Some(key) == serde_name::trace_name::<T>()
+		if key == get_component_name::<T>()
 		{
 			entity.add::<T>(map.next_value()?);
 		}
@@ -469,7 +470,7 @@ impl<'a> hecs::serialize::row::DeserializeContext for DeserializeContext<'a>
 			self.try_deserialize_component::<DynamicLight, M>(&key, &mut map, entity)?;
 
 			// Drawable components with shared resources.
-			if Some(key.as_str()) == serde_name::trace_name::<ModelEntityProxy>()
+			if key.as_str() == get_component_name::<ModelEntityProxy>()
 			{
 				if let Some(v) = map
 					.next_value::<ModelEntityProxy>()?
@@ -478,7 +479,7 @@ impl<'a> hecs::serialize::row::DeserializeContext for DeserializeContext<'a>
 					entity.add(v);
 				}
 			}
-			if Some(key.as_str()) == serde_name::trace_name::<DecalProxy>()
+			if key.as_str() == get_component_name::<DecalProxy>()
 			{
 				if let Some(v) = map
 					.next_value::<DecalProxy>()?
@@ -491,6 +492,12 @@ impl<'a> hecs::serialize::row::DeserializeContext for DeserializeContext<'a>
 
 		Ok(())
 	}
+}
+
+fn get_component_name<'de, T: Deserialize<'de>>() -> &'static str
+{
+	// Use "unwrap" to catch early problems with broken components naming.
+	serde_name::trace_name::<T>().unwrap()
 }
 
 #[derive(Default)]
