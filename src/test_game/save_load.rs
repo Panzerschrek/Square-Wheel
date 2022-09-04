@@ -24,7 +24,7 @@ pub fn save(
 		.create(true)
 		.truncate(true)
 		.open(file_path)
-		.unwrap();
+		.ok()?;
 
 	let mut header = SaveHeader {
 		id: SAVE_ID,
@@ -173,10 +173,7 @@ fn save_ecs(ecs: &hecs::World, file: &mut File) -> Option<SharedResources>
 	};
 
 	let mut serializer = bincode::Serializer::new(file, bincode::DefaultOptions::new());
-	if !hecs::serialize::row::serialize(ecs, &mut context, &mut serializer).is_ok()
-	{
-		return None;
-	}
+	hecs::serialize::row::serialize(ecs, &mut context, &mut serializer).ok()?;
 
 	Some(shared_resources)
 }
@@ -227,7 +224,6 @@ fn save_shared_resources(
 		);
 	}
 
-	// Use binary format in case of huge direct resources.
 	bincode::serialize_into(file, &r).ok()
 }
 
@@ -282,7 +278,6 @@ enum ResourceForSerialization<T>
 
 fn save_physics(physics: &test_game_physics::TestGamePhysics, file: &mut File) -> Option<()>
 {
-	// Use binary format for physics, because it is too heavy.
 	bincode::serialize_into(file, physics).ok()
 }
 
@@ -298,14 +293,15 @@ struct SerializeContext<'a>
 
 impl<'a> SerializeContext<'a>
 {
-	fn try_serialize_component<'de, T, S>(
+	fn try_serialize_component<
+		'de,
+		T: hecs::Component + serde::Serialize + serde::Deserialize<'de>,
+		S: serde::ser::SerializeMap,
+	>(
 		&self,
 		entity: hecs::EntityRef,
 		map: &mut S,
 	) -> Result<Option<S::Ok>, S::Error>
-	where
-		T: hecs::Component + serde::Serialize + serde::Deserialize<'de>,
-		S: serde::ser::SerializeMap,
 	{
 		if let Some(c) = entity.get::<&T>()
 		{
@@ -318,10 +314,14 @@ impl<'a> SerializeContext<'a>
 
 impl<'a> hecs::serialize::row::SerializeContext for SerializeContext<'a>
 {
-	fn serialize_entity<S>(&mut self, entity: hecs::EntityRef<'_>, mut map: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::ser::SerializeMap,
+	fn serialize_entity<S: serde::ser::SerializeMap>(
+		&mut self,
+		entity: hecs::EntityRef,
+		mut map: S,
+	) -> Result<S::Ok, S::Error>
 	{
+		// Do not forget to add new components here!
+
 		self.try_serialize_component::<TestModelComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<TestDecalComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<TestLightComponent, S>(entity, &mut map)?;
@@ -367,7 +367,6 @@ impl<'a> hecs::serialize::row::SerializeContext for SerializeContext<'a>
 
 		if let Some(c) = entity.get::<&ModelEntity>()
 		{
-			// TODO - hanlde errors properly.
 			let proxy = ModelEntityProxy::new(
 				&*c,
 				&mut self.shared_resources.models,
@@ -378,7 +377,6 @@ impl<'a> hecs::serialize::row::SerializeContext for SerializeContext<'a>
 
 		if let Some(c) = entity.get::<&Decal>()
 		{
-			// TODO - hanlde errors properly.
 			let proxy = DecalProxy::new(&*c, &mut self.shared_resources.lite_textures);
 			map.serialize_entry(get_component_name::<DecalProxy>(), &proxy)?;
 		}
@@ -399,15 +397,12 @@ struct DeserializeContext<'a>
 
 impl<'a> DeserializeContext<'a>
 {
-	fn try_deserialize_component<'de, T, M>(
+	fn try_deserialize_component<'de, T: hecs::Component + Deserialize<'de>, M: serde::de::MapAccess<'de>>(
 		&'a self,
 		key: &str,
 		map: &mut M,
 		entity: &mut hecs::EntityBuilder,
 	) -> Result<(), M::Error>
-	where
-		T: hecs::Component + Deserialize<'de>,
-		M: serde::de::MapAccess<'de>,
 	{
 		if key == get_component_name::<T>()
 		{
@@ -420,12 +415,16 @@ impl<'a> DeserializeContext<'a>
 
 impl<'a> hecs::serialize::row::DeserializeContext for DeserializeContext<'a>
 {
-	fn deserialize_entity<'de, M>(&mut self, mut map: M, entity: &mut hecs::EntityBuilder) -> Result<(), M::Error>
-	where
-		M: serde::de::MapAccess<'de>,
+	fn deserialize_entity<'de, M: serde::de::MapAccess<'de>>(
+		&mut self,
+		mut map: M,
+		entity: &mut hecs::EntityBuilder,
+	) -> Result<(), M::Error>
 	{
 		while let Some(key) = map.next_key::<String>()?
 		{
+			// Do not forget to add new components here!
+
 			self.try_deserialize_component::<TestModelComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<TestDecalComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<TestLightComponent, M>(&key, &mut map, entity)?;
