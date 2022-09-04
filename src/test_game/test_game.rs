@@ -525,14 +525,18 @@ impl Game
 			return;
 		}
 
-		crate::save_load::save(
+		if crate::save_load::save(
 			&self.ecs,
 			&self.physics,
 			self.game_time,
 			self.player_entity,
 			&std::path::PathBuf::from(&args[0]),
 			&self.resources_manager.lock().unwrap(),
-		);
+		)
+		.is_none()
+		{
+			self.console.lock().unwrap().add_text("Failed to save".to_string());
+		}
 	}
 
 	fn command_load(&mut self, args: commands_queue::CommandArgs)
@@ -543,10 +547,20 @@ impl Game
 			return;
 		}
 
-		crate::save_load::load(
+		if let Some(load_result) = crate::save_load::load(
 			&std::path::PathBuf::from(&args[0]),
 			&mut self.resources_manager.lock().unwrap(),
-		);
+		)
+		{
+			self.ecs = load_result.ecs;
+			self.physics = load_result.physics;
+			self.game_time = load_result.game_time;
+			self.player_entity = load_result.player_entity;
+		}
+		else
+		{
+			self.console.lock().unwrap().add_text("Failed to load".to_string());
+		}
 	}
 }
 
