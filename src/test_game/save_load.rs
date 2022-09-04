@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 use square_wheel_lib::common::{bbox::*, material, math_types::*};
 use std::{
 	collections::HashMap,
-	io::{Read, Seek, Write},
+	fs::{File, OpenOptions},
+	io::{Read, Seek, SeekFrom, Write},
+	path::Path,
+	sync::Arc,
 };
 
 pub fn save(
@@ -11,11 +14,11 @@ pub fn save(
 	physics: &test_game_physics::TestGamePhysics,
 	game_time: f32,
 	player_entity: hecs::Entity,
-	file_path: &std::path::Path,
+	file_path: &Path,
 	resources_manager: &resources_manager::ResourcesManager,
 ) -> Option<()>
 {
-	let mut file = std::fs::OpenOptions::new()
+	let mut file = OpenOptions::new()
 		.read(true)
 		.write(true)
 		.create(true)
@@ -54,7 +57,7 @@ pub fn save(
 	save_physics(physics, &mut file)?;
 
 	// Write header again to update offsets.
-	file.seek(std::io::SeekFrom::Start(0)).ok()?;
+	file.seek(SeekFrom::Start(0)).ok()?;
 	file.write_all(header_bytes).ok()?;
 	file.sync_data().ok()?;
 
@@ -69,12 +72,9 @@ pub struct LoadResult
 	pub player_entity: hecs::Entity,
 }
 
-pub fn load(
-	file_path: &std::path::Path,
-	resources_manager: &mut resources_manager::ResourcesManager,
-) -> Option<LoadResult>
+pub fn load(file_path: &Path, resources_manager: &mut resources_manager::ResourcesManager) -> Option<LoadResult>
 {
-	let mut file = std::fs::OpenOptions::new()
+	let mut file = OpenOptions::new()
 		.read(true)
 		.write(false)
 		.create(false)
@@ -106,20 +106,16 @@ pub fn load(
 		return None;
 	}
 
-	file.seek(std::io::SeekFrom::Start(header.common_data_offset as u64))
-		.ok()?;
+	file.seek(SeekFrom::Start(header.common_data_offset as u64)).ok()?;
 	let common_data = load_common_data(&mut file)?;
 
-	file.seek(std::io::SeekFrom::Start(header.resources_data_offset as u64))
-		.ok()?;
+	file.seek(SeekFrom::Start(header.resources_data_offset as u64)).ok()?;
 	let shared_resources = load_shared_resources(resources_manager, &mut file)?;
 
-	file.seek(std::io::SeekFrom::Start(header.ecs_data_offset as u64))
-		.ok()?;
+	file.seek(SeekFrom::Start(header.ecs_data_offset as u64)).ok()?;
 	let ecs = load_ecs(&shared_resources, &mut file)?;
 
-	file.seek(std::io::SeekFrom::Start(header.physics_data_offset as u64))
-		.ok()?;
+	file.seek(SeekFrom::Start(header.physics_data_offset as u64)).ok()?;
 	let physics = load_physics(&mut file)?;
 
 	Some(LoadResult {
@@ -144,7 +140,7 @@ struct SaveHeader
 const SAVE_ID: [u8; 4] = ['S' as u8, 'q' as u8, 'w' as u8, 'S' as u8];
 const SAVE_VERSION: u32 = 1; // Change each time when format is changed!
 
-fn save_common_data(game_time: f32, player_entity: hecs::Entity, file: &mut std::fs::File) -> Option<()>
+fn save_common_data(game_time: f32, player_entity: hecs::Entity, file: &mut File) -> Option<()>
 {
 	serde_json::to_writer_pretty(
 		file,
@@ -156,7 +152,7 @@ fn save_common_data(game_time: f32, player_entity: hecs::Entity, file: &mut std:
 	.ok()
 }
 
-fn load_common_data(file: &mut std::fs::File) -> Option<CommonData>
+fn load_common_data(file: &mut File) -> Option<CommonData>
 {
 	let mut de = serde_json::Deserializer::new(serde_json::de::IoRead::new(file));
 	serde::de::Deserialize::deserialize(&mut de).ok()
@@ -169,7 +165,7 @@ struct CommonData
 	player_entity: hecs::Entity,
 }
 
-fn save_ecs(ecs: &hecs::World, file: &mut std::fs::File) -> Option<SharedResources>
+fn save_ecs(ecs: &hecs::World, file: &mut File) -> Option<SharedResources>
 {
 	let mut shared_resources = SharedResources::default();
 
@@ -187,7 +183,7 @@ fn save_ecs(ecs: &hecs::World, file: &mut std::fs::File) -> Option<SharedResourc
 	Some(shared_resources)
 }
 
-fn load_ecs(shared_resources: &SharedResources, file: &mut std::fs::File) -> Option<hecs::World>
+fn load_ecs(shared_resources: &SharedResources, file: &mut File) -> Option<hecs::World>
 {
 	let mut context = DeserializeContext { shared_resources };
 
@@ -199,7 +195,7 @@ fn load_ecs(shared_resources: &SharedResources, file: &mut std::fs::File) -> Opt
 fn save_shared_resources(
 	shared_resources: &SharedResources,
 	resources_manager: &resources_manager::ResourcesManager,
-	file: &mut std::fs::File,
+	file: &mut File,
 ) -> Option<()>
 {
 	let mut r = ResourcesForSerialization::default();
@@ -240,7 +236,7 @@ fn save_shared_resources(
 
 fn load_shared_resources(
 	resources_manager: &mut resources_manager::ResourcesManager,
-	file: &mut std::fs::File,
+	file: &mut File,
 ) -> Option<SharedResources>
 {
 	let mut shared_resources_serialized: ResourcesForSerialization = bincode::deserialize_from(file).ok()?;
@@ -252,7 +248,7 @@ fn load_shared_resources(
 		let model = match model_resource
 		{
 			ResourceForSerialization::Named(name) => resources_manager.get_model(&name),
-			ResourceForSerialization::Direct(r) => std::sync::Arc::new(r),
+			ResourceForSerialization::Direct(r) => Arc::new(r),
 		};
 		shared_resources.models.insert(key, model);
 	}
@@ -262,7 +258,7 @@ fn load_shared_resources(
 		let model = match texture_resource
 		{
 			ResourceForSerialization::Named(name) => resources_manager.get_texture_lite(&name),
-			ResourceForSerialization::Direct(r) => std::sync::Arc::new(r),
+			ResourceForSerialization::Direct(r) => Arc::new(r),
 		};
 		shared_resources.lite_textures.insert(key, model);
 	}
@@ -287,13 +283,13 @@ enum ResourceForSerialization<T>
 	Direct(T),
 }
 
-fn save_physics(physics: &test_game_physics::TestGamePhysics, file: &mut std::fs::File) -> Option<()>
+fn save_physics(physics: &test_game_physics::TestGamePhysics, file: &mut File) -> Option<()>
 {
 	// Use binary format for physics, because it is too heavy.
 	bincode::serialize_into(file, physics).ok()
 }
 
-fn load_physics(file: &mut std::fs::File) -> Option<test_game_physics::TestGamePhysics>
+fn load_physics(file: &mut File) -> Option<test_game_physics::TestGamePhysics>
 {
 	bincode::deserialize_from(file).ok()
 }
@@ -515,7 +511,7 @@ impl ResourceSerializationKey
 {
 	fn from_resource<T>(resource: &resources_manager::SharedResourcePtr<T>, resources: &mut ResourcesMap<T>) -> Self
 	{
-		let key = Self(std::sync::Arc::as_ptr(resource) as usize as u64);
+		let key = Self(Arc::as_ptr(resource) as usize as u64);
 
 		if !resources.contains_key(&key)
 		{
