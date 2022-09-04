@@ -204,10 +204,10 @@ fn save_shared_resources(
 {
 	let mut r = ResourcesForSerialization::default();
 
-	for (_, model) in &shared_resources.models
+	for (key, model) in &shared_resources.models
 	{
 		r.models.insert(
-			ResourceSerializationKey::from_resource_unchecked(model).as_string(),
+			*key,
 			if let Some(name) = resources_manager.get_model_name(model)
 			{
 				ResourceForSerialization::Named(name.to_string())
@@ -219,10 +219,10 @@ fn save_shared_resources(
 		);
 	}
 
-	for (_, texture) in &shared_resources.lite_textures
+	for (key, texture) in &shared_resources.lite_textures
 	{
 		r.lite_textures.insert(
-			ResourceSerializationKey::from_resource_unchecked(texture).as_string(),
+			*key,
 			if let Some(name) = resources_manager.get_texture_lite_name(texture)
 			{
 				ResourceForSerialization::Named(name.to_string())
@@ -247,30 +247,24 @@ fn load_shared_resources(
 
 	let mut shared_resources = SharedResources::default();
 
-	for (key_str, model_resource) in &mut shared_resources_serialized.models.drain()
+	for (key, model_resource) in &mut shared_resources_serialized.models.drain()
 	{
-		if let Some(key) = ResourceSerializationKey::from_string(&key_str)
+		let model = match model_resource
 		{
-			let model = match model_resource
-			{
-				ResourceForSerialization::Named(name) => resources_manager.get_model(&name),
-				ResourceForSerialization::Direct(r) => std::sync::Arc::new(r),
-			};
-			shared_resources.models.insert(key, model);
-		}
+			ResourceForSerialization::Named(name) => resources_manager.get_model(&name),
+			ResourceForSerialization::Direct(r) => std::sync::Arc::new(r),
+		};
+		shared_resources.models.insert(key, model);
 	}
 
-	for (key_str, texture_resource) in &mut shared_resources_serialized.lite_textures.drain()
+	for (key, texture_resource) in &mut shared_resources_serialized.lite_textures.drain()
 	{
-		if let Some(key) = ResourceSerializationKey::from_string(&key_str)
+		let model = match texture_resource
 		{
-			let model = match texture_resource
-			{
-				ResourceForSerialization::Named(name) => resources_manager.get_texture_lite(&name),
-				ResourceForSerialization::Direct(r) => std::sync::Arc::new(r),
-			};
-			shared_resources.lite_textures.insert(key, model);
-		}
+			ResourceForSerialization::Named(name) => resources_manager.get_texture_lite(&name),
+			ResourceForSerialization::Direct(r) => std::sync::Arc::new(r),
+		};
+		shared_resources.lite_textures.insert(key, model);
 	}
 
 	Some(shared_resources)
@@ -279,8 +273,8 @@ fn load_shared_resources(
 #[derive(Default, Serialize, Deserialize)]
 struct ResourcesForSerialization
 {
-	models: HashMap<String, ResourceForSerialization<triangle_model::TriangleModel>>,
-	lite_textures: HashMap<String, ResourceForSerialization<textures::TextureLiteWithMips>>,
+	models: HashMap<ResourceSerializationKey, ResourceForSerialization<triangle_model::TriangleModel>>,
+	lite_textures: HashMap<ResourceSerializationKey, ResourceForSerialization<textures::TextureLiteWithMips>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -510,7 +504,7 @@ struct SharedResources
 	lite_textures: ResourcesMap<textures::TextureLiteWithMips>,
 }
 
-// Use hash map with pointer as key because HashSet in not possible for Arc.
+// Use hash map with pointer converted to integer as key because HashSet in not possible for Arc.
 type ResourcesMap<T> = HashMap<ResourceSerializationKey, resources_manager::SharedResourcePtr<T>>;
 
 // Use pointers as resources keys.
@@ -528,21 +522,6 @@ impl ResourceSerializationKey
 			resources.insert(key, resource.clone());
 		}
 		key
-	}
-
-	fn from_resource_unchecked<T>(resource: &resources_manager::SharedResourcePtr<T>) -> Self
-	{
-		Self(std::sync::Arc::as_ptr(resource) as usize as u64)
-	}
-
-	fn from_string(s: &str) -> Option<Self>
-	{
-		s.parse::<u64>().ok().map(|x| Self(x))
-	}
-
-	fn as_string(self) -> String
-	{
-		format!("{}", self.0)
 	}
 
 	fn to_resource<T>(self, resources: &ResourcesMap<T>) -> Option<resources_manager::SharedResourcePtr<T>>
