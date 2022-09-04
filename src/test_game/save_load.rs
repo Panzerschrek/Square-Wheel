@@ -213,7 +213,7 @@ fn save_shared_resources(
 	}
 
 	// Use binary format in case of huge direct resources.
-	serde_cbor::to_writer(file, &r);
+	bincode::serialize_into(file, &r).unwrap();
 }
 
 fn load_shared_resources(
@@ -221,9 +221,7 @@ fn load_shared_resources(
 	file: &mut std::fs::File,
 ) -> SharedResources
 {
-	let mut de = serde_cbor::Deserializer::from_reader(file);
-	let mut shared_resources_serialized: ResourcesForSerialization =
-		serde::de::Deserialize::deserialize(&mut de).unwrap();
+	let mut shared_resources_serialized: ResourcesForSerialization = bincode::deserialize_from(file).unwrap();
 
 	let mut shared_resources = SharedResources::default();
 
@@ -276,13 +274,12 @@ enum ResourceForSerialization<T>
 fn save_physics(physics: &test_game_physics::TestGamePhysics, file: &mut std::fs::File)
 {
 	// Use binary format for physics, because it is too heavy.
-	serde_cbor::to_writer(file, physics).unwrap();
+	bincode::serialize_into(file, physics).unwrap();
 }
 
 fn load_physics(file: &mut std::fs::File) -> test_game_physics::TestGamePhysics
 {
-	let mut de = serde_cbor::Deserializer::from_reader(file);
-	serde::de::Deserialize::deserialize(&mut de).unwrap()
+	bincode::deserialize_from(file).unwrap()
 }
 
 struct SerializeContext<'a>
