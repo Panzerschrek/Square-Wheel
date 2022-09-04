@@ -142,7 +142,7 @@ const SAVE_VERSION: u32 = 1; // Change each time when format is changed!
 
 fn save_common_data(game_time: f32, player_entity: hecs::Entity, file: &mut File) -> Option<()>
 {
-	serde_json::to_writer_pretty(
+	bincode::serialize_into(
 		file,
 		&CommonData {
 			game_time,
@@ -154,8 +154,7 @@ fn save_common_data(game_time: f32, player_entity: hecs::Entity, file: &mut File
 
 fn load_common_data(file: &mut File) -> Option<CommonData>
 {
-	let mut de = serde_json::Deserializer::new(serde_json::de::IoRead::new(file));
-	serde::de::Deserialize::deserialize(&mut de).ok()
+	bincode::deserialize_from(file).ok()
 }
 
 #[derive(Serialize, Deserialize)]
@@ -173,8 +172,7 @@ fn save_ecs(ecs: &hecs::World, file: &mut File) -> Option<SharedResources>
 		shared_resources: &mut shared_resources,
 	};
 
-	// TODO - maybe use binary serialization instead?
-	let mut serializer = serde_json::Serializer::pretty(file);
+	let mut serializer = bincode::Serializer::new(file, bincode::DefaultOptions::new());
 	if !hecs::serialize::row::serialize(ecs, &mut context, &mut serializer).is_ok()
 	{
 		return None;
@@ -187,8 +185,7 @@ fn load_ecs(shared_resources: &SharedResources, file: &mut File) -> Option<hecs:
 {
 	let mut context = DeserializeContext { shared_resources };
 
-	// TODO - maybe use binary serialization instead?
-	let mut deserializer = serde_json::Deserializer::new(serde_json::de::IoRead::new(file));
+	let mut deserializer = bincode::Deserializer::with_reader(file, bincode::DefaultOptions::new());
 	hecs::serialize::row::deserialize(&mut context, &mut deserializer).ok()
 }
 
