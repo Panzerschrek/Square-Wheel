@@ -41,8 +41,8 @@ pub fn save(
 	};
 	file.write_all(header_bytes)?;
 
-	save_common_data(game_time, player_entity, &mut file);
 	header.common_data_offset = file.stream_position()? as u32;
+	save_common_data(game_time, player_entity, &mut file);
 
 	header.ecs_data_offset = file.stream_position()? as u32;
 	let shared_resources = save_ecs(ecs, &mut file);
@@ -97,12 +97,19 @@ pub fn load(
 		return Ok(None);
 	}
 
+	file.seek(std::io::SeekFrom::Start(header.common_data_offset as u64))?;
+	let common_data = load_common_data(&mut file);
+
 	file.seek(std::io::SeekFrom::Start(header.resources_data_offset as u64))?;
 	let shared_resources = load_shared_resources(resources_manager, &mut file);
 
 	file.seek(std::io::SeekFrom::Start(header.ecs_data_offset as u64))?;
+	let ecs = load_ecs(&shared_resources, &mut file);
 
-	Ok(Some(load_ecs(&shared_resources, &mut file)))
+	file.seek(std::io::SeekFrom::Start(header.physics_data_offset as u64))?;
+	let physics = load_physics(&mut file);
+
+	Ok(Some(ecs))
 }
 
 #[repr(C)]
@@ -128,6 +135,12 @@ fn save_common_data(game_time: f32, player_entity: hecs::Entity, file: &mut std:
 			player_entity,
 		},
 	);
+}
+
+fn load_common_data(file: &mut std::fs::File) -> CommonData
+{
+	let mut de = serde_json::Deserializer::new(serde_json::de::IoRead::new(file));
+	serde::de::Deserialize::deserialize(&mut de).unwrap()
 }
 
 #[derive(Serialize, Deserialize)]
@@ -208,7 +221,9 @@ fn load_shared_resources(
 	file: &mut std::fs::File,
 ) -> SharedResources
 {
-	let mut shared_resources_serialized: ResourcesForSerialization = serde_cbor::from_reader(file).unwrap();
+	let mut de = serde_cbor::Deserializer::from_reader(file);
+	let mut shared_resources_serialized: ResourcesForSerialization =
+		serde::de::Deserialize::deserialize(&mut de).unwrap();
 
 	let mut shared_resources = SharedResources::default();
 
@@ -261,8 +276,13 @@ enum ResourceForSerialization<T>
 fn save_physics(physics: &test_game_physics::TestGamePhysics, file: &mut std::fs::File)
 {
 	// Use binary format for physics, because it is too heavy.
-	let mut serializer = serde_cbor::Serializer::new(serde_cbor::ser::IoWrite::new(file));
-	serializer.serialize_some(physics);
+	serde_cbor::to_writer(file, physics).unwrap();
+}
+
+fn load_physics(file: &mut std::fs::File) -> test_game_physics::TestGamePhysics
+{
+	let mut de = serde_cbor::Deserializer::from_reader(file);
+	serde::de::Deserialize::deserialize(&mut de).unwrap()
 }
 
 struct SerializeContext<'a>
