@@ -61,7 +61,10 @@ pub fn save(
 	Ok(())
 }
 
-pub fn load(file_path: &std::path::Path) -> Result<Option<hecs::World>, std::io::Error>
+pub fn load(
+	file_path: &std::path::Path,
+	resources_manager: &mut resources_manager::ResourcesManager,
+) -> Result<Option<hecs::World>, std::io::Error>
 {
 	let mut file = std::fs::OpenOptions::new()
 		.read(true)
@@ -94,9 +97,12 @@ pub fn load(file_path: &std::path::Path) -> Result<Option<hecs::World>, std::io:
 		return Ok(None);
 	}
 
+	file.seek(std::io::SeekFrom::Start(header.resources_data_offset as u64))?;
+	let shared_resources = load_shared_resources(resources_manager, &mut file);
+
 	file.seek(std::io::SeekFrom::Start(header.ecs_data_offset as u64))?;
 
-	Ok(Some(load_ecs(&SharedResources::default(), &mut file)))
+	Ok(Some(load_ecs(&shared_resources, &mut file)))
 }
 
 #[repr(C)]
@@ -197,6 +203,51 @@ fn save_shared_resources(
 	serde_cbor::to_writer(file, &r);
 }
 
+fn load_shared_resources(
+	resources_manager: &mut resources_manager::ResourcesManager,
+	file: &mut std::fs::File,
+) -> SharedResources
+{
+	let mut shared_resources_serialized: ResourcesForSerialization = serde_cbor::from_reader(file).unwrap();
+
+	let mut shared_resources = SharedResources::default();
+
+	for (key_str, model_resource) in &mut shared_resources_serialized.models.drain()
+	{
+		if let Some(key) = ResourceSerializationKey::from_string(&key_str)
+		{
+			let model = match model_resource
+			{
+				ResourceForSerialization::Named(name) => resources_manager.get_model(&name),
+				ResourceForSerialization::Direct(r) => std::sync::Arc::new(r),
+			};
+			shared_resources.models.insert(key, model);
+		}
+	}
+
+	for (key_str, texture_resource) in &mut shared_resources_serialized.lite_textures.drain()
+	{
+		if let Some(key) = ResourceSerializationKey::from_string(&key_str)
+		{
+			let model = match texture_resource
+			{
+				ResourceForSerialization::Named(name) => resources_manager.get_texture_lite(&name),
+				ResourceForSerialization::Direct(r) => std::sync::Arc::new(r),
+			};
+			shared_resources.lite_textures.insert(key, model);
+		}
+	}
+
+	shared_resources
+}
+
+#[derive(Default, Serialize, Deserialize)]
+struct ResourcesForSerialization
+{
+	models: HashMap<String, ResourceForSerialization<triangle_model::TriangleModel>>,
+	lite_textures: HashMap<String, ResourceForSerialization<textures::TextureLiteWithMips>>,
+}
+
 #[derive(Serialize, Deserialize)]
 enum ResourceForSerialization<T>
 {
@@ -205,13 +256,6 @@ enum ResourceForSerialization<T>
 	// Save resource directly.
 	// It is possible for generated resources or othrer resources, obtained not via ResourcesManager.
 	Direct(T),
-}
-
-#[derive(Default, Serialize, Deserialize)]
-struct ResourcesForSerialization
-{
-	models: HashMap<String, ResourceForSerialization<triangle_model::TriangleModel>>,
-	lite_textures: HashMap<String, ResourceForSerialization<textures::TextureLiteWithMips>>,
 }
 
 fn save_physics(physics: &test_game_physics::TestGamePhysics, file: &mut std::fs::File)
@@ -396,14 +440,23 @@ impl<'a> hecs::serialize::row::DeserializeContext for DeserializeContext<'a>
 			self.try_deserialize_component::<DynamicLight, M>(&key, &mut map, entity);
 
 			// Drawable components with shared resources.
-			// TODO - fix this.
 			if Some(key.as_str()) == serde_name::trace_name::<ModelEntityProxy>()
 			{
-				map.next_value::<ModelEntityProxy>()?;
+				if let Some(v) = map
+					.next_value::<ModelEntityProxy>()?
+					.try_to(&self.shared_resources.models, &self.shared_resources.lite_textures)
+				{
+					entity.add(v);
+				}
 			}
 			if Some(key.as_str()) == serde_name::trace_name::<DecalProxy>()
 			{
-				map.next_value::<DecalProxy>()?;
+				if let Some(v) = map
+					.next_value::<DecalProxy>()?
+					.try_to(&self.shared_resources.lite_textures)
+				{
+					entity.add(v);
+				}
 			}
 		}
 
@@ -419,29 +472,33 @@ struct SharedResources
 }
 
 // Use hash map with pointer as key because HashSet in not possible for Arc.
-type ResourcesMap<T> = HashMap<*const T, resources_manager::SharedResourcePtr<T>>;
+type ResourcesMap<T> = HashMap<ResourceSerializationKey, resources_manager::SharedResourcePtr<T>>;
 
 // Use pointers as resources keys.
-#[derive(Copy, Clone, Serialize, Deserialize)]
+#[derive(Copy, Clone, Serialize, Deserialize, std::cmp::PartialEq, std::cmp::Eq, std::hash::Hash)]
 struct ResourceSerializationKey(u64);
 
 impl ResourceSerializationKey
 {
 	fn from_resource<T>(resource: &resources_manager::SharedResourcePtr<T>, resources: &mut ResourcesMap<T>) -> Self
 	{
-		let ptr = std::sync::Arc::as_ptr(resource);
+		let key = Self(std::sync::Arc::as_ptr(resource) as usize as u64);
 
-		if !resources.contains_key(&ptr)
+		if !resources.contains_key(&key)
 		{
-			resources.insert(ptr, resource.clone());
+			resources.insert(key, resource.clone());
 		}
-
-		Self(ptr as usize as u64)
+		key
 	}
 
 	fn from_resource_unchecked<T>(resource: &resources_manager::SharedResourcePtr<T>) -> Self
 	{
 		Self(std::sync::Arc::as_ptr(resource) as usize as u64)
+	}
+
+	fn from_string(s: &str) -> Option<Self>
+	{
+		s.parse::<u64>().ok().map(|x| Self(x))
 	}
 
 	fn as_string(self) -> String
@@ -451,8 +508,7 @@ impl ResourceSerializationKey
 
 	fn to_resource<T>(self, resources: &ResourcesMap<T>) -> Option<resources_manager::SharedResourcePtr<T>>
 	{
-		let ptr = self.0 as *const T;
-		resources.get(&ptr).map(|x| x.clone())
+		resources.get(&self).map(|x| x.clone())
 	}
 }
 

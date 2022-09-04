@@ -543,7 +543,10 @@ impl Game
 			return;
 		}
 
-		crate::save_load::load(&std::path::PathBuf::from(&args[0]));
+		crate::save_load::load(
+			&std::path::PathBuf::from(&args[0]),
+			&mut self.resources_manager.lock().unwrap(),
+		);
 	}
 }
 
