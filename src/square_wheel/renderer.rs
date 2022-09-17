@@ -2092,6 +2092,7 @@ impl Renderer
 
 		// TODO - maybe use different basis?
 		const DECAL_TEXTURE_BASIS: [[f32; 4]; 2] = [[0.0, -0.5, 0.0, 0.5], [0.0, 0.0, -0.5, 0.5]];
+		const MAX_ANGLE_COS: f32 = 0.1;
 
 		// TODO - use uninitialized memory.
 		let mut vertices_clipped0 = unsafe { std::mem::zeroed::<[Vec3f; MAX_VERTICES]>() };
@@ -2102,6 +2103,17 @@ impl Renderer
 		{
 			let decal = &decals[decal_index as usize];
 			let decal_info = &self.decals_info[decal_index as usize];
+
+			// Both vectors are normalized, so, dot product is just cosine of angle.
+			let decal_angle_cos = polygon_data
+				.basis_vecs
+				.normal
+				.dot(decal.rotation.rotate_vector(-Vec3f::unit_x()));
+			// Do not apply decals to back faces and faces with extreme slope.
+			if decal_angle_cos < MAX_ANGLE_COS
+			{
+				continue;
+			}
 
 			let decal_planes_matrix = decal_info.camera_planes_matrix;
 
