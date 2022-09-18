@@ -25,6 +25,9 @@ structopt = "0.3"
 
 rapier3d = { path = "../rapier/crates/rapier3d", features= ["serde-serialize"] }
 
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
+
 # Engine library.
 [lib]
 name = "square_wheel_lib"
