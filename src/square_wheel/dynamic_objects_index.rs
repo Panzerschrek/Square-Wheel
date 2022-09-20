@@ -85,8 +85,7 @@ impl DynamicObjectsIndex
 			self.position_object_bbox(
 				index as DynamicObjectId,
 				&BBox::from_min_max(Vec3f::new(-1.0, -1.0, -1.0), Vec3f::new(1.0, 1.0, 1.0)),
-				&(get_object_matrix(decal.position, decal.rotation) *
-					Mat4f::from_nonuniform_scale(decal.scale.x, decal.scale.y, decal.scale.z)),
+				&get_object_matrix_with_scale(decal.position, decal.rotation, decal.scale),
 			);
 		}
 	}

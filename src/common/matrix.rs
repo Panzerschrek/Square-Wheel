@@ -96,3 +96,8 @@ pub fn get_object_matrix(position: Vec3f, rotation: QuaternionF) -> Mat4f
 	let translate = Mat4f::from_translation(position);
 	translate * rotate
 }
+
+pub fn get_object_matrix_with_scale(position: Vec3f, rotation: QuaternionF, scale: Vec3f) -> Mat4f
+{
+	get_object_matrix(position, rotation) * Mat4f::from_nonuniform_scale(scale.x, scale.y, scale.z)
+}

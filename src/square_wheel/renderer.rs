@@ -767,8 +767,7 @@ impl Renderer
 		{
 			// TODO - maybe check visibility of decals and skip processing invisible decals?
 
-			let decal_matrix = get_object_matrix(decal.position, decal.rotation) *
-				Mat4f::from_nonuniform_scale(decal.scale.x, decal.scale.y, decal.scale.z);
+			let decal_matrix = get_object_matrix_with_scale(decal.position, decal.rotation, decal.scale);
 
 			let camera_planes_matrix =
 				frame_info.camera_matrices.planes_matrix * decal_matrix.transpose().invert().unwrap();
