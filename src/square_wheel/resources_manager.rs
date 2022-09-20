@@ -1,6 +1,6 @@
 use super::{
-	abstract_color::*, config, console::*, resources_manager_config::*, textures::*, triangle_model,
-	triangle_model_iqm, triangle_model_md3,
+	config, console::*, resources_manager_config::*, textures::*, triangle_model, triangle_model_iqm,
+	triangle_model_md3,
 };
 use crate::common::{bbox::*, bsp_map_compact::*, bsp_map_save_load::*, color::*, image, material::*, math_types::*};
 use std::{
@@ -265,7 +265,13 @@ impl ResourcesManager
 			&self.default_material
 		});
 
-		let skybox_texture = load_skybox_texture(material, &self.config.textures_path);
+		let skybox = material.skybox.as_ref().unwrap();
+
+		let mut skybox_texture = SkyboxTextures::default();
+		for (side_image, out_side) in skybox.side_images.iter().zip(skybox_texture.iter_mut())
+		{
+			*out_side = load_skybox_texture_side(&self.config.textures_path, &side_image, skybox.brightness);
+		}
 
 		let ptr = SharedResourcePtr::new(skybox_texture);
 		self.skybox_textures_32.insert(key.clone(), ptr.clone());
@@ -288,7 +294,16 @@ impl ResourcesManager
 			&self.default_material
 		});
 
-		let skybox_texture = load_skybox_texture(material, &self.config.textures_path);
+		// TODO - maybe use separate files/directories foe 32-bit and 64-bit skyboxes?
+
+		// TODO - avoid "unwrap".
+		let skybox = material.skybox.as_ref().unwrap();
+
+		let mut skybox_texture = SkyboxTextures::default();
+		for (side_image, out_side) in skybox.side_images.iter().zip(skybox_texture.iter_mut())
+		{
+			*out_side = load_skybox_texture_side64(&self.config.textures_path, &side_image, skybox.brightness);
+		}
 
 		let ptr = SharedResourcePtr::new(skybox_texture);
 		self.skybox_textures_64.insert(key.clone(), ptr.clone());
@@ -368,24 +383,11 @@ fn load_texture(material: &Material, textures_path: &str) -> TextureWithMips
 	build_texture_mips(mip0)
 }
 
-fn load_skybox_texture<ColorT: AbstractColor>(material: &Material, textures_path: &str) -> SkyboxTextures<ColorT>
-{
-	// TODO - avoid "unwrap".
-	let skybox = material.skybox.as_ref().unwrap();
-
-	let mut result = SkyboxTextures::default();
-	for (side_image, out_side) in skybox.side_images.iter().zip(result.iter_mut())
-	{
-		*out_side = load_skybox_texture_side(textures_path, &side_image, skybox.brightness);
-	}
-	result
-}
-
-fn load_skybox_texture_side<ColorT: AbstractColor>(
+fn load_skybox_texture_side(
 	textures_path: &str,
 	texture_image_name: &str,
 	brightness: f32,
-) -> SkyboxSideTextureWithMips<ColorT>
+) -> SkyboxSideTextureWithMips<Color32>
 {
 	if texture_image_name.is_empty()
 	{
@@ -397,9 +399,32 @@ fn load_skybox_texture_side<ColorT: AbstractColor>(
 	make_skybox_side_texture_mips(mip0)
 }
 
+fn load_skybox_texture_side64(
+	textures_path: &str,
+	texture_image_name: &str,
+	brightness: f32,
+) -> SkyboxSideTextureWithMips<Color64>
+{
+	if texture_image_name.is_empty()
+	{
+		return SkyboxSideTextureWithMips::default();
+	}
+
+	let image = load_image64(texture_image_name, textures_path).unwrap_or_else(image::make_stub64);
+	let mip0 = make_skybox_side_texture64(&image, brightness);
+	make_skybox_side_texture_mips(mip0)
+}
+
 fn load_image(file_name: &str, textures_path: &str) -> Option<image::Image>
 {
 	let mut path = PathBuf::from(textures_path);
 	path.push(file_name);
 	image::load(&path)
+}
+
+fn load_image64(file_name: &str, textures_path: &str) -> Option<image::Image64>
+{
+	let mut path = PathBuf::from(textures_path);
+	path.push(file_name);
+	image::load64(&path)
 }

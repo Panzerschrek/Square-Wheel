@@ -7,15 +7,53 @@ pub struct Image
 	pub pixels: Vec<Color32>,
 }
 
+#[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Image64
+{
+	pub size: [u32; 2],
+	pub pixels: Vec<Color64>,
+}
+
 pub fn load(file_path: &std::path::Path) -> Option<Image>
 {
 	let src_image = image::open(file_path).ok()?.into_rgba8();
-
 	Some(Image {
 		size: [src_image.width(), src_image.height()],
 		pixels: src_image
 			.pixels()
 			.map(|p| Color32::from_rgba(p[0], p[1], p[2], p[3]))
+			.collect(),
+	})
+}
+
+pub fn load64(file_path: &std::path::Path) -> Option<Image64>
+{
+	let src_image = image::open(file_path).ok()?;
+	if let Some(image16) = src_image.as_rgba16()
+	{
+		return Some(Image64 {
+			size: [image16.width(), image16.height()],
+			pixels: image16
+				.pixels()
+				.map(|p| Color64::from_rgba(p[0], p[1], p[2], p[3]))
+				.collect(),
+		});
+	}
+	if let Some(image16) = src_image.as_rgb16()
+	{
+		return Some(Image64 {
+			size: [image16.width(), image16.height()],
+			pixels: image16.pixels().map(|p| Color64::from_rgb(p[0], p[1], p[2])).collect(),
+		});
+	}
+
+	let image8 = src_image.into_rgba8();
+
+	Some(Image64 {
+		size: [image8.width(), image8.height()],
+		pixels: image8
+			.pixels()
+			.map(|p| Color64::from_rgba(p[0] as u16, p[1] as u16, p[2] as u16, p[3] as u16))
 			.collect(),
 	})
 }
@@ -61,6 +99,33 @@ pub fn make_stub() -> Image
 			else
 			{
 				Color32::from_rgba(160, 160, 160, 128)
+			};
+			result.pixels[(x + y * result.size[0]) as usize] = color;
+		}
+	}
+
+	result
+}
+
+pub fn make_stub64() -> Image64
+{
+	let size = 32;
+	let mut result = Image64 {
+		size: [size, size],
+		pixels: vec![Color64::from_rgb(0, 0, 0); (size * size) as usize],
+	};
+
+	for y in 0 .. result.size[1]
+	{
+		for x in 0 .. result.size[0]
+		{
+			let color = if (((x >> 3) ^ (y >> 3)) & 1) != 0
+			{
+				Color64::from_rgba(224, 224, 224, 255)
+			}
+			else
+			{
+				Color64::from_rgba(160, 160, 160, 128)
 			};
 			result.pixels[(x + y * result.size[0]) as usize] = color;
 		}
