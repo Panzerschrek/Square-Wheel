@@ -16,7 +16,6 @@ Engine:
 Renderer:
 * Fix bug with missing visibility when camera lies on portal plane inside portal polygon
 * Fix buggy visibility calculationg with portals clipped by "z_near" plane
-* HDR skyboxes
 * Animated textures (with N frames)
 * Models rendering improvements - avoid splitting models into pieces for each BSP tree leaf in some cases
 * Shadows from triangle models
