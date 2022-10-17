@@ -111,7 +111,7 @@ impl Color32
 	}
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct Color64(u64);
 
 impl Color64
