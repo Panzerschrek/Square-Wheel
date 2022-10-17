@@ -18,6 +18,9 @@ pub struct HostConfig
 
 	#[serde(default)]
 	pub fullscreen_mode: u32,
+
+	#[serde(default)]
+	pub frame_scale: u32,
 }
 
 impl HostConfig

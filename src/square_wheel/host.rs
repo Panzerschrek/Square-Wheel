@@ -1,6 +1,7 @@
 use super::{
-	commands_processor, commands_queue, config, console, debug_stats_printer::*, game_interface::*, host_config::*,
-	performance_counter::*, postprocessor::*, renderer, resources_manager::*, text_printer, ticks_counter::*,
+	commands_processor, commands_queue, config, console, debug_stats_printer::*, frame_upscaler::*, game_interface::*,
+	host_config::*, performance_counter::*, postprocessor::*, renderer, resources_manager::*, text_printer,
+	ticks_counter::*,
 };
 use crate::common::{color::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
@@ -17,6 +18,7 @@ pub struct Host
 	console: console::ConsoleSharedPtr,
 	window: system_window::SystemWindow,
 	postprocessor: Postprocessor,
+	frame_upscaler: FrameUpscaler,
 	resources_manager: ResourcesManagerSharedPtr,
 	game_creation_function: GameCreationFunction,
 	active_map: Option<ActiveMap>,
@@ -104,6 +106,7 @@ impl Host
 			console: console.clone(),
 			window: system_window::SystemWindow::new(),
 			postprocessor: Postprocessor::new(app_config.clone()),
+			frame_upscaler: FrameUpscaler::new(),
 			resources_manager: ResourcesManager::new(app_config, console),
 			game_creation_function,
 			active_map: None,
@@ -272,10 +275,12 @@ impl Host
 
 		let window = &mut self.window;
 		let postprocessor = &mut self.postprocessor;
+		let frame_upscaler = &mut self.frame_upscaler;
 		let active_map = &mut self.active_map;
 		let console = self.console.clone();
 		let fps_counter = &mut self.fps_counter;
 		let max_fps = self.config.max_fps;
+		let frame_scale = self.config.frame_scale;
 		let frame_duration_counter = &self.frame_duration_counter;
 		let prev_frame_end_time = &mut self.prev_frame_end_time;
 
@@ -289,38 +294,95 @@ impl Host
 				// Process game logic.
 				active_map.game.update(&keyboard_state, &events, time_delta_s);
 
-				// Get frame info from game code.
-				frame_info = Some(active_map.game.get_frame_info(&surface_info_initial));
-				let frame_info_ref = frame_info.as_ref().unwrap();
-
 				// Perform rendering frame preparation.
-				if postprocessor.use_hdr_rendering()
+				if frame_scale > 1
 				{
-					let hdr_buffer_size = [surface_info_initial.width, surface_info_initial.height];
-					let hdr_buffer = postprocessor.get_hdr_buffer(hdr_buffer_size);
+					let (pixels_scaled, surface_info_scaled) =
+						frame_upscaler.get_draw_buffer(&surface_info_initial, frame_scale as usize);
 
-					let hdr_surface_info = system_window::SurfaceInfo {
-						width: hdr_buffer_size[0],
-						height: hdr_buffer_size[1],
-						pitch: hdr_buffer_size[0],
-					};
+					// Get frame info from game code.
+					frame_info = Some(active_map.game.get_frame_info(&surface_info_scaled));
+					let frame_info_ref = frame_info.as_ref().unwrap();
 
-					active_map
-						.renderer
-						.prepare_frame::<Color64>(&hdr_surface_info, frame_info_ref);
+					if postprocessor.use_hdr_rendering()
+					{
+						let hdr_buffer_size = [surface_info_scaled.width, surface_info_scaled.height];
+						let hdr_buffer = postprocessor.get_hdr_buffer(hdr_buffer_size);
 
-					active_map.renderer.draw_frame(
-						hdr_buffer,
-						&hdr_surface_info,
-						frame_info_ref,
-						&mut active_map.debug_stats_printer,
-					);
+						let hdr_surface_info = system_window::SurfaceInfo {
+							width: hdr_buffer_size[0],
+							height: hdr_buffer_size[1],
+							pitch: hdr_buffer_size[0],
+						};
+
+						active_map
+							.renderer
+							.prepare_frame::<Color64>(&hdr_surface_info, frame_info_ref);
+
+						active_map.renderer.draw_frame(
+							hdr_buffer,
+							&hdr_surface_info,
+							frame_info_ref,
+							&mut active_map.debug_stats_printer,
+						);
+
+						postprocessor.perform_postprocessing(
+							pixels_scaled,
+							&surface_info_scaled,
+							time_delta_s,
+							&mut active_map.debug_stats_printer,
+						);
+					}
+					else
+					{
+						active_map
+							.renderer
+							.prepare_frame::<Color32>(&surface_info_scaled, frame_info_ref);
+
+						active_map.renderer.draw_frame(
+							pixels_scaled,
+							&surface_info_scaled,
+							frame_info_ref,
+							&mut active_map.debug_stats_printer,
+						);
+					}
+
+					active_map.game.draw_frame_overlay(pixels_scaled, &surface_info_scaled);
 				}
 				else
 				{
-					active_map
-						.renderer
-						.prepare_frame::<Color32>(&surface_info_initial, frame_info_ref);
+					// Get frame info from game code.
+					frame_info = Some(active_map.game.get_frame_info(&surface_info_initial));
+					let frame_info_ref = frame_info.as_ref().unwrap();
+
+					if postprocessor.use_hdr_rendering()
+					{
+						let hdr_buffer_size = [surface_info_initial.width, surface_info_initial.height];
+						let hdr_buffer = postprocessor.get_hdr_buffer(hdr_buffer_size);
+
+						let hdr_surface_info = system_window::SurfaceInfo {
+							width: hdr_buffer_size[0],
+							height: hdr_buffer_size[1],
+							pitch: hdr_buffer_size[0],
+						};
+
+						active_map
+							.renderer
+							.prepare_frame::<Color64>(&hdr_surface_info, frame_info_ref);
+
+						active_map.renderer.draw_frame(
+							hdr_buffer,
+							&hdr_surface_info,
+							frame_info_ref,
+							&mut active_map.debug_stats_printer,
+						);
+					}
+					else
+					{
+						active_map
+							.renderer
+							.prepare_frame::<Color32>(&surface_info_initial, frame_info_ref);
+					}
 				}
 			}
 		};
@@ -369,27 +431,34 @@ impl Host
 
 			if let Some(active_map) = active_map
 			{
-				if postprocessor.use_hdr_rendering()
+				if frame_scale > 1
 				{
-					postprocessor.perform_postprocessing(
-						pixels,
-						surface_info,
-						time_delta_s,
-						&mut active_map.debug_stats_printer,
-					);
+					frame_upscaler.perform_upscale(pixels, surface_info, frame_scale as usize);
 				}
 				else
 				{
-					let frame_info_ref = frame_info.as_ref().unwrap();
-					active_map.renderer.draw_frame(
-						pixels,
-						surface_info,
-						frame_info_ref,
-						&mut active_map.debug_stats_printer,
-					);
-				}
+					if postprocessor.use_hdr_rendering()
+					{
+						postprocessor.perform_postprocessing(
+							pixels,
+							surface_info,
+							time_delta_s,
+							&mut active_map.debug_stats_printer,
+						);
+					}
+					else
+					{
+						let frame_info_ref = frame_info.as_ref().unwrap();
+						active_map.renderer.draw_frame(
+							pixels,
+							surface_info,
+							frame_info_ref,
+							&mut active_map.debug_stats_printer,
+						);
+					}
 
-				active_map.game.draw_frame_overlay(pixels, surface_info);
+					active_map.game.draw_frame_overlay(pixels, surface_info);
+				}
 
 				active_map.debug_stats_printer.flush(pixels, surface_info);
 			}

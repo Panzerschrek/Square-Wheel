@@ -13,6 +13,7 @@ pub mod equations;
 pub mod fast_math;
 pub mod frame_info;
 pub mod frame_number;
+pub mod frame_upscaler;
 pub mod game_interface;
 pub mod host;
 pub mod host_config;
