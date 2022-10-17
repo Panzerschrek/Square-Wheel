@@ -309,6 +309,8 @@ impl Host
 				// Perform rendering frame preparation.
 				if frame_scale > 1
 				{
+					// In case of scaled buffer perform frame preparation, rendering and postprocessing now.
+
 					let (pixels_scaled, surface_info_scaled) =
 						frame_upscaler.get_draw_buffer(&surface_info_initial, frame_scale as usize);
 
@@ -369,6 +371,8 @@ impl Host
 
 					if postprocessor.use_hdr_rendering()
 					{
+						// Postprocessing is enabled - perform frame preparation and rendering.
+
 						let hdr_buffer_size = [surface_info_initial.width, surface_info_initial.height];
 						let hdr_buffer = postprocessor.get_hdr_buffer(hdr_buffer_size);
 
@@ -391,6 +395,7 @@ impl Host
 					}
 					else
 					{
+						// No postprocessing and no intermediate buffer - only prepare frame.
 						active_map
 							.renderer
 							.prepare_frame::<Color32>(&surface_info_initial, frame_info_ref);
@@ -445,6 +450,8 @@ impl Host
 			{
 				if frame_scale > 1
 				{
+					// In case of scaled buffer just perform upscaling into screen buffer.
+
 					frame_upscaler.perform_upscale(
 						pixels,
 						surface_info,
@@ -456,6 +463,7 @@ impl Host
 				{
 					if postprocessor.use_hdr_rendering()
 					{
+						// Perform postprocessing into screen buffer.
 						postprocessor.perform_postprocessing(
 							pixels,
 							surface_info,
@@ -465,6 +473,7 @@ impl Host
 					}
 					else
 					{
+						// No intermediate buffer or postprocessing - perform rendering directly into screen buffer.
 						let frame_info_ref = frame_info.as_ref().unwrap();
 						active_map.renderer.draw_frame(
 							pixels,
