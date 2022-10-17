@@ -225,6 +225,17 @@ impl Host
 			config_is_dirty = true;
 		}
 
+		if self.config.frame_scale > MAX_FRAME_SCALE as u32
+		{
+			self.config.frame_scale = MAX_FRAME_SCALE as u32;
+			config_is_dirty = true;
+		}
+		if self.config.frame_scale < 1
+		{
+			self.config.frame_scale = 1;
+			config_is_dirty = true;
+		}
+
 		if config_is_dirty
 		{
 			self.config.update_app_config(&self.app_config);
