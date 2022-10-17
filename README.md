@@ -19,6 +19,7 @@ Main features are related to world static geometry:
 * Directional lightmaps
 * Normal-mapping (directional lightmap-based)
 * Specular lighting (directional lightmap-based) for metals and non-metals
+* Dynamic lights
 * Translucent surfaces
 * Alpha-blending and alpha-test
 * Skyboxes
@@ -108,7 +109,7 @@ BSP leafs are connected together via portals.
 Portal-based algorithm is used to determine visibility (set of visible leafs) for given camera position.
 Visibility determination algorithm is the same as in [Thief](https://nothings.org/gamedev/thief_rendering.html) game.
 
-BSP tree-based algorithm is used to place dynamic objects (models, decals) in world and determine visibility for them.
+BSP tree-based algorithm is used to place dynamic objects (models, decals, lights) in world and determine visibility for them.
 
 
 ### Lighting
@@ -189,6 +190,31 @@ Lightmap data is used to calculate light for decals.
 Lightmap fetch is performed per-vertex and with linear interpolation.
 Such approach may produce bad results for large decals, so, avoid using large decals, unless you disable lightmap fetch for decal at all and use constant light instead.
 But for small decals (like bullet holes) which size is comparable to lightmap texel size per-vertex lighting looks fine.
+
+
+### Dynamic lighting
+
+The engine supports also dynamic lights.
+There are three types of lights - spherical with no shadowmap, spherical with cube shadowmap and conical with projector shadowmap.
+Lights radius is limited in order to reduce complexity of light calculations.
+
+Dynamic lighting is not so fast as static and exists mostly in order to implement effects such as muzzle flash, explosions, glowing projectiles, player's flashlight, etc.
+It is important to avoid large number of dynamic lights with large radius and/or shadows in order to avoid performance impact.
+But it is fine to use small number (up to 10) of dynamic lights without shadows and one or two dynamic lights with large radius and shadows.
+
+Shadowmaps are prepared for each visible light with shadowmap.
+Visibility is determined via same leaf BSP tree-based approach, as for other dynamic objects.
+Shadowmap resolution is dependent on distance from light source to camera and radius of light source.
+
+During surfaces preparation for each surface influencing dynamic lights list is prepared.
+For each of these dynamic lights per-texel light is calculated, using proper texel normal (from normal map) and material properties (roughness/metallicity).
+
+Triangle models are affected by dynamic lights too.
+For each model dynamic light cube is prepared (similar as precalculated light grid element), including proper attenuation and shadowing.
+Then dynamic lighting is applied using this cube for all vertices of the model.
+
+Dynamic lights light cube is also prepared for decals.
+Decal segment light is dependent on this cube and normal of polygon for which this decal segment is applied.
 
 
 ### Skybox
