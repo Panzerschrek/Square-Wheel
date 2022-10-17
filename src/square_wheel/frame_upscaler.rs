@@ -1,3 +1,4 @@
+use super::fast_math::*;
 use crate::common::{color::*, system_window};
 
 pub const MAX_FRAME_SCALE: usize = 6;
@@ -99,8 +100,13 @@ impl FrameUpscaler
 				{
 					for dx in 0 .. SCALE
 					{
-						// TODO - use unchecked indexing.
-						dst_line_start[dst_x_start + dx + dy * surface_info.pitch] = src_pixel;
+						unsafe {
+							debug_only_checked_write(
+								dst_line_start,
+								dst_x_start + dx + dy * surface_info.pitch,
+								src_pixel,
+							)
+						};
 					}
 				}
 			} // for src_x
@@ -108,13 +114,12 @@ impl FrameUpscaler
 			// Leftover column.
 			if width_scaled_up < surface_info.width
 			{
-				let src_pixel = src_line[scaled_width - 1];
+				let src_pixel = unsafe { debug_only_checked_fetch(src_line, scaled_width - 1) };
 				for dst_x in width_scaled_up .. surface_info.width
 				{
 					for dy in 0 .. SCALE
 					{
-						// TODO - use unchecked indexing.
-						dst_line_start[dst_x + dy * surface_info.pitch] = src_pixel;
+						unsafe { debug_only_checked_write(dst_line_start, dst_x + dy * surface_info.pitch, src_pixel) };
 					}
 				}
 			}
@@ -134,8 +139,13 @@ impl FrameUpscaler
 				{
 					for dx in 0 .. SCALE
 					{
-						// TODO - use unchecked indexing.
-						dst_line_start[dst_x_start + dx + dy * surface_info.pitch] = src_pixel;
+						unsafe {
+							debug_only_checked_write(
+								dst_line_start,
+								dst_x_start + dx + dy * surface_info.pitch,
+								src_pixel,
+							)
+						};
 					}
 				}
 			} // for src_x
@@ -143,13 +153,12 @@ impl FrameUpscaler
 			// Leftover corner.
 			if width_scaled_up < surface_info.width
 			{
-				let src_pixel = src_line[scaled_width - 1];
+				let src_pixel = unsafe { debug_only_checked_fetch(src_line, scaled_width - 1) };
 				for dst_x in width_scaled_up .. surface_info.width
 				{
 					for dy in 0 .. dy_left
 					{
-						// TODO - use unchecked indexing.
-						dst_line_start[dst_x + dy * surface_info.pitch] = src_pixel;
+						unsafe { debug_only_checked_write(dst_line_start, dst_x + dy * surface_info.pitch, src_pixel) };
 					}
 				}
 			}
@@ -173,30 +182,29 @@ impl FrameUpscaler
 			let dst_line_start = &mut pixels[src_y * 2 * surface_info.pitch ..];
 			for src_x in 0 .. scaled_width - 1
 			{
-				// TODO - use unchecked indexing.
-				let pix_00 = src_line[src_x];
-				let pix_10 = src_line[src_x + 1];
-				let pix_01 = src_line[scaled_width + src_x];
-				let pix_11 = src_line[scaled_width + src_x + 1];
+				let pix_00 = unsafe { debug_only_checked_fetch(src_line, src_x) };
+				let pix_10 = unsafe { debug_only_checked_fetch(src_line, src_x + 1) };
+				let pix_01 = unsafe { debug_only_checked_fetch(src_line, scaled_width + src_x) };
+				let pix_11 = unsafe { debug_only_checked_fetch(src_line, scaled_width + src_x + 1) };
 
 				let x_mix = Color32::get_average(pix_00, pix_10);
 				let y_mix = Color32::get_average(pix_00, pix_01);
 				let corner_mix = Color32::get_average(x_mix, Color32::get_average(pix_01, pix_11));
 				let dst_x = src_x * 2;
-				dst_line_start[dst_x] = pix_00;
-				dst_line_start[dst_x + 1] = x_mix;
-				dst_line_start[surface_info.pitch + dst_x] = y_mix;
-				dst_line_start[surface_info.pitch + dst_x + 1] = corner_mix;
+				unsafe { debug_only_checked_write(dst_line_start, dst_x, pix_00) };
+				unsafe { debug_only_checked_write(dst_line_start, dst_x + 1, x_mix) };
+				unsafe { debug_only_checked_write(dst_line_start, surface_info.pitch + dst_x, y_mix) };
+				unsafe { debug_only_checked_write(dst_line_start, surface_info.pitch + dst_x + 1, corner_mix) };
 			} // for src_x
 
 			// Leftover column.
-			let last_pix_0 = src_line[scaled_width - 1];
-			let last_pix_1 = src_line[scaled_width - 1 + scaled_width];
+			let last_pix_0 = unsafe { debug_only_checked_fetch(src_line, scaled_width - 1) };
+			let last_pix_1 = unsafe { debug_only_checked_fetch(src_line, scaled_width - 1 + scaled_width) };
 			let last_pix_mix = Color32::get_average(last_pix_0, last_pix_1);
 			for dst_x in (scaled_width - 1) * 2 .. surface_info.width
 			{
-				dst_line_start[dst_x] = last_pix_mix;
-				dst_line_start[dst_x + surface_info.pitch] = last_pix_mix;
+				unsafe { debug_only_checked_write(dst_line_start, dst_x, last_pix_mix) };
+				unsafe { debug_only_checked_write(dst_line_start, dst_x + surface_info.pitch, last_pix_mix) };
 			}
 		} // for src_y
 
@@ -207,25 +215,25 @@ impl FrameUpscaler
 		let dst_line_start = &mut pixels[src_y * 2 * surface_info.pitch ..];
 		for src_x in 0 .. scaled_width - 1
 		{
-			let pix_0 = src_line[src_x];
-			let pix_1 = src_line[src_x + 1];
+			let pix_0 = unsafe { debug_only_checked_fetch(src_line, src_x) };
+			let pix_1 = unsafe { debug_only_checked_fetch(src_line, src_x + 1) };
 			let x_mix = Color32::get_average(pix_0, pix_1);
 			let dst_x = src_x * 2;
 			for dy in 0 .. y_left
 			{
 				let dst_offset = dy * surface_info.pitch + dst_x;
-				dst_line_start[dst_offset] = pix_0;
-				dst_line_start[dst_offset + 1] = x_mix;
+				unsafe { debug_only_checked_write(dst_line_start, dst_offset, pix_0) };
+				unsafe { debug_only_checked_write(dst_line_start, dst_offset + 1, x_mix) };
 			}
 		}
 
 		// Leftover corner.
-		let last_pix = src_line[scaled_width - 1];
+		let last_pix = unsafe { debug_only_checked_fetch(src_line, scaled_width - 1) };
 		for dst_x in (scaled_width - 1) * 2 .. surface_info.width
 		{
 			for dy in 0 .. y_left
 			{
-				dst_line_start[dy * surface_info.pitch + dst_x] = last_pix;
+				unsafe { debug_only_checked_write(dst_line_start, dy * surface_info.pitch + dst_x, last_pix) };
 			}
 		}
 	}
