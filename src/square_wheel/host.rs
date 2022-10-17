@@ -292,6 +292,7 @@ impl Host
 		let fps_counter = &mut self.fps_counter;
 		let max_fps = self.config.max_fps;
 		let frame_scale = self.config.frame_scale;
+		let frame_resize_interpolate = self.config.frame_resize_interpolate;
 		let frame_duration_counter = &self.frame_duration_counter;
 		let prev_frame_end_time = &mut self.prev_frame_end_time;
 
@@ -444,7 +445,12 @@ impl Host
 			{
 				if frame_scale > 1
 				{
-					frame_upscaler.perform_upscale(pixels, surface_info, frame_scale as usize);
+					frame_upscaler.perform_upscale(
+						pixels,
+						surface_info,
+						frame_scale as usize,
+						frame_resize_interpolate,
+					);
 				}
 				else
 				{
