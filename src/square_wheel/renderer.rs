@@ -2291,7 +2291,7 @@ impl Renderer
 								polygon_lightmap_eqution.k[1]) + polygon_lightmap_coord_shift[1],
 						);
 
-					let lightmap_light = get_polygon_lightap_light(&self.map, polygon, &lightmap_coord);
+					let lightmap_light = get_polygon_lightmap_light(&self.map, polygon, &lightmap_coord);
 					for i in 0 .. 3
 					{
 						light[i] += lightmap_light[i] * decal.lightmap_light_scale;
@@ -2767,7 +2767,7 @@ impl Renderer
 	}
 }
 
-fn get_polygon_lightap_light(
+fn get_polygon_lightmap_light(
 	map: &bsp_map_compact::BSPMap,
 	polygon: &bsp_map_compact::Polygon,
 	lightmap_coord: &Vec2f,
