@@ -3006,23 +3006,6 @@ fn create_dynamic_light_cube_shadow_map<'a>(
 	}
 }
 
-fn create_dynamic_light_cube_shadow_map_dummy() -> CubeShadowMap<'static>
-{
-	const DUMMY_DATA: [ShadowMapElement; 1] = [1.0e24];
-	const DUMMY: CubeShadowMap = CubeShadowMap {
-		size: 1,
-		sides: [
-			&DUMMY_DATA,
-			&DUMMY_DATA,
-			&DUMMY_DATA,
-			&DUMMY_DATA,
-			&DUMMY_DATA,
-			&DUMMY_DATA,
-		],
-	};
-	DUMMY
-}
-
 fn create_dynamic_light_projector_shadow_map<'a>(
 	rotation: &QuaternionF,
 	fov: RadiansF,
@@ -3042,18 +3025,6 @@ fn create_dynamic_light_projector_shadow_map<'a>(
 		basis_x: rotation.rotate_vector(Vec3f::unit_y()) * inv_half_fov_tan,
 		basis_y: rotation.rotate_vector(Vec3f::unit_z()) * inv_half_fov_tan,
 		basis_z: rotation.rotate_vector(-Vec3f::unit_x()),
-	}
-}
-
-fn create_dynamic_light_projector_shadow_map_dummy() -> ProjectorShadowMap<'static>
-{
-	const DUMMY_DATA: [ShadowMapElement; 1] = [1.0e24];
-	ProjectorShadowMap {
-		size: 1,
-		data: &DUMMY_DATA,
-		basis_x: Vec3f::unit_y(),
-		basis_y: Vec3f::unit_z(),
-		basis_z: Vec3f::unit_x(),
 	}
 }
 

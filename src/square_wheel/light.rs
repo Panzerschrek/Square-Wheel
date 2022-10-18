@@ -153,6 +153,35 @@ pub fn make_shadow_map_circle(data: &mut [ShadowMapElement], size: u32)
 	}
 }
 
+pub fn create_dynamic_light_cube_shadow_map_dummy() -> CubeShadowMap<'static>
+{
+	const DUMMY_DATA: [ShadowMapElement; 1] = [1.0e24];
+	const DUMMY: CubeShadowMap = CubeShadowMap {
+		size: 1,
+		sides: [
+			&DUMMY_DATA,
+			&DUMMY_DATA,
+			&DUMMY_DATA,
+			&DUMMY_DATA,
+			&DUMMY_DATA,
+			&DUMMY_DATA,
+		],
+	};
+	DUMMY
+}
+
+pub fn create_dynamic_light_projector_shadow_map_dummy() -> ProjectorShadowMap<'static>
+{
+	const DUMMY_DATA: [ShadowMapElement; 1] = [1.0e24];
+	ProjectorShadowMap {
+		size: 1,
+		data: &DUMMY_DATA,
+		basis_x: Vec3f::unit_y(),
+		basis_y: Vec3f::unit_z(),
+		basis_z: Vec3f::unit_x(),
+	}
+}
+
 pub fn get_light_shadow_factor(light: &DynamicLightWithShadow, vec: &Vec3f) -> f32
 {
 	match &light.shadow_map
