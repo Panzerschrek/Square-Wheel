@@ -361,7 +361,7 @@ impl Postprocessor
 			for src_x in 0 .. self.bloom_buffer_size[0]
 			{
 				let dst_x_base = src_x * BLOOM_BUFFER_SCALE;
-				let bloom_src = debug_checked_fetch(&self.bloom_buffers[0], src_x + src_line_offset);
+				let bloom_src = unsafe { debug_only_checked_fetch(&self.bloom_buffers[0], src_x + src_line_offset) };
 				let bloom_c = ColorVec::from_color64(bloom_src);
 				for dy in 0 .. BLOOM_BUFFER_SCALE
 				{
@@ -370,12 +370,12 @@ impl Postprocessor
 					let pixels_line_offset = dst_x_base + dst_y * surface_info.pitch;
 					for dx in 0 .. BLOOM_BUFFER_SCALE
 					{
-						let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
+						let c = unsafe { debug_only_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset) };
 						let c_vec = ColorVec::from_color64(c);
 						let sum = ColorVec::add(&bloom_c, &c_vec);
 						// let sum = bloom_c;
 						let c_mapped = tonemapping_function.do_it(&sum);
-						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
+						unsafe { debug_only_checked_write(pixels, dx + pixels_line_offset, c_mapped.into()) };
 					}
 				}
 			}
@@ -383,10 +383,12 @@ impl Postprocessor
 			if columns_left > 0
 			{
 				let dst_x_base = self.bloom_buffer_size[0] * BLOOM_BUFFER_SCALE;
-				let bloom_src = debug_checked_fetch(
-					&self.bloom_buffers[0],
-					(self.bloom_buffer_size[0] - 1) + src_line_offset,
-				);
+				let bloom_src = unsafe {
+					debug_only_checked_fetch(
+						&self.bloom_buffers[0],
+						(self.bloom_buffer_size[0] - 1) + src_line_offset,
+					)
+				};
 				let bloom_c = ColorVec::from_color64(bloom_src);
 				for dy in 0 .. BLOOM_BUFFER_SCALE
 				{
@@ -395,11 +397,11 @@ impl Postprocessor
 					let pixels_line_offset = dst_x_base + dst_y * surface_info.pitch;
 					for dx in 0 .. columns_left
 					{
-						let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
+						let c = unsafe { debug_only_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset) };
 						let c_vec = ColorVec::from_color64(c);
 						let sum = ColorVec::add(&bloom_c, &c_vec);
 						let c_mapped = tonemapping_function.do_it(&sum);
-						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
+						unsafe { debug_only_checked_write(pixels, dx + pixels_line_offset, c_mapped.into()) };
 					}
 				}
 			}
@@ -412,7 +414,7 @@ impl Postprocessor
 			for src_x in 0 .. self.bloom_buffer_size[0]
 			{
 				let dst_x_base = src_x * BLOOM_BUFFER_SCALE;
-				let bloom_src = debug_checked_fetch(&self.bloom_buffers[0], src_x + src_line_offset);
+				let bloom_src = unsafe { debug_only_checked_fetch(&self.bloom_buffers[0], src_x + src_line_offset) };
 				let bloom_c = ColorVec::from_color64(bloom_src);
 				for dy in 0 .. lines_left
 				{
@@ -421,11 +423,11 @@ impl Postprocessor
 					let pixels_line_offset = dst_x_base + dst_y * surface_info.pitch;
 					for dx in 0 .. BLOOM_BUFFER_SCALE
 					{
-						let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
+						let c = unsafe { debug_only_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset) };
 						let c_vec = ColorVec::from_color64(c);
 						let sum = ColorVec::add(&bloom_c, &c_vec);
 						let c_mapped = tonemapping_function.do_it(&sum);
-						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
+						unsafe { debug_only_checked_write(pixels, dx + pixels_line_offset, c_mapped.into()) };
 					}
 				}
 			}
@@ -433,10 +435,12 @@ impl Postprocessor
 			if columns_left > 0
 			{
 				let dst_x_base = self.bloom_buffer_size[0] * BLOOM_BUFFER_SCALE;
-				let bloom_src = debug_checked_fetch(
-					&self.bloom_buffers[0],
-					(self.bloom_buffer_size[0] - 1) + src_line_offset,
-				);
+				let bloom_src = unsafe {
+					debug_only_checked_fetch(
+						&self.bloom_buffers[0],
+						(self.bloom_buffer_size[0] - 1) + src_line_offset,
+					)
+				};
 				let bloom_c = ColorVec::from_color64(bloom_src);
 				for dy in 0 .. lines_left
 				{
@@ -445,11 +449,11 @@ impl Postprocessor
 					let pixels_line_offset = dst_x_base + dst_y * surface_info.pitch;
 					for dx in 0 .. columns_left
 					{
-						let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
+						let c = unsafe { debug_only_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset) };
 						let c_vec = ColorVec::from_color64(c);
 						let sum = ColorVec::add(&bloom_c, &c_vec);
 						let c_mapped = tonemapping_function.do_it(&sum);
-						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
+						unsafe { debug_only_checked_write(pixels, dx + pixels_line_offset, c_mapped.into()) };
 					}
 				}
 			}
@@ -483,12 +487,14 @@ impl Postprocessor
 		if src_y_start == 0
 		{
 			let dst_y_base = 0;
-			let mut bloom_src_0_0 = ColorVec::from_color64(debug_checked_fetch(&self.bloom_buffers[0], 0));
+			let mut bloom_src_0_0 =
+				unsafe { ColorVec::from_color64(debug_only_checked_fetch(&self.bloom_buffers[0], 0)) };
 			for src_x in 0 .. self.bloom_buffer_size[0] - 1
 			{
 				let dst_x_base = src_x * BLOOM_BUFFER_SCALE + BLOOM_BUFFER_SCALE / 2;
 
-				let bloom_src_1_0 = ColorVec::from_color64(debug_checked_fetch(&self.bloom_buffers[0], src_x + 1));
+				let bloom_src_1_0 =
+					ColorVec::from_color64(unsafe { debug_only_checked_fetch(&self.bloom_buffers[0], src_x + 1) });
 
 				for dy in 0 .. BLOOM_BUFFER_SCALE / 2
 				{
@@ -497,7 +503,7 @@ impl Postprocessor
 					let pixels_line_offset = dst_x_base + dst_y * surface_info.pitch;
 					for dx in 0 .. BLOOM_BUFFER_SCALE
 					{
-						let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
+						let c = unsafe { debug_only_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset) };
 						let x_mix_factor = mix_factors[dx];
 						let one_minus_x_mix_factor = 1.0 - x_mix_factor;
 						let sum = ColorVec::mul_scalar_add(
@@ -506,7 +512,7 @@ impl Postprocessor
 							&ColorVec::mul_scalar_add(&bloom_src_1_0, x_mix_factor, &ColorVec::from_color64(c)),
 						);
 						let c_mapped = tonemapping_function.do_it(&sum);
-						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
+						unsafe { debug_only_checked_write(pixels, dx + pixels_line_offset, c_mapped.into()) };
 					}
 				}
 
@@ -520,11 +526,10 @@ impl Postprocessor
 			let src_line_offset = src_y * self.bloom_buffer_size[0];
 
 			let mut bloom_src_0_0 =
-				ColorVec::from_color64(debug_checked_fetch(&self.bloom_buffers[0], src_line_offset));
-			let mut bloom_src_0_1 = ColorVec::from_color64(debug_checked_fetch(
-				&self.bloom_buffers[0],
-				src_line_offset + self.bloom_buffer_size[0],
-			));
+				ColorVec::from_color64(unsafe { debug_only_checked_fetch(&self.bloom_buffers[0], src_line_offset) });
+			let mut bloom_src_0_1 = ColorVec::from_color64(unsafe {
+				debug_only_checked_fetch(&self.bloom_buffers[0], src_line_offset + self.bloom_buffer_size[0])
+			});
 
 			// Left border.
 			for dy in 0 .. BLOOM_BUFFER_SCALE
@@ -542,10 +547,10 @@ impl Postprocessor
 				let pixels_line_offset = dst_y * surface_info.pitch;
 				for dx in 0 .. BLOOM_BUFFER_SCALE / 2
 				{
-					let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
+					let c = unsafe { debug_only_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset) };
 					let sum = ColorVec::add(&bloom_src, &ColorVec::from_color64(c));
 					let c_mapped = tonemapping_function.do_it(&sum);
-					debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
+					unsafe { debug_only_checked_write(pixels, dx + pixels_line_offset, c_mapped.into()) };
 				}
 			}
 			// Main image.
@@ -553,12 +558,15 @@ impl Postprocessor
 			{
 				let dst_x_base = src_x * BLOOM_BUFFER_SCALE + BLOOM_BUFFER_SCALE / 2;
 
-				let bloom_src_1_0 =
-					ColorVec::from_color64(debug_checked_fetch(&self.bloom_buffers[0], src_x + 1 + src_line_offset));
-				let bloom_src_1_1 = ColorVec::from_color64(debug_checked_fetch(
-					&self.bloom_buffers[0],
-					src_x + 1 + src_line_offset + self.bloom_buffer_size[0],
-				));
+				let bloom_src_1_0 = ColorVec::from_color64(unsafe {
+					debug_only_checked_fetch(&self.bloom_buffers[0], src_x + 1 + src_line_offset)
+				});
+				let bloom_src_1_1 = ColorVec::from_color64(unsafe {
+					debug_only_checked_fetch(
+						&self.bloom_buffers[0],
+						src_x + 1 + src_line_offset + self.bloom_buffer_size[0],
+					)
+				});
 
 				for dy in 0 .. BLOOM_BUFFER_SCALE
 				{
@@ -580,7 +588,7 @@ impl Postprocessor
 					let pixels_line_offset = dst_x_base + dst_y * surface_info.pitch;
 					for dx in 0 .. BLOOM_BUFFER_SCALE
 					{
-						let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
+						let c = unsafe { debug_only_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset) };
 						let x_mix_factor = mix_factors[dx];
 						let one_minus_x_mix_factor = 1.0 - x_mix_factor;
 						let sum = ColorVec::mul_scalar_add(
@@ -589,7 +597,7 @@ impl Postprocessor
 							&ColorVec::mul_scalar_add(&bloom_src_right, x_mix_factor, &ColorVec::from_color64(c)),
 						);
 						let c_mapped = tonemapping_function.do_it(&sum);
-						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
+						unsafe { debug_only_checked_write(pixels, dx + pixels_line_offset, c_mapped.into()) };
 					}
 				}
 
@@ -612,10 +620,10 @@ impl Postprocessor
 				let pixels_line_offset = right_border_begin_x + dst_y * surface_info.pitch;
 				for dx in 0 .. right_border_size
 				{
-					let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
+					let c = unsafe { debug_only_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset) };
 					let sum = ColorVec::add(&bloom_src, &ColorVec::from_color64(c));
 					let c_mapped = tonemapping_function.do_it(&sum);
-					debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
+					unsafe { debug_only_checked_write(pixels, dx + pixels_line_offset, c_mapped.into()) };
 				}
 			}
 		}
@@ -626,13 +634,14 @@ impl Postprocessor
 
 			let src_line_offset = (self.bloom_buffer_size[1] - 1) * self.bloom_buffer_size[0];
 			let mut bloom_src_0_0 =
-				ColorVec::from_color64(debug_checked_fetch(&self.bloom_buffers[0], src_line_offset));
+				ColorVec::from_color64(unsafe { debug_only_checked_fetch(&self.bloom_buffers[0], src_line_offset) });
 			for src_x in 0 .. self.bloom_buffer_size[0] - 1
 			{
 				let dst_x_base = src_x * BLOOM_BUFFER_SCALE + BLOOM_BUFFER_SCALE / 2;
 
-				let bloom_src_1_0 =
-					ColorVec::from_color64(debug_checked_fetch(&self.bloom_buffers[0], src_x + 1 + src_line_offset));
+				let bloom_src_1_0 = ColorVec::from_color64(unsafe {
+					debug_only_checked_fetch(&self.bloom_buffers[0], src_x + 1 + src_line_offset)
+				});
 
 				for dy in 0 .. upper_border_size
 				{
@@ -641,7 +650,7 @@ impl Postprocessor
 					let pixels_line_offset = dst_x_base + dst_y * surface_info.pitch;
 					for dx in 0 .. BLOOM_BUFFER_SCALE
 					{
-						let c = debug_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset);
+						let c = unsafe { debug_only_checked_fetch(&self.hdr_buffer, dx + hdr_buffer_line_offset) };
 						let x_mix_factor = mix_factors[dx];
 						let one_minus_x_mix_factor = 1.0 - x_mix_factor;
 						let sum = ColorVec::mul_scalar_add(
@@ -650,7 +659,7 @@ impl Postprocessor
 							&ColorVec::mul_scalar_add(&bloom_src_1_0, x_mix_factor, &ColorVec::from_color64(c)),
 						);
 						let c_mapped = tonemapping_function.do_it(&sum);
-						debug_checked_store(pixels, dx + pixels_line_offset, c_mapped.into());
+						unsafe { debug_only_checked_write(pixels, dx + pixels_line_offset, c_mapped.into()) };
 					}
 				}
 
@@ -666,10 +675,10 @@ impl Postprocessor
 				let pixels_line_offset = y * surface_info.pitch;
 				for x in x_start .. x_end
 				{
-					let c = debug_checked_fetch(&self.hdr_buffer, x + hdr_buffer_line_offset);
+					let c = unsafe { debug_only_checked_fetch(&self.hdr_buffer, x + hdr_buffer_line_offset) };
 					let sum = ColorVec::add(&bloom_value, &ColorVec::from_color64(c));
 					let c_mapped = tonemapping_function.do_it(&sum);
-					debug_checked_store(pixels, x + pixels_line_offset, c_mapped.into());
+					unsafe { debug_only_checked_write(pixels, x + pixels_line_offset, c_mapped.into()) };
 				}
 			}
 		};
@@ -804,18 +813,20 @@ impl Postprocessor
 					let src_offset = src_x_base + src_line_offset;
 					for dx in 0 .. BLOOM_BUFFER_SCALE
 					{
-						let src = debug_checked_fetch(&self.hdr_buffer, dx + src_offset);
+						let src = unsafe { debug_only_checked_fetch(&self.hdr_buffer, dx + src_offset) };
 						let c = ColorVecI::from_color64(src);
 						sum = ColorVecI::add(&sum, &c);
 					}
 				}
 
 				let average = ColorVecI::shift_right::<COLOR_SHIFT>(&ColorVecI::mul_scalar(&sum, average_scaler));
-				debug_checked_store(
-					&mut self.bloom_buffers[0],
-					dst_x + dst_line_offset,
-					average.into_color64(),
-				);
+				unsafe {
+					debug_only_checked_write(
+						&mut self.bloom_buffers[0],
+						dst_x + dst_line_offset,
+						average.into_color64(),
+					)
+				};
 
 				line_colors_sum = ColorVecI::add(&line_colors_sum, &average);
 			}
@@ -856,27 +867,34 @@ impl Postprocessor
 				// Optimization: fetch and scale center pixel, than fetch and scale pairs of side pixels.
 				// We can do this since blur is symmetrical.
 				let mut sum = ColorVecI::mul_scalar(
-					&ColorVecI::from_color64(debug_checked_fetch(&self.bloom_buffers[0], dst_x + line_offset)),
-					debug_checked_fetch(&blur_kernel_i, radius_i as usize),
+					&ColorVecI::from_color64(unsafe {
+						debug_only_checked_fetch(&self.bloom_buffers[0], dst_x + line_offset)
+					}),
+					unsafe { debug_only_checked_fetch(&blur_kernel_i, radius_i as usize) },
 				);
 				for dx in 1 ..= radius_i
 				{
 					let src_x_0 = ((dst_x as i32) - dx).max(0);
 					let src_x_1 = ((dst_x as i32) + dx).min(bloom_buffer_size_minus_one[0]);
-					let src_0 = debug_checked_fetch(&self.bloom_buffers[0], (src_x_0 as usize) + line_offset);
-					let src_1 = debug_checked_fetch(&self.bloom_buffers[0], (src_x_1 as usize) + line_offset);
+					let src_0 =
+						unsafe { debug_only_checked_fetch(&self.bloom_buffers[0], (src_x_0 as usize) + line_offset) };
+					let src_1 =
+						unsafe { debug_only_checked_fetch(&self.bloom_buffers[0], (src_x_1 as usize) + line_offset) };
 					let two_sum = ColorVecI::add(&ColorVecI::from_color64(src_0), &ColorVecI::from_color64(src_1));
-					let two_sum_scaled =
-						ColorVecI::mul_scalar(&two_sum, debug_checked_fetch(&blur_kernel_i, (dx + radius_i) as usize));
+					let two_sum_scaled = ColorVecI::mul_scalar(&two_sum, unsafe {
+						debug_only_checked_fetch(&blur_kernel_i, (dx + radius_i) as usize)
+					});
 					sum = ColorVecI::add(&sum, &two_sum_scaled);
 				}
 
 				let sum_shifted = ColorVecI::shift_right::<COLOR_SHIFT>(&sum);
-				debug_checked_store(
-					&mut self.bloom_buffers[1],
-					dst_x + line_offset,
-					sum_shifted.into_color64(),
-				);
+				unsafe {
+					debug_only_checked_write(
+						&mut self.bloom_buffers[1],
+						dst_x + line_offset,
+						sum_shifted.into_color64(),
+					)
+				};
 			}
 		}
 
@@ -895,37 +913,43 @@ impl Postprocessor
 			{
 				let src_x = dst_x;
 				let mut sum = ColorVecI::mul_scalar(
-					&ColorVecI::from_color64(debug_checked_fetch(
-						&self.bloom_buffers[1],
-						src_x + dst_y * self.bloom_buffer_size[0],
-					)),
-					debug_checked_fetch(&blur_kernel_i, radius_i as usize),
+					&ColorVecI::from_color64(unsafe {
+						debug_only_checked_fetch(&self.bloom_buffers[1], src_x + dst_y * self.bloom_buffer_size[0])
+					}),
+					unsafe { debug_only_checked_fetch(&blur_kernel_i, radius_i as usize) },
 				);
 
 				for dy in 1 ..= radius_i
 				{
 					let src_y_0 = ((dst_y as i32) - dy).max(0);
 					let src_y_1 = ((dst_y as i32) + dy).min(bloom_buffer_size_minus_one[1]);
-					let src_0 = debug_checked_fetch(
-						&self.bloom_buffers[1],
-						src_x + (src_y_0 as usize) * self.bloom_buffer_size[0],
-					);
-					let src_1 = debug_checked_fetch(
-						&self.bloom_buffers[1],
-						src_x + (src_y_1 as usize) * self.bloom_buffer_size[0],
-					);
+					let src_0 = unsafe {
+						debug_only_checked_fetch(
+							&self.bloom_buffers[1],
+							src_x + (src_y_0 as usize) * self.bloom_buffer_size[0],
+						)
+					};
+					let src_1 = unsafe {
+						debug_only_checked_fetch(
+							&self.bloom_buffers[1],
+							src_x + (src_y_1 as usize) * self.bloom_buffer_size[0],
+						)
+					};
 					let two_sum = ColorVecI::add(&ColorVecI::from_color64(src_0), &ColorVecI::from_color64(src_1));
-					let two_sum_scaled =
-						ColorVecI::mul_scalar(&two_sum, debug_checked_fetch(&blur_kernel_i, (dy + radius_i) as usize));
+					let two_sum_scaled = ColorVecI::mul_scalar(&two_sum, unsafe {
+						debug_only_checked_fetch(&blur_kernel_i, (dy + radius_i) as usize)
+					});
 					sum = ColorVecI::add(&sum, &two_sum_scaled);
 				}
 
 				let sum_shifted = ColorVecI::shift_right::<COLOR_SHIFT>(&sum);
-				debug_checked_store(
-					&mut self.bloom_buffers[0],
-					dst_x + dst_line_offset,
-					sum_shifted.into_color64(),
-				);
+				unsafe {
+					debug_only_checked_write(
+						&mut self.bloom_buffers[0],
+						dst_x + dst_line_offset,
+						sum_shifted.into_color64(),
+					)
+				};
 			}
 		}
 	}
@@ -1014,30 +1038,6 @@ fn compute_gaussian_kernel(sigma: f32, radius: usize) -> [f32; MAX_GAUSSIAN_KERN
 	}
 
 	result
-}
-
-fn debug_checked_fetch<T: Copy>(data: &[T], index: usize) -> T
-{
-	#[cfg(debug_assertions)]
-	{
-		data[index]
-	}
-	#[cfg(not(debug_assertions))]
-	unsafe {
-		*data.get_unchecked(index)
-	}
-}
-
-fn debug_checked_store<T: Copy>(data: &mut [T], index: usize, value: T)
-{
-	#[cfg(debug_assertions)]
-	{
-		data[index] = value
-	}
-	#[cfg(not(debug_assertions))]
-	unsafe {
-		*data.get_unchecked_mut(index) = value
-	}
 }
 
 fn get_color_brightness(c: &ColorVec) -> f32

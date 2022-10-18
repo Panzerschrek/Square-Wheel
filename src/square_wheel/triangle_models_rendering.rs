@@ -375,15 +375,7 @@ fn get_triangle_plane(transformed_vertices: &[ModelVertex3d], triangle: &Triangl
 
 pub fn triangle_vertex_debug_checked_fetch<VertexT: Copy>(vertices: &[VertexT], index: VertexIndex) -> VertexT
 {
-	let index_s = index as usize;
-	#[cfg(debug_assertions)]
-	{
-		vertices[index_s]
-	}
-	#[cfg(not(debug_assertions))]
-	unsafe {
-		*vertices.get_unchecked(index_s)
-	}
+	unsafe { debug_only_checked_fetch(vertices, index as usize) }
 }
 
 pub struct ModelLightData

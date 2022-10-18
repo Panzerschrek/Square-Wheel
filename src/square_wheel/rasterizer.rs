@@ -444,7 +444,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					debug_assert!(pix_tc[0] <= texture_size_minus_one[0] as u32);
 					debug_assert!(pix_tc[1] <= texture_size_minus_one[1] as u32);
 					let texel_address = (pix_tc[0] + pix_tc[1] * texture_width) as usize;
-					let texel = unchecked_texture_fetch(texture_data, texel_address);
+					let texel = unsafe { debug_only_checked_fetch(texture_data, texel_address) };
 					write_into_framebuffer::<ColorT, BLENDING_MODE>(dst_pixel, texel);
 
 					span_inv_z += span_d_inv_z;
@@ -572,7 +572,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					debug_assert!(tc_int[1] < texture_info.size[1] as i32);
 
 					let texel_address = ((tc_int[0] as u32) + (tc_int[1] as u32) * texture_width) as usize;
-					let texel = unchecked_texture_fetch(texture_data, texel_address);
+					let texel = unsafe { debug_only_checked_fetch(texture_data, texel_address) };
 					write_into_framebuffer::<ColorT, BLENDING_MODE>(dst_pixel, texel);
 
 					span_tc[0] += span_d_tc[0];
@@ -719,7 +719,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					debug_assert!(tc_int[0] < texture_info.size[0] as i32);
 					debug_assert!(tc_int[1] < texture_info.size[1] as i32);
 					let texel_address = (tc_int[0] + tc_int[1] * texture_info.size[0]) as usize;
-					let texel = unchecked_texture_fetch(texture_data, texel_address);
+					let texel = unsafe { debug_only_checked_fetch(texture_data, texel_address) };
 					write_into_framebuffer::<ColorT, BLENDING_MODE>(dst_pixel, texel);
 
 					tc[0] += d_tc[0];
@@ -1243,7 +1243,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					debug_assert!(v < texture_info.size[1]);
 
 					let texel_address = (u + v * texture_info.size[0]) as usize;
-					let texel = unchecked_texture_fetch(texture_data, texel_address);
+					let texel = unsafe { debug_only_checked_fetch(texture_data, texel_address) };
 
 					let texel_vec = texel.into();
 					let texel_vec_lighted = ColorVecI::shift_right::<16>(&ColorVecI::mul(&texel_vec, &line_light));
@@ -1562,21 +1562,6 @@ fn unchecked_to_int64(x: f32) -> i64
 {
 	// Do not care about overflow, infinity, NaN. It is almost impossible.
 	unsafe { x.to_int_unchecked::<i64>() }
-}
-
-fn unchecked_texture_fetch<ColorT: Copy>(texture_data: &[ColorT], texel_address: usize) -> ColorT
-{
-	// operator [] checks bounds and calls panic! handler in case if index is out of bounds.
-	// This check is useless here since we clamp texture coordnates properly.
-	// So, use "get_unchecked" in release mode.
-	#[cfg(debug_assertions)]
-	{
-		texture_data[texel_address]
-	}
-	#[cfg(not(debug_assertions))]
-	unsafe {
-		*texture_data.get_unchecked(texel_address)
-	}
 }
 
 fn unchecked_slice_range_mut<T>(data: &mut [T], start: usize, end: usize) -> &mut [T]
