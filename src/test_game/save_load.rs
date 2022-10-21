@@ -381,6 +381,12 @@ impl<'a> hecs::serialize::row::SerializeContext for SerializeContext<'a>
 			map.serialize_entry(get_component_name::<DecalProxy>(), &proxy)?;
 		}
 
+		if let Some(c) = entity.get::<&Sprite>()
+		{
+			let proxy = SpriteProxy::new(&*c, &mut self.shared_resources.lite_textures);
+			map.serialize_entry(get_component_name::<SpriteProxy>(), &proxy)?;
+		}
+
 		map.end()
 	}
 
@@ -479,6 +485,15 @@ impl<'a> hecs::serialize::row::DeserializeContext for DeserializeContext<'a>
 			{
 				if let Some(v) = map
 					.next_value::<DecalProxy>()?
+					.try_to(&self.shared_resources.lite_textures)
+				{
+					entity.add(v);
+				}
+			}
+			if key.as_str() == get_component_name::<SpriteProxy>()
+			{
+				if let Some(v) = map
+					.next_value::<SpriteProxy>()?
 					.try_to(&self.shared_resources.lite_textures)
 				{
 					entity.add(v);
@@ -621,6 +636,38 @@ impl DecalProxy
 			blending_mode: self.blending_mode,
 			lightmap_light_scale: self.lightmap_light_scale,
 			light_add: self.light_add,
+		})
+	}
+}
+
+#[derive(Serialize, Deserialize)]
+struct SpriteProxy
+{
+	position: Vec3f,
+	radius: f32,
+	texture: ResourceSerializationKey,
+	orientation: SpriteOrientation,
+}
+
+impl SpriteProxy
+{
+	fn new(sprite: &Sprite, textures: &mut ResourcesMap<textures::TextureLiteWithMips>) -> Self
+	{
+		Self {
+			position: sprite.position,
+			radius: sprite.radius,
+			texture: ResourceSerializationKey::from_resource(&sprite.texture, textures),
+			orientation: sprite.orientation,
+		}
+	}
+
+	fn try_to(&self, textures: &ResourcesMap<textures::TextureLiteWithMips>) -> Option<Sprite>
+	{
+		Some(Sprite {
+			position: self.position,
+			radius: self.radius,
+			texture: self.texture.to_resource(textures)?,
+			orientation: self.orientation,
 		})
 	}
 }

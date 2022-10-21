@@ -651,6 +651,7 @@ impl GameInterface for Game
 			lights: self.collect_drawable_components(),
 			model_entities: self.collect_drawable_components(),
 			decals: self.collect_drawable_components(),
+			sprites: self.collect_drawable_components(),
 		}
 	}
 
