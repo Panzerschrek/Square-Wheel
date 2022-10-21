@@ -41,6 +41,7 @@ pub struct Renderer
 	dynamic_models_index: DynamicObjectsIndex,
 	decals_index: DynamicObjectsIndex,
 	decals_info: Vec<DecalInfo>,
+	sprites_index: DynamicObjectsIndex,
 	dynamic_lights_index: DynamicObjectsIndex,
 	// TODO - maybe extract dynamic models-related stuff into separate class?
 	// Store transformed models vertices and triangles in separate buffer.
@@ -241,6 +242,7 @@ impl Renderer
 			dynamic_models_index: DynamicObjectsIndex::new(map.clone()),
 			decals_index: DynamicObjectsIndex::new(map.clone()),
 			decals_info: Vec::new(),
+			sprites_index: DynamicObjectsIndex::new(map.clone()),
 			dynamic_lights_index: DynamicObjectsIndex::new(map),
 			visible_dynamic_meshes_list: Vec::new(),
 			dynamic_model_to_dynamic_meshes_index: Vec::new(),
@@ -300,6 +302,8 @@ impl Renderer
 		);
 
 		self.prepare_decals(frame_info);
+
+		self.prepare_sprites(frame_info);
 
 		run_with_measure(
 			|| {
@@ -833,6 +837,12 @@ impl Renderer
 		}
 
 		debug_assert!(self.decals_info.len() == frame_info.decals.len());
+	}
+
+	// Call this after visible leafs search.
+	fn prepare_sprites(&mut self, frame_info: &FrameInfo)
+	{
+		self.sprites_index.position_sprites(&frame_info.sprites);
 	}
 
 	// Call this after visible leafs search.
