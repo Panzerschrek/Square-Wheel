@@ -43,6 +43,8 @@ impl Game
 			("reset_test_models", Game::command_reset_test_models),
 			("add_test_decal", Game::command_add_test_decal),
 			("reset_test_decals", Game::command_reset_test_decals),
+			("add_test_sprite", Game::command_add_test_sprite),
+			("reset_test_sprites", Game::command_reset_test_sprites),
 			("set_view_model", Game::command_set_view_model),
 			("reset_view_model", Game::command_reset_view_model),
 			("noclip", Game::command_noclip),
@@ -409,6 +411,55 @@ impl Game
 	fn command_reset_test_decals(&mut self, _args: commands_queue::CommandArgs)
 	{
 		for (id, (_test_decal_component,)) in self.ecs.query_mut::<(&TestDecalComponent,)>()
+		{
+			self.ecs_command_buffer.despawn(id)
+		}
+		self.ecs_command_buffer.run_on(&mut self.ecs);
+	}
+
+	fn command_add_test_sprite(&mut self, args: commands_queue::CommandArgs)
+	{
+		if args.len() < 1
+		{
+			self.console
+				.lock()
+				.unwrap()
+				.add_text("Expected at least 1 arg".to_string());
+			return;
+		}
+
+		let texture = self.resources_manager.lock().unwrap().get_texture_lite(&args[0]);
+		let scale = if args.len() >= 2
+		{
+			args[1].parse::<f32>().unwrap_or(1.0)
+		}
+		else
+		{
+			1.0
+		};
+
+		let texture_mip0 = &texture[0];
+		let radius = 0.25 *
+			scale * ((texture_mip0.size[0] * texture_mip0.size[0] +
+			texture_mip0.size[1] * texture_mip0.size[1]) as f32)
+			.sqrt();
+
+		let (position, _rotation) = self.get_camera_location();
+
+		self.ecs.spawn((
+			TestSpriteComponent {},
+			Sprite {
+				position,
+				radius,
+				texture,
+				orientation: SpriteOrientation::FacingTowardsCamera,
+			},
+		));
+	}
+
+	fn command_reset_test_sprites(&mut self, _args: commands_queue::CommandArgs)
+	{
+		for (id, (_test_sprite_component,)) in self.ecs.query_mut::<(&TestSpriteComponent,)>()
 		{
 			self.ecs_command_buffer.despawn(id)
 		}

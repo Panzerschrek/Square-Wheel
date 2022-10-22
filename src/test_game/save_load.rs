@@ -324,6 +324,7 @@ impl<'a> hecs::serialize::row::SerializeContext for SerializeContext<'a>
 
 		self.try_serialize_component::<TestModelComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<TestDecalComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<TestSpriteComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<TestLightComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<TestProjectileComponent, S>(entity, &mut map)?;
 
@@ -433,6 +434,7 @@ impl<'a> hecs::serialize::row::DeserializeContext for DeserializeContext<'a>
 
 			self.try_deserialize_component::<TestModelComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<TestDecalComponent, M>(&key, &mut map, entity)?;
+			self.try_deserialize_component::<TestSpriteComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<TestLightComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<TestProjectileComponent, M>(&key, &mut map, entity)?;
 

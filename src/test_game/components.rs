@@ -12,6 +12,8 @@ pub struct TestModelComponent {}
 #[derive(Serialize, Deserialize)]
 pub struct TestDecalComponent {}
 #[derive(Serialize, Deserialize)]
+pub struct TestSpriteComponent {}
+#[derive(Serialize, Deserialize)]
 pub struct TestLightComponent {}
 
 #[derive(Serialize, Deserialize)]
