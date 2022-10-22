@@ -42,6 +42,7 @@ pub struct Renderer
 	decals_index: DynamicObjectsIndex,
 	decals_info: Vec<DecalInfo>,
 	sprites_index: DynamicObjectsIndex,
+	sprites_info: Vec<SpriteInfo>,
 	dynamic_lights_index: DynamicObjectsIndex,
 	// TODO - maybe extract dynamic models-related stuff into separate class?
 	// Store transformed models vertices and triangles in separate buffer.
@@ -172,6 +173,13 @@ struct DecalInfo
 	dynamic_light: bsp_map_compact::LightGridElement,
 }
 
+#[derive(Copy, Clone)]
+struct SpriteInfo
+{
+	vertices_projected: [Vec3f; 4],
+	light: [f32; 3],
+}
+
 impl Renderer
 {
 	pub fn new(
@@ -243,6 +251,7 @@ impl Renderer
 			decals_index: DynamicObjectsIndex::new(map.clone()),
 			decals_info: Vec::new(),
 			sprites_index: DynamicObjectsIndex::new(map.clone()),
+			sprites_info: Vec::new(),
 			dynamic_lights_index: DynamicObjectsIndex::new(map),
 			visible_dynamic_meshes_list: Vec::new(),
 			dynamic_model_to_dynamic_meshes_index: Vec::new(),
@@ -843,6 +852,40 @@ impl Renderer
 	fn prepare_sprites(&mut self, frame_info: &FrameInfo)
 	{
 		self.sprites_index.position_sprites(&frame_info.sprites);
+
+		self.sprites_info.clear();
+		for sprite in &frame_info.sprites
+		{
+			let texture_mip0 = &sprite.texture[0];
+			let step_u =
+				sprite.radius * inv_sqrt_fast(1.0 + (texture_mip0.size[0] as f32) / (texture_mip0.size[1] as f32));
+			let step_v =
+				sprite.radius * inv_sqrt_fast(1.0 + (texture_mip0.size[1] as f32) / (texture_mip0.size[0] as f32));
+
+			// TODO -  use proper vecs
+			let vec_u = Vec3f::unit_x() * step_u;
+			let vec_v = Vec3f::unit_y() * step_v;
+
+			let vertices = [
+				sprite.position + vec_u + vec_v,
+				sprite.position + vec_u - vec_v,
+				sprite.position - vec_u + vec_v,
+				sprite.position - vec_u - vec_v,
+			];
+
+			let vertices_projected = vertices.map(|v| {
+				let v_projected = frame_info.camera_matrices.view_matrix * v.extend(1.0);
+				Vec3f::new(v_projected.x, v_projected.y, v_projected.w)
+			});
+
+			let sprite_info = SpriteInfo {
+				vertices_projected,
+				light: [1.0, 1.0, 1.0], // TODO - use proper light
+			};
+			self.sprites_info.push(sprite_info);
+		}
+
+		debug_assert!(self.sprites_info.len() == frame_info.sprites.len());
 	}
 
 	// Call this after visible leafs search.
