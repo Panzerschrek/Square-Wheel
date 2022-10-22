@@ -2635,8 +2635,13 @@ impl Renderer
 			tc: Vec2f::new(tc_reduce, texture_size[1] - tc_reduce),
 		};
 
+		let z_near_plane = Plane {
+			vec: Vec3f::unit_z(),
+			dist: Z_NEAR,
+		};
+
 		let mut num_vertices = 4;
-		for clip_plane in leaf_clip_planes
+		for clip_plane in [z_near_plane].iter().chain(leaf_clip_planes.iter())
 		{
 			num_vertices = clip_3d_model_polygon_by_plane(&vc_src[.. num_vertices], clip_plane, vc_dst);
 			if num_vertices < 3
