@@ -855,18 +855,20 @@ impl Renderer
 
 		let view_matrix_inverse = frame_info.camera_matrices.view_matrix.invert().unwrap();
 
-		// let v_vec_base = -Vec3f::unit_z();
+		let u_vec_base_initial = (view_matrix_inverse * Vec4f::unit_x()).truncate();
+		let u_vec_base = u_vec_base_initial / u_vec_base_initial.magnitude();
+
 		let v_vec_base_initial = (view_matrix_inverse * Vec4f::unit_y()).truncate();
 		let v_vec_base = v_vec_base_initial / v_vec_base_initial.magnitude();
 
-		let u_vec_base_initial = (view_matrix_inverse * Vec4f::unit_x()).truncate();
-		let u_vec_base = u_vec_base_initial / u_vec_base_initial.magnitude();
+		let camera_direction = u_vec_base.cross(v_vec_base);
 
 		self.sprites_info.clear();
 		for sprite in &frame_info.sprites
 		{
 			let (u_vec_normalized, v_vec_normalized) = match sprite.orientation
 			{
+				SpriteOrientation::ParallelToCameraPlane => (u_vec_base, v_vec_base),
 				SpriteOrientation::FacingTowardsCamera =>
 				{
 					let vec_to_camera = frame_info.camera_matrices.position - sprite.position;
@@ -888,8 +890,24 @@ impl Renderer
 					let u_vec_normalized = plane_normal.cross(v_vec_normalized);
 					(u_vec_normalized, v_vec_normalized)
 				},
-				SpriteOrientation::ParallelToCameraPlane => (u_vec_base, v_vec_base),
-				SpriteOrientation::AlignToZAxis =>
+				SpriteOrientation::AlignToZAxisParallelToCameraPlane =>
+				{
+					let v_vec_normalized = Vec3f::unit_z();
+
+					let u_vec = v_vec_normalized.cross(camera_direction);
+					let u_vec_len = u_vec.magnitude();
+					let u_vec_normalized = if u_vec_len < 0.0001
+					{
+						Vec3f::unit_x()
+					}
+					else
+					{
+						u_vec / u_vec_len
+					};
+
+					(u_vec_normalized, v_vec_normalized)
+				},
+				SpriteOrientation::AlignToZAxisFacingTowardsCamera =>
 				{
 					let vec_to_camera = frame_info.camera_matrices.position - sprite.position;
 
