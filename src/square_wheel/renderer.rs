@@ -853,28 +853,43 @@ impl Renderer
 	{
 		self.sprites_index.position_sprites(&frame_info.sprites);
 
+		let view_matrix_inverse = frame_info.camera_matrices.view_matrix.invert().unwrap();
+
+		// let v_vec_base = -Vec3f::unit_z();
+		let v_vec_base_initial = (view_matrix_inverse * Vec4f::unit_y()).truncate();
+		let v_vec_base = v_vec_base_initial / v_vec_base_initial.magnitude();
+
+		let u_vec_base_initial = (view_matrix_inverse * Vec4f::unit_x()).truncate();
+		let u_vec_base = u_vec_base_initial / u_vec_base_initial.magnitude();
+
 		self.sprites_info.clear();
 		for sprite in &frame_info.sprites
 		{
-			// TODO - improve this. Support camera-aligned v_vec.
-			let vec_to_camera = frame_info.camera_matrices.position - sprite.position;
-			let plane_normal = vec_to_camera / vec_to_camera.magnitude().max(0.001);
-
-			let v_vec_base = -Vec3f::unit_z();
-			let v_vec_projected_to_plane = v_vec_base - plane_normal * v_vec_base.dot(plane_normal);
-
-			let v_vec_projected_len = v_vec_projected_to_plane.magnitude();
-			let v_vec_normalized = if v_vec_projected_len < 0.0001
+			let (u_vec_normalized, v_vec_normalized) = match sprite.orientation
 			{
-				Vec3f::unit_y()
-			}
-			else
-			{
-				v_vec_projected_to_plane / v_vec_projected_len
+				SpriteOrientation::FacingTowardsCamera =>
+				{
+					let vec_to_camera = frame_info.camera_matrices.position - sprite.position;
+					let plane_normal = vec_to_camera / vec_to_camera.magnitude().max(0.001);
+
+					let v_vec_projected_to_plane = v_vec_base - plane_normal * v_vec_base.dot(plane_normal);
+
+					let v_vec_projected_len = v_vec_projected_to_plane.magnitude();
+					let v_vec_normalized = if v_vec_projected_len < 0.0001
+					{
+						Vec3f::unit_y()
+					}
+					else
+					{
+						v_vec_projected_to_plane / v_vec_projected_len
+					};
+
+					// Should be normalized, since both vectors are normalied and perpendicular.
+					let u_vec_normalized = plane_normal.cross(v_vec_normalized);
+					(u_vec_normalized, v_vec_normalized)
+				},
+				SpriteOrientation::ParallelToCameraPlane => (u_vec_base, v_vec_base),
 			};
-
-			// Should be normalized, since both vectors are normalied and perpendicular.
-			let u_vec_normalized = plane_normal.cross(v_vec_normalized);
 
 			let texture_mip0 = &sprite.texture[0];
 			let ratio_h_w = (texture_mip0.size[1] as f32) / (texture_mip0.size[0] as f32);
