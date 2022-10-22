@@ -877,10 +877,10 @@ impl Renderer
 			let u_vec_normalized = plane_normal.cross(v_vec_normalized);
 
 			let texture_mip0 = &sprite.texture[0];
-			let step_u =
-				sprite.radius * inv_sqrt_fast(1.0 + (texture_mip0.size[0] as f32) / (texture_mip0.size[1] as f32));
-			let step_v =
-				sprite.radius * inv_sqrt_fast(1.0 + (texture_mip0.size[1] as f32) / (texture_mip0.size[0] as f32));
+			let ratio_h_w = (texture_mip0.size[1] as f32) / (texture_mip0.size[0] as f32);
+			let step_u = sprite.radius * inv_sqrt_fast(1.0 + ratio_h_w * ratio_h_w);
+			let ratio_w_h = (texture_mip0.size[0] as f32) / (texture_mip0.size[1] as f32);
+			let step_v = sprite.radius * inv_sqrt_fast(1.0 + ratio_w_h * ratio_w_h);
 
 			let u_vec = u_vec_normalized * step_u;
 			let v_vec = v_vec_normalized * step_v;
