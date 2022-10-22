@@ -2061,6 +2061,9 @@ impl Renderer
 		const MAX_SUBMODELS_IN_LEAF: usize = 12;
 		let mut models_for_sorting = [draw_ordering::BBoxForDrawOrdering::default(); MAX_SUBMODELS_IN_LEAF];
 
+		const DYNAMIC_MESH_INDEX_ADD: u32 = 65536;
+		const SPRITE_INDEX_ADD: u32 = DYNAMIC_MESH_INDEX_ADD + 65536;
+
 		for (&model_index, model_for_sorting) in leaf_submodels.iter().zip(models_for_sorting.iter_mut())
 		{
 			if let Some(submodel_matrices) = &self.submodels_info[model_index as usize].matrices
@@ -2076,7 +2079,6 @@ impl Renderer
 		}
 		let mut num_models = std::cmp::min(leaf_submodels.len(), MAX_SUBMODELS_IN_LEAF);
 
-		const DYNAMIC_MESH_INDEX_ADD: u32 = 65536;
 		for dynamic_model_index in leaf_dynamic_models
 		{
 			if num_models == MAX_SUBMODELS_IN_LEAF
@@ -2111,12 +2113,39 @@ impl Renderer
 			}
 		}
 
+		for sprite_index in leaf_sprites
+		{
+			if num_models == MAX_SUBMODELS_IN_LEAF
+			{
+				break;
+			}
+			let sprite = &frame_info.sprites[*sprite_index as usize];
+			let extend_vec = Vec3f::new(sprite.radius, sprite.radius, sprite.radius);
+			let bbox = BBox::from_min_max(sprite.position - extend_vec, sprite.position + extend_vec);
+
+			models_for_sorting[num_models] = (
+				sprite_index + SPRITE_INDEX_ADD,
+				draw_ordering::project_bbox(&bbox, &frame_info.camera_matrices),
+			);
+			num_models += 1;
+		}
+
 		draw_ordering::order_bboxes(&mut models_for_sorting[.. num_models]);
 
 		// Draw dynamic models and submodels, located in this leaf, after leaf polygons.
 		for (submodel_index, _bbox) in &models_for_sorting[.. num_models]
 		{
-			if *submodel_index >= DYNAMIC_MESH_INDEX_ADD
+			if *submodel_index >= SPRITE_INDEX_ADD
+			{
+				self.draw_sprite(
+					rasterizer,
+					&clip_planes,
+					used_leaf_clip_planes,
+					&frame_info.sprites,
+					*submodel_index - SPRITE_INDEX_ADD,
+				);
+			}
+			else if *submodel_index >= DYNAMIC_MESH_INDEX_ADD
 			{
 				let visible_mesh_index = *submodel_index - DYNAMIC_MESH_INDEX_ADD;
 				self.draw_mesh(
