@@ -869,8 +869,8 @@ impl Renderer
 			let vertices = [
 				sprite.position + vec_u + vec_v,
 				sprite.position + vec_u - vec_v,
-				sprite.position - vec_u + vec_v,
 				sprite.position - vec_u - vec_v,
+				sprite.position - vec_u + vec_v,
 			];
 
 			let vertices_projected = vertices.map(|v| {
@@ -1910,7 +1910,8 @@ impl Renderer
 
 		let leaf_submodels = self.inline_models_index.get_leaf_models(leaf_index);
 		let leaf_dynamic_models = self.dynamic_models_index.get_leaf_objects(leaf_index);
-		if leaf_submodels.is_empty() && leaf_dynamic_models.is_empty()
+		let leaf_sprites = self.sprites_index.get_leaf_objects(leaf_index);
+		if leaf_submodels.is_empty() && leaf_dynamic_models.is_empty() && leaf_sprites.is_empty()
 		{
 			return;
 		}
@@ -1997,7 +1998,7 @@ impl Renderer
 		}
 
 		// Fast path for cases with single model, to avoid expensive sorting structures preparations.
-		if leaf_submodels.len() == 1 && leaf_dynamic_models.len() == 0
+		if leaf_submodels.len() == 1 && leaf_dynamic_models.len() == 0 && leaf_sprites.len() == 0
 		{
 			self.draw_submodel_in_leaf(
 				rasterizer,
@@ -2009,7 +2010,7 @@ impl Renderer
 			);
 			return;
 		}
-		if leaf_submodels.len() == 0 && leaf_dynamic_models.len() == 1
+		if leaf_submodels.len() == 0 && leaf_dynamic_models.len() == 1 && leaf_sprites.len() == 0
 		{
 			let entry = self.dynamic_model_to_dynamic_meshes_index[leaf_dynamic_models[0] as usize];
 			for visible_mesh_index in entry.first_visible_mesh .. entry.first_visible_mesh + entry.num_visible_meshes
@@ -2022,6 +2023,17 @@ impl Renderer
 					&self.visible_dynamic_meshes_list[visible_mesh_index as usize],
 				);
 			}
+			return;
+		}
+		if leaf_submodels.len() == 0 && leaf_dynamic_models.len() == 0 && leaf_sprites.len() == 1
+		{
+			self.draw_sprite(
+				rasterizer,
+				&clip_planes,
+				used_leaf_clip_planes,
+				&frame_info.sprites,
+				leaf_sprites[0],
+			);
 			return;
 		}
 
@@ -2560,6 +2572,115 @@ impl Renderer
 			self.get_polygon_surface_data(polygon_data),
 			self.materials_processor.get_material(polygon.texture).blending_mode,
 		);
+	}
+
+	fn draw_sprite<'a, ColorT: AbstractColor>(
+		&self,
+		rasterizer: &mut Rasterizer<'a, ColorT>,
+		clip_planes: &ClippingPolygonPlanes,
+		leaf_clip_planes: &[Plane],
+		sprites: &[Sprite],
+		sprite_index: u32,
+	)
+	{
+		let sprite = &sprites[sprite_index as usize];
+		let sprite_info = &self.sprites_info[sprite_index as usize];
+
+		// TODO - select proper mip level.
+		let texture_mip = &sprite.texture[0];
+		let texture_size = [texture_mip.size[0] as f32, texture_mip.size[1] as f32];
+
+		let mut vertices_clipped0 = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
+		let mut vertices_clipped1 = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
+		let mut vc_src = &mut vertices_clipped0;
+		let mut vc_dst = &mut vertices_clipped1;
+
+		let tc_reduce = 1.0 / 16.0;
+		vc_src[0] = ModelVertex3d {
+			light: sprite_info.light,
+			pos: sprite_info.vertices_projected[0],
+			tc: Vec2f::new(texture_size[0] - tc_reduce, texture_size[1] - tc_reduce),
+		};
+		vc_src[1] = ModelVertex3d {
+			light: sprite_info.light,
+			pos: sprite_info.vertices_projected[1],
+			tc: Vec2f::new(texture_size[0] - tc_reduce, tc_reduce),
+		};
+		vc_src[2] = ModelVertex3d {
+			light: sprite_info.light,
+			pos: sprite_info.vertices_projected[2],
+			tc: Vec2f::new(tc_reduce, tc_reduce),
+		};
+		vc_src[3] = ModelVertex3d {
+			light: sprite_info.light,
+			pos: sprite_info.vertices_projected[3],
+			tc: Vec2f::new(tc_reduce, texture_size[1] - tc_reduce),
+		};
+
+		let mut num_vertices = 4;
+		for clip_plane in leaf_clip_planes
+		{
+			num_vertices = clip_3d_model_polygon_by_plane(&vc_src[.. num_vertices], clip_plane, vc_dst);
+			if num_vertices < 3
+			{
+				return;
+			}
+			std::mem::swap(&mut vc_src, &mut vc_dst);
+		}
+
+		let mut vertices_projected0 = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
+		let mut vertices_projected1 = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
+		let mut vp_src = &mut vertices_projected0;
+		let mut vp_dst = &mut vertices_projected1;
+
+		for (src, dst) in vc_src[.. num_vertices].iter().zip(vp_src.iter_mut())
+		{
+			*dst = ModelVertex2d {
+				pos: src.pos.truncate() / src.pos.z,
+				tc: src.tc,
+				light: src.light,
+			};
+		}
+		for clip_plane in clip_planes
+		{
+			num_vertices = clip_2d_model_polygon(&vp_src[.. num_vertices], clip_plane, vp_dst);
+			if num_vertices < 3
+			{
+				return;
+			}
+			std::mem::swap(&mut vp_src, &mut vp_dst);
+		}
+
+		let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
+		for (src, dst) in vp_src[.. num_vertices].iter().zip(vertices_fixed.iter_mut())
+		{
+			*dst = TrianglePointProjected {
+				x: f32_to_fixed16(src.pos.x),
+				y: f32_to_fixed16(src.pos.y),
+				tc: [f32_to_fixed16(src.tc.x), f32_to_fixed16(src.tc.y)],
+				light: [
+					f32_to_fixed16(src.light[0]),
+					f32_to_fixed16(src.light[1]),
+					f32_to_fixed16(src.light[2]),
+				],
+			};
+		}
+
+		let texture_info = TextureInfo {
+			size: [texture_mip.size[0] as i32, texture_mip.size[1] as i32],
+		};
+		let texture_data = &texture_mip.pixels;
+		let blending_mode = BlendingMode::None; // TODO - support other blending modes.
+
+		for t in 0 .. num_vertices - 2
+		{
+			rasterizer.fill_triangle(
+				&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
+				&texture_info,
+				texture_data,
+				blending_mode,
+			);
+		} // for subtriangles
 	}
 
 	fn draw_mesh<'a, ColorT: AbstractColor>(
