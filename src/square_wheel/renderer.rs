@@ -874,20 +874,20 @@ impl Renderer
 					let vec_to_camera = frame_info.camera_matrices.position - sprite.position;
 					let plane_normal = vec_to_camera / vec_to_camera.magnitude().max(0.001);
 
-					let v_vec_projected_to_plane = v_vec_base - plane_normal * v_vec_base.dot(plane_normal);
+					let u_vec_projected_to_plane = u_vec_base - plane_normal * u_vec_base.dot(plane_normal);
 
-					let v_vec_projected_len = v_vec_projected_to_plane.magnitude();
-					let v_vec_normalized = if v_vec_projected_len < 0.0001
+					let u_vec_projected_len = u_vec_projected_to_plane.magnitude();
+					let u_vec_normalized = if u_vec_projected_len < 0.0001
 					{
-						Vec3f::unit_y()
+						Vec3f::unit_x()
 					}
 					else
 					{
-						v_vec_projected_to_plane / v_vec_projected_len
+						u_vec_projected_to_plane / u_vec_projected_len
 					};
 
 					// Should be normalized, since both vectors are normalied and perpendicular.
-					let u_vec_normalized = plane_normal.cross(v_vec_normalized);
+					let v_vec_normalized = u_vec_normalized.cross(plane_normal);
 					(u_vec_normalized, v_vec_normalized)
 				},
 				SpriteOrientation::AlignToZAxisParallelToCameraPlane =>
