@@ -856,21 +856,39 @@ impl Renderer
 		self.sprites_info.clear();
 		for sprite in &frame_info.sprites
 		{
+			// TODO - improve this. Support camera-aligned v_vec.
+			let vec_to_camera = frame_info.camera_matrices.position - sprite.position;
+			let plane_normal = vec_to_camera / vec_to_camera.magnitude().max(0.001);
+
+			let v_vec_base = -Vec3f::unit_z();
+			let v_vec_projected_to_plane = v_vec_base - plane_normal * v_vec_base.dot(plane_normal);
+
+			let v_vec_projected_len = v_vec_projected_to_plane.magnitude();
+			let v_vec_normalized = if v_vec_projected_len < 0.0001
+			{
+				Vec3f::unit_y()
+			}
+			else
+			{
+				v_vec_projected_to_plane / v_vec_projected_len
+			};
+
+			// Should be normalized, since both vectors are normalied and perpendicular.
+			let u_vec_normalized = plane_normal.cross(v_vec_normalized);
+
 			let texture_mip0 = &sprite.texture[0];
 			let step_u =
 				sprite.radius * inv_sqrt_fast(1.0 + (texture_mip0.size[0] as f32) / (texture_mip0.size[1] as f32));
 			let step_v =
 				sprite.radius * inv_sqrt_fast(1.0 + (texture_mip0.size[1] as f32) / (texture_mip0.size[0] as f32));
 
-			// TODO -  use proper vecs
-			let vec_u = Vec3f::unit_x() * step_u;
-			let vec_v = Vec3f::unit_y() * step_v;
-
+			let u_vec = u_vec_normalized * step_u;
+			let v_vec = v_vec_normalized * step_v;
 			let vertices = [
-				sprite.position + vec_u + vec_v,
-				sprite.position + vec_u - vec_v,
-				sprite.position - vec_u - vec_v,
-				sprite.position - vec_u + vec_v,
+				sprite.position + u_vec + v_vec,
+				sprite.position + u_vec - v_vec,
+				sprite.position - u_vec - v_vec,
+				sprite.position - u_vec + v_vec,
 			];
 
 			let vertices_projected = vertices.map(|v| {
