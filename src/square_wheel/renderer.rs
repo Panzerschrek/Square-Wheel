@@ -2693,7 +2693,7 @@ impl Renderer
 			size: [texture_mip.size[0] as i32, texture_mip.size[1] as i32],
 		};
 		let texture_data = &texture_mip.pixels;
-		let blending_mode = BlendingMode::None; // TODO - support other blending modes.
+		let blending_mode = sprite.blending_mode;
 
 		for t in 0 .. num_vertices - 2
 		{

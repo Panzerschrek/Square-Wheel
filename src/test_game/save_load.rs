@@ -648,6 +648,7 @@ struct SpriteProxy
 	position: Vec3f,
 	radius: f32,
 	texture: ResourceSerializationKey,
+	blending_mode: material::BlendingMode,
 	orientation: SpriteOrientation,
 }
 
@@ -659,6 +660,7 @@ impl SpriteProxy
 			position: sprite.position,
 			radius: sprite.radius,
 			texture: ResourceSerializationKey::from_resource(&sprite.texture, textures),
+			blending_mode: sprite.blending_mode,
 			orientation: sprite.orientation,
 		}
 	}
@@ -669,6 +671,7 @@ impl SpriteProxy
 			position: self.position,
 			radius: self.radius,
 			texture: self.texture.to_resource(textures)?,
+			blending_mode: self.blending_mode,
 			orientation: self.orientation,
 		})
 	}

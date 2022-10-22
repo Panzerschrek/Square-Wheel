@@ -453,6 +453,7 @@ impl Game
 				radius,
 				texture,
 				orientation: SpriteOrientation::FacingTowardsCamera,
+				blending_mode: material::BlendingMode::Average,
 			},
 		));
 	}

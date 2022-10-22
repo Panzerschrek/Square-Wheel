@@ -93,6 +93,7 @@ pub struct Sprite
 	pub position: Vec3f,
 	pub radius: f32,
 	pub texture: SharedResourcePtr<TextureLiteWithMips>,
+	pub blending_mode: material::BlendingMode,
 	pub orientation: SpriteOrientation,
 }
 
