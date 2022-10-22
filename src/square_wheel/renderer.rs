@@ -889,6 +889,25 @@ impl Renderer
 					(u_vec_normalized, v_vec_normalized)
 				},
 				SpriteOrientation::ParallelToCameraPlane => (u_vec_base, v_vec_base),
+				SpriteOrientation::AlignToZAxis =>
+				{
+					let vec_to_camera = frame_info.camera_matrices.position - sprite.position;
+
+					let v_vec_normalized = Vec3f::unit_z();
+
+					let u_vec = v_vec_normalized.cross(vec_to_camera);
+					let u_vec_len = u_vec.magnitude();
+					let u_vec_normalized = if u_vec_len < 0.0001
+					{
+						Vec3f::unit_x()
+					}
+					else
+					{
+						u_vec / u_vec_len
+					};
+
+					(u_vec_normalized, v_vec_normalized)
+				},
 			};
 
 			let texture_mip0 = &sprite.texture[0];

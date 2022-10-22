@@ -102,6 +102,7 @@ pub enum SpriteOrientation
 {
 	ParallelToCameraPlane,
 	FacingTowardsCamera,
+	AlignToZAxis,
 	// TODO - add more orientations
 }
 
