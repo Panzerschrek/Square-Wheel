@@ -179,7 +179,10 @@ struct SpriteInfo
 	vertices_projected: [Vec3f; 4],
 	light: [f32; 3],
 	mip: u32,
+	tesselation_level: u32,
 }
+
+const MAX_SPRITE_TESSELATION_LEVEL: u32 = 4;
 
 impl Renderer
 {
@@ -868,6 +871,7 @@ impl Renderer
 			vertices_projected: [Vec3f::zero(); 4],
 			light: [0.0; 3],
 			mip: 0,
+			tesselation_level: 0,
 		};
 
 		self.sprites_info.clear();
@@ -990,6 +994,26 @@ impl Renderer
 				0
 			};
 
+			let min_z = vertices_projected[0]
+				.z
+				.min(vertices_projected[1].z)
+				.min(vertices_projected[2].z)
+				.min(vertices_projected[3].z);
+			let max_z = vertices_projected[0]
+				.z
+				.max(vertices_projected[1].z)
+				.max(vertices_projected[2].z)
+				.max(vertices_projected[3].z);
+			let tesselation_level = if min_z <= 0.0
+			{
+				MAX_SPRITE_TESSELATION_LEVEL
+			}
+			else
+			{
+				// TODO - tune this formula.
+				(((max_z / min_z - 1.0) * 4.0).max(1.0) as u32).min(MAX_SPRITE_TESSELATION_LEVEL)
+			};
+
 			let mut sprite_light = sprite.light_add;
 			if sprite.light_scale > 0.0
 			{
@@ -1065,6 +1089,7 @@ impl Renderer
 				vertices_projected,
 				light: sprite_light,
 				mip,
+				tesselation_level,
 			};
 			self.sprites_info.push(sprite_info);
 		}
@@ -2834,70 +2859,192 @@ impl Renderer
 			dist: Z_NEAR,
 		};
 
-		let mut num_vertices = 4;
-		for clip_plane in [z_near_plane].iter().chain(leaf_clip_planes.iter())
+		if sprite_info.tesselation_level <= 1
 		{
-			num_vertices = clip_3d_model_polygon_by_plane(&vc_src[.. num_vertices], clip_plane, vc_dst);
-			if num_vertices < 3
+			// Draw sprite without tesselation.
+
+			let mut num_vertices = 4;
+			for clip_plane in [z_near_plane].iter().chain(leaf_clip_planes.iter())
 			{
-				return;
+				num_vertices = clip_3d_model_polygon_by_plane(&vc_src[.. num_vertices], clip_plane, vc_dst);
+				if num_vertices < 3
+				{
+					return;
+				}
+				std::mem::swap(&mut vc_src, &mut vc_dst);
 			}
-			std::mem::swap(&mut vc_src, &mut vc_dst);
-		}
 
-		let mut vertices_projected0 = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
-		let mut vertices_projected1 = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
-		let mut vp_src = &mut vertices_projected0;
-		let mut vp_dst = &mut vertices_projected1;
+			let mut vertices_projected0 = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
+			let mut vertices_projected1 = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
+			let mut vp_src = &mut vertices_projected0;
+			let mut vp_dst = &mut vertices_projected1;
 
-		for (src, dst) in vc_src[.. num_vertices].iter().zip(vp_src.iter_mut())
-		{
-			*dst = ModelVertex2d {
-				pos: src.pos.truncate() / src.pos.z,
-				tc: src.tc,
-				light: src.light,
-			};
-		}
-		for clip_plane in clip_planes
-		{
-			num_vertices = clip_2d_model_polygon(&vp_src[.. num_vertices], clip_plane, vp_dst);
-			if num_vertices < 3
+			for (src, dst) in vc_src[.. num_vertices].iter().zip(vp_src.iter_mut())
 			{
-				return;
+				*dst = ModelVertex2d {
+					pos: src.pos.truncate() / src.pos.z,
+					tc: src.tc,
+					light: src.light,
+				};
 			}
-			std::mem::swap(&mut vp_src, &mut vp_dst);
-		}
+			for clip_plane in clip_planes
+			{
+				num_vertices = clip_2d_model_polygon(&vp_src[.. num_vertices], clip_plane, vp_dst);
+				if num_vertices < 3
+				{
+					return;
+				}
+				std::mem::swap(&mut vp_src, &mut vp_dst);
+			}
 
-		let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
-		for (src, dst) in vp_src[.. num_vertices].iter().zip(vertices_fixed.iter_mut())
-		{
-			*dst = TrianglePointProjected {
-				x: f32_to_fixed16(src.pos.x),
-				y: f32_to_fixed16(src.pos.y),
-				tc: [f32_to_fixed16(src.tc.x), f32_to_fixed16(src.tc.y)],
-				light: [
-					f32_to_fixed16(src.light[0]),
-					f32_to_fixed16(src.light[1]),
-					f32_to_fixed16(src.light[2]),
-				],
+			let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
+			for (src, dst) in vp_src[.. num_vertices].iter().zip(vertices_fixed.iter_mut())
+			{
+				*dst = TrianglePointProjected {
+					x: f32_to_fixed16(src.pos.x),
+					y: f32_to_fixed16(src.pos.y),
+					tc: [f32_to_fixed16(src.tc.x), f32_to_fixed16(src.tc.y)],
+					light: [
+						f32_to_fixed16(src.light[0]),
+						f32_to_fixed16(src.light[1]),
+						f32_to_fixed16(src.light[2]),
+					],
+				};
+			}
+
+			let texture_info = TextureInfo {
+				size: [texture_mip.size[0] as i32, texture_mip.size[1] as i32],
 			};
+			let texture_data = &texture_mip.pixels;
+			let blending_mode = sprite.blending_mode;
+
+			for t in 0 .. num_vertices - 2
+			{
+				rasterizer.fill_triangle(
+					&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
+					&texture_info,
+					texture_data,
+					blending_mode,
+				);
+			} // for subtriangles
 		}
-
-		let texture_info = TextureInfo {
-			size: [texture_mip.size[0] as i32, texture_mip.size[1] as i32],
-		};
-		let texture_data = &texture_mip.pixels;
-		let blending_mode = sprite.blending_mode;
-
-		for t in 0 .. num_vertices - 2
+		else
 		{
-			rasterizer.fill_triangle(
-				&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
-				&texture_info,
-				texture_data,
-				blending_mode,
-			);
-		} // for subtriangles
+			// Perform grid tesselation.
+
+			// Prepare tesselated vertices.
+			const MAX_TESSELATED_VERTICES: u32 =
+				(MAX_SPRITE_TESSELATION_LEVEL + 1) * (MAX_SPRITE_TESSELATION_LEVEL + 1);
+			let mut tesselated_vertices =
+				unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_TESSELATED_VERTICES as usize]>() };
+
+			let num_vertices_in_row = sprite_info.tesselation_level + 1;
+
+			let inv_step = 1.0 / (sprite_info.tesselation_level as f32);
+			for y in 0 .. num_vertices_in_row
+			{
+				let y_mix = (y as f32) * inv_step;
+				for x in 0 .. num_vertices_in_row
+				{
+					let x_mix = (x as f32) * inv_step;
+
+					let weights = [
+						x_mix * y_mix,
+						(1.0 - x_mix) * y_mix,
+						(1.0 - x_mix) * (1.0 - y_mix),
+						x_mix * (1.0 - y_mix),
+					];
+
+					let dst_v = &mut tesselated_vertices[(x + y * num_vertices_in_row) as usize];
+					dst_v.pos = weights[0] * vc_src[0].pos +
+						weights[1] * vc_src[1].pos +
+						weights[2] * vc_src[2].pos +
+						weights[3] * vc_src[3].pos;
+					dst_v.tc = weights[0] * vc_src[0].tc +
+						weights[1] * vc_src[1].tc +
+						weights[2] * vc_src[2].tc +
+						weights[3] * vc_src[3].tc;
+				}
+			}
+
+			let mut vertices_projected0 = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
+			let mut vertices_projected1 = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
+			let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
+
+			let texture_info = TextureInfo {
+				size: [texture_mip.size[0] as i32, texture_mip.size[1] as i32],
+			};
+			let texture_data = &texture_mip.pixels;
+			let blending_mode = sprite.blending_mode;
+
+			// Process subquads.
+			for x in 0 .. sprite_info.tesselation_level
+			{
+				'tesselation_loop: for y in 0 .. sprite_info.tesselation_level
+				{
+					vc_src[0] = tesselated_vertices[(x + y * num_vertices_in_row) as usize];
+					vc_src[1] = tesselated_vertices[(x + (y + 1) * num_vertices_in_row) as usize];
+					vc_src[2] = tesselated_vertices[(1 + x + (y + 1) * num_vertices_in_row) as usize];
+					vc_src[3] = tesselated_vertices[(1 + x + y * num_vertices_in_row) as usize];
+
+					let mut num_vertices = 4;
+					for clip_plane in [z_near_plane].iter().chain(leaf_clip_planes.iter())
+					{
+						num_vertices = clip_3d_model_polygon_by_plane(&vc_src[.. num_vertices], clip_plane, vc_dst);
+						if num_vertices < 3
+						{
+							continue 'tesselation_loop;
+						}
+						std::mem::swap(&mut vc_src, &mut vc_dst);
+					}
+
+					let mut vp_src = &mut vertices_projected0;
+					let mut vp_dst = &mut vertices_projected1;
+
+					for (src, dst) in vc_src[.. num_vertices].iter().zip(vp_src.iter_mut())
+					{
+						*dst = ModelVertex2d {
+							pos: src.pos.truncate() / src.pos.z,
+							tc: src.tc,
+							light: src.light,
+						};
+					}
+					for clip_plane in clip_planes
+					{
+						num_vertices = clip_2d_model_polygon(&vp_src[.. num_vertices], clip_plane, vp_dst);
+						if num_vertices < 3
+						{
+							continue 'tesselation_loop;
+						}
+						std::mem::swap(&mut vp_src, &mut vp_dst);
+					}
+
+					for (src, dst) in vp_src[.. num_vertices].iter().zip(vertices_fixed.iter_mut())
+					{
+						*dst = TrianglePointProjected {
+							x: f32_to_fixed16(src.pos.x),
+							y: f32_to_fixed16(src.pos.y),
+							tc: [f32_to_fixed16(src.tc.x), f32_to_fixed16(src.tc.y)],
+							light: [
+								f32_to_fixed16(sprite_info.light[0]),
+								f32_to_fixed16(sprite_info.light[1]),
+								f32_to_fixed16(sprite_info.light[2]),
+							],
+						};
+					}
+
+					for t in 0 .. num_vertices - 2
+					{
+						rasterizer.fill_triangle(
+							&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
+							&texture_info,
+							texture_data,
+							blending_mode,
+						);
+					} // for subtriangles
+				} // for y
+			} // for x
+		}
 	}
 
 	fn draw_mesh<'a, ColorT: AbstractColor>(
