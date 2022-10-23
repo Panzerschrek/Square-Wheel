@@ -960,9 +960,35 @@ impl Renderer
 				Vec3f::new(v_projected.x, v_projected.y, v_projected.w)
 			});
 
+			let mut light = sprite.light_add;
+			if sprite.light_scale > 0.0
+			{
+				let grid_light = fetch_light_from_grid(&self.map, &sprite.position);
+
+				// Get average value of all cube sides.
+				let cube_side_scale = sprite.light_scale / 6.0;
+				for cube_side in &grid_light.light_cube
+				{
+					for i in 0 .. 3
+					{
+						light[i] += cube_side[i] * cube_side_scale;
+					}
+				}
+
+				// Us ehalf of power of directional component.
+				let directional_component_scale =
+					sprite.light_scale * 0.5 * grid_light.light_direction_vector_scaled.magnitude();
+				for i in 0 .. 3
+				{
+					light[i] += directional_component_scale * grid_light.directional_light_color[i];
+				}
+
+				// TODO - add also dynamic light.
+			}
+
 			let sprite_info = SpriteInfo {
 				vertices_projected,
-				light: [1.0, 1.0, 1.0], // TODO - use proper light
+				light,
 			};
 			self.sprites_info.push(sprite_info);
 		}

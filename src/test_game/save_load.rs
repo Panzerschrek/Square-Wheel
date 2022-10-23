@@ -650,6 +650,8 @@ struct SpriteProxy
 	texture: ResourceSerializationKey,
 	blending_mode: material::BlendingMode,
 	orientation: SpriteOrientation,
+	light_scale: f32,
+	light_add: [f32; 3],
 }
 
 impl SpriteProxy
@@ -662,6 +664,8 @@ impl SpriteProxy
 			texture: ResourceSerializationKey::from_resource(&sprite.texture, textures),
 			blending_mode: sprite.blending_mode,
 			orientation: sprite.orientation,
+			light_scale: sprite.light_scale,
+			light_add: sprite.light_add,
 		}
 	}
 
@@ -673,6 +677,8 @@ impl SpriteProxy
 			texture: self.texture.to_resource(textures)?,
 			blending_mode: self.blending_mode,
 			orientation: self.orientation,
+			light_scale: self.light_scale,
+			light_add: self.light_add,
 		})
 	}
 }

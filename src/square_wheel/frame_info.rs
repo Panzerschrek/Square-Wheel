@@ -95,6 +95,8 @@ pub struct Sprite
 	pub texture: SharedResourcePtr<TextureLiteWithMips>,
 	pub blending_mode: material::BlendingMode,
 	pub orientation: SpriteOrientation,
+	pub light_scale: f32,
+	pub light_add: [f32; 3],
 }
 
 #[derive(Copy, Clone, Serialize, Deserialize)]

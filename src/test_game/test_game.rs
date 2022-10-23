@@ -454,6 +454,8 @@ impl Game
 				texture,
 				orientation: SpriteOrientation::FacingTowardsCamera,
 				blending_mode: material::BlendingMode::Average,
+				light_scale: 1.0,
+				light_add: [0.0; 3],
 			},
 		));
 	}
