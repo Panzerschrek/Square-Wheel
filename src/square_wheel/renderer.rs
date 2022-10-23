@@ -178,6 +178,7 @@ struct SpriteInfo
 {
 	vertices_projected: [Vec3f; 4],
 	light: [f32; 3],
+	mip: u32,
 }
 
 impl Renderer
@@ -866,6 +867,7 @@ impl Renderer
 		let dummy_sprite_info = SpriteInfo {
 			vertices_projected: [Vec3f::zero(); 4],
 			light: [0.0; 3],
+			mip: 0,
 		};
 
 		self.sprites_info.clear();
@@ -960,6 +962,34 @@ impl Renderer
 				Vec3f::new(v_projected.x, v_projected.y, v_projected.w)
 			});
 
+			let mip = if vertices_projected[0].z > 0.0 &&
+				vertices_projected[1].z > 0.0 &&
+				vertices_projected[2].z > 0.0 &&
+				vertices_projected[3].z > 0.0
+			{
+				let points = vertices_projected.map(|v| v.truncate() / v.z);
+				let diagonal0_square_len = (points[0] - points[2]).magnitude2();
+				let diagonal1_square_len = (points[1] - points[3]).magnitude2();
+				let shortest_diagonal_square_len = diagonal0_square_len.min(diagonal1_square_len);
+				if shortest_diagonal_square_len <= 0.0
+				{
+					MAX_MIP as u32
+				}
+				else
+				{
+					let tc_diagonal_square_diff =
+						Vec2f::new(texture_mip0.size[0] as f32, texture_mip0.size[1] as f32).magnitude2();
+					let d_tc_2 = tc_diagonal_square_diff / shortest_diagonal_square_len;
+					let mip_f = d_tc_2.log2() * 0.5 + self.mip_bias; // log(sqrt(x)) = log(x) * 0.5
+					let mip = (mip_f.round().max(0.0) as u32).min(MAX_MIP as u32);
+					mip
+				}
+			}
+			else
+			{
+				0
+			};
+
 			let mut sprite_light = sprite.light_add;
 			if sprite.light_scale > 0.0
 			{
@@ -1034,6 +1064,7 @@ impl Renderer
 			let sprite_info = SpriteInfo {
 				vertices_projected,
 				light: sprite_light,
+				mip,
 			};
 			self.sprites_info.push(sprite_info);
 		}
@@ -2768,8 +2799,7 @@ impl Renderer
 		let sprite = &sprites[sprite_index as usize];
 		let sprite_info = &self.sprites_info[sprite_index as usize];
 
-		// TODO - select proper mip level.
-		let texture_mip = &sprite.texture[0];
+		let texture_mip = &sprite.texture[sprite_info.mip as usize];
 		let texture_size = [texture_mip.size[0] as f32, texture_mip.size[1] as f32];
 
 		let mut vertices_clipped0 = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
