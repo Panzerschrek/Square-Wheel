@@ -960,7 +960,7 @@ impl Renderer
 				Vec3f::new(v_projected.x, v_projected.y, v_projected.w)
 			});
 
-			let mut light = sprite.light_add;
+			let mut sprite_light = sprite.light_add;
 			if sprite.light_scale > 0.0
 			{
 				let grid_light = fetch_light_from_grid(&self.map, &sprite.position);
@@ -971,24 +971,69 @@ impl Renderer
 				{
 					for i in 0 .. 3
 					{
-						light[i] += cube_side[i] * cube_side_scale;
+						sprite_light[i] += cube_side[i] * cube_side_scale;
 					}
 				}
 
-				// Us ehalf of power of directional component.
+				// Use half of power of directional component.
 				let directional_component_scale =
 					sprite.light_scale * 0.5 * grid_light.light_direction_vector_scaled.magnitude();
 				for i in 0 .. 3
 				{
-					light[i] += directional_component_scale * grid_light.directional_light_color[i];
+					sprite_light[i] += directional_component_scale * grid_light.directional_light_color[i];
 				}
 
-				// TODO - add also dynamic light.
+				// Process dynamic lights.
+				let dynamic_lights_scale = sprite.light_scale * 0.5;
+				let min_square_distance = sprite.radius * sprite.radius;
+				for (light, light_info) in frame_info.lights.iter().zip(self.dynamic_lights_info.iter())
+				{
+					if !light_info.visible
+					{
+						continue;
+					}
+
+					let vec_to_light = light.position - sprite.position;
+					let inv_square_dist = 1.0 / vec_to_light.magnitude2().max(min_square_distance);
+					let light_inv_square_radius = 1.0 / (light.radius * light.radius);
+					if inv_square_dist < light_inv_square_radius
+					{
+						continue;
+					}
+
+					let shadow_factor = match &light.shadow_type
+					{
+						DynamicLightShadowType::None => 1.0,
+						DynamicLightShadowType::Cubemap => cube_shadow_map_fetch(
+							&create_dynamic_light_cube_shadow_map(light_info, &self.shadow_maps_data),
+							&vec_to_light,
+						),
+						DynamicLightShadowType::Projector { rotation, fov } => projector_shadow_map_fetch(
+							&create_dynamic_light_projector_shadow_map(
+								rotation,
+								*fov,
+								light_info,
+								&self.shadow_maps_data,
+							),
+							&vec_to_light,
+						),
+					};
+					if shadow_factor <= 0.0
+					{
+						continue;
+					}
+
+					let scale = dynamic_lights_scale * shadow_factor * (inv_square_dist - light_inv_square_radius);
+					for i in 0 .. 3
+					{
+						sprite_light[i] += scale * light.color[i];
+					}
+				} // for ynamic lights
 			}
 
 			let sprite_info = SpriteInfo {
 				vertices_projected,
-				light,
+				light: sprite_light,
 			};
 			self.sprites_info.push(sprite_info);
 		}
