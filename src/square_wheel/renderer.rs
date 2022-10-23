@@ -863,9 +863,21 @@ impl Renderer
 
 		let camera_direction = u_vec_base.cross(v_vec_base);
 
+		let dummy_sprite_info = SpriteInfo {
+			vertices_projected: [Vec3f::zero(); 4],
+			light: [0.0; 3],
+		};
+
 		self.sprites_info.clear();
-		for sprite in &frame_info.sprites
+		for (sprite_index, sprite) in frame_info.sprites.iter().enumerate()
 		{
+			if self.sprites_index.get_object_leafs(sprite_index).is_empty()
+			{
+				// This sprite is not visible. Avoid costly computations for it.
+				self.sprites_info.push(dummy_sprite_info);
+				continue;
+			}
+
 			let (u_vec_normalized, v_vec_normalized) = match sprite.orientation
 			{
 				SpriteOrientation::ParallelToCameraPlane => (u_vec_base, v_vec_base),
