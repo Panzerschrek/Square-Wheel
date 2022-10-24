@@ -1,8 +1,8 @@
 use super::{
 	abstract_color::*, config, debug_stats_printer::*, depth_renderer::*, draw_ordering, dynamic_objects_index::*,
 	equations::*, fast_math::*, frame_info::*, frame_number::*, inline_models_index::*, light::*,
-	map_materials_processor::*, map_visibility_calculator::*, performance_counter::*, rasterizer::*, rect_splitting,
-	renderer_config::*, resources_manager::*, surfaces::*, textures::*, triangle_model::*,
+	map_materials_processor::*, map_visibility_calculator::*, rasterizer::*, rect_splitting, renderer_config::*,
+	renderer_structs::*, resources_manager::*, surfaces::*, textures::*, triangle_model::*,
 	triangle_models_rendering::*,
 };
 use crate::common::{
@@ -52,137 +52,6 @@ pub struct Renderer
 	dynamic_meshes_vertices: Vec<ModelVertex3d>,
 	dynamic_meshes_triangles: Vec<Triangle>,
 }
-
-struct RendererPerformanceCounters
-{
-	materials_update: PerformanceCounter,
-	visible_leafs_search: PerformanceCounter,
-	triangle_models_preparation: PerformanceCounter,
-	surfaces_preparation: PerformanceCounter,
-	shadow_maps_building: PerformanceCounter,
-	background_fill: PerformanceCounter,
-	rasterization: PerformanceCounter,
-}
-
-impl RendererPerformanceCounters
-{
-	fn new() -> Self
-	{
-		let window_size = 100;
-		Self {
-			materials_update: PerformanceCounter::new(window_size),
-			visible_leafs_search: PerformanceCounter::new(window_size),
-			triangle_models_preparation: PerformanceCounter::new(window_size),
-			surfaces_preparation: PerformanceCounter::new(window_size),
-			shadow_maps_building: PerformanceCounter::new(window_size),
-			background_fill: PerformanceCounter::new(window_size),
-			rasterization: PerformanceCounter::new(window_size),
-		}
-	}
-}
-
-fn run_with_measure<F: FnOnce()>(f: F, performanc_counter: &mut PerformanceCounter)
-{
-	type Clock = std::time::Instant;
-	let start_time = Clock::now();
-
-	f();
-
-	let end_time = Clock::now();
-	performanc_counter.add_value((end_time - start_time).as_secs_f32());
-}
-
-// Mutable data associated with map polygon.
-#[derive(Copy, Clone)]
-struct DrawPolygonData
-{
-	// Leaf index where this polygon is located or submodel index.
-	parent: DrawPolygonParent,
-	// Precalculaed basis vecs for mip 0
-	basis_vecs: PolygonBasisVecs,
-	// Frame last time this polygon was visible.
-	visible_frame: FrameNumber,
-	// Projected equations for current frame.
-	depth_equation: DepthEquation,
-	tex_coord_equation: TexCoordEquation,
-	surface_pixels_offset: usize,
-	surface_size: [u32; 2],
-	mip: u32,
-	surface_tc_min: [i32; 2],
-}
-
-#[derive(Copy, Clone)]
-enum DrawPolygonParent
-{
-	Leaf(u32),
-	Submodel(u32),
-}
-
-// Calculate matrices once for frame and use them during polygons preparation, sorting and polygons ordering.
-#[derive(Copy, Clone)]
-struct VisibleSubmodelMatrices
-{
-	// Planes matrix for transformation of submodel planes into current position of submodel within the world.
-	world_planes_matrix: Mat4f,
-	camera_matrices: CameraMatrices,
-}
-
-#[derive(Default, Clone)]
-struct VisibleSubmodelInfo
-{
-	matrices: Option<VisibleSubmodelMatrices>,
-	// Dynamic lights that affects this submodel.
-	dynamic_lights: Vec<DynamicObjectId>,
-}
-
-struct VisibleDynamicMeshInfo
-{
-	entity_index: u32,
-	mesh_index: u32,
-	vertices_offset: usize,
-	triangles_offset: usize,
-	num_visible_triangles: usize,
-	bbox_vertices_transformed: [Vec3f; 8],
-	clipping_polygon: ClippingPolygon,
-	model_matrix: Mat4f,
-	camera_matrices: CameraMatrices,
-	mip: u32,
-}
-
-#[derive(Default, Copy, Clone)]
-struct DynamicModelInfo
-{
-	first_visible_mesh: u32,
-	num_visible_meshes: u32,
-}
-
-#[derive(Default, Copy, Clone)]
-struct DynamicLightInfo
-{
-	// Light is not visible if all leafs where it is located are not visible.
-	visible: bool,
-	shadow_map_data_offset: usize,
-	// Cubemap side size or projector shadowmap size.
-	shadow_map_size: u32,
-}
-
-#[derive(Copy, Clone)]
-struct DecalInfo
-{
-	camera_planes_matrix: Mat4f,
-	dynamic_light: bsp_map_compact::LightGridElement,
-}
-
-#[derive(Copy, Clone)]
-struct SpriteInfo
-{
-	vertices_projected: [Vec3f; 4],
-	light: [f32; 3],
-	mip: u32,
-	tesselation_level: u32,
-}
-
-const MAX_SPRITE_TESSELATION_LEVEL: u32 = 4;
 
 impl Renderer
 {
@@ -278,55 +147,42 @@ impl Renderer
 
 		self.current_frame.next();
 
-		run_with_measure(
-			|| self.materials_processor.update(frame_info.game_time_s),
-			&mut performance_counters.materials_update,
-		);
+		performance_counters
+			.materials_update
+			.run_with_measure(|| self.materials_processor.update(frame_info.game_time_s));
 
-		run_with_measure(
-			|| {
-				// TODO - before preparing frame try to shift camera a little bit away from all planes of BSP nodes before current leaf.
-				// This is needed to fix possible z_near clipping of current leaf portals.
+		performance_counters.visible_leafs_search.run_with_measure(|| {
+			// TODO - before preparing frame try to shift camera a little bit away from all planes of BSP nodes before current leaf.
+			// This is needed to fix possible z_near clipping of current leaf portals.
 
-				let frame_bounds =
-					ClippingPolygon::from_box(0.0, 0.0, surface_info.width as f32, surface_info.height as f32);
-				self.visibility_calculator
-					.update_visibility(&frame_info.camera_matrices, &frame_bounds);
-			},
-			&mut performance_counters.visible_leafs_search,
-		);
+			let frame_bounds =
+				ClippingPolygon::from_box(0.0, 0.0, surface_info.width as f32, surface_info.height as f32);
+			self.visibility_calculator
+				.update_visibility(&frame_info.camera_matrices, &frame_bounds);
+		});
 
 		self.prepare_dynamic_lights(frame_info);
-		run_with_measure(
-			|| {
-				self.build_shadow_maps(&frame_info.lights);
-			},
-			&mut performance_counters.shadow_maps_building,
-		);
+		performance_counters.shadow_maps_building.run_with_measure(|| {
+			self.build_shadow_maps(&frame_info.lights);
+		});
 
 		self.prepare_submodels(frame_info);
 
-		run_with_measure(
-			|| {
-				self.prepare_dynamic_models(&frame_info.camera_matrices, &frame_info.model_entities);
-				self.build_dynamic_models_buffers(&frame_info.lights, &frame_info.model_entities);
-			},
-			&mut performance_counters.triangle_models_preparation,
-		);
+		performance_counters.triangle_models_preparation.run_with_measure(|| {
+			self.prepare_dynamic_models(&frame_info.camera_matrices, &frame_info.model_entities);
+			self.build_dynamic_models_buffers(&frame_info.lights, &frame_info.model_entities);
+		});
 
 		self.prepare_decals(frame_info);
 
 		self.prepare_sprites(frame_info);
 
-		run_with_measure(
-			|| {
-				self.prepare_polygons_surfaces(&frame_info.camera_matrices);
-				self.allocate_surfaces_pixels::<ColorT>();
+		performance_counters.surfaces_preparation.run_with_measure(|| {
+			self.prepare_polygons_surfaces(&frame_info.camera_matrices);
+			self.allocate_surfaces_pixels::<ColorT>();
 
-				self.build_polygons_surfaces::<ColorT>(&frame_info.camera_matrices, &frame_info.lights);
-			},
-			&mut performance_counters.surfaces_preparation,
-		);
+			self.build_polygons_surfaces::<ColorT>(&frame_info.camera_matrices, &frame_info.lights);
+		});
 	}
 
 	pub fn draw_frame<ColorT: AbstractColor>(
@@ -340,23 +196,19 @@ impl Renderer
 		let performance_counters_ptr = self.performance_counters.clone();
 		let mut performance_counters = performance_counters_ptr.lock().unwrap();
 
-		run_with_measure(
-			|| {
-				// Clear background (if needed) only before performing rasterization.
-				// Clear bacgrkound only if camera is located outside of volume of current leaf, defined as space at front of all leaf polygons.
-				// If camera is inside volume space, we do not need to fill background because (normally) no gaps between map geometry should be visible.
-				if self.config.clear_background && !self.visibility_calculator.is_current_camera_inside_leaf_volume()
-				{
-					draw_background(pixels, ColorVec::from_color_f32x3(&[32.0, 16.0, 8.0]).into());
-				}
-			},
-			&mut performance_counters.background_fill,
-		);
+		performance_counters.background_fill.run_with_measure(|| {
+			// Clear background (if needed) only before performing rasterization.
+			// Clear bacgrkound only if camera is located outside of volume of current leaf, defined as space at front of all leaf polygons.
+			// If camera is inside volume space, we do not need to fill background because (normally) no gaps between map geometry should be visible.
+			if self.config.clear_background && !self.visibility_calculator.is_current_camera_inside_leaf_volume()
+			{
+				draw_background(pixels, ColorVec::from_color_f32x3(&[32.0, 16.0, 8.0]).into());
+			}
+		});
 
-		run_with_measure(
-			|| self.perform_rasterization(pixels, surface_info, frame_info),
-			&mut performance_counters.rasterization,
-		);
+		performance_counters
+			.rasterization
+			.run_with_measure(|| self.perform_rasterization(pixels, surface_info, frame_info));
 
 		if debug_stats_printer.show_debug_stats()
 		{
@@ -3481,88 +3333,6 @@ fn polygon_is_affected_by_light(
 			// TODO - maybe process corner cases here (literally, check intersection with corners)?
 			true
 		}
-	}
-}
-
-fn create_dynamic_light_with_shadow<'a>(
-	light: &DynamicLight,
-	light_info: &DynamicLightInfo,
-	shadow_maps_data: &'a [ShadowMapElement],
-) -> DynamicLightWithShadow<'a>
-{
-	DynamicLightWithShadow {
-		position: light.position,
-		radius: light.radius,
-		inv_square_radius: 1.0 / (light.radius * light.radius),
-		color: light.color,
-		shadow_map: match &light.shadow_type
-		{
-			DynamicLightShadowType::None => ShadowMap::None,
-			DynamicLightShadowType::Cubemap => ShadowMap::Cube(
-				if light_info.visible
-				{
-					create_dynamic_light_cube_shadow_map(light_info, shadow_maps_data)
-				}
-				else
-				{
-					create_dynamic_light_cube_shadow_map_dummy()
-				},
-			),
-			DynamicLightShadowType::Projector { rotation, fov } => ShadowMap::Projector(
-				if light_info.visible
-				{
-					create_dynamic_light_projector_shadow_map(rotation, *fov, light_info, shadow_maps_data)
-				}
-				else
-				{
-					create_dynamic_light_projector_shadow_map_dummy()
-				},
-			),
-		},
-	}
-}
-
-fn create_dynamic_light_cube_shadow_map<'a>(
-	light_info: &DynamicLightInfo,
-	shadow_maps_data: &'a [ShadowMapElement],
-) -> CubeShadowMap<'a>
-{
-	let side_data_size = (light_info.shadow_map_size * light_info.shadow_map_size) as usize;
-	let shadow_map_data =
-		&shadow_maps_data[light_info.shadow_map_data_offset .. light_info.shadow_map_data_offset + side_data_size * 6];
-
-	CubeShadowMap {
-		size: light_info.shadow_map_size,
-		sides: [
-			&shadow_map_data[0 * side_data_size .. 1 * side_data_size],
-			&shadow_map_data[1 * side_data_size .. 2 * side_data_size],
-			&shadow_map_data[2 * side_data_size .. 3 * side_data_size],
-			&shadow_map_data[3 * side_data_size .. 4 * side_data_size],
-			&shadow_map_data[4 * side_data_size .. 5 * side_data_size],
-			&shadow_map_data[5 * side_data_size .. 6 * side_data_size],
-		],
-	}
-}
-
-fn create_dynamic_light_projector_shadow_map<'a>(
-	rotation: &QuaternionF,
-	fov: RadiansF,
-	light_info: &DynamicLightInfo,
-	shadow_maps_data: &'a [ShadowMapElement],
-) -> ProjectorShadowMap<'a>
-{
-	let data_size = (light_info.shadow_map_size * light_info.shadow_map_size) as usize;
-	let shadow_map_data =
-		&shadow_maps_data[light_info.shadow_map_data_offset .. light_info.shadow_map_data_offset + data_size];
-
-	let inv_half_fov_tan = 1.0 / (fov * 0.5).tan();
-
-	ProjectorShadowMap {
-		size: light_info.shadow_map_size,
-		data: shadow_map_data,
-		basis_x: rotation.rotate_vector(Vec3f::unit_y()) * inv_half_fov_tan,
-		basis_y: rotation.rotate_vector(Vec3f::unit_z()) * inv_half_fov_tan,
-		basis_z: rotation.rotate_vector(-Vec3f::unit_x()),
 	}
 }
 

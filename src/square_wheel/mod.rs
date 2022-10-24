@@ -28,6 +28,7 @@ pub mod rasterizer;
 pub mod rect_splitting;
 pub mod renderer;
 pub mod renderer_config;
+pub mod renderer_structs;
 pub mod resources_manager;
 pub mod resources_manager_config;
 pub mod surfaces;

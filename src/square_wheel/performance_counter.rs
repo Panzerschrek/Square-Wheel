@@ -35,4 +35,15 @@ impl PerformanceCounter
 		}
 		sum / (self.values.len() as f32)
 	}
+
+	pub fn run_with_measure<F: FnOnce()>(&mut self, f: F)
+	{
+		type Clock = std::time::Instant;
+		let start_time = Clock::now();
+
+		f();
+
+		let end_time = Clock::now();
+		self.add_value((end_time - start_time).as_secs_f32());
+	}
 }
