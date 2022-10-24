@@ -91,6 +91,10 @@ pub struct SubmodelEntityWithIndexLocationLinkComponent {}
 #[derive(Serialize, Deserialize)]
 pub struct DecalLocationLinkComponent {}
 
+// Component that sets Sprite position using LocationComponent.
+#[derive(Serialize, Deserialize)]
+pub struct SpriteLocationLinkComponent {}
+
 // Component that sets DynamicLight position/rotation using LocationComponent.
 #[derive(Serialize, Deserialize)]
 pub struct DynamicLightLocationLinkComponent {}

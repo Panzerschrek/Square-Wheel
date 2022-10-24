@@ -634,6 +634,7 @@ impl GameInterface for Game
 		world_update::update_player_entity(
 			&mut self.ecs,
 			&mut self.physics,
+			&mut self.resources_manager.lock().unwrap(),
 			self.player_entity,
 			keyboard_state,
 			events,
@@ -670,6 +671,7 @@ impl GameInterface for Game
 		world_update::update_models_locations(&mut self.ecs);
 		world_update::update_submodels_locations(&mut self.ecs);
 		world_update::update_decals_locations(&mut self.ecs);
+		world_update::update_sprites_locations(&mut self.ecs);
 		world_update::update_dynamic_lights_locations(&mut self.ecs);
 	}
 

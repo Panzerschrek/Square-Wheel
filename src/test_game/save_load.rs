@@ -340,6 +340,7 @@ impl<'a> hecs::serialize::row::SerializeContext for SerializeContext<'a>
 		self.try_serialize_component::<ModelEntityLocationLinkComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<SubmodelEntityWithIndexLocationLinkComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<DecalLocationLinkComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<SpriteLocationLinkComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<DynamicLightLocationLinkComponent, S>(entity, &mut map)?;
 
 		self.try_serialize_component::<SimpleAnimationComponent, S>(entity, &mut map)?;
@@ -450,6 +451,7 @@ impl<'a> hecs::serialize::row::DeserializeContext for DeserializeContext<'a>
 			self.try_deserialize_component::<ModelEntityLocationLinkComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<SubmodelEntityWithIndexLocationLinkComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<DecalLocationLinkComponent, M>(&key, &mut map, entity)?;
+			self.try_deserialize_component::<SpriteLocationLinkComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<DynamicLightLocationLinkComponent, M>(&key, &mut map, entity)?;
 
 			self.try_deserialize_component::<SimpleAnimationComponent, M>(&key, &mut map, entity)?;
