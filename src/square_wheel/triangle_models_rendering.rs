@@ -562,7 +562,7 @@ fn get_model_static_light(map: &bsp_map_compact::BSPMap, model: &ModelEntity) ->
 	}
 }
 
-fn fetch_light_from_grid(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> bsp_map_compact::LightGridElement
+pub fn fetch_light_from_grid(map: &bsp_map_compact::BSPMap, pos: &Vec3f) -> bsp_map_compact::LightGridElement
 {
 	let zero_light = bsp_map_compact::LightGridElement::default();
 

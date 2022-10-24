@@ -12,6 +12,8 @@ pub struct TestModelComponent {}
 #[derive(Serialize, Deserialize)]
 pub struct TestDecalComponent {}
 #[derive(Serialize, Deserialize)]
+pub struct TestSpriteComponent {}
+#[derive(Serialize, Deserialize)]
 pub struct TestLightComponent {}
 
 #[derive(Serialize, Deserialize)]
@@ -88,6 +90,10 @@ pub struct SubmodelEntityWithIndexLocationLinkComponent {}
 // Component that sets Decal position/rotation using LocationComponent.
 #[derive(Serialize, Deserialize)]
 pub struct DecalLocationLinkComponent {}
+
+// Component that sets Sprite position using LocationComponent.
+#[derive(Serialize, Deserialize)]
+pub struct SpriteLocationLinkComponent {}
 
 // Component that sets DynamicLight position/rotation using LocationComponent.
 #[derive(Serialize, Deserialize)]

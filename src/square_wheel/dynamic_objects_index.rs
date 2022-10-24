@@ -90,6 +90,21 @@ impl DynamicObjectsIndex
 		}
 	}
 
+	// Reset internal state and position new set of sprites.
+	pub fn position_sprites(&mut self, sprites: &[Sprite])
+	{
+		// Clear previous sprites.
+		self.clear();
+
+		// Position new sprites.
+		self.allocate_objects(sprites.len());
+		let root_node = bsp_map_compact::get_root_node_index(&self.map);
+		for (index, sprite) in sprites.iter().enumerate()
+		{
+			self.position_object_sphere_r(index as DynamicObjectId, &sprite.position, sprite.radius, root_node);
+		}
+	}
+
 	// Reset internal state and position new set of dynamic lights.
 	pub fn position_dynamic_lights(&mut self, lights: &[DynamicLight])
 	{

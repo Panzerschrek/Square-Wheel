@@ -324,6 +324,7 @@ impl<'a> hecs::serialize::row::SerializeContext for SerializeContext<'a>
 
 		self.try_serialize_component::<TestModelComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<TestDecalComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<TestSpriteComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<TestLightComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<TestProjectileComponent, S>(entity, &mut map)?;
 
@@ -339,6 +340,7 @@ impl<'a> hecs::serialize::row::SerializeContext for SerializeContext<'a>
 		self.try_serialize_component::<ModelEntityLocationLinkComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<SubmodelEntityWithIndexLocationLinkComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<DecalLocationLinkComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<SpriteLocationLinkComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<DynamicLightLocationLinkComponent, S>(entity, &mut map)?;
 
 		self.try_serialize_component::<SimpleAnimationComponent, S>(entity, &mut map)?;
@@ -379,6 +381,12 @@ impl<'a> hecs::serialize::row::SerializeContext for SerializeContext<'a>
 		{
 			let proxy = DecalProxy::new(&*c, &mut self.shared_resources.lite_textures);
 			map.serialize_entry(get_component_name::<DecalProxy>(), &proxy)?;
+		}
+
+		if let Some(c) = entity.get::<&Sprite>()
+		{
+			let proxy = SpriteProxy::new(&*c, &mut self.shared_resources.lite_textures);
+			map.serialize_entry(get_component_name::<SpriteProxy>(), &proxy)?;
 		}
 
 		map.end()
@@ -427,6 +435,7 @@ impl<'a> hecs::serialize::row::DeserializeContext for DeserializeContext<'a>
 
 			self.try_deserialize_component::<TestModelComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<TestDecalComponent, M>(&key, &mut map, entity)?;
+			self.try_deserialize_component::<TestSpriteComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<TestLightComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<TestProjectileComponent, M>(&key, &mut map, entity)?;
 
@@ -442,6 +451,7 @@ impl<'a> hecs::serialize::row::DeserializeContext for DeserializeContext<'a>
 			self.try_deserialize_component::<ModelEntityLocationLinkComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<SubmodelEntityWithIndexLocationLinkComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<DecalLocationLinkComponent, M>(&key, &mut map, entity)?;
+			self.try_deserialize_component::<SpriteLocationLinkComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<DynamicLightLocationLinkComponent, M>(&key, &mut map, entity)?;
 
 			self.try_deserialize_component::<SimpleAnimationComponent, M>(&key, &mut map, entity)?;
@@ -479,6 +489,15 @@ impl<'a> hecs::serialize::row::DeserializeContext for DeserializeContext<'a>
 			{
 				if let Some(v) = map
 					.next_value::<DecalProxy>()?
+					.try_to(&self.shared_resources.lite_textures)
+				{
+					entity.add(v);
+				}
+			}
+			if key.as_str() == get_component_name::<SpriteProxy>()
+			{
+				if let Some(v) = map
+					.next_value::<SpriteProxy>()?
 					.try_to(&self.shared_resources.lite_textures)
 				{
 					entity.add(v);
@@ -620,6 +639,47 @@ impl DecalProxy
 			texture: self.texture.to_resource(textures)?,
 			blending_mode: self.blending_mode,
 			lightmap_light_scale: self.lightmap_light_scale,
+			light_add: self.light_add,
+		})
+	}
+}
+
+#[derive(Serialize, Deserialize)]
+struct SpriteProxy
+{
+	position: Vec3f,
+	radius: f32,
+	texture: ResourceSerializationKey,
+	blending_mode: material::BlendingMode,
+	orientation: SpriteOrientation,
+	light_scale: f32,
+	light_add: [f32; 3],
+}
+
+impl SpriteProxy
+{
+	fn new(sprite: &Sprite, textures: &mut ResourcesMap<textures::TextureLiteWithMips>) -> Self
+	{
+		Self {
+			position: sprite.position,
+			radius: sprite.radius,
+			texture: ResourceSerializationKey::from_resource(&sprite.texture, textures),
+			blending_mode: sprite.blending_mode,
+			orientation: sprite.orientation,
+			light_scale: sprite.light_scale,
+			light_add: sprite.light_add,
+		}
+	}
+
+	fn try_to(&self, textures: &ResourcesMap<textures::TextureLiteWithMips>) -> Option<Sprite>
+	{
+		Some(Sprite {
+			position: self.position,
+			radius: self.radius,
+			texture: self.texture.to_resource(textures)?,
+			blending_mode: self.blending_mode,
+			orientation: self.orientation,
+			light_scale: self.light_scale,
 			light_add: self.light_add,
 		})
 	}

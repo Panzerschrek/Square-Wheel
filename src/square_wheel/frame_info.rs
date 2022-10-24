@@ -10,6 +10,7 @@ pub struct FrameInfo
 	pub submodel_entities: Vec<SubmodelEntityOpt>,
 	pub model_entities: Vec<ModelEntity>,
 	pub decals: Vec<Decal>,
+	pub sprites: Vec<Sprite>,
 	pub lights: Vec<DynamicLight>,
 	pub skybox_rotation: QuaternionF,
 }
@@ -84,6 +85,27 @@ pub struct Decal
 	pub blending_mode: material::BlendingMode,
 	pub lightmap_light_scale: f32,
 	pub light_add: [f32; 3],
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Sprite
+{
+	pub position: Vec3f,
+	pub radius: f32,
+	pub texture: SharedResourcePtr<TextureLiteWithMips>,
+	pub blending_mode: material::BlendingMode,
+	pub orientation: SpriteOrientation,
+	pub light_scale: f32,
+	pub light_add: [f32; 3],
+}
+
+#[derive(Copy, Clone, Serialize, Deserialize)]
+pub enum SpriteOrientation
+{
+	ParallelToCameraPlane,
+	FacingTowardsCamera,
+	AlignToZAxisParallelToCameraPlane,
+	AlignToZAxisFacingTowardsCamera,
 }
 
 #[derive(Copy, Clone, Serialize, Deserialize)]

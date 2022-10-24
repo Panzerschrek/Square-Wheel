@@ -1,9 +1,10 @@
-use super::{components::*, frame_info::*, test_game_physics::*};
-use square_wheel_lib::common::{math_types::*, system_window};
+use super::{components::*, frame_info::*, resources_manager::*, test_game_physics::*};
+use square_wheel_lib::common::{material, math_types::*, system_window};
 
 pub fn update_player_entity(
 	ecs: &mut hecs::World,
 	physics: &mut TestGamePhysics,
+	resources_manager: &mut ResourcesManager,
 	player_entity: hecs::Entity,
 	keyboard_state: &system_window::KeyboardState,
 	events: &[sdl2::event::Event],
@@ -167,6 +168,16 @@ pub fn update_player_entity(
 			TestProjectileComponent {
 				velocity: camera_vector * 256.0,
 			},
+			Sprite {
+				position,
+				radius: 32.0,
+				texture: resources_manager.get_texture_lite(&"shot_sprite.png".to_string()),
+				orientation: SpriteOrientation::FacingTowardsCamera,
+				blending_mode: material::BlendingMode::AlphaBlend,
+				light_scale: 0.0,
+				light_add: [32.0, 64.0, 32.0],
+			},
+			SpriteLocationLinkComponent {},
 		));
 	}
 
@@ -798,6 +809,15 @@ pub fn update_decals_locations(ecs: &mut hecs::World)
 	{
 		decal.position = location_component.position;
 		decal.rotation = location_component.rotation;
+	}
+}
+
+pub fn update_sprites_locations(ecs: &mut hecs::World)
+{
+	for (_id, (_sprite_location_component, location_component, sprite)) in
+		ecs.query_mut::<(&SpriteLocationLinkComponent, &LocationComponent, &mut Sprite)>()
+	{
+		sprite.position = location_component.position;
 	}
 }
 

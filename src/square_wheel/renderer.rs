@@ -41,6 +41,8 @@ pub struct Renderer
 	dynamic_models_index: DynamicObjectsIndex,
 	decals_index: DynamicObjectsIndex,
 	decals_info: Vec<DecalInfo>,
+	sprites_index: DynamicObjectsIndex,
+	sprites_info: Vec<SpriteInfo>,
 	dynamic_lights_index: DynamicObjectsIndex,
 	// TODO - maybe extract dynamic models-related stuff into separate class?
 	// Store transformed models vertices and triangles in separate buffer.
@@ -171,6 +173,17 @@ struct DecalInfo
 	dynamic_light: bsp_map_compact::LightGridElement,
 }
 
+#[derive(Copy, Clone)]
+struct SpriteInfo
+{
+	vertices_projected: [Vec3f; 4],
+	light: [f32; 3],
+	mip: u32,
+	tesselation_level: u32,
+}
+
+const MAX_SPRITE_TESSELATION_LEVEL: u32 = 4;
+
 impl Renderer
 {
 	pub fn new(
@@ -241,6 +254,8 @@ impl Renderer
 			dynamic_models_index: DynamicObjectsIndex::new(map.clone()),
 			decals_index: DynamicObjectsIndex::new(map.clone()),
 			decals_info: Vec::new(),
+			sprites_index: DynamicObjectsIndex::new(map.clone()),
+			sprites_info: Vec::new(),
 			dynamic_lights_index: DynamicObjectsIndex::new(map),
 			visible_dynamic_meshes_list: Vec::new(),
 			dynamic_model_to_dynamic_meshes_index: Vec::new(),
@@ -300,6 +315,8 @@ impl Renderer
 		);
 
 		self.prepare_decals(frame_info);
+
+		self.prepare_sprites(frame_info);
 
 		run_with_measure(
 			|| {
@@ -833,6 +850,251 @@ impl Renderer
 		}
 
 		debug_assert!(self.decals_info.len() == frame_info.decals.len());
+	}
+
+	// Call this after visible leafs search.
+	fn prepare_sprites(&mut self, frame_info: &FrameInfo)
+	{
+		self.sprites_index.position_sprites(&frame_info.sprites);
+
+		let view_matrix_inverse = frame_info.camera_matrices.view_matrix.invert().unwrap();
+
+		let u_vec_base_initial = (view_matrix_inverse * Vec4f::unit_x()).truncate();
+		let u_vec_base = u_vec_base_initial / u_vec_base_initial.magnitude();
+
+		let v_vec_base_initial = (view_matrix_inverse * Vec4f::unit_y()).truncate();
+		let v_vec_base = v_vec_base_initial / v_vec_base_initial.magnitude();
+
+		let camera_direction = u_vec_base.cross(v_vec_base);
+
+		let dummy_sprite_info = SpriteInfo {
+			vertices_projected: [Vec3f::zero(); 4],
+			light: [0.0; 3],
+			mip: 0,
+			tesselation_level: 0,
+		};
+
+		self.sprites_info.clear();
+		for (sprite_index, sprite) in frame_info.sprites.iter().enumerate()
+		{
+			if self.sprites_index.get_object_leafs(sprite_index).is_empty()
+			{
+				// This sprite is not visible. Avoid costly computations for it.
+				self.sprites_info.push(dummy_sprite_info);
+				continue;
+			}
+
+			let (u_vec_normalized, v_vec_normalized) = match sprite.orientation
+			{
+				SpriteOrientation::ParallelToCameraPlane => (u_vec_base, v_vec_base),
+				SpriteOrientation::FacingTowardsCamera =>
+				{
+					let vec_to_camera = frame_info.camera_matrices.position - sprite.position;
+					let plane_normal = vec_to_camera / vec_to_camera.magnitude().max(0.001);
+
+					let u_vec_projected_to_plane = u_vec_base - plane_normal * u_vec_base.dot(plane_normal);
+
+					let u_vec_projected_len = u_vec_projected_to_plane.magnitude();
+					let u_vec_normalized = if u_vec_projected_len < 0.0001
+					{
+						Vec3f::unit_x()
+					}
+					else
+					{
+						u_vec_projected_to_plane / u_vec_projected_len
+					};
+
+					// Should be normalized, since both vectors are normalied and perpendicular.
+					let v_vec_normalized = u_vec_normalized.cross(plane_normal);
+					(u_vec_normalized, v_vec_normalized)
+				},
+				SpriteOrientation::AlignToZAxisParallelToCameraPlane =>
+				{
+					let v_vec_normalized = Vec3f::unit_z();
+
+					let u_vec = v_vec_normalized.cross(camera_direction);
+					let u_vec_len = u_vec.magnitude();
+					let u_vec_normalized = if u_vec_len < 0.0001
+					{
+						Vec3f::unit_x()
+					}
+					else
+					{
+						u_vec / u_vec_len
+					};
+
+					(u_vec_normalized, v_vec_normalized)
+				},
+				SpriteOrientation::AlignToZAxisFacingTowardsCamera =>
+				{
+					let vec_to_camera = frame_info.camera_matrices.position - sprite.position;
+
+					let v_vec_normalized = Vec3f::unit_z();
+
+					let u_vec = v_vec_normalized.cross(vec_to_camera);
+					let u_vec_len = u_vec.magnitude();
+					let u_vec_normalized = if u_vec_len < 0.0001
+					{
+						Vec3f::unit_x()
+					}
+					else
+					{
+						u_vec / u_vec_len
+					};
+
+					(u_vec_normalized, v_vec_normalized)
+				},
+			};
+
+			let texture_mip0 = &sprite.texture[0];
+			let ratio_h_w = (texture_mip0.size[1] as f32) / (texture_mip0.size[0] as f32);
+			let step_u = sprite.radius * inv_sqrt_fast(1.0 + ratio_h_w * ratio_h_w);
+			let ratio_w_h = (texture_mip0.size[0] as f32) / (texture_mip0.size[1] as f32);
+			let step_v = sprite.radius * inv_sqrt_fast(1.0 + ratio_w_h * ratio_w_h);
+
+			let u_vec = u_vec_normalized * step_u;
+			let v_vec = v_vec_normalized * step_v;
+			let vertices = [
+				sprite.position + u_vec + v_vec,
+				sprite.position + u_vec - v_vec,
+				sprite.position - u_vec - v_vec,
+				sprite.position - u_vec + v_vec,
+			];
+
+			let vertices_projected = vertices.map(|v| {
+				let v_projected = frame_info.camera_matrices.view_matrix * v.extend(1.0);
+				Vec3f::new(v_projected.x, v_projected.y, v_projected.w)
+			});
+
+			let mip = if vertices_projected[0].z > 0.0 &&
+				vertices_projected[1].z > 0.0 &&
+				vertices_projected[2].z > 0.0 &&
+				vertices_projected[3].z > 0.0
+			{
+				let points = vertices_projected.map(|v| v.truncate() / v.z);
+				let diagonal0_square_len = (points[0] - points[2]).magnitude2();
+				let diagonal1_square_len = (points[1] - points[3]).magnitude2();
+				let shortest_diagonal_square_len = diagonal0_square_len.min(diagonal1_square_len);
+				if shortest_diagonal_square_len <= 0.0
+				{
+					MAX_MIP as u32
+				}
+				else
+				{
+					let tc_diagonal_square_diff =
+						Vec2f::new(texture_mip0.size[0] as f32, texture_mip0.size[1] as f32).magnitude2();
+					let d_tc_2 = tc_diagonal_square_diff / shortest_diagonal_square_len;
+					let mip_f = d_tc_2.log2() * 0.5 + self.mip_bias; // log(sqrt(x)) = log(x) * 0.5
+					let mip = (mip_f.round().max(0.0) as u32).min(MAX_MIP as u32);
+					mip
+				}
+			}
+			else
+			{
+				0
+			};
+
+			let min_z = vertices_projected[0]
+				.z
+				.min(vertices_projected[1].z)
+				.min(vertices_projected[2].z)
+				.min(vertices_projected[3].z);
+			let max_z = vertices_projected[0]
+				.z
+				.max(vertices_projected[1].z)
+				.max(vertices_projected[2].z)
+				.max(vertices_projected[3].z);
+			let tesselation_level = if min_z <= 0.0
+			{
+				MAX_SPRITE_TESSELATION_LEVEL
+			}
+			else
+			{
+				// TODO - tune this formula.
+				(((max_z / min_z - 1.0) * 4.0).max(1.0) as u32).min(MAX_SPRITE_TESSELATION_LEVEL)
+			};
+
+			let mut sprite_light = sprite.light_add;
+			if sprite.light_scale > 0.0
+			{
+				let grid_light = fetch_light_from_grid(&self.map, &sprite.position);
+
+				// Get average value of all cube sides.
+				let cube_side_scale = sprite.light_scale / 6.0;
+				for cube_side in &grid_light.light_cube
+				{
+					for i in 0 .. 3
+					{
+						sprite_light[i] += cube_side[i] * cube_side_scale;
+					}
+				}
+
+				// Use half of power of directional component.
+				let directional_component_scale =
+					sprite.light_scale * 0.5 * grid_light.light_direction_vector_scaled.magnitude();
+				for i in 0 .. 3
+				{
+					sprite_light[i] += directional_component_scale * grid_light.directional_light_color[i];
+				}
+
+				// Process dynamic lights.
+				let dynamic_lights_scale = sprite.light_scale * 0.5;
+				let min_square_distance = sprite.radius * sprite.radius;
+				for (light, light_info) in frame_info.lights.iter().zip(self.dynamic_lights_info.iter())
+				{
+					if !light_info.visible
+					{
+						continue;
+					}
+
+					let vec_to_light = light.position - sprite.position;
+					let inv_square_dist = 1.0 / vec_to_light.magnitude2().max(min_square_distance);
+					let light_inv_square_radius = 1.0 / (light.radius * light.radius);
+					if inv_square_dist < light_inv_square_radius
+					{
+						continue;
+					}
+
+					let shadow_factor = match &light.shadow_type
+					{
+						DynamicLightShadowType::None => 1.0,
+						DynamicLightShadowType::Cubemap => cube_shadow_map_fetch(
+							&create_dynamic_light_cube_shadow_map(light_info, &self.shadow_maps_data),
+							&vec_to_light,
+						),
+						DynamicLightShadowType::Projector { rotation, fov } => projector_shadow_map_fetch(
+							&create_dynamic_light_projector_shadow_map(
+								rotation,
+								*fov,
+								light_info,
+								&self.shadow_maps_data,
+							),
+							&vec_to_light,
+						),
+					};
+					if shadow_factor <= 0.0
+					{
+						continue;
+					}
+
+					let scale = dynamic_lights_scale * shadow_factor * (inv_square_dist - light_inv_square_radius);
+					for i in 0 .. 3
+					{
+						sprite_light[i] += scale * light.color[i];
+					}
+				} // for ynamic lights
+			}
+
+			let sprite_info = SpriteInfo {
+				vertices_projected,
+				light: sprite_light,
+				mip,
+				tesselation_level,
+			};
+			self.sprites_info.push(sprite_info);
+		}
+
+		debug_assert!(self.sprites_info.len() == frame_info.sprites.len());
 	}
 
 	// Call this after visible leafs search.
@@ -1857,7 +2119,8 @@ impl Renderer
 
 		let leaf_submodels = self.inline_models_index.get_leaf_models(leaf_index);
 		let leaf_dynamic_models = self.dynamic_models_index.get_leaf_objects(leaf_index);
-		if leaf_submodels.is_empty() && leaf_dynamic_models.is_empty()
+		let leaf_sprites = self.sprites_index.get_leaf_objects(leaf_index);
+		if leaf_submodels.is_empty() && leaf_dynamic_models.is_empty() && leaf_sprites.is_empty()
 		{
 			return;
 		}
@@ -1944,7 +2207,7 @@ impl Renderer
 		}
 
 		// Fast path for cases with single model, to avoid expensive sorting structures preparations.
-		if leaf_submodels.len() == 1 && leaf_dynamic_models.len() == 0
+		if leaf_submodels.len() == 1 && leaf_dynamic_models.len() == 0 && leaf_sprites.len() == 0
 		{
 			self.draw_submodel_in_leaf(
 				rasterizer,
@@ -1956,7 +2219,7 @@ impl Renderer
 			);
 			return;
 		}
-		if leaf_submodels.len() == 0 && leaf_dynamic_models.len() == 1
+		if leaf_submodels.len() == 0 && leaf_dynamic_models.len() == 1 && leaf_sprites.len() == 0
 		{
 			let entry = self.dynamic_model_to_dynamic_meshes_index[leaf_dynamic_models[0] as usize];
 			for visible_mesh_index in entry.first_visible_mesh .. entry.first_visible_mesh + entry.num_visible_meshes
@@ -1971,12 +2234,26 @@ impl Renderer
 			}
 			return;
 		}
+		if leaf_submodels.len() == 0 && leaf_dynamic_models.len() == 0 && leaf_sprites.len() == 1
+		{
+			self.draw_sprite(
+				rasterizer,
+				&clip_planes,
+				used_leaf_clip_planes,
+				&frame_info.sprites,
+				leaf_sprites[0],
+			);
+			return;
+		}
 
 		// Multiple models. Sort them.
 
 		// TODO - use uninitialized memory and increase this value.
 		const MAX_SUBMODELS_IN_LEAF: usize = 12;
 		let mut models_for_sorting = [draw_ordering::BBoxForDrawOrdering::default(); MAX_SUBMODELS_IN_LEAF];
+
+		const DYNAMIC_MESH_INDEX_ADD: u32 = 65536;
+		const SPRITE_INDEX_ADD: u32 = DYNAMIC_MESH_INDEX_ADD + 65536;
 
 		for (&model_index, model_for_sorting) in leaf_submodels.iter().zip(models_for_sorting.iter_mut())
 		{
@@ -1993,7 +2270,6 @@ impl Renderer
 		}
 		let mut num_models = std::cmp::min(leaf_submodels.len(), MAX_SUBMODELS_IN_LEAF);
 
-		const DYNAMIC_MESH_INDEX_ADD: u32 = 65536;
 		for dynamic_model_index in leaf_dynamic_models
 		{
 			if num_models == MAX_SUBMODELS_IN_LEAF
@@ -2028,12 +2304,39 @@ impl Renderer
 			}
 		}
 
+		for sprite_index in leaf_sprites
+		{
+			if num_models == MAX_SUBMODELS_IN_LEAF
+			{
+				break;
+			}
+			let sprite = &frame_info.sprites[*sprite_index as usize];
+			let extend_vec = Vec3f::new(sprite.radius, sprite.radius, sprite.radius);
+			let bbox = BBox::from_min_max(sprite.position - extend_vec, sprite.position + extend_vec);
+
+			models_for_sorting[num_models] = (
+				sprite_index + SPRITE_INDEX_ADD,
+				draw_ordering::project_bbox(&bbox, &frame_info.camera_matrices),
+			);
+			num_models += 1;
+		}
+
 		draw_ordering::order_bboxes(&mut models_for_sorting[.. num_models]);
 
 		// Draw dynamic models and submodels, located in this leaf, after leaf polygons.
 		for (submodel_index, _bbox) in &models_for_sorting[.. num_models]
 		{
-			if *submodel_index >= DYNAMIC_MESH_INDEX_ADD
+			if *submodel_index >= SPRITE_INDEX_ADD
+			{
+				self.draw_sprite(
+					rasterizer,
+					&clip_planes,
+					used_leaf_clip_planes,
+					&frame_info.sprites,
+					*submodel_index - SPRITE_INDEX_ADD,
+				);
+			}
+			else if *submodel_index >= DYNAMIC_MESH_INDEX_ADD
 			{
 				let visible_mesh_index = *submodel_index - DYNAMIC_MESH_INDEX_ADD;
 				self.draw_mesh(
@@ -2507,6 +2810,241 @@ impl Renderer
 			self.get_polygon_surface_data(polygon_data),
 			self.materials_processor.get_material(polygon.texture).blending_mode,
 		);
+	}
+
+	fn draw_sprite<'a, ColorT: AbstractColor>(
+		&self,
+		rasterizer: &mut Rasterizer<'a, ColorT>,
+		clip_planes: &ClippingPolygonPlanes,
+		leaf_clip_planes: &[Plane],
+		sprites: &[Sprite],
+		sprite_index: u32,
+	)
+	{
+		let sprite = &sprites[sprite_index as usize];
+		let sprite_info = &self.sprites_info[sprite_index as usize];
+
+		let texture_mip = &sprite.texture[sprite_info.mip as usize];
+		let texture_size = [texture_mip.size[0] as f32, texture_mip.size[1] as f32];
+
+		let mut vertices_clipped0 = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
+		let mut vertices_clipped1 = unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_VERTICES]>() };
+		let mut vc_src = &mut vertices_clipped0;
+		let mut vc_dst = &mut vertices_clipped1;
+
+		let tc_reduce = 1.0 / 16.0;
+		vc_src[0] = ModelVertex3d {
+			light: sprite_info.light,
+			pos: sprite_info.vertices_projected[0],
+			tc: Vec2f::new(texture_size[0] - tc_reduce, texture_size[1] - tc_reduce),
+		};
+		vc_src[1] = ModelVertex3d {
+			light: sprite_info.light,
+			pos: sprite_info.vertices_projected[1],
+			tc: Vec2f::new(texture_size[0] - tc_reduce, tc_reduce),
+		};
+		vc_src[2] = ModelVertex3d {
+			light: sprite_info.light,
+			pos: sprite_info.vertices_projected[2],
+			tc: Vec2f::new(tc_reduce, tc_reduce),
+		};
+		vc_src[3] = ModelVertex3d {
+			light: sprite_info.light,
+			pos: sprite_info.vertices_projected[3],
+			tc: Vec2f::new(tc_reduce, texture_size[1] - tc_reduce),
+		};
+
+		let z_near_plane = Plane {
+			vec: Vec3f::unit_z(),
+			dist: Z_NEAR,
+		};
+
+		if sprite_info.tesselation_level <= 1
+		{
+			// Draw sprite without tesselation.
+
+			let mut num_vertices = 4;
+			for clip_plane in [z_near_plane].iter().chain(leaf_clip_planes.iter())
+			{
+				num_vertices = clip_3d_model_polygon_by_plane(&vc_src[.. num_vertices], clip_plane, vc_dst);
+				if num_vertices < 3
+				{
+					return;
+				}
+				std::mem::swap(&mut vc_src, &mut vc_dst);
+			}
+
+			let mut vertices_projected0 = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
+			let mut vertices_projected1 = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
+			let mut vp_src = &mut vertices_projected0;
+			let mut vp_dst = &mut vertices_projected1;
+
+			for (src, dst) in vc_src[.. num_vertices].iter().zip(vp_src.iter_mut())
+			{
+				*dst = ModelVertex2d {
+					pos: src.pos.truncate() / src.pos.z,
+					tc: src.tc,
+					light: src.light,
+				};
+			}
+			for clip_plane in clip_planes
+			{
+				num_vertices = clip_2d_model_polygon(&vp_src[.. num_vertices], clip_plane, vp_dst);
+				if num_vertices < 3
+				{
+					return;
+				}
+				std::mem::swap(&mut vp_src, &mut vp_dst);
+			}
+
+			let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
+			for (src, dst) in vp_src[.. num_vertices].iter().zip(vertices_fixed.iter_mut())
+			{
+				*dst = TrianglePointProjected {
+					x: f32_to_fixed16(src.pos.x),
+					y: f32_to_fixed16(src.pos.y),
+					tc: [f32_to_fixed16(src.tc.x), f32_to_fixed16(src.tc.y)],
+					light: [
+						f32_to_fixed16(src.light[0]),
+						f32_to_fixed16(src.light[1]),
+						f32_to_fixed16(src.light[2]),
+					],
+				};
+			}
+
+			let texture_info = TextureInfo {
+				size: [texture_mip.size[0] as i32, texture_mip.size[1] as i32],
+			};
+			let texture_data = &texture_mip.pixels;
+			let blending_mode = sprite.blending_mode;
+
+			for t in 0 .. num_vertices - 2
+			{
+				rasterizer.fill_triangle(
+					&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
+					&texture_info,
+					texture_data,
+					blending_mode,
+				);
+			} // for subtriangles
+		}
+		else
+		{
+			// Perform grid tesselation.
+
+			// Prepare tesselated vertices.
+			const MAX_TESSELATED_VERTICES: u32 =
+				(MAX_SPRITE_TESSELATION_LEVEL + 1) * (MAX_SPRITE_TESSELATION_LEVEL + 1);
+			let mut tesselated_vertices =
+				unsafe { std::mem::zeroed::<[ModelVertex3d; MAX_TESSELATED_VERTICES as usize]>() };
+
+			let num_vertices_in_row = sprite_info.tesselation_level + 1;
+
+			let inv_step = 1.0 / (sprite_info.tesselation_level as f32);
+			for y in 0 .. num_vertices_in_row
+			{
+				let y_mix = (y as f32) * inv_step;
+				for x in 0 .. num_vertices_in_row
+				{
+					let x_mix = (x as f32) * inv_step;
+
+					let weights = [
+						x_mix * y_mix,
+						(1.0 - x_mix) * y_mix,
+						(1.0 - x_mix) * (1.0 - y_mix),
+						x_mix * (1.0 - y_mix),
+					];
+
+					let dst_v = &mut tesselated_vertices[(x + y * num_vertices_in_row) as usize];
+					dst_v.pos = weights[0] * vc_src[0].pos +
+						weights[1] * vc_src[1].pos +
+						weights[2] * vc_src[2].pos +
+						weights[3] * vc_src[3].pos;
+					dst_v.tc = weights[0] * vc_src[0].tc +
+						weights[1] * vc_src[1].tc +
+						weights[2] * vc_src[2].tc +
+						weights[3] * vc_src[3].tc;
+				}
+			}
+
+			let mut vertices_projected0 = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
+			let mut vertices_projected1 = unsafe { std::mem::zeroed::<[ModelVertex2d; MAX_VERTICES]>() };
+			let mut vertices_fixed = unsafe { std::mem::zeroed::<[TrianglePointProjected; MAX_VERTICES]>() };
+
+			let texture_info = TextureInfo {
+				size: [texture_mip.size[0] as i32, texture_mip.size[1] as i32],
+			};
+			let texture_data = &texture_mip.pixels;
+			let blending_mode = sprite.blending_mode;
+
+			// Process subquads.
+			for x in 0 .. sprite_info.tesselation_level
+			{
+				'tesselation_loop: for y in 0 .. sprite_info.tesselation_level
+				{
+					vc_src[0] = tesselated_vertices[(x + y * num_vertices_in_row) as usize];
+					vc_src[1] = tesselated_vertices[(x + (y + 1) * num_vertices_in_row) as usize];
+					vc_src[2] = tesselated_vertices[(1 + x + (y + 1) * num_vertices_in_row) as usize];
+					vc_src[3] = tesselated_vertices[(1 + x + y * num_vertices_in_row) as usize];
+
+					let mut num_vertices = 4;
+					for clip_plane in [z_near_plane].iter().chain(leaf_clip_planes.iter())
+					{
+						num_vertices = clip_3d_model_polygon_by_plane(&vc_src[.. num_vertices], clip_plane, vc_dst);
+						if num_vertices < 3
+						{
+							continue 'tesselation_loop;
+						}
+						std::mem::swap(&mut vc_src, &mut vc_dst);
+					}
+
+					let mut vp_src = &mut vertices_projected0;
+					let mut vp_dst = &mut vertices_projected1;
+
+					for (src, dst) in vc_src[.. num_vertices].iter().zip(vp_src.iter_mut())
+					{
+						*dst = ModelVertex2d {
+							pos: src.pos.truncate() / src.pos.z,
+							tc: src.tc,
+							light: src.light,
+						};
+					}
+					for clip_plane in clip_planes
+					{
+						num_vertices = clip_2d_model_polygon(&vp_src[.. num_vertices], clip_plane, vp_dst);
+						if num_vertices < 3
+						{
+							continue 'tesselation_loop;
+						}
+						std::mem::swap(&mut vp_src, &mut vp_dst);
+					}
+
+					for (src, dst) in vp_src[.. num_vertices].iter().zip(vertices_fixed.iter_mut())
+					{
+						*dst = TrianglePointProjected {
+							x: f32_to_fixed16(src.pos.x),
+							y: f32_to_fixed16(src.pos.y),
+							tc: [f32_to_fixed16(src.tc.x), f32_to_fixed16(src.tc.y)],
+							light: [
+								f32_to_fixed16(sprite_info.light[0]),
+								f32_to_fixed16(sprite_info.light[1]),
+								f32_to_fixed16(sprite_info.light[2]),
+							],
+						};
+					}
+
+					for t in 0 .. num_vertices - 2
+					{
+						rasterizer.fill_triangle(
+							&[vertices_fixed[0], vertices_fixed[t + 1], vertices_fixed[t + 2]],
+							&texture_info,
+							texture_data,
+							blending_mode,
+						);
+					} // for subtriangles
+				} // for y
+			} // for x
+		}
 	}
 
 	fn draw_mesh<'a, ColorT: AbstractColor>(

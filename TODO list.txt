@@ -21,7 +21,6 @@ Renderer:
 * Shadows from triangle models
 * Multithreaded shadowmaps building
 * Emissive textures (lamps, screens)
-* Billboards and sprites
 
 Lightmapper:
 * Cone lights

@@ -43,6 +43,8 @@ impl Game
 			("reset_test_models", Game::command_reset_test_models),
 			("add_test_decal", Game::command_add_test_decal),
 			("reset_test_decals", Game::command_reset_test_decals),
+			("add_test_sprite", Game::command_add_test_sprite),
+			("reset_test_sprites", Game::command_reset_test_sprites),
 			("set_view_model", Game::command_set_view_model),
 			("reset_view_model", Game::command_reset_view_model),
 			("noclip", Game::command_noclip),
@@ -415,6 +417,58 @@ impl Game
 		self.ecs_command_buffer.run_on(&mut self.ecs);
 	}
 
+	fn command_add_test_sprite(&mut self, args: commands_queue::CommandArgs)
+	{
+		if args.len() < 1
+		{
+			self.console
+				.lock()
+				.unwrap()
+				.add_text("Expected at least 1 arg".to_string());
+			return;
+		}
+
+		let texture = self.resources_manager.lock().unwrap().get_texture_lite(&args[0]);
+		let scale = if args.len() >= 2
+		{
+			args[1].parse::<f32>().unwrap_or(1.0)
+		}
+		else
+		{
+			1.0
+		};
+
+		let texture_mip0 = &texture[0];
+		let radius = 0.25 *
+			scale * ((texture_mip0.size[0] * texture_mip0.size[0] +
+			texture_mip0.size[1] * texture_mip0.size[1]) as f32)
+			.sqrt();
+
+		let (position, _rotation) = self.get_camera_location();
+
+		self.ecs.spawn((
+			TestSpriteComponent {},
+			Sprite {
+				position,
+				radius,
+				texture,
+				orientation: SpriteOrientation::FacingTowardsCamera,
+				blending_mode: material::BlendingMode::Average,
+				light_scale: 1.0,
+				light_add: [0.0; 3],
+			},
+		));
+	}
+
+	fn command_reset_test_sprites(&mut self, _args: commands_queue::CommandArgs)
+	{
+		for (id, (_test_sprite_component,)) in self.ecs.query_mut::<(&TestSpriteComponent,)>()
+		{
+			self.ecs_command_buffer.despawn(id)
+		}
+		self.ecs_command_buffer.run_on(&mut self.ecs);
+	}
+
 	fn command_set_view_model(&mut self, args: commands_queue::CommandArgs)
 	{
 		self.command_reset_view_model(Vec::new());
@@ -580,6 +634,7 @@ impl GameInterface for Game
 		world_update::update_player_entity(
 			&mut self.ecs,
 			&mut self.physics,
+			&mut self.resources_manager.lock().unwrap(),
 			self.player_entity,
 			keyboard_state,
 			events,
@@ -616,6 +671,7 @@ impl GameInterface for Game
 		world_update::update_models_locations(&mut self.ecs);
 		world_update::update_submodels_locations(&mut self.ecs);
 		world_update::update_decals_locations(&mut self.ecs);
+		world_update::update_sprites_locations(&mut self.ecs);
 		world_update::update_dynamic_lights_locations(&mut self.ecs);
 	}
 
@@ -651,6 +707,7 @@ impl GameInterface for Game
 			lights: self.collect_drawable_components(),
 			model_entities: self.collect_drawable_components(),
 			decals: self.collect_drawable_components(),
+			sprites: self.collect_drawable_components(),
 		}
 	}
 
