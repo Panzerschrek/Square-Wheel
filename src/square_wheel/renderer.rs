@@ -298,6 +298,28 @@ impl Renderer
 			}
 		}
 
+		let mut sprites = 0;
+		let mut sprites_leafs_parts = 0;
+		for i in 0 .. frame_info.sprites.len()
+		{
+			let mut visible = false;
+			for leaf_index in self.sprites_index.get_object_leafs(i)
+			{
+				if self
+					.visibility_calculator
+					.get_current_frame_leaf_bounds(*leaf_index)
+					.is_some()
+				{
+					sprites_leafs_parts += 1;
+					visible = true;
+				}
+			}
+			if visible
+			{
+				sprites += 1;
+			}
+		}
+
 		let mut visible_lights = 0;
 		let mut visible_lights_with_shadow = 0;
 		for (light, light_info) in frame_info.lights.iter().zip(self.dynamic_lights_info.iter_mut())
@@ -354,6 +376,10 @@ impl Renderer
 			triangle_vertices
 		));
 		debug_stats_printer.add_line(format!("decals: {}, (parsts in leafs: {})", decals, decals_leafs_parts));
+		debug_stats_printer.add_line(format!(
+			"sprites: {}, (parsts in leafs: {})",
+			sprites, sprites_leafs_parts
+		));
 		debug_stats_printer.add_line(format!(
 			"dynamic lights: {}, (with shadow: {})",
 			visible_lights, visible_lights_with_shadow
