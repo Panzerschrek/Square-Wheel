@@ -3,7 +3,7 @@ use crate::common::{color::*, image, math_types::*};
 use serde::{Deserialize, Serialize};
 
 // MAX_MIP must be not greater, than LIGHTMAP_SCALE_LOG2
-pub const MAX_MIP: usize = 3;
+pub const MAX_MIP: usize = 4;
 pub const NUM_MIPS: usize = MAX_MIP + 1;
 pub type TextureWithMips = [Texture; NUM_MIPS];
 
@@ -237,6 +237,7 @@ pub fn make_skybox_side_texture_mips<ColorT: AbstractColor>(
 		SkyboxSideTexture::default(),
 		SkyboxSideTexture::default(),
 		SkyboxSideTexture::default(),
+		SkyboxSideTexture::default(),
 	];
 
 	for i in 1 .. NUM_MIPS
@@ -287,6 +288,8 @@ pub fn make_skybox_side_texture_mips<ColorT: AbstractColor>(
 pub fn build_texture_mips(mip0: Texture) -> TextureWithMips
 {
 	// This function requires input texture with size multiple of ( 1 << MAX_MIP ).
+	debug_assert!(mip0.size[0] >= (1 << MAX_MIP));
+	debug_assert!(mip0.size[1] >= (1 << MAX_MIP));
 
 	let mut result = TextureWithMips::default();
 
@@ -354,8 +357,13 @@ pub fn build_texture_mips(mip0: Texture) -> TextureWithMips
 
 pub fn make_texture_lite_mips(mip0: TextureLite) -> TextureLiteWithMips
 {
+	// This function requires input texture with size multiple of ( 1 << MAX_MIP ).
+	debug_assert!(mip0.size[0] >= (1 << MAX_MIP));
+	debug_assert!(mip0.size[1] >= (1 << MAX_MIP));
+
 	let mut result = [
 		mip0,
+		TextureLite::default(),
 		TextureLite::default(),
 		TextureLite::default(),
 		TextureLite::default(),
