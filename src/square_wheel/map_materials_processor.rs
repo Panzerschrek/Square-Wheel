@@ -11,7 +11,10 @@ pub struct MapMaterialsProcessor
 	// Store here only animated textures.
 	textures_modified: Vec<TextureWithMips>,
 	temp_buffer: Vec<TextureElement>,
+	textures_shift: Vec<TextureShift>,
 }
+
+pub type TextureShift = [i32; 2];
 
 impl MapMaterialsProcessor
 {
@@ -20,8 +23,10 @@ impl MapMaterialsProcessor
 		let mut r = resources_manager.lock().unwrap();
 		let all_materials = r.get_materials();
 
-		let mut materials = Vec::with_capacity(map.textures.len());
-		let mut textures = Vec::with_capacity(map.textures.len());
+		let num_textures = map.textures.len();
+
+		let mut materials = Vec::with_capacity(num_textures);
+		let mut textures = Vec::with_capacity(num_textures);
 		let mut skybox_textures_32 = HashMap::new();
 		let mut skybox_textures_64 = HashMap::new();
 		for (texture_index, texture_name) in map.textures.iter().enumerate()
@@ -60,11 +65,25 @@ impl MapMaterialsProcessor
 			skybox_textures_32,
 			skybox_textures_64,
 			temp_buffer: Vec::new(),
+			textures_shift: vec![[0, 0]; num_textures],
 		}
 	}
 
 	pub fn update(&mut self, current_time_s: f32)
 	{
+		// Update shifts.
+		for ((_material, texture), shift) in self
+			.materials
+			.iter()
+			.zip(self.textures.iter())
+			.zip(self.textures_shift.iter_mut())
+		{
+			for i in 0 .. 2
+			{
+				shift[i] = ((32.0 * current_time_s) as i32).rem_euclid(texture[0].size[i] as i32);
+			}
+		}
+
 		// TODO - maybe perform lazy update (on demand)?
 
 		// TODO - maybe use parallel for here?
@@ -106,6 +125,11 @@ impl MapMaterialsProcessor
 
 		// Return source texture.
 		&self.textures[material_index as usize]
+	}
+
+	pub fn get_texture_shift(&self, material_index: u32) -> TextureShift
+	{
+		self.textures_shift[material_index as usize]
 	}
 
 	pub fn get_skybox_textures<ColorT: AbstractColor>(&self, material_index: u32) -> Option<&SkyboxTextures<ColorT>>

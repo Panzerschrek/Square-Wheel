@@ -1676,6 +1676,12 @@ impl Renderer
 
 			let lightmap_size = lightmap::get_polygon_lightmap_size(polygon);
 
+			let extra_shift = materials_processor.get_texture_shift(polygon.texture);
+			let tc_start = [
+				polygon_data.surface_tc_min[0] as i32 + (extra_shift[0] >> polygon_data.mip),
+				polygon_data.surface_tc_min[1] as i32 + (extra_shift[1] >> polygon_data.mip),
+			];
+
 			let lightmap_scale_log2 = lightmap::LIGHTMAP_SCALE_LOG2 - polygon_data.mip;
 			if use_directional_lightmap
 			{
@@ -1691,7 +1697,7 @@ impl Renderer
 				build_surface_directional_lightmap(
 					&basis_vecs_scaled,
 					surface_size,
-					polygon_data.surface_tc_min,
+					tc_start,
 					texture,
 					lightmap_size,
 					lightmap_scale_log2,
@@ -1716,7 +1722,7 @@ impl Renderer
 				build_surface_simple_lightmap(
 					&basis_vecs_scaled,
 					surface_size,
-					polygon_data.surface_tc_min,
+					tc_start,
 					texture,
 					lightmap_size,
 					lightmap_scale_log2,
