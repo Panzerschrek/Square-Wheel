@@ -11,7 +11,10 @@ pub struct MapMaterialsProcessor
 	// Store here only animated textures.
 	textures_modified: Vec<TextureWithMips>,
 	temp_buffer: Vec<TextureElement>,
+	textures_shift: Vec<TextureShift>,
 }
+
+pub type TextureShift = [i32; 2];
 
 impl MapMaterialsProcessor
 {
@@ -20,8 +23,10 @@ impl MapMaterialsProcessor
 		let mut r = resources_manager.lock().unwrap();
 		let all_materials = r.get_materials();
 
-		let mut materials = Vec::with_capacity(map.textures.len());
-		let mut textures = Vec::with_capacity(map.textures.len());
+		let num_textures = map.textures.len();
+
+		let mut materials = Vec::with_capacity(num_textures);
+		let mut textures = Vec::with_capacity(num_textures);
 		let mut skybox_textures_32 = HashMap::new();
 		let mut skybox_textures_64 = HashMap::new();
 		for (texture_index, texture_name) in map.textures.iter().enumerate()
@@ -60,11 +65,29 @@ impl MapMaterialsProcessor
 			skybox_textures_32,
 			skybox_textures_64,
 			temp_buffer: Vec::new(),
+			textures_shift: vec![[0, 0]; num_textures],
 		}
 	}
 
 	pub fn update(&mut self, current_time_s: f32)
 	{
+		// Update shifts.
+		for ((material, texture), shift) in self
+			.materials
+			.iter()
+			.zip(self.textures.iter())
+			.zip(self.textures_shift.iter_mut())
+		{
+			for i in 0 .. 2
+			{
+				if material.scroll_speed[i] != 0.0
+				{
+					shift[i] =
+						((material.scroll_speed[i] * current_time_s) as i32).rem_euclid(texture[0].size[i] as i32);
+				}
+			}
+		}
+
 		// TODO - maybe perform lazy update (on demand)?
 
 		// TODO - maybe use parallel for here?
@@ -106,6 +129,11 @@ impl MapMaterialsProcessor
 
 		// Return source texture.
 		&self.textures[material_index as usize]
+	}
+
+	pub fn get_texture_shift(&self, material_index: u32) -> TextureShift
+	{
+		self.textures_shift[material_index as usize]
 	}
 
 	pub fn get_skybox_textures<ColorT: AbstractColor>(&self, material_index: u32) -> Option<&SkyboxTextures<ColorT>>
@@ -154,22 +182,14 @@ fn make_turb_distortion(
 	let amplitude_corrected = mip_scale * turb.amplitude;
 	let frequency_scaled = std::f32::consts::TAU / (turb.wave_length * mip_scale);
 	let time_based_shift = current_time_s * turb.frequency * std::f32::consts::TAU;
-	let constant_shift = [
-		turb.scroll_speed[0] * (current_time_s * mip_scale),
-		turb.scroll_speed[1] * (current_time_s * mip_scale),
-	];
 
 	let size = [src.size[0] as i32, src.size[1] as i32];
 
 	// Shift rows.
 	for y in 0 .. size[1]
 	{
-		let shift = f32_mul_add(
-			f32_mul_add(y as f32, frequency_scaled, time_based_shift).sin(),
-			amplitude_corrected,
-			constant_shift[0],
-		)
-		.round() as i32;
+		let shift =
+			(f32_mul_add(y as f32, frequency_scaled, time_based_shift).sin() * amplitude_corrected).round() as i32;
 
 		let start_offset = (y * size[0]) as usize;
 		let end_offset = ((y + 1) * size[0]) as usize;
@@ -198,12 +218,8 @@ fn make_turb_distortion(
 			*temp_dst = dst.pixels[(x + y * size[0]) as usize];
 		}
 
-		let shift = f32_mul_add(
-			f32_mul_add(x as f32, frequency_scaled, time_based_shift).sin(),
-			amplitude_corrected,
-			constant_shift[1],
-		)
-		.round() as i32;
+		let shift =
+			(f32_mul_add(x as f32, frequency_scaled, time_based_shift).sin() * amplitude_corrected).round() as i32;
 
 		let mut src_y = shift.rem_euclid(size[1]);
 		for y in 0 .. size[1]

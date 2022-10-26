@@ -1656,7 +1656,18 @@ impl Renderer
 				}
 			}
 
-			let basis_vecs_scaled = polygon_data.basis_vecs.get_basis_vecs_for_mip(polygon_data.mip);
+			let extra_shift = materials_processor.get_texture_shift(polygon.texture);
+			let extra_shift_mip_compensated = [extra_shift[0] >> polygon_data.mip, extra_shift[1] >> polygon_data.mip];
+
+			let mut basis_vecs_scaled_and_corrected = polygon_data.basis_vecs.get_basis_vecs_for_mip(polygon_data.mip);
+			basis_vecs_scaled_and_corrected.start -= (extra_shift_mip_compensated[0] as f32) *
+				basis_vecs_scaled_and_corrected.u +
+				(extra_shift_mip_compensated[1] as f32) * basis_vecs_scaled_and_corrected.v;
+
+			let tc_start = [
+				polygon_data.surface_tc_min[0] as i32 + extra_shift_mip_compensated[0],
+				polygon_data.surface_tc_min[1] as i32 + extra_shift_mip_compensated[1],
+			];
 
 			let texture = &materials_processor.get_texture(polygon.texture)[polygon_data.mip as usize];
 			let surface_data = unsafe {
@@ -1689,9 +1700,9 @@ impl Renderer
 					&[]
 				};
 				build_surface_directional_lightmap(
-					&basis_vecs_scaled,
+					&basis_vecs_scaled_and_corrected,
 					surface_size,
-					polygon_data.surface_tc_min,
+					tc_start,
 					texture,
 					lightmap_size,
 					lightmap_scale_log2,
@@ -1714,9 +1725,9 @@ impl Renderer
 					&[]
 				};
 				build_surface_simple_lightmap(
-					&basis_vecs_scaled,
+					&basis_vecs_scaled_and_corrected,
 					surface_size,
-					polygon_data.surface_tc_min,
+					tc_start,
 					texture,
 					lightmap_size,
 					lightmap_scale_log2,
