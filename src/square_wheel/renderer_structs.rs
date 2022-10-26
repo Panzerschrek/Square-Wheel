@@ -49,6 +49,7 @@ pub struct DrawPolygonData
 	pub surface_size: [u32; 2],
 	pub mip: u32,
 	pub surface_tc_min: [i32; 2],
+	pub lightmap_tc_shift: [u32; 2],
 }
 
 #[derive(Copy, Clone)]

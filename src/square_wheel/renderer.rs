@@ -80,6 +80,7 @@ impl Renderer
 				surface_size: [0, 0],
 				mip: 0,
 				surface_tc_min: [0, 0],
+				lightmap_tc_shift: [0, 0],
 			})
 			.collect();
 
@@ -1411,8 +1412,6 @@ impl Renderer
 		polygon_index: usize,
 	)
 	{
-		let polygon_data = &mut self.polygons_data[polygon_index];
-
 		let polygon = &self.map.polygons[polygon_index];
 
 		let plane_transformed = camera_matrices.planes_matrix * polygon.plane.vec.extend(-polygon.plane.dist);
@@ -1475,9 +1474,16 @@ impl Renderer
 		let tex_coord_equation = &polygon.tex_coord_equation;
 
 		// Calculate texture coordinates equations.
+		let extra_shift = self.materials_processor.get_texture_shift(polygon.texture);
 		let tc_basis_transformed = [
-			camera_matrices.planes_matrix * tex_coord_equation[0].vec.extend(tex_coord_equation[0].dist),
-			camera_matrices.planes_matrix * tex_coord_equation[1].vec.extend(tex_coord_equation[1].dist),
+			camera_matrices.planes_matrix *
+				tex_coord_equation[0]
+					.vec
+					.extend(tex_coord_equation[0].dist + (extra_shift[0] as f32)),
+			camera_matrices.planes_matrix *
+				tex_coord_equation[1]
+					.vec
+					.extend(tex_coord_equation[1].dist + (extra_shift[1] as f32)),
 		];
 		// Equation projeted to polygon plane.
 		let tc_equation = TexCoordEquation::from_depth_equation_and_transformed_tex_coord_equations(
@@ -1525,6 +1531,7 @@ impl Renderer
 
 		let mut surface_tc_min = [0, 0];
 		let mut surface_size = [0, 0];
+		let mut lightmap_tc_shift: [u32; 2] = [0, 0];
 		for i in 0 .. 2
 		{
 			// Reduce min/max texture coordinates slightly to avoid adding extra pixels
@@ -1536,9 +1543,9 @@ impl Renderer
 			// Clamp coordinates to min/max polygon coordinates (they may be out of range because of computational errors).
 			// It's important to clamp texture coordinates to avoid reading lightmap outside borders.
 			let round_mask = !((lightmap::LIGHTMAP_SCALE as i32) - 1);
-			let tc_min_round_down = (polygon.tex_coord_min[i] & round_mask) >> mip;
-			let tc_max_round_up =
-				((polygon.tex_coord_max[i] + (lightmap::LIGHTMAP_SCALE as i32) - 1) & round_mask) >> mip;
+			let tc_min_round_down = ((polygon.tex_coord_min[i] & round_mask) + extra_shift[i]) >> mip;
+			let tc_max_round_up = (((polygon.tex_coord_max[i] + (lightmap::LIGHTMAP_SCALE as i32) - 1) & round_mask) +
+				extra_shift[i]) >> mip;
 
 			let mut tc_min_int = (tc_min[i].max(-inf).floor() as i32).max(tc_min_round_down);
 			let mut tc_max_int = (tc_max[i].min(inf).ceil() as i32).min(tc_max_round_up);
@@ -1554,11 +1561,16 @@ impl Renderer
 			surface_size[i] = tc_max_int - tc_min_int;
 			debug_assert!(tc_min_int >= tc_min_round_down);
 			debug_assert!(tc_max_int <= tc_max_round_up);
+
+			let lightmap_shift = surface_tc_min[i] - tc_min_round_down;
+			debug_assert!(lightmap_shift >= 0);
+			lightmap_tc_shift[i] = lightmap_shift as u32;
 		}
 
 		let surface_pixels_offset = *surfaces_pixels_accumulated_offset;
 		*surfaces_pixels_accumulated_offset += (surface_size[0] * surface_size[1]) as usize;
 
+		let polygon_data = &mut self.polygons_data[polygon_index];
 		polygon_data.visible_frame = self.current_frame;
 		polygon_data.depth_equation = depth_equation;
 		polygon_data.tex_coord_equation = tc_equation_scaled;
@@ -1566,6 +1578,7 @@ impl Renderer
 		polygon_data.surface_size = [surface_size[0] as u32, surface_size[1] as u32];
 		polygon_data.mip = mip;
 		polygon_data.surface_tc_min = surface_tc_min;
+		polygon_data.lightmap_tc_shift = lightmap_tc_shift;
 
 		// Correct texture coordinates equation to compensate shift to surface rect.
 		for i in 0 .. 2
@@ -1664,23 +1677,7 @@ impl Renderer
 					polygon_data.surface_pixels_offset + (surface_size[0] * surface_size[1]) as usize]
 			};
 
-			let mut lightmap_tc_shift: [u32; 2] = [0, 0];
-			for i in 0 .. 2
-			{
-				let round_mask = !((lightmap::LIGHTMAP_SCALE as i32) - 1);
-				let shift =
-					polygon_data.surface_tc_min[i] - ((polygon.tex_coord_min[i] & round_mask) >> polygon_data.mip);
-				debug_assert!(shift >= 0);
-				lightmap_tc_shift[i] = shift as u32;
-			}
-
 			let lightmap_size = lightmap::get_polygon_lightmap_size(polygon);
-
-			let extra_shift = materials_processor.get_texture_shift(polygon.texture);
-			let tc_start = [
-				polygon_data.surface_tc_min[0] as i32 + (extra_shift[0] >> polygon_data.mip),
-				polygon_data.surface_tc_min[1] as i32 + (extra_shift[1] >> polygon_data.mip),
-			];
 
 			let lightmap_scale_log2 = lightmap::LIGHTMAP_SCALE_LOG2 - polygon_data.mip;
 			if use_directional_lightmap
@@ -1697,11 +1694,11 @@ impl Renderer
 				build_surface_directional_lightmap(
 					&basis_vecs_scaled,
 					surface_size,
-					tc_start,
+					polygon_data.surface_tc_min,
 					texture,
 					lightmap_size,
 					lightmap_scale_log2,
-					lightmap_tc_shift,
+					polygon_data.lightmap_tc_shift,
 					polygon_lightmap_data,
 					&polygon_lights[.. num_polygon_lights],
 					&camera_matrices.position,
@@ -1722,11 +1719,11 @@ impl Renderer
 				build_surface_simple_lightmap(
 					&basis_vecs_scaled,
 					surface_size,
-					tc_start,
+					polygon_data.surface_tc_min,
 					texture,
 					lightmap_size,
 					lightmap_scale_log2,
-					lightmap_tc_shift,
+					polygon_data.lightmap_tc_shift,
 					polygon_lightmap_data,
 					&polygon_lights[.. num_polygon_lights],
 					&camera_matrices.position,
@@ -2364,6 +2361,7 @@ impl Renderer
 			let tc_equation_scaled = tc_equation * (1.0 / ((1 << mip) as f32));
 
 			// Use projected polygon texture coordinates equation in order to get lightmap coordinates for decal points.
+			// TODO - fix case with scrolling textures.
 			let polygon_lightmap_coord_scale = ((1 << (polygon_data.mip)) as f32) / (lightmap::LIGHTMAP_SCALE as f32);
 			let polygon_lightmap_coord_shift = [
 				(polygon_data.surface_tc_min[0] as f32) * polygon_lightmap_coord_scale -
