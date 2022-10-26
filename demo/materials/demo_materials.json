@@ -8,7 +8,8 @@
 	{
 		"diffuse": "alpha_blend.png",
 		"blending_mode": "AlphaBlend",
-		"blocks_view": false
+		"blocks_view": false,
+		"scroll_speed" : [0.0, -64.0]
 	},
 	"alpha_grid":
 	{
