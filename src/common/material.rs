@@ -61,6 +61,10 @@ pub struct Material
 	#[serde(default)]
 	pub blending_mode: BlendingMode,
 
+	/// Pixels/s.
+	#[serde(default)]
+	pub scroll_speed: [f32; 2],
+
 	/// If some - use texture turbulence effect.
 	#[serde(default)]
 	pub turb: Option<TurbParams>,
@@ -105,10 +109,6 @@ pub struct TurbParams
 
 	/// In seconds.
 	pub frequency: f32,
-
-	/// Pixels/s.
-	#[serde(default)]
-	pub scroll_speed: [f32; 2],
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -140,6 +140,7 @@ impl Default for Material
 			decals: true,
 			emissive_light: [0.0, 0.0, 0.0],
 			blending_mode: BlendingMode::None,
+			scroll_speed: [0.0, 0.0],
 			turb: None,
 			skybox: None,
 			extra: HashMap::new(),
