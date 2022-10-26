@@ -1589,25 +1589,6 @@ impl Renderer
 			polygon_data.tex_coord_equation.k[i] -= tc_min * depth_equation.k;
 		}
 
-		if extra_shift[0] != 0 || extra_shift[1] != 0
-		{
-			// Recalculate basis vecs for scrolling surfaces.
-			// But this doesn't work properly for submodels.
-			polygon_data.basis_vecs = PolygonBasisVecs::form_plane_and_tex_coord_equation(
-				&polygon.plane,
-				&[
-					Plane {
-						vec: polygon.tex_coord_equation[0].vec,
-						dist: polygon.tex_coord_equation[0].dist + (extra_shift[0] as f32),
-					},
-					Plane {
-						vec: polygon.tex_coord_equation[1].vec,
-						dist: polygon.tex_coord_equation[1].dist + (extra_shift[1] as f32),
-					},
-				],
-			);
-		}
-
 		self.current_frame_visible_polygons.push(polygon_index as u32);
 	}
 
@@ -3282,8 +3263,6 @@ fn polygon_is_affected_by_light(
 	light: &DynamicLightWithShadow,
 ) -> bool
 {
-	// TODO - fix case with scrolling textures.
-
 	// TODO - check mathemathics here.
 
 	let vec_from_light_position_to_tc_start_point = light.position - basis_vecs.start;
