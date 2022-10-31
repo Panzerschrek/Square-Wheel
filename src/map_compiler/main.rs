@@ -1,6 +1,6 @@
 use square_wheel_lib::common::{
-	bsp_builder, bsp_map_compact, bsp_map_compact_conversion, bsp_map_save_load, image, map_file_q1, map_file_q4,
-	map_polygonizer, material,
+	bsp_builder, bsp_map_compact, bsp_map_compact_conversion, bsp_map_save_load, image, lightmaps_builder, map_file_q1,
+	map_file_q4, map_polygonizer, material,
 };
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -84,12 +84,15 @@ fn main()
 		.map(|s| bsp_builder::build_submodel_bsp_tree(s, &materials))
 		.collect::<Vec<_>>();
 
-	let map_compact = bsp_map_compact_conversion::convert_bsp_map_to_compact_format(
+	let mut map_compact = bsp_map_compact_conversion::convert_bsp_map_to_compact_format(
 		&bsp_tree,
 		&map_polygonized,
 		&submodels_bsp_trees,
 		&materials,
 	);
+
+	lightmaps_builder::build_dummy_lightmaps(&materials, &mut map_compact);
+
 	bsp_map_save_load::save_map(&map_compact, &opt.output).unwrap();
 
 	if opt.print_stats

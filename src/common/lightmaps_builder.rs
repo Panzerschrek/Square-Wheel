@@ -213,6 +213,17 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	println!("Done!");
 }
 
+pub fn build_dummy_lightmaps(materials: &material::MaterialsMap, map: &mut bsp_map_compact::BSPMap)
+{
+	let mut lightmaps_data = allocate_lightmaps(materials, map);
+	for texel in &mut lightmaps_data
+	{
+		*texel = [1.0; 3];
+	}
+
+	map.lightmaps_data = lightmaps_data;
+}
+
 type LightsByLeaf = Vec<Vec<PointLight>>;
 
 fn group_lights_by_leafs(map: &bsp_map_compact::BSPMap, light_sources: &[PointLight]) -> LightsByLeaf
