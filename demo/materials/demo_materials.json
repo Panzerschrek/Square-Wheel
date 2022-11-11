@@ -15,10 +15,15 @@
 	{
 		"diffuse": "alpha_grid.png",
 		"normal_map": "alpha_grid_normal.png",
-		"roughness" : 0.1,
+		"roughness" : 0.05,
 		"is_metal" : true,
 		"blending_mode": "AlphaTest",
 		"blocks_view": false
+	},
+	"bricks":
+	{
+		"diffuse": "bricks.png",
+		"normal_map": "bricks_normal.png"
 	},
 	"bolted_metal_plate":
 	{
@@ -26,6 +31,11 @@
 		"normal_map": "bolted_metal_plate_normal.png",
 		"roughness" : 0.05,
 		"is_metal": true
+	},
+	"grass":
+	{
+		"diffuse": "grass.png",
+		"normal_map": "grass_normal.png"
 	},
 	"large_pawment":
 	{
@@ -36,6 +46,11 @@
 	{
 		"diffuse": "large_pawment_45.png",
 		"normal_map": "large_pawment_45_normal.png"
+	},
+	"limestone_column":
+	{
+		"diffuse": "limestone_column.png",
+		"normal_map": "limestone_column_normal.png"
 	},
 	"limestone_bricks":
 	{
@@ -56,7 +71,7 @@
 	{
 		"diffuse": "marble_tiles.png",
 		"normal_map": "marble_tiles_normal.png",
-		"roughness": 0.02
+		"roughness": 0.001
 	},
 	"marble_tiles_large":
 	{
@@ -65,7 +80,8 @@
 	},
 	"marble_trim":
 	{
-		"diffuse": "marble_trim.png"
+		"diffuse": "marble_trim.png",
+		"roughness": 0.001
 	},
 	"metals_example":
 	{
