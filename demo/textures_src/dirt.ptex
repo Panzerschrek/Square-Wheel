@@ -1,45 +1,9 @@
 {
 	"connections": [
 		{
-			"from": "perlin",
-			"from_port": 0,
-			"to": "colorize",
-			"to_port": 0
-		},
-		{
-			"from": "perlin_2",
-			"from_port": 0,
-			"to": "colorize_2",
-			"to_port": 0
-		},
-		{
 			"from": "colorize",
 			"from_port": 0,
-			"to": "blend",
-			"to_port": 1
-		},
-		{
-			"from": "colorize_2",
-			"from_port": 0,
-			"to": "blend",
-			"to_port": 0
-		},
-		{
-			"from": "blend",
-			"from_port": 0,
 			"to": "Material",
-			"to_port": 0
-		},
-		{
-			"from": "scratches",
-			"from_port": 0,
-			"to": "blend",
-			"to_port": 2
-		},
-		{
-			"from": "scratches",
-			"from_port": 0,
-			"to": "normal_map2",
 			"to_port": 0
 		},
 		{
@@ -47,6 +11,24 @@
 			"from_port": 0,
 			"to": "Material",
 			"to_port": 4
+		},
+		{
+			"from": "brightness_contrast",
+			"from_port": 0,
+			"to": "normal_map2",
+			"to_port": 0
+		},
+		{
+			"from": "dirt",
+			"from_port": 0,
+			"to": "colorize",
+			"to_port": 0
+		},
+		{
+			"from": "dirt",
+			"from_port": 0,
+			"to": "brightness_contrast",
+			"to_port": 0
 		}
 	],
 	"label": "Graph",
@@ -151,100 +133,49 @@
 			"type": "colorize"
 		},
 		{
-			"name": "scratches",
-			"node_position": {
-				"x": 56,
-				"y": 476
-			},
-			"parameters": {
-				"angle": 0,
-				"layers": 120,
-				"length": 0.15,
-				"randomness": 0.37,
-				"waviness": 0.2,
-				"width": 0.15
-			},
-			"seed": 0,
-			"seed_locked": false,
-			"type": "scratches"
-		},
-		{
-			"name": "blend",
-			"node_position": {
-				"x": 387,
-				"y": 132
-			},
-			"parameters": {
-				"amount": 1,
-				"blend_type": 0
-			},
-			"seed": 0,
-			"seed_locked": false,
-			"type": "blend"
-		},
-		{
-			"name": "perlin_2",
-			"node_position": {
-				"x": -245,
-				"y": 294
-			},
-			"parameters": {
-				"iterations": 5,
-				"persistence": 0.5,
-				"scale_x": 8,
-				"scale_y": 8
-			},
-			"seed": 0,
-			"seed_locked": false,
-			"type": "perlin"
-		},
-		{
-			"name": "colorize_2",
-			"node_position": {
-				"x": 27,
-				"y": 304
-			},
-			"parameters": {
-				"gradient": {
-					"interpolation": 1,
-					"points": [
-						{
-							"a": 1,
-							"b": 0.078354,
-							"g": 0.253906,
-							"pos": 0,
-							"r": 0.108527
-						},
-						{
-							"a": 1,
-							"b": 0.059921,
-							"g": 0.300781,
-							"pos": 1,
-							"r": 0.287609
-						}
-					],
-					"type": "Gradient"
-				}
-			},
-			"seed": 0,
-			"seed_locked": false,
-			"type": "colorize"
-		},
-		{
 			"name": "normal_map2",
 			"node_position": {
-				"x": 491,
-				"y": 455
+				"x": 332.375,
+				"y": 310.5
 			},
 			"parameters": {
 				"buffer": 1,
 				"param2": 0,
 				"size": 10,
-				"strength": 0.01
+				"strength": 1
 			},
 			"seed": 0,
 			"seed_locked": false,
 			"type": "normal_map2"
+		},
+		{
+			"name": "brightness_contrast",
+			"node_position": {
+				"x": 52.375,
+				"y": 367.5
+			},
+			"parameters": {
+				"brightness": 0,
+				"contrast": 0.1
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "brightness_contrast"
+		},
+		{
+			"name": "dirt",
+			"node_position": {
+				"x": -187.708313,
+				"y": 270.916656
+			},
+			"parameters": {
+				"d_scale": 0.5,
+				"param0": 0,
+				"param1": 10
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "dirt"
 		}
 	],
 	"parameters": {

@@ -1,97 +1,13 @@
 {
 	"connections": [
 		{
-			"from": "bricks_uneven3",
-			"from_port": 0,
-			"to": "blend",
-			"to_port": 2
-		},
-		{
-			"from": "uniform",
-			"from_port": 0,
-			"to": "blend",
-			"to_port": 1
-		},
-		{
-			"from": "bricks_uneven3",
-			"from_port": 1,
-			"to": "fill_to_position",
-			"to_port": 0
-		},
-		{
-			"from": "graph_2",
-			"from_port": 0,
-			"to": "transform2",
-			"to_port": 0
-		},
-		{
-			"from": "transform2",
-			"from_port": 0,
-			"to": "blend",
-			"to_port": 0
-		},
-		{
-			"from": "bricks_uneven3",
-			"from_port": 1,
-			"to": "fill_to_position_2",
-			"to_port": 0
-		},
-		{
-			"from": "fill_to_position_2",
-			"from_port": 0,
-			"to": "transform2_2",
-			"to_port": 2
-		},
-		{
-			"from": "fill_to_position",
-			"from_port": 0,
-			"to": "transform2_2",
-			"to_port": 1
-		},
-		{
 			"from": "graph_2",
 			"from_port": 3,
-			"to": "transform2_2",
-			"to_port": 0
-		},
-		{
-			"from": "transform2_2",
-			"from_port": 0,
-			"to": "normal_blend",
-			"to_port": 1
-		},
-		{
-			"from": "bricks_uneven3",
-			"from_port": 0,
-			"to": "normal_map2",
-			"to_port": 0
-		},
-		{
-			"from": "normal_map2",
-			"from_port": 0,
-			"to": "normal_blend",
-			"to_port": 0
-		},
-		{
-			"from": "normal_blend",
-			"from_port": 0,
 			"to": "Material",
 			"to_port": 4
 		},
 		{
-			"from": "fill_to_position",
-			"from_port": 0,
-			"to": "transform2",
-			"to_port": 1
-		},
-		{
-			"from": "fill_to_position_2",
-			"from_port": 0,
-			"to": "transform2",
-			"to_port": 2
-		},
-		{
-			"from": "blend",
+			"from": "graph_2",
 			"from_port": 0,
 			"to": "Material",
 			"to_port": 0
@@ -287,8 +203,8 @@
 			"longdesc": "",
 			"name": "graph_2",
 			"node_position": {
-				"x": -282,
-				"y": -14.5
+				"x": 519,
+				"y": 188.5
 			},
 			"nodes": [
 				{
@@ -495,7 +411,7 @@
 						"y": -378.799133
 					},
 					"parameters": {
-						"amount": 0.1,
+						"amount": 0.2,
 						"blend_type": 0
 					},
 					"seed": 18078,
@@ -590,7 +506,7 @@
 							],
 							"type": "Gradient"
 						},
-						"param1": 0.1,
+						"param1": 0.2,
 						"param2": 0.1
 					},
 					"seed": 31626,
@@ -964,156 +880,13 @@
 					],
 					"type": "Gradient"
 				},
-				"param1": 0.1,
+				"param1": 0.2,
 				"param2": 0.1
 			},
 			"seed": 0,
 			"seed_locked": false,
 			"shortdesc": "",
 			"type": "graph"
-		},
-		{
-			"name": "bricks_uneven3",
-			"node_position": {
-				"x": -337,
-				"y": 205.5
-			},
-			"parameters": {
-				"bevel": 0.03,
-				"corner": 0.3,
-				"iterations": 1,
-				"min_size": 0.3,
-				"mortar": 0.01,
-				"round": 0,
-				"rows": 6
-			},
-			"seed": 0,
-			"seed_locked": false,
-			"type": "bricks_uneven3"
-		},
-		{
-			"name": "blend",
-			"node_position": {
-				"x": 575,
-				"y": 206.5
-			},
-			"parameters": {
-				"amount": 1,
-				"blend_type": 0
-			},
-			"seed": 0,
-			"seed_locked": false,
-			"type": "blend"
-		},
-		{
-			"name": "uniform",
-			"node_position": {
-				"x": 399,
-				"y": 197.5
-			},
-			"parameters": {
-				"color": {
-					"a": 1,
-					"b": 0.048599,
-					"g": 0.152357,
-					"r": 0.191406,
-					"type": "Color"
-				}
-			},
-			"seed": 0,
-			"seed_locked": false,
-			"type": "uniform"
-		},
-		{
-			"name": "transform2",
-			"node_position": {
-				"x": 190,
-				"y": 311.5
-			},
-			"parameters": {
-				"mode": 1,
-				"rotate": 0,
-				"scale_x": 1,
-				"scale_y": 1,
-				"translate_x": 1.5,
-				"translate_y": 1.5
-			},
-			"seed": 0,
-			"seed_locked": false,
-			"type": "transform2"
-		},
-		{
-			"name": "fill_to_position",
-			"node_position": {
-				"x": -94,
-				"y": 323.5
-			},
-			"parameters": {
-				"axis": 0
-			},
-			"seed": 0,
-			"seed_locked": false,
-			"type": "fill_to_position"
-		},
-		{
-			"name": "fill_to_position_2",
-			"node_position": {
-				"x": -94,
-				"y": 399.5
-			},
-			"parameters": {
-				"axis": 1
-			},
-			"seed": 0,
-			"seed_locked": false,
-			"type": "fill_to_position"
-		},
-		{
-			"name": "transform2_2",
-			"node_position": {
-				"x": 173.75,
-				"y": 549.75
-			},
-			"parameters": {
-				"mode": 1,
-				"rotate": 0,
-				"scale_x": 1,
-				"scale_y": 1,
-				"translate_x": 1,
-				"translate_y": 1
-			},
-			"seed": 0,
-			"seed_locked": false,
-			"type": "transform2"
-		},
-		{
-			"name": "normal_blend",
-			"node_position": {
-				"x": 660,
-				"y": 482.75
-			},
-			"parameters": {
-				"amount": 0.5
-			},
-			"seed": 0,
-			"seed_locked": false,
-			"type": "normal_blend"
-		},
-		{
-			"name": "normal_map2",
-			"node_position": {
-				"x": 453,
-				"y": 426.75
-			},
-			"parameters": {
-				"buffer": 1,
-				"param2": 0,
-				"size": 10,
-				"strength": 1
-			},
-			"seed": 0,
-			"seed_locked": false,
-			"type": "normal_map2"
 		}
 	],
 	"parameters": {

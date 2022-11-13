@@ -920,13 +920,13 @@
 			},
 			"parameters": {
 				"bevel": 0.015,
-				"columns": 2,
+				"columns": 4,
 				"corner": 0.3,
-				"mortar": 0.01,
+				"mortar": 0.005,
 				"pattern": 0,
 				"round": 0.03,
 				"row_offset": 1,
-				"rows": 2
+				"rows": 4
 			},
 			"seed": 0,
 			"seed_locked": false,

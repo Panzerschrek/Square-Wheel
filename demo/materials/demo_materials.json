@@ -32,6 +32,16 @@
 		"roughness" : 0.05,
 		"is_metal": true
 	},
+	"dark_metal":
+	{
+		"diffuse": "dark_metal.png",
+		"is_metal": true
+	},
+	"dirt":
+	{
+		"diffuse": "dirt.png",
+		"normal_map": "dirt_normal.png"
+	},
 	"grass":
 	{
 		"diffuse": "grass.png",
@@ -61,6 +71,21 @@
 	{
 		"diffuse": "limestone_fire_holder.png",
 		"normal_map": "limestone_fire_holder_normal.png"
+	},
+	"limestone_floor_tiles":
+	{
+		"diffuse": "limestone_floor_tiles.png",
+		"normal_map": "limestone_floor_tiles_normal.png"
+	},
+	"limestone_plate":
+	{
+		"diffuse": "limestone_plate.png",
+		"normal_map": "limestone_plate_normal.png"
+	},
+	"limestone_steps":
+	{
+		"diffuse": "limestone_steps.png",
+		"normal_map": "limestone_steps_normal.png"
 	},
 	"marble_column":
 	{
@@ -126,6 +151,16 @@
 			"wave_length": 128.0,
 			"frequency": 0.25
 		}
+	},
+	"white_ceiling":
+	{
+		"diffuse": "white_ceiling.png",
+		"normal_map": "white_ceiling_normal.png"
+	},
+	"wooden_beam":
+	{
+		"diffuse": "wooden_beam.png",
+		"normal_map": "wooden_beam_normal.png"
 	},
 	"wooden_planks":
 	{

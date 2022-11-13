@@ -43,12 +43,6 @@
 			"to_port": 0
 		},
 		{
-			"from": "uniform_greyscale",
-			"from_port": 0,
-			"to": "Material",
-			"to_port": 7
-		},
-		{
 			"from": "graph",
 			"from_port": 0,
 			"to": "brightness_contrast",
@@ -63,7 +57,7 @@
 	],
 	"label": "Graph",
 	"longdesc": "",
-	"name": "@@312",
+	"name": "312",
 	"node_position": {
 		"x": 0,
 		"y": 0
@@ -447,19 +441,6 @@
 			"seed": 0,
 			"seed_locked": false,
 			"type": "normal_map2"
-		},
-		{
-			"name": "uniform_greyscale",
-			"node_position": {
-				"x": 811.503662,
-				"y": 335
-			},
-			"parameters": {
-				"color": 0.5
-			},
-			"seed": 0,
-			"seed_locked": false,
-			"type": "uniform_greyscale"
 		},
 		{
 			"name": "brightness_contrast",
