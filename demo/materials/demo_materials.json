@@ -35,6 +35,7 @@
 	"dark_metal":
 	{
 		"diffuse": "dark_metal.png",
+		"roughness" : 0.001,
 		"is_metal": true
 	},
 	"dirt":
@@ -151,6 +152,24 @@
 			"wave_length": 128.0,
 			"frequency": 0.25
 		}
+	},
+	"water_flowing_slow":
+	{
+		"diffuse": "water.png",
+		"normal_map": "water_normal.png",
+		"roughness": 0.0,
+		"blending_mode": "Average",
+		"blocks_view": false,
+		"scroll_speed": [0.0, -16.0]
+	},
+	"water_flowing_fast":
+	{
+		"diffuse": "water.png",
+		"normal_map": "water_normal.png",
+		"roughness": 0.0,
+		"blending_mode": "Average",
+		"blocks_view": false,
+		"scroll_speed": [0.0, -64.0]
 	},
 	"white_ceiling":
 	{
