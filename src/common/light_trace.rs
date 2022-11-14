@@ -200,7 +200,20 @@ fn get_nearest_sky_point_r(
 		let mut result: Option<Vec3f> = None;
 		for polygon in &map.polygons[leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize]
 		{
-			if sky_flag_table[polygon.texture as usize] && edge_intersects_with_polygon(from, to, polygon, map)
+			if !sky_flag_table[polygon.texture as usize]
+			{
+				// Not a sky polygon.
+				continue;
+			}
+
+			if (from - to).dot(polygon.plane.vec) <= 0.0
+			{
+				// Ignore this polygon - we can hit it only from behind.
+				// This is needed to prevent some cases of sky light leaking.
+				continue;
+			}
+
+			if edge_intersects_with_polygon(from, to, polygon, map)
 			{
 				let pos = get_line_plane_intersection(from, to, &polygon.plane);
 				if let Some(prev_pos) = &mut result
