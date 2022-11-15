@@ -32,6 +32,10 @@
 		"roughness" : 0.05,
 		"is_metal": true
 	},
+	"coal_black":
+	{
+		"diffuse": "coal_black.png"
+	},
 	"dark_metal":
 	{
 		"diffuse": "dark_metal.png",
@@ -102,7 +106,8 @@
 	"marble_tiles_large":
 	{
 		"diffuse": "marble_tiles_large.png",
-		"normal_map": "marble_tiles_large_normal.png"
+		"normal_map": "marble_tiles_large_normal.png",
+		"roughness": 0.001
 	},
 	"marble_trim":
 	{
@@ -170,6 +175,11 @@
 		"blending_mode": "Average",
 		"blocks_view": false,
 		"scroll_speed": [0.0, -64.0]
+	},
+	"well_top_limestone_bricks":
+	{
+		"diffuse": "well_top_limestone_bricks.png",
+		"normal_map": "well_top_limestone_bricks_normal.png"
 	},
 	"white_ceiling":
 	{
