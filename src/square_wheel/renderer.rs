@@ -21,6 +21,8 @@ pub struct Renderer
 	map: Arc<bsp_map_compact::BSPMap>,
 	visibility_calculator: MapVisibilityCalculator,
 	shadows_maps_renderer: DepthRenderer,
+	// Store precalculated list of bounding planes for each leaf.
+	leafs_planes: Vec<LeafClipPlanes>,
 	polygons_data: Vec<DrawPolygonData>,
 	vertices_transformed: Vec<Vec3f>,
 	// Store surfaces pixels as raw array.
@@ -100,10 +102,15 @@ impl Renderer
 			}
 		}
 
+		let leafs_planes = (0 .. map.leafs.len())
+			.map(|leaf_index| get_leaf_clip_planes(&map, leaf_index as u32))
+			.collect();
+
 		Renderer {
 			app_config,
 			config: config_parsed,
 			current_frame: FrameNumber::default(),
+			leafs_planes,
 			polygons_data,
 			vertices_transformed: vec![Vec3f::new(0.0, 0.0, 0.0); map.vertices.len()],
 			surfaces_pixels: Vec::new(),
@@ -2014,86 +2021,27 @@ impl Renderer
 			return;
 		}
 
-		// Collect clip planes, that will be used for models clipping.
 		// TODO - use uninitialized memory.
 		let mut leaf_clip_planes = [Plane {
 			vec: Vec3f::zero(),
 			dist: 0.0,
 		}; MAX_LEAF_CLIP_PLANES];
-		let mut num_clip_planes = 0;
 
-		let mut add_clip_plane = |plane: Plane| {
-			// We need to use planes with normalized vector in order to compare distances properly.
-			let normal_length = plane.vec.magnitude();
-			if normal_length < 0.00000000001
-			{
-				return;
-			}
-			let plane_normalized = Plane {
-				vec: plane.vec / normal_length,
-				dist: plane.dist / normal_length,
-			};
+		let leaf_clip_planes_src = &self.leafs_planes[leaf_index as usize];
 
-			// Perform dedupliction - iterate over previous planes.
-			// We have quadratic complexity here, but it is not a problem since number of planes are usually small (6 for cube-shaped leaf).
-			for prev_plane in &mut leaf_clip_planes[.. num_clip_planes]
-			{
-				// Dot product is angle cos since vectors are normalized.
-				let dot = plane_normalized.vec.dot(prev_plane.vec);
-				if dot >= 1.0 - 1.0 / 256.0
-				{
-					// Planes are (almost) parallel.
-					// Select plane with greater distance to clip more.
-					prev_plane.dist = prev_plane.dist.max(plane_normalized.dist);
-					return;
-				}
-			}
-
-			if num_clip_planes == MAX_LEAF_CLIP_PLANES
-			{
-				return;
-			}
-
-			leaf_clip_planes[num_clip_planes] = plane_normalized;
-			num_clip_planes += 1;
-		};
-
-		// Clip models polygons by portal planes of current leaf.
-		for &portal_index in &self.map.leafs_portals
-			[leaf.first_leaf_portal as usize .. (leaf.first_leaf_portal + leaf.num_leaf_portals) as usize]
+		// Transform leaf clip planes.
+		for (dst_plane, src_plane) in leaf_clip_planes.iter_mut().zip(leaf_clip_planes_src.iter())
 		{
-			let portal = &self.map.portals[portal_index as usize];
-			let clip_plane = if portal.leafs[0] == leaf_index
-			{
-				portal.plane
-			}
-			else
-			{
-				portal.plane.get_inverted()
-			};
-			add_clip_plane(clip_plane);
-		}
-
-		// Clip models also by polygons of current leaf.
-		for polygon in
-			&self.map.polygons[leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize]
-		{
-			add_clip_plane(polygon.plane);
-		}
-
-		let used_leaf_clip_planes = &mut leaf_clip_planes[.. num_clip_planes];
-
-		// Perform planes transformation after deduplication.
-		// This is needed because deduplication works badly in stretched camera space.
-		// Also it's faster to transform only unique planes.
-		for plane in used_leaf_clip_planes.iter_mut()
-		{
-			let plane_transformed_vec4 = frame_info.camera_matrices.planes_matrix * plane.vec.extend(-plane.dist);
-			*plane = Plane {
+			let plane_transformed_vec4 =
+				frame_info.camera_matrices.planes_matrix * src_plane.vec.extend(-src_plane.dist);
+			*dst_plane = Plane {
 				vec: plane_transformed_vec4.truncate(),
 				dist: -plane_transformed_vec4.w,
 			};
 		}
+
+		let num_clip_planes = std::cmp::min(leaf_clip_planes.len(), leaf_clip_planes_src.len());
+		let used_leaf_clip_planes = &mut leaf_clip_planes[.. num_clip_planes];
 
 		// Fast path for cases with single model, to avoid expensive sorting structures preparations.
 		if leaf_submodels.len() == 1 && leaf_dynamic_models.len() == 0 && leaf_sprites.len() == 0

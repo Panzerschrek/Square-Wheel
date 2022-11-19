@@ -2,7 +2,7 @@ use super::{
 	dynamic_objects_index::*, equations::*, frame_info::*, frame_number::*, light::*, performance_counter::*,
 	surfaces::*,
 };
-use crate::common::{bsp_map_compact, clipping_polygon::*, math_types::*, matrix::*};
+use crate::common::{bsp_map_compact, clipping_polygon::*, math_types::*, matrix::*, plane::*};
 
 pub struct RendererPerformanceCounters
 {
@@ -31,6 +31,8 @@ impl RendererPerformanceCounters
 		}
 	}
 }
+
+pub type LeafClipPlanes = Vec<Plane>;
 
 // Mutable data associated with map polygon.
 #[derive(Copy, Clone)]
@@ -123,6 +125,68 @@ pub struct SpriteInfo
 }
 
 pub const MAX_SPRITE_TESSELATION_LEVEL: u32 = 4;
+
+// Get list of unique clip planes for given map leaf.
+pub fn get_leaf_clip_planes(map: &bsp_map_compact::BSPMap, leaf_index: u32) -> LeafClipPlanes
+{
+	let leaf = &map.leafs[leaf_index as usize];
+
+	let mut planes = Vec::<Plane>::new();
+
+	let mut add_and_deduplicate_plane = |plane: Plane| {
+		// We need to use planes with normalized vector in order to compare distances properly.
+		let normal_length = plane.vec.magnitude();
+		if normal_length < 0.00000000001
+		{
+			return;
+		}
+		let plane_normalized = Plane {
+			vec: plane.vec / normal_length,
+			dist: plane.dist / normal_length,
+		};
+
+		// Perform dedupliction - iterate over previous planes.
+		// We have quadratic complexity here, but it is not a problem since number of planes are usually small (6 for cube-shaped leaf).
+		for prev_plane in &mut planes
+		{
+			// Dot product is angle cos since vectors are normalized.
+			let dot = plane_normalized.vec.dot(prev_plane.vec);
+			if dot >= 1.0 - 1.0 / 256.0
+			{
+				// Planes are (almost) parallel.
+				// Select plane with greater distance to clip more.
+				prev_plane.dist = prev_plane.dist.max(plane_normalized.dist);
+				return;
+			}
+		}
+
+		planes.push(plane_normalized);
+	};
+
+	// Use planes of all portals.
+	for &portal_index in
+		&map.leafs_portals[leaf.first_leaf_portal as usize .. (leaf.first_leaf_portal + leaf.num_leaf_portals) as usize]
+	{
+		let portal = &map.portals[portal_index as usize];
+		let clip_plane = if portal.leafs[0] == leaf_index
+		{
+			portal.plane
+		}
+		else
+		{
+			portal.plane.get_inverted()
+		};
+		add_and_deduplicate_plane(clip_plane);
+	}
+
+	// Use planes of all polygons.
+	for polygon in &map.polygons[leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize]
+	{
+		add_and_deduplicate_plane(polygon.plane);
+	}
+
+	planes
+}
 
 pub fn create_dynamic_light_with_shadow<'a>(
 	light: &DynamicLight,
