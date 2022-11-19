@@ -366,6 +366,25 @@ fn spawn_regular_entity(
 						ordering_custom_bbox: None,
 					},
 				));
+
+				let sprite_texture = resources_manager.get_texture_lite(&"small_flame.png".to_string());
+				let scale = 0.5;
+
+				let texture_mip0 = &sprite_texture[0];
+				let sprite_radius = 0.25 *
+					scale * ((texture_mip0.size[0] * texture_mip0.size[0] +
+					texture_mip0.size[1] * texture_mip0.size[1]) as f32)
+					.sqrt();
+
+				ecs.spawn((Sprite {
+					position: position + Vec3f::new(0.0, 0.0, 2.0),
+					radius: sprite_radius,
+					texture: sprite_texture,
+					orientation: SpriteOrientation::AlignToZAxisFacingTowardsCamera,
+					blending_mode: material::BlendingMode::Additive,
+					light_scale: 0.0,
+					light_add: [8.0; 3],
+				},));
 			}
 		},
 		// Process unknown entities with submodels as "func_detal".
