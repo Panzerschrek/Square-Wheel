@@ -795,7 +795,7 @@ impl Renderer
 				},
 				SpriteOrientation::AlignToZAxisParallelToCameraPlane =>
 				{
-					let v_vec_normalized = Vec3f::unit_z();
+					let v_vec_normalized = -Vec3f::unit_z();
 
 					let u_vec = v_vec_normalized.cross(camera_direction);
 					let u_vec_len = u_vec.magnitude();
@@ -814,7 +814,7 @@ impl Renderer
 				{
 					let vec_to_camera = frame_info.camera_matrices.position - sprite.position;
 
-					let v_vec_normalized = Vec3f::unit_z();
+					let v_vec_normalized = -Vec3f::unit_z();
 
 					let u_vec = v_vec_normalized.cross(vec_to_camera);
 					let u_vec_len = u_vec.magnitude();
