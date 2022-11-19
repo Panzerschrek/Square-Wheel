@@ -340,6 +340,34 @@ fn spawn_regular_entity(
 				));
 			}
 		},
+		Some("light_wall_oil_lamp") =>
+		{
+			if let Some(origin) = get_entity_origin(map_entity, map)
+			{
+				let position = origin;
+				let rotation = QuaternionF::from_angle_z(Rad(get_entity_angle_rad(map_entity, map)));
+
+				ecs.spawn((
+					SimpleAnimationComponent {},
+					LocationComponent { position, rotation },
+					ModelEntityLocationLinkComponent {},
+					ModelEntity {
+						position,
+						rotation,
+						animation: AnimationPoint {
+							frames: [0, 0],
+							lerp: 0.0,
+						},
+						model: resources_manager.get_model(&"wall_oil_lamp.iqm".to_string()),
+						texture: resources_manager.get_texture_lite(&"wall_oil_lamp.png".to_string()),
+						blending_mode: material::BlendingMode::None,
+						lighting: ModelLighting::Default,
+						is_view_model: false,
+						ordering_custom_bbox: None,
+					},
+				));
+			}
+		},
 		// Process unknown entities with submodels as "func_detal".
 		Some("func_detail") | _ =>
 		{
