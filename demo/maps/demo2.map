@@ -7419,7 +7419,7 @@
 {
 ( 2432 224 160 ) ( 2496 352 192 ) ( 2496 224 192 ) roof_tiles 0 0 90 1 1
 ( 2368 -704 128 ) ( 2368 -704 129 ) ( 2369 -704 128 ) __TB_empty 0 0 0 0.5 0.5
-( 2368 -704 128 ) ( 2369 -704 128 ) ( 2368 -703 128 ) roof_tiles 0 0 0 0.5 0.5
+( 2368 -704 128 ) ( 2369 -704 128 ) ( 2368 -703 128 ) wooden_planks 0 0 0 0.5 0.5
 ( 2624 1152 192 ) ( 2624 1153 192 ) ( 2625 1152 192 ) __TB_empty 0 0 0 0.5 0.5
 ( 2624 1152 192 ) ( 2625 1152 192 ) ( 2624 1152 193 ) __TB_empty 0 0 0 0.5 0.5
 ( 2624 224 192 ) ( 2560 352 160 ) ( 2560 224 160 ) white_ceiling 0 0 0 0.5 0.5
@@ -7428,7 +7428,7 @@
 {
 ( 3072 224 192 ) ( 3136 224 160 ) ( 3136 352 160 ) white_ceiling 0 0 0 0.5 0.5
 ( 3328 -704 128 ) ( 3327 -704 128 ) ( 3328 -704 129 ) __TB_empty 0 0 0 0.5 0.5
-( 3328 -704 128 ) ( 3328 -703 128 ) ( 3327 -704 128 ) roof_tiles 0 0 0 0.5 0.5
+( 3328 -704 128 ) ( 3328 -703 128 ) ( 3327 -704 128 ) wooden_planks 0 0 0 0.5 0.5
 ( 3072 1152 192 ) ( 3071 1152 192 ) ( 3072 1153 192 ) __TB_empty 0 0 0 0.5 0.5
 ( 3072 1152 192 ) ( 3072 1152 193 ) ( 3071 1152 192 ) __TB_empty 0 0 0 0.5 0.5
 ( 3264 224 160 ) ( 3200 224 192 ) ( 3200 352 192 ) roof_tiles 0 0 -90 1 1
@@ -14524,49 +14524,52 @@
 // entity 14
 {
 "classname" "light_wall_oil_lamp"
-"origin" "2504 -1232 72"
+"origin" "2512 -1232 72"
 "light" "250"
 "color" "255 192 128"
 }
 // entity 15
 {
 "classname" "light_wall_oil_lamp"
-"origin" "2744 -1232 72"
+"origin" "2736 -1232 72"
 "light" "250"
 "color" "255 192 128"
+"angle" "180"
 }
 // entity 16
 {
 "classname" "light_wall_oil_lamp"
-"origin" "2504 -1024 16"
+"origin" "2512 -1024 16"
 "light" "250"
 "color" "255 192 128"
 }
 // entity 17
 {
 "classname" "light_wall_oil_lamp"
-"origin" "2504 -896 -48"
+"origin" "2512 -896 -48"
 "light" "250"
 "color" "255 192 128"
 }
 // entity 18
 {
 "classname" "light_wall_oil_lamp"
-"origin" "2744 -1024 144"
+"origin" "2736 -1024 144"
 "light" "250"
 "color" "255 192 128"
+"angle" "180"
 }
 // entity 19
 {
 "classname" "light_wall_oil_lamp"
-"origin" "2744 -896 208"
+"origin" "2736 -896 208"
 "light" "250"
 "color" "255 192 128"
+"angle" "180"
 }
 // entity 20
 {
 "classname" "light_wall_oil_lamp"
-"origin" "3192 -896 -48"
+"origin" "3184 -896 -48"
 "light" "250"
 "color" "255 192 128"
 "angle" "180"
@@ -14574,23 +14577,23 @@
 // entity 21
 {
 "classname" "light_wall_oil_lamp"
-"origin" "2952 -896 208"
+"origin" "2960 -896 208"
 "light" "250"
 "color" "255 192 128"
-"angle" "180"
+"angle" "0"
 }
 // entity 22
 {
 "classname" "light_wall_oil_lamp"
-"origin" "2952 -1024 144"
+"origin" "2960 -1024 144"
 "light" "250"
 "color" "255 192 128"
-"angle" "180"
+"angle" "0"
 }
 // entity 23
 {
 "classname" "light_wall_oil_lamp"
-"origin" "3192 -1024 16"
+"origin" "3184 -1024 16"
 "light" "250"
 "color" "255 192 128"
 "angle" "180"
@@ -14598,7 +14601,7 @@
 // entity 24
 {
 "classname" "light_wall_oil_lamp"
-"origin" "3192 -1232 72"
+"origin" "3184 -1232 72"
 "light" "250"
 "color" "255 192 128"
 "angle" "180"
@@ -14606,43 +14609,45 @@
 // entity 25
 {
 "classname" "light_wall_oil_lamp"
-"origin" "2952 -1232 72"
+"origin" "2960 -1232 72"
 "light" "250"
 "color" "255 192 128"
-"angle" "180"
+"angle" "0"
 }
 // entity 26
 {
 "classname" "light_wall_oil_lamp"
-"origin" "2504 1480 -224"
+"origin" "2512 1480 -224"
 "light" "250"
 "color" "255 192 128"
 }
 // entity 27
 {
 "classname" "light_wall_oil_lamp"
-"origin" "2792 1480 -224"
+"origin" "2784 1480 -224"
 "light" "250"
 "color" "255 192 128"
+"angle" "180"
 }
 // entity 28
 {
 "classname" "light_wall_oil_lamp"
-"origin" "2504 1344 -176"
+"origin" "2512 1344 -176"
 "light" "250"
 "color" "255 192 128"
 }
 // entity 29
 {
 "classname" "light_wall_oil_lamp"
-"origin" "2792 1344 -264"
+"origin" "2784 1344 -264"
 "light" "250"
 "color" "255 192 128"
+"angle" "180"
 }
 // entity 30
 {
 "classname" "light_wall_oil_lamp"
-"origin" "3192 1480 -224"
+"origin" "3184 1480 -224"
 "light" "250"
 "color" "255 192 128"
 "angle" "180"
@@ -14650,7 +14655,7 @@
 // entity 31
 {
 "classname" "light_wall_oil_lamp"
-"origin" "3192 1344 -176"
+"origin" "3184 1344 -176"
 "light" "250"
 "color" "255 192 128"
 "angle" "180"
@@ -14658,82 +14663,268 @@
 // entity 32
 {
 "classname" "light_wall_oil_lamp"
-"origin" "2904 1480 -224"
+"origin" "2912 1480 -224"
 "light" "250"
 "color" "255 192 128"
-"angle" "180"
+"angle" "0"
 }
 // entity 33
 {
 "classname" "light_wall_oil_lamp"
-"origin" "2904 1344 -264"
+"origin" "2912 1344 -264"
 "light" "250"
 "color" "255 192 128"
-"angle" "180"
+"angle" "0"
 }
 // entity 34
 {
 "classname" "light_wall_oil_lamp"
-"origin" "2792 1344 256"
+"origin" "2800 1344 256"
 "light" "250"
 "color" "255 192 128"
 }
 // entity 35
 {
 "classname" "light_wall_oil_lamp"
-"origin" "2904 1472 192"
+"origin" "2896 1472 192"
 "light" "250"
 "color" "255 192 128"
+"angle" "180"
 }
 // entity 36
 {
 "classname" "light_wall_oil_lamp"
-"origin" "2792 1600 128"
+"origin" "2800 1600 128"
 "light" "250"
 "color" "255 192 128"
 }
 // entity 37
 {
 "classname" "light_wall_oil_lamp"
-"origin" "3008 1736 48"
+"origin" "3008 1744 48"
 "light" "250"
 "color" "255 192 128"
+"angle" "90"
 }
 // entity 38
 {
 "classname" "light_wall_oil_lamp"
-"origin" "3136 1736 8"
+"origin" "3136 1744 8"
 "light" "250"
 "color" "255 192 128"
+"angle" "90"
 }
 // entity 39
 {
 "classname" "light_wall_oil_lamp"
-"origin" "3264 1736 -56"
+"origin" "3264 1744 -56"
 "light" "250"
 "color" "255 192 128"
+"angle" "90"
 }
 // entity 40
 {
 "classname" "light_wall_oil_lamp"
-"origin" "2688 1736 56"
+"origin" "2688 1744 56"
 "light" "250"
 "color" "255 192 128"
-"angle" "180"
+"angle" "90"
 }
 // entity 41
 {
 "classname" "light_wall_oil_lamp"
-"origin" "2560 1736 8"
+"origin" "2560 1744 8"
 "light" "250"
 "color" "255 192 128"
-"angle" "180"
+"angle" "90"
 }
 // entity 42
 {
 "classname" "light_wall_oil_lamp"
-"origin" "2432 1736 -56"
+"origin" "2432 1744 -56"
 "light" "250"
 "color" "255 192 128"
+"angle" "90"
+}
+// entity 43
+{
+"classname" "func_door"
 "angle" "180"
+// brush 0
+{
+( 2496 1200 -32 ) ( 2496 1168 -32 ) ( 2496 1168 -176 ) __TB_empty 0 0 0 0.5 0.5
+( 2496 1168 -32 ) ( 2544 1168 -32 ) ( 2544 1168 -176 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 2544 1168 -176 ) ( 2544 1200 -176 ) ( 2496 1200 -176 ) __TB_empty 0 0 0 0.5 0.5
+( 2496 1200 -32 ) ( 2544 1200 -32 ) ( 2544 1168 -32 ) __TB_empty 0 0 0 0.5 0.5
+( 2544 1200 -176 ) ( 2544 1200 -32 ) ( 2496 1200 -32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 2544 1168 -32 ) ( 2544 1200 -32 ) ( 2544 1200 -176 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+}
+}
+// entity 44
+{
+"classname" "func_door"
+"angle" "0"
+// brush 0
+{
+( 2544 1168 -32 ) ( 2544 1200 -176 ) ( 2544 1200 -32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 2592 1168 -32 ) ( 2544 1168 -176 ) ( 2544 1168 -32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 2544 1168 -176 ) ( 2592 1200 -176 ) ( 2544 1200 -176 ) __TB_empty 0 0 0 0.5 0.5
+( 2592 1200 -32 ) ( 2544 1168 -32 ) ( 2544 1200 -32 ) __TB_empty 0 0 0 0.5 0.5
+( 2544 1200 -176 ) ( 2592 1200 -32 ) ( 2544 1200 -32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 2592 1200 -32 ) ( 2592 1168 -176 ) ( 2592 1168 -32 ) __TB_empty 0 0 0 0.5 0.5
+}
+}
+// entity 45
+{
+"classname" "func_door"
+"angle" "0"
+// brush 0
+{
+( 3152 1168 -32 ) ( 3152 1200 -176 ) ( 3152 1200 -32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 3200 1168 -32 ) ( 3152 1168 -176 ) ( 3152 1168 -32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 3152 1168 -176 ) ( 3200 1200 -176 ) ( 3152 1200 -176 ) __TB_empty 0 0 0 0.5 0.5
+( 3200 1200 -32 ) ( 3152 1168 -32 ) ( 3152 1200 -32 ) __TB_empty 0 0 0 0.5 0.5
+( 3152 1200 -176 ) ( 3200 1200 -32 ) ( 3152 1200 -32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 3200 1200 -32 ) ( 3200 1168 -176 ) ( 3200 1168 -32 ) __TB_empty 0 0 0 0.5 0.5
+}
+}
+// entity 46
+{
+"classname" "func_door"
+"angle" "180"
+// brush 0
+{
+( 3104 1200 -32 ) ( 3104 1168 -32 ) ( 3104 1168 -176 ) __TB_empty 0 0 0 0.5 0.5
+( 3104 1168 -32 ) ( 3152 1168 -32 ) ( 3152 1168 -176 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 3152 1168 -176 ) ( 3152 1200 -176 ) ( 3104 1200 -176 ) __TB_empty 0 0 0 0.5 0.5
+( 3104 1200 -32 ) ( 3152 1200 -32 ) ( 3152 1168 -32 ) __TB_empty 0 0 0 0.5 0.5
+( 3152 1200 -176 ) ( 3152 1200 -32 ) ( 3104 1200 -32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 3152 1168 -32 ) ( 3152 1200 -32 ) ( 3152 1200 -176 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+}
+}
+// entity 47
+{
+"classname" "func_door"
+"angle" "0"
+// brush 0
+{
+( 2544 -720 -32 ) ( 2544 -752 -32 ) ( 2544 -752 -176 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 2544 -752 -32 ) ( 2592 -752 -32 ) ( 2592 -752 -176 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 2592 -752 -176 ) ( 2592 -720 -176 ) ( 2544 -720 -176 ) __TB_empty 0 0 0 0.5 0.5
+( 2544 -720 -32 ) ( 2592 -720 -32 ) ( 2592 -752 -32 ) __TB_empty 0 0 0 0.5 0.5
+( 2592 -720 -176 ) ( 2592 -720 -32 ) ( 2544 -720 -32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 2592 -752 -32 ) ( 2592 -720 -32 ) ( 2592 -720 -176 ) __TB_empty 0 0 0 0.5 0.5
+}
+}
+// entity 48
+{
+"classname" "func_door"
+"angle" "180"
+// brush 0
+{
+( 2496 -720 -32 ) ( 2496 -752 -32 ) ( 2496 -752 -176 ) __TB_empty 0 0 0 0.5 0.5
+( 2496 -752 -32 ) ( 2544 -752 -32 ) ( 2544 -752 -176 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 2544 -752 -176 ) ( 2544 -720 -176 ) ( 2496 -720 -176 ) __TB_empty 0 0 0 0.5 0.5
+( 2496 -720 -32 ) ( 2544 -720 -32 ) ( 2544 -752 -32 ) __TB_empty 0 0 0 0.5 0.5
+( 2544 -720 -176 ) ( 2544 -720 -32 ) ( 2496 -720 -32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 2544 -752 -32 ) ( 2544 -720 -32 ) ( 2544 -720 -176 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+}
+}
+// entity 49
+{
+"classname" "func_door"
+"angle" "0"
+// brush 0
+{
+( 3152 -752 -32 ) ( 3152 -720 -176 ) ( 3152 -720 -32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 3200 -752 -32 ) ( 3152 -752 -176 ) ( 3152 -752 -32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 3152 -752 -176 ) ( 3200 -720 -176 ) ( 3152 -720 -176 ) __TB_empty 0 0 0 0.5 0.5
+( 3200 -720 -32 ) ( 3152 -752 -32 ) ( 3152 -720 -32 ) __TB_empty 0 0 0 0.5 0.5
+( 3152 -720 -176 ) ( 3200 -720 -32 ) ( 3152 -720 -32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 3200 -720 -32 ) ( 3200 -752 -176 ) ( 3200 -752 -32 ) __TB_empty 0 0 0 0.5 0.5
+}
+}
+// entity 50
+{
+"classname" "func_door"
+"angle" "180"
+// brush 0
+{
+( 3104 -720 -32 ) ( 3104 -752 -32 ) ( 3104 -752 -176 ) __TB_empty 0 0 0 0.5 0.5
+( 3104 -752 -32 ) ( 3152 -752 -32 ) ( 3152 -752 -176 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 3152 -752 -176 ) ( 3152 -720 -176 ) ( 3104 -720 -176 ) __TB_empty 0 0 0 0.5 0.5
+( 3104 -720 -32 ) ( 3152 -720 -32 ) ( 3152 -752 -32 ) __TB_empty 0 0 0 0.5 0.5
+( 3152 -720 -176 ) ( 3152 -720 -32 ) ( 3104 -720 -32 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 3152 -752 -32 ) ( 3152 -720 -32 ) ( 3152 -720 -176 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+}
+}
+// entity 51
+{
+"classname" "func_door"
+"angle" "0"
+// brush 0
+{
+( 2992 -720 352 ) ( 2992 -752 352 ) ( 2992 -752 224 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 2992 -752 352 ) ( 3040 -752 352 ) ( 3040 -752 224 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 3040 -752 224 ) ( 3040 -720 224 ) ( 2992 -720 224 ) __TB_empty 0 0 0 0.5 0.5
+( 2992 -720 352 ) ( 3040 -720 352 ) ( 3040 -752 352 ) __TB_empty 0 0 0 0.5 0.5
+( 3040 -720 224 ) ( 3040 -720 352 ) ( 2992 -720 352 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 3040 -752 352 ) ( 3040 -720 352 ) ( 3040 -720 224 ) __TB_empty 0 0 0 0.5 0.5
+}
+}
+// entity 52
+{
+"classname" "func_door"
+"angle" "180"
+// brush 0
+{
+( 2944 -720 352 ) ( 2944 -752 352 ) ( 2944 -752 224 ) __TB_empty 0 0 0 0.5 0.5
+( 2944 -752 352 ) ( 2992 -752 352 ) ( 2992 -752 224 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 2992 -752 224 ) ( 2992 -720 224 ) ( 2944 -720 224 ) __TB_empty 0 0 0 0.5 0.5
+( 2944 -720 352 ) ( 2992 -720 352 ) ( 2992 -752 352 ) __TB_empty 0 0 0 0.5 0.5
+( 2992 -720 224 ) ( 2992 -720 352 ) ( 2944 -720 352 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 2992 -752 352 ) ( 2992 -720 352 ) ( 2992 -720 224 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+}
+}
+// entity 53
+{
+"classname" "func_door"
+"angle" "0"
+// brush 0
+{
+( 2704 -720 352 ) ( 2704 -752 352 ) ( 2704 -752 224 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 2704 -752 352 ) ( 2752 -752 352 ) ( 2752 -752 224 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 2752 -752 224 ) ( 2752 -720 224 ) ( 2704 -720 224 ) __TB_empty 0 0 0 0.5 0.5
+( 2704 -720 352 ) ( 2752 -720 352 ) ( 2752 -752 352 ) __TB_empty 0 0 0 0.5 0.5
+( 2752 -720 224 ) ( 2752 -720 352 ) ( 2704 -720 352 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 2752 -752 352 ) ( 2752 -720 352 ) ( 2752 -720 224 ) __TB_empty 0 0 0 0.5 0.5
+}
+}
+// entity 54
+{
+"classname" "func_door"
+"angle" "180"
+// brush 0
+{
+( 2656 -720 352 ) ( 2656 -752 352 ) ( 2656 -752 224 ) __TB_empty 0 0 0 0.5 0.5
+( 2656 -752 352 ) ( 2704 -752 352 ) ( 2704 -752 224 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 2704 -752 224 ) ( 2704 -720 224 ) ( 2656 -720 224 ) __TB_empty 0 0 0 0.5 0.5
+( 2656 -720 352 ) ( 2704 -720 352 ) ( 2704 -752 352 ) __TB_empty 0 0 0 0.5 0.5
+( 2704 -720 224 ) ( 2704 -720 352 ) ( 2656 -720 352 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 2704 -752 352 ) ( 2704 -720 352 ) ( 2704 -720 224 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+}
+}
+// entity 55
+{
+"classname" "func_door"
+"angle" "-1"
+// brush 0
+{
+( 2816 1176 352 ) ( 2816 1160 352 ) ( 2816 1160 224 ) __TB_empty 0 0 0 0.5 0.5
+( 2816 1160 352 ) ( 2880 1160 352 ) ( 2880 1160 224 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 2880 1160 224 ) ( 2880 1176 224 ) ( 2816 1176 224 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 2816 1176 352 ) ( 2880 1176 352 ) ( 2880 1160 352 ) __TB_empty 0 0 0 0.5 0.5
+( 2880 1176 224 ) ( 2880 1176 352 ) ( 2816 1176 352 ) wooden_plate_with_rusty_metal 0 0 0 0.5 0.5
+( 2880 1160 352 ) ( 2880 1176 352 ) ( 2880 1176 224 ) __TB_empty 0 0 0 0.5 0.5
+}
 }
