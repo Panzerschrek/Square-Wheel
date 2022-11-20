@@ -293,7 +293,7 @@ impl ResourcesManager
 			&self.default_material
 		});
 
-		// TODO - maybe use separate files/directories foe 32-bit and 64-bit skyboxes?
+		// TODO - maybe use separate files/directories for 32-bit and 64-bit skyboxes?
 
 		// TODO - avoid "unwrap".
 		let skybox = material.skybox.as_ref().unwrap();

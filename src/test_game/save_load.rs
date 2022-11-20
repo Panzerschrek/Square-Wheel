@@ -248,12 +248,12 @@ fn load_shared_resources(
 
 	for (key, texture_resource) in &mut shared_resources_serialized.lite_textures.drain()
 	{
-		let model = match texture_resource
+		let texture = match texture_resource
 		{
 			ResourceForSerialization::Named(name) => resources_manager.get_texture_lite(&name),
 			ResourceForSerialization::Direct(r) => Arc::new(r),
 		};
-		shared_resources.lite_textures.insert(key, model);
+		shared_resources.lite_textures.insert(key, texture);
 	}
 
 	Some(shared_resources)
