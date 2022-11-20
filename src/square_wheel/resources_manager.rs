@@ -42,8 +42,6 @@ pub type ResourcesManagerSharedPtr = Arc<Mutex<ResourcesManager>>;
 
 pub type SharedResourcePtr<T> = Arc<T>;
 
-pub type ResourceKey = String;
-
 type ResourcesMap<T> = HashMap<String, SharedResourcePtr<T>>;
 
 // Use pointer to name map in order to obtain name for given resource.
@@ -136,7 +134,7 @@ impl ResourcesManager
 		}
 	}
 
-	pub fn get_model(&mut self, key: &ResourceKey) -> SharedResourcePtr<triangle_model::TriangleModel>
+	pub fn get_model(&mut self, key: &str) -> SharedResourcePtr<triangle_model::TriangleModel>
 	{
 		if let Some(p) = self.models.get(key)
 		{
@@ -169,8 +167,8 @@ impl ResourcesManager
 			},
 		};
 
-		self.models.insert(key.clone(), ptr.clone());
-		self.models_names.insert(ResourcePtrInt::new(&ptr), key.clone());
+		self.models.insert(key.to_string(), ptr.clone());
+		self.models_names.insert(ResourcePtrInt::new(&ptr), key.to_string());
 		ptr
 	}
 
@@ -179,7 +177,7 @@ impl ResourcesManager
 		self.models_names.get(&ResourcePtrInt::new(model)).map(|s| s.as_str())
 	}
 
-	pub fn get_image(&mut self, key: &ResourceKey) -> SharedResourcePtr<image::Image>
+	pub fn get_image(&mut self, key: &str) -> SharedResourcePtr<image::Image>
 	{
 		if let Some(p) = self.images.get(key)
 		{
@@ -195,8 +193,8 @@ impl ResourcesManager
 			self.stub_image.clone()
 		};
 
-		self.images.insert(key.clone(), ptr.clone());
-		self.images_names.insert(ResourcePtrInt::new(&ptr), key.clone());
+		self.images.insert(key.to_string(), ptr.clone());
+		self.images_names.insert(ResourcePtrInt::new(&ptr), key.to_string());
 		ptr
 	}
 
@@ -205,7 +203,7 @@ impl ResourcesManager
 		self.images_names.get(&ResourcePtrInt::new(model)).map(|s| s.as_str())
 	}
 
-	pub fn get_material_texture(&mut self, key: &ResourceKey) -> SharedResourcePtr<TextureWithMips>
+	pub fn get_material_texture(&mut self, key: &str) -> SharedResourcePtr<TextureWithMips>
 	{
 		if let Some(p) = self.material_textures.get(key)
 		{
@@ -223,12 +221,12 @@ impl ResourcesManager
 		let texture_with_mips = load_texture(material, &self.config.textures_path);
 
 		let ptr = SharedResourcePtr::new(texture_with_mips);
-		self.material_textures.insert(key.clone(), ptr.clone());
+		self.material_textures.insert(key.to_string(), ptr.clone());
 
 		ptr
 	}
 
-	pub fn get_texture_lite(&mut self, key: &ResourceKey) -> SharedResourcePtr<TextureLiteWithMips>
+	pub fn get_texture_lite(&mut self, key: &str) -> SharedResourcePtr<TextureLiteWithMips>
 	{
 		if let Some(p) = self.lite_textures.get(key)
 		{
@@ -238,8 +236,9 @@ impl ResourcesManager
 		let mip0 = load_image(&key, &self.config.textures_path).unwrap_or_else(|| (*self.stub_image).clone());
 		let ptr = SharedResourcePtr::new(make_texture_lite_mips(mip0));
 
-		self.lite_textures.insert(key.clone(), ptr.clone());
-		self.lite_textures_names.insert(ResourcePtrInt::new(&ptr), key.clone());
+		self.lite_textures.insert(key.to_string(), ptr.clone());
+		self.lite_textures_names
+			.insert(ResourcePtrInt::new(&ptr), key.to_string());
 		ptr
 	}
 
@@ -250,7 +249,7 @@ impl ResourcesManager
 			.map(|s| s.as_str())
 	}
 
-	pub fn get_skybox_textures_32(&mut self, key: &ResourceKey) -> SharedResourcePtr<SkyboxTextures<Color32>>
+	pub fn get_skybox_textures_32(&mut self, key: &str) -> SharedResourcePtr<SkyboxTextures<Color32>>
 	{
 		if let Some(p) = self.skybox_textures_32.get(key)
 		{
@@ -274,12 +273,12 @@ impl ResourcesManager
 		}
 
 		let ptr = SharedResourcePtr::new(skybox_texture);
-		self.skybox_textures_32.insert(key.clone(), ptr.clone());
+		self.skybox_textures_32.insert(key.to_string(), ptr.clone());
 
 		ptr
 	}
 
-	pub fn get_skybox_textures_64(&mut self, key: &ResourceKey) -> SharedResourcePtr<SkyboxTextures<Color64>>
+	pub fn get_skybox_textures_64(&mut self, key: &str) -> SharedResourcePtr<SkyboxTextures<Color64>>
 	{
 		if let Some(p) = self.skybox_textures_64.get(key)
 		{
@@ -306,7 +305,7 @@ impl ResourcesManager
 		}
 
 		let ptr = SharedResourcePtr::new(skybox_texture);
-		self.skybox_textures_64.insert(key.clone(), ptr.clone());
+		self.skybox_textures_64.insert(key.to_string(), ptr.clone());
 
 		ptr
 	}

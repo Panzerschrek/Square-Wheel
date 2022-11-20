@@ -358,8 +358,8 @@ fn spawn_regular_entity(
 							frames: [0, 0],
 							lerp: 0.0,
 						},
-						model: resources_manager.get_model(&"wall_oil_lamp.iqm".to_string()),
-						texture: resources_manager.get_texture_lite(&"wall_oil_lamp.png".to_string()),
+						model: resources_manager.get_model("wall_oil_lamp.iqm"),
+						texture: resources_manager.get_texture_lite("wall_oil_lamp.png"),
 						blending_mode: material::BlendingMode::None,
 						lighting: ModelLighting::Default,
 						is_view_model: false,
@@ -367,7 +367,7 @@ fn spawn_regular_entity(
 					},
 				));
 
-				let sprite_texture = resources_manager.get_texture_lite(&"small_flame.png".to_string());
+				let sprite_texture = resources_manager.get_texture_lite("small_flame.png");
 				let scale = 0.5;
 
 				let texture_mip0 = &sprite_texture[0];
@@ -495,7 +495,7 @@ fn spawn_player_shadow(ecs: &mut hecs::World, resources_manager: &mut ResourcesM
 			scale: Vec3f::new(32.0, 32.0, 32.0),
 			// Shadow blob is totally-black textue with variable alpha.
 			// So, use no lighting for it and alpha-blending in otder to darken polygons in shadow.
-			texture: resources_manager.get_texture_lite(&"shadow_blob.png".to_string()),
+			texture: resources_manager.get_texture_lite("shadow_blob.png"),
 			blending_mode: material::BlendingMode::AlphaBlend,
 			lightmap_light_scale: 0.0,
 			light_add: [0.0; 3],

@@ -171,7 +171,7 @@ pub fn update_player_entity(
 			Sprite {
 				position,
 				radius: 32.0,
-				texture: resources_manager.get_texture_lite(&"shot_sprite.png".to_string()),
+				texture: resources_manager.get_texture_lite("shot_sprite.png"),
 				orientation: SpriteOrientation::FacingTowardsCamera,
 				blending_mode: material::BlendingMode::AlphaBlend,
 				light_scale: 0.0,

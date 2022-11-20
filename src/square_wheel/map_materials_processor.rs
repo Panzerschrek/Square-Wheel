@@ -31,29 +31,27 @@ impl MapMaterialsProcessor
 		let mut skybox_textures_64 = HashMap::new();
 		for (texture_index, texture_name) in map.textures.iter().enumerate()
 		{
-			let material_name_string = bsp_map_compact::get_texture_string(texture_name);
-			let material = if let Some(material) = all_materials.get(material_name_string)
+			let material_name = bsp_map_compact::get_texture_string(texture_name);
+			let material = if let Some(material) = all_materials.get(material_name)
 			{
 				material.clone()
 			}
 			else
 			{
-				println!("Failed to find material \"{}\"", material_name_string);
+				println!("Failed to find material \"{}\"", material_name);
 				Material::default()
 			};
-
-			let material_name = material_name_string.to_string();
 
 			// TODO - load skyboxes lazily.
 			// TODO - create stub regular texture for skyboxes.
 			if material.skybox.is_some()
 			{
-				skybox_textures_32.insert(texture_index as u32, r.get_skybox_textures_32(&material_name));
-				skybox_textures_64.insert(texture_index as u32, r.get_skybox_textures_64(&material_name));
+				skybox_textures_32.insert(texture_index as u32, r.get_skybox_textures_32(material_name));
+				skybox_textures_64.insert(texture_index as u32, r.get_skybox_textures_64(material_name));
 			}
 
 			materials.push(material);
-			textures.push(r.get_material_texture(&material_name));
+			textures.push(r.get_material_texture(material_name));
 		}
 
 		let textures_modified = vec![TextureWithMips::default(); textures.len()];
