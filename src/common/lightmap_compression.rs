@@ -2,11 +2,22 @@ use super::{bsp_map_compact::*, math_types::*};
 
 pub type LightmapElementCompressed = CompressedColor;
 
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct DirectionalLightmapElementCompressed
 {
 	pub ambient_light: CompressedColor,
 	pub light_direction_vector_scaled: CompressedVector,
 	pub directional_light_deviation: u8,
+	pub directional_light_color: CompressedColor,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct LightGridElementCompressed
+{
+	pub light_cube: [CompressedColor; 6],
+	pub light_direction_vector_scaled: CompressedVector,
 	pub directional_light_color: CompressedColor,
 }
 
@@ -64,7 +75,7 @@ impl CompressedVector
 		let multiplier = VECTOR_SCALE / scale;
 
 		Self {
-			components: [v.x, v.y, v.z].map(|c| (c * multiplier).max(0.0).min(127.0) as i8),
+			components: [v.x, v.y, v.z].map(|c| (c * multiplier).max(-127.0).min(127.0) as i8),
 			scale: scale as u8,
 		}
 	}
@@ -100,6 +111,27 @@ impl DirectionalLightmapElementCompressed
 			ambient_light: CompressedColor::decompress(&self.ambient_light),
 			light_direction_vector_scaled: CompressedVector::decompress(&self.light_direction_vector_scaled),
 			directional_light_deviation: self.directional_light_deviation as f32 / LIGHT_DEVIATION_SCALE,
+			directional_light_color: CompressedColor::decompress(&self.directional_light_color),
+		}
+	}
+}
+
+impl LightGridElementCompressed
+{
+	pub fn compress(e: &LightGridElement) -> Self
+	{
+		Self {
+			light_cube: e.light_cube.map(|s| CompressedColor::compress(&s)),
+			light_direction_vector_scaled: CompressedVector::compress(&e.light_direction_vector_scaled),
+			directional_light_color: CompressedColor::compress(&e.directional_light_color),
+		}
+	}
+
+	pub fn decompress(&self) -> LightGridElement
+	{
+		LightGridElement {
+			light_cube: self.light_cube.map(|s| CompressedColor::decompress(&s)),
+			light_direction_vector_scaled: CompressedVector::decompress(&self.light_direction_vector_scaled),
 			directional_light_color: CompressedColor::decompress(&self.directional_light_color),
 		}
 	}
