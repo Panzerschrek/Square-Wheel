@@ -1770,9 +1770,7 @@ fn compress_light_grid(
 	];
 	let mut light_grid_samples = Vec::new();
 
-	let get_sample = |x, y, z| light_grid[get_light_grid_sample_address(light_grid_header, x, y, z)];
-
-	let zero_element = bsp_map_compact::LightGridElement::default();
+	let get_sample = |x, y, z| &light_grid[get_light_grid_sample_address(light_grid_header, x, y, z)];
 
 	for x in 0 .. light_grid_header.grid_size[0]
 	{
@@ -1782,7 +1780,7 @@ fn compress_light_grid(
 			while min_non_zero_light_z < light_grid_header.grid_size[2]
 			{
 				let light = get_sample(x, y, min_non_zero_light_z);
-				if light != zero_element
+				if !light_grid_element_is_zero(light)
 				{
 					break;
 				}
@@ -1793,7 +1791,7 @@ fn compress_light_grid(
 			while max_non_zero_light_z > min_non_zero_light_z
 			{
 				let light = get_sample(x, y, max_non_zero_light_z);
-				if light != zero_element
+				if !light_grid_element_is_zero(light)
 				{
 					break;
 				}
@@ -1808,7 +1806,7 @@ fn compress_light_grid(
 
 			for z in min_non_zero_light_z ..= max_non_zero_light_z
 			{
-				light_grid_samples.push(get_sample(x, y, z));
+				light_grid_samples.push(*get_sample(x, y, z));
 			}
 		} // for y
 	} // for x
@@ -1816,6 +1814,31 @@ fn compress_light_grid(
 	println!("Non-empty light grid samples: {}", light_grid_samples.len());
 
 	(light_grid_columns, light_grid_samples)
+}
+
+fn light_grid_element_is_zero(e: &bsp_map_compact::LightGridElement) -> bool
+{
+	// Treat very small light intensity as zero in order to improve light grid compression rate.
+	// Also there is no reason to store very small values, since the lossy compression converts them to zero.
+	const MIN_LIGHT: f32 = 1.0 / 256.0;
+
+	for side in &e.light_cube
+	{
+		for component in side
+		{
+			if *component > MIN_LIGHT
+			{
+				return false;
+			}
+		}
+	}
+
+	if e.light_direction_vector_scaled.magnitude2() > MIN_LIGHT * MIN_LIGHT
+	{
+		return false;
+	}
+
+	true
 }
 
 fn calculate_light_for_grid_point(
