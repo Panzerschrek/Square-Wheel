@@ -107,12 +107,20 @@ impl DirectionalLightmapElementCompressed
 
 	pub fn decompress(&self) -> DirectionalLightmapElement
 	{
-		DirectionalLightmapElement {
+		let mut res = DirectionalLightmapElement {
 			ambient_light: CompressedColor::decompress(&self.ambient_light),
 			light_direction_vector_scaled: CompressedVector::decompress(&self.light_direction_vector_scaled),
 			directional_light_deviation: self.directional_light_deviation as f32 / LIGHT_DEVIATION_SCALE,
 			directional_light_color: CompressedColor::decompress(&self.directional_light_color),
+		};
+
+		// Hack! This vector should be non-zero, but can be zero after compression because of quantisation.
+		if res.light_direction_vector_scaled.magnitude2() <= 0.0
+		{
+			res.light_direction_vector_scaled = Vec3f::new(0.0, 0.0, 1.0 / 1024.0);
 		}
+
+		res
 	}
 }
 

@@ -245,7 +245,7 @@ impl LightHemisphere
 		}
 
 		let mut vec_len = scaled_vecs_sum.magnitude();
-		if vec_len <= 0.0
+		if vec_len <= MIN_LEN
 		{
 			scaled_vecs_sum = Vec3f::new(0.0, 0.0, MIN_LEN);
 			vec_len = MIN_LEN;
