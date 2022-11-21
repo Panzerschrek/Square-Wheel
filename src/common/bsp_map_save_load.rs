@@ -1,4 +1,4 @@
-use super::bsp_map_compact::*;
+use super::{bsp_map_compact::*, lightmap_compression::*};
 use std::{
 	io::{Read, Seek, Write},
 	path::{Path, PathBuf},
@@ -109,13 +109,21 @@ pub fn save_map(bsp_map: &BSPMap, file_path: &Path) -> Result<(), std::io::Error
 		&mut offset,
 	)?;
 	write_lump(
-		&bsp_map.lightmaps_data,
+		&bsp_map
+			.lightmaps_data
+			.iter()
+			.map(LightmapElementCompressed::compress)
+			.collect::<Vec<_>>(),
 		&mut file,
 		&mut header.lumps[LUMP_LIGHTMAPS_DATA],
 		&mut offset,
 	)?;
 	write_lump(
-		&bsp_map.directional_lightmaps_data,
+		&bsp_map
+			.directional_lightmaps_data
+			.iter()
+			.map(DirectionalLightmapElementCompressed::compress)
+			.collect::<Vec<_>>(),
 		&mut file,
 		&mut header.lumps[LUMP_DIRECTIONAL_LIGHTMAPS_DATA],
 		&mut offset,
@@ -133,7 +141,11 @@ pub fn save_map(bsp_map: &BSPMap, file_path: &Path) -> Result<(), std::io::Error
 		&mut offset,
 	)?;
 	write_lump(
-		&bsp_map.light_grid_samples,
+		&bsp_map
+			.light_grid_samples
+			.iter()
+			.map(LightGridElementCompressed::compress)
+			.collect::<Vec<_>>(),
 		&mut file,
 		&mut header.lumps[LUMP_LIGHT_GRID_SAMPLES],
 		&mut offset,
@@ -193,11 +205,20 @@ pub fn load_map(file_path: &Path) -> Result<Option<BSPMap>, std::io::Error>
 		entities: read_lump(&mut file, &header.lumps[LUMP_ENTITIES])?,
 		key_value_pairs: read_lump(&mut file, &header.lumps[LUMP_KEY_VALUE_PAIRS])?,
 		strings_data: read_lump(&mut file, &header.lumps[LUMP_STRINGS_DATA])?,
-		lightmaps_data: read_lump(&mut file, &header.lumps[LUMP_LIGHTMAPS_DATA])?,
-		directional_lightmaps_data: read_lump(&mut file, &header.lumps[LUMP_DIRECTIONAL_LIGHTMAPS_DATA])?,
+		lightmaps_data: read_lump(&mut file, &header.lumps[LUMP_LIGHTMAPS_DATA])?
+			.iter()
+			.map(LightmapElementCompressed::decompress)
+			.collect(),
+		directional_lightmaps_data: read_lump(&mut file, &header.lumps[LUMP_DIRECTIONAL_LIGHTMAPS_DATA])?
+			.iter()
+			.map(DirectionalLightmapElementCompressed::decompress)
+			.collect(),
 		light_grid_header: read_single_element_lump(&mut file, &header.lumps[LUMP_LIGHT_GRID_HEADER])?,
 		light_grid_columns: read_lump(&mut file, &header.lumps[LUMP_LIGHT_GRID_COLUMNS])?,
-		light_grid_samples: read_lump(&mut file, &header.lumps[LUMP_LIGHT_GRID_SAMPLES])?,
+		light_grid_samples: read_lump(&mut file, &header.lumps[LUMP_LIGHT_GRID_SAMPLES])?
+			.iter()
+			.map(LightGridElementCompressed::decompress)
+			.collect(),
 	};
 
 	Ok(Some(map))
@@ -220,7 +241,7 @@ struct Lump
 }
 
 const BSP_MAP_ID: [u8; 4] = ['S' as u8, 'q' as u8, 'w' as u8, 'M' as u8];
-const BSP_MAP_VERSION: u32 = 10; // Change each time when format is changed!
+const BSP_MAP_VERSION: u32 = 11; // Change each time when format is changed!
 
 const MAX_LUMPS: usize = 32;
 
