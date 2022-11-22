@@ -128,7 +128,7 @@ pub fn extract_map_lights(map: &bsp_map_compact::BSPMap) -> Vec<PointLight>
 						{
 							direction = Some(LightDirection {
 								dir_normalized: dir / dir_len,
-								half_angle_cos: 0.25, // TODO - allow to configure this and choose good default value.
+								half_angle_cos: 0.9, // TODO - allow to configure this and choose good default value.
 							});
 						}
 					}
