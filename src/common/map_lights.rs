@@ -1,10 +1,20 @@
 use super::{bbox::*, bsp_map_compact, map_file_common, math_types::*};
+use std::collections::HashMap;
 
 #[derive(Copy, Clone)]
 pub struct PointLight
 {
 	pub pos: Vec3f,
 	pub color: [f32; 3], // Color scaled by intensity.
+	// Non-empty for spot lights.
+	pub direction: Option<LightDirection>,
+}
+
+#[derive(Copy, Clone)]
+pub struct LightDirection
+{
+	pub dir_normalized: Vec3f,
+	pub half_angle_cos: f32,
 }
 
 pub struct SunLight
@@ -18,15 +28,45 @@ pub fn extract_map_lights(map: &bsp_map_compact::BSPMap) -> Vec<PointLight>
 {
 	let mut result = Vec::new();
 
+	let mut named_targets = HashMap::new();
+	for entity in &map.entities
+	{
+		let mut origin = None;
+		let mut targetname = None;
+
+		for key_value_pair in &map.key_value_pairs[entity.first_key_value_pair as usize ..
+			(entity.first_key_value_pair + entity.num_key_value_pairs) as usize]
+		{
+			let key = bsp_map_compact::get_map_string(key_value_pair.key, map);
+			let value = bsp_map_compact::get_map_string(key_value_pair.value, map);
+			if key == "origin"
+			{
+				if let Ok(o) = map_file_common::parse_vec3(value)
+				{
+					origin = Some(o);
+				}
+			}
+			if key == "targetname"
+			{
+				targetname = Some(value);
+			}
+		}
+
+		if let (Some(origin), Some(targetname)) = (origin, targetname)
+		{
+			named_targets.insert(targetname, origin);
+		}
+	}
+
 	for entity in &map.entities
 	{
 		let mut is_light_entity = false;
 		let mut origin = None;
 		let mut intensity = None;
 		let mut color = None;
+		let mut target = None;
 
 		// Parse Quake-style lights.
-		// TODO - support directional lights.
 
 		for key_value_pair in &map.key_value_pairs[(entity.first_key_value_pair as usize) ..
 			((entity.first_key_value_pair + entity.num_key_value_pairs) as usize)]
@@ -58,6 +98,10 @@ pub fn extract_map_lights(map: &bsp_map_compact::BSPMap) -> Vec<PointLight>
 					color = Some(c);
 				}
 			}
+			if key == "target"
+			{
+				target = Some(value);
+			}
 		}
 
 		if is_light_entity
@@ -73,9 +117,30 @@ pub fn extract_map_lights(map: &bsp_map_compact::BSPMap) -> Vec<PointLight>
 					out_color[2] *= (color.z / 255.0).max(0.0).min(1.0);
 				}
 
+				let mut direction = None;
+				if let Some(target) = target
+				{
+					if let Some(target_origin) = named_targets.get(target)
+					{
+						let dir = target_origin - pos;
+						let dir_len = dir.magnitude();
+						if dir_len > 0.0
+						{
+							direction = Some(LightDirection {
+								dir_normalized: dir / dir_len,
+								half_angle_cos: 0.25, // TODO - allow to configure this and choose good default value.
+							});
+						}
+					}
+				};
+
 				if out_color[0] > 0.0 || out_color[1] > 0.0 || out_color[2] > 0.0
 				{
-					result.push(PointLight { pos, color: out_color });
+					result.push(PointLight {
+						pos,
+						color: out_color,
+						direction,
+					});
 				}
 			}
 		}
