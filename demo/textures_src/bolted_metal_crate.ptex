@@ -1,0 +1,1901 @@
+{
+	"connections": [
+		{
+			"from": "shape",
+			"from_port": 0,
+			"to": "invert",
+			"to_port": 0
+		},
+		{
+			"from": "normal_map2",
+			"from_port": 0,
+			"to": "Material",
+			"to_port": 4
+		},
+		{
+			"from": "sphere",
+			"from_port": 0,
+			"to": "transform2",
+			"to_port": 0
+		},
+		{
+			"from": "transform2",
+			"from_port": 0,
+			"to": "math",
+			"to_port": 0
+		},
+		{
+			"from": "shape_2",
+			"from_port": 0,
+			"to": "invert_2",
+			"to_port": 0
+		},
+		{
+			"from": "invert_2",
+			"from_port": 0,
+			"to": "math",
+			"to_port": 1
+		},
+		{
+			"from": "math",
+			"from_port": 0,
+			"to": "math_2",
+			"to_port": 1
+		},
+		{
+			"from": "invert",
+			"from_port": 0,
+			"to": "math_3",
+			"to_port": 0
+		},
+		{
+			"from": "math_3",
+			"from_port": 0,
+			"to": "math_2",
+			"to_port": 0
+		},
+		{
+			"from": "math",
+			"from_port": 0,
+			"to": "tones_step",
+			"to_port": 0
+		},
+		{
+			"from": "tones_step",
+			"from_port": 0,
+			"to": "blend",
+			"to_port": 2
+		},
+		{
+			"from": "graph_2_2",
+			"from_port": 0,
+			"to": "blend",
+			"to_port": 0
+		},
+		{
+			"from": "tones_step",
+			"from_port": 0,
+			"to": "blend_2",
+			"to_port": 2
+		},
+		{
+			"from": "uniform_greyscale",
+			"from_port": 0,
+			"to": "blend_2",
+			"to_port": 0
+		},
+		{
+			"from": "perlin",
+			"from_port": 0,
+			"to": "tones_step_2",
+			"to_port": 0
+		},
+		{
+			"from": "uniform",
+			"from_port": 0,
+			"to": "blend_3",
+			"to_port": 0
+		},
+		{
+			"from": "blend",
+			"from_port": 0,
+			"to": "blend_3",
+			"to_port": 1
+		},
+		{
+			"from": "blend_3",
+			"from_port": 0,
+			"to": "Material",
+			"to_port": 0
+		},
+		{
+			"from": "blend_2",
+			"from_port": 0,
+			"to": "blend_4",
+			"to_port": 1
+		},
+		{
+			"from": "uniform_greyscale_3",
+			"from_port": 0,
+			"to": "blend_4",
+			"to_port": 0
+		},
+		{
+			"from": "blend_4",
+			"from_port": 0,
+			"to": "Material",
+			"to_port": 2
+		},
+		{
+			"from": "shape",
+			"from_port": 0,
+			"to": "tones_step_3",
+			"to_port": 0
+		},
+		{
+			"from": "tones_step_3",
+			"from_port": 0,
+			"to": "blend_5",
+			"to_port": 2
+		},
+		{
+			"from": "graph_2_4",
+			"from_port": 0,
+			"to": "blend_5",
+			"to_port": 1
+		},
+		{
+			"from": "graph_2_3",
+			"from_port": 0,
+			"to": "blend_5",
+			"to_port": 0
+		},
+		{
+			"from": "blend_5",
+			"from_port": 0,
+			"to": "blend",
+			"to_port": 1
+		},
+		{
+			"from": "tones_step_3",
+			"from_port": 0,
+			"to": "blend_6",
+			"to_port": 2
+		},
+		{
+			"from": "uniform_greyscale_2",
+			"from_port": 0,
+			"to": "blend_6",
+			"to_port": 0
+		},
+		{
+			"from": "uniform_greyscale_4",
+			"from_port": 0,
+			"to": "blend_6",
+			"to_port": 1
+		},
+		{
+			"from": "blend_6",
+			"from_port": 0,
+			"to": "blend_2",
+			"to_port": 1
+		},
+		{
+			"from": "tones_step_2",
+			"from_port": 0,
+			"to": "math_4",
+			"to_port": 0
+		},
+		{
+			"from": "tones_step_3",
+			"from_port": 0,
+			"to": "math_4",
+			"to_port": 1
+		},
+		{
+			"from": "math_4",
+			"from_port": 0,
+			"to": "blend_4",
+			"to_port": 2
+		},
+		{
+			"from": "math_4",
+			"from_port": 0,
+			"to": "blend_3",
+			"to_port": 2
+		},
+		{
+			"from": "math_2",
+			"from_port": 0,
+			"to": "math_5",
+			"to_port": 0
+		},
+		{
+			"from": "math_5",
+			"from_port": 0,
+			"to": "normal_map2",
+			"to_port": 0
+		},
+		{
+			"from": "text",
+			"from_port": 0,
+			"to": "bevel",
+			"to_port": 0
+		},
+		{
+			"from": "bevel",
+			"from_port": 0,
+			"to": "math_5",
+			"to_port": 1
+		}
+	],
+	"label": "Graph",
+	"longdesc": "",
+	"name": "@@312",
+	"node_position": {
+		"x": 0,
+		"y": 0
+	},
+	"nodes": [
+		{
+			"export_paths": {
+
+			},
+			"name": "Material",
+			"node_position": {
+				"x": 1700,
+				"y": 560
+			},
+			"parameters": {
+				"albedo_color": {
+					"a": 1,
+					"b": 1,
+					"g": 1,
+					"r": 1,
+					"type": "Color"
+				},
+				"ao": 1,
+				"depth_scale": 0.5,
+				"emission_energy": 1,
+				"flags_transparent": true,
+				"metallic": 1,
+				"normal": 1,
+				"roughness": 1,
+				"size": 9,
+				"sss": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "material"
+		},
+		{
+			"name": "shape",
+			"node_position": {
+				"x": -400,
+				"y": 420
+			},
+			"parameters": {
+				"edge": 1,
+				"radius": 0.8,
+				"shape": 1,
+				"sides": 4
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "shape"
+		},
+		{
+			"name": "normal_map2",
+			"node_position": {
+				"x": 1360,
+				"y": 400
+			},
+			"parameters": {
+				"buffer": 1,
+				"param2": 0,
+				"size": 9,
+				"strength": 1
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "normal_map2"
+		},
+		{
+			"name": "invert",
+			"node_position": {
+				"x": -240,
+				"y": 420
+			},
+			"parameters": {
+
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "invert"
+		},
+		{
+			"name": "math_2",
+			"node_position": {
+				"x": 860,
+				"y": 420
+			},
+			"parameters": {
+				"clamp": false,
+				"default_in1": 0,
+				"default_in2": 0,
+				"op": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "math"
+		},
+		{
+			"name": "sphere",
+			"node_position": {
+				"x": -840,
+				"y": 600
+			},
+			"parameters": {
+				"cx": 0.5,
+				"cy": 0.5,
+				"r": 0.2
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "sphere"
+		},
+		{
+			"name": "transform2",
+			"node_position": {
+				"x": -620,
+				"y": 600
+			},
+			"parameters": {
+				"mode": 1,
+				"rotate": 0,
+				"scale_x": 0.1,
+				"scale_y": 0.1,
+				"translate_x": 0.05,
+				"translate_y": 0.05
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "transform2"
+		},
+		{
+			"name": "shape_2",
+			"node_position": {
+				"x": -680,
+				"y": 820
+			},
+			"parameters": {
+				"edge": 0,
+				"radius": 0.8,
+				"shape": 1,
+				"sides": 4
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "shape"
+		},
+		{
+			"name": "math",
+			"node_position": {
+				"x": -360,
+				"y": 780
+			},
+			"parameters": {
+				"clamp": false,
+				"default_in1": 0,
+				"default_in2": 0,
+				"op": 2
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "math"
+		},
+		{
+			"name": "invert_2",
+			"node_position": {
+				"x": -520,
+				"y": 820
+			},
+			"parameters": {
+
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "invert"
+		},
+		{
+			"name": "math_3",
+			"node_position": {
+				"x": -100,
+				"y": 420
+			},
+			"parameters": {
+				"clamp": false,
+				"default_in1": 0,
+				"default_in2": 0.5,
+				"op": 2
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "math"
+		},
+		{
+			"name": "blend",
+			"node_position": {
+				"x": 720,
+				"y": 680
+			},
+			"parameters": {
+				"amount": 1,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "tones_step",
+			"node_position": {
+				"x": -100,
+				"y": 800
+			},
+			"parameters": {
+				"invert": false,
+				"value": 0.1,
+				"width": 0.1
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "tones_step"
+		},
+		{
+			"connections": [
+				{
+					"from": "uniform_2",
+					"from_port": 0,
+					"to": "gen_outputs",
+					"to_port": 3
+				},
+				{
+					"from": "uniform_greyscale_3_2",
+					"from_port": 0,
+					"to": "combine",
+					"to_port": 0
+				},
+				{
+					"from": "uniform_greyscale_3",
+					"from_port": 0,
+					"to": "combine",
+					"to_port": 1
+				},
+				{
+					"from": "uniform_greyscale_4",
+					"from_port": 0,
+					"to": "combine",
+					"to_port": 2
+				},
+				{
+					"from": "uniform_3",
+					"from_port": 0,
+					"to": "gen_outputs",
+					"to_port": 0
+				},
+				{
+					"from": "combine",
+					"from_port": 0,
+					"to": "gen_outputs",
+					"to_port": 1
+				},
+				{
+					"from": "uniform",
+					"from_port": 0,
+					"to": "gen_outputs",
+					"to_port": 2
+				}
+			],
+			"label": "Metal",
+			"longdesc": "",
+			"name": "graph_2_2",
+			"node_position": {
+				"x": 180,
+				"y": 680
+			},
+			"nodes": [
+				{
+					"name": "uniform_greyscale_3_2",
+					"node_position": {
+						"x": -712.322693,
+						"y": -216.48642
+					},
+					"parameters": {
+						"color": 1
+					},
+					"seed": 36576,
+					"seed_locked": false,
+					"type": "uniform_greyscale"
+				},
+				{
+					"name": "uniform_greyscale_4",
+					"node_position": {
+						"x": -712.322693,
+						"y": -114.48642
+					},
+					"parameters": {
+						"color": 1
+					},
+					"seed": 36422,
+					"seed_locked": false,
+					"type": "uniform_greyscale"
+				},
+				{
+					"name": "uniform_greyscale_3",
+					"node_position": {
+						"x": -712.322693,
+						"y": -165.48642
+					},
+					"parameters": {
+						"color": 0.1
+					},
+					"seed": 36499,
+					"seed_locked": false,
+					"type": "uniform_greyscale"
+				},
+				{
+					"name": "uniform_2",
+					"node_position": {
+						"x": -674.908142,
+						"y": -0.333069
+					},
+					"parameters": {
+						"color": {
+							"a": 1,
+							"b": 0,
+							"g": 0.501961,
+							"r": 0.501961,
+							"type": "Color"
+						}
+					},
+					"seed": -61342,
+					"seed_locked": false,
+					"type": "uniform"
+				},
+				{
+					"name": "uniform_3",
+					"node_position": {
+						"x": -676.322693,
+						"y": -271.48642
+					},
+					"parameters": {
+						"color": {
+							"a": 1,
+							"b": 0.526,
+							"g": 0.609,
+							"r": 0.66,
+							"type": "Color"
+						}
+					},
+					"seed": 11477,
+					"seed_locked": false,
+					"type": "uniform"
+				},
+				{
+					"name": "combine",
+					"node_position": {
+						"x": -514.322693,
+						"y": -176.48642
+					},
+					"parameters": {
+
+					},
+					"seed": 31890,
+					"seed_locked": false,
+					"type": "combine"
+				},
+				{
+					"name": "gen_inputs",
+					"node_position": {
+						"x": -847.322693,
+						"y": -143.585464
+					},
+					"parameters": {
+
+					},
+					"ports": [
+
+					],
+					"seed": 63262,
+					"seed_locked": false,
+					"type": "ios"
+				},
+				{
+					"name": "gen_outputs",
+					"node_position": {
+						"x": -206.322693,
+						"y": -144.585464
+					},
+					"parameters": {
+
+					},
+					"ports": [
+						{
+							"group_size": 4,
+							"name": "Albedo",
+							"type": "rgb"
+						},
+						{
+							"name": "ORM",
+							"type": "rgb"
+						},
+						{
+							"name": "Emission",
+							"type": "rgb"
+						},
+						{
+							"name": "Normal",
+							"type": "rgb"
+						}
+					],
+					"seed": 2686,
+					"seed_locked": false,
+					"type": "ios"
+				},
+				{
+					"name": "gen_parameters",
+					"node_position": {
+						"x": -739.30249,
+						"y": -408.925568
+					},
+					"parameters": {
+						"param0": 6,
+						"param1": 0.1
+					},
+					"seed": 55275,
+					"seed_locked": false,
+					"type": "remote",
+					"widgets": [
+						{
+							"configurations": {
+								"Aluminum": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.925,
+											"g": 0.921,
+											"r": 0.913,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Chromium": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.554,
+											"g": 0.556,
+											"r": 0.55,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Cobalt": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.634,
+											"g": 0.655,
+											"r": 0.662,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Copper": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.538,
+											"g": 0.637,
+											"r": 0.955,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Gold": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.336,
+											"g": 0.766,
+											"r": 1,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Iron": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.58,
+											"g": 0.57,
+											"r": 0.56,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Nickel": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.526,
+											"g": 0.609,
+											"r": 0.66,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Platinum": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.585,
+											"g": 0.637,
+											"r": 0.672,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Silver": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.915,
+											"g": 0.96,
+											"r": 0.972,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Titanium": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.449,
+											"g": 0.497,
+											"r": 0.542,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								]
+							},
+							"label": "Metal",
+							"linked_widgets": [
+								{
+									"node": "uniform_3",
+									"widget": "color"
+								}
+							],
+							"name": "param0",
+							"type": "config_control"
+						},
+						{
+							"label": "Roughness",
+							"linked_widgets": [
+								{
+									"node": "uniform_greyscale_3",
+									"widget": "color"
+								}
+							],
+							"name": "param1",
+							"type": "linked_control"
+						}
+					]
+				},
+				{
+					"name": "uniform",
+					"node_position": {
+						"x": -673.80249,
+						"y": -56.425568
+					},
+					"parameters": {
+						"color": {
+							"a": 1,
+							"b": 0,
+							"g": 0,
+							"r": 0,
+							"type": "Color"
+						}
+					},
+					"seed": 53321,
+					"seed_locked": false,
+					"type": "uniform"
+				}
+			],
+			"parameters": {
+				"param0": 6,
+				"param1": 0.1
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"shortdesc": "",
+			"type": "graph"
+		},
+		{
+			"connections": [
+				{
+					"from": "uniform_2",
+					"from_port": 0,
+					"to": "gen_outputs",
+					"to_port": 3
+				},
+				{
+					"from": "uniform_greyscale_3_2",
+					"from_port": 0,
+					"to": "combine",
+					"to_port": 0
+				},
+				{
+					"from": "uniform_greyscale_3",
+					"from_port": 0,
+					"to": "combine",
+					"to_port": 1
+				},
+				{
+					"from": "uniform_greyscale_4",
+					"from_port": 0,
+					"to": "combine",
+					"to_port": 2
+				},
+				{
+					"from": "uniform_3",
+					"from_port": 0,
+					"to": "gen_outputs",
+					"to_port": 0
+				},
+				{
+					"from": "combine",
+					"from_port": 0,
+					"to": "gen_outputs",
+					"to_port": 1
+				},
+				{
+					"from": "uniform",
+					"from_port": 0,
+					"to": "gen_outputs",
+					"to_port": 2
+				}
+			],
+			"label": "Metal",
+			"longdesc": "",
+			"name": "graph_2_3",
+			"node_position": {
+				"x": 180,
+				"y": 400
+			},
+			"nodes": [
+				{
+					"name": "uniform_greyscale_3_2",
+					"node_position": {
+						"x": -712.322693,
+						"y": -216.48642
+					},
+					"parameters": {
+						"color": 1
+					},
+					"seed": 36576,
+					"seed_locked": false,
+					"type": "uniform_greyscale"
+				},
+				{
+					"name": "uniform_greyscale_4",
+					"node_position": {
+						"x": -712.322693,
+						"y": -114.48642
+					},
+					"parameters": {
+						"color": 1
+					},
+					"seed": 36422,
+					"seed_locked": false,
+					"type": "uniform_greyscale"
+				},
+				{
+					"name": "uniform_greyscale_3",
+					"node_position": {
+						"x": -712.322693,
+						"y": -165.48642
+					},
+					"parameters": {
+						"color": 0.1
+					},
+					"seed": 36499,
+					"seed_locked": false,
+					"type": "uniform_greyscale"
+				},
+				{
+					"name": "uniform_2",
+					"node_position": {
+						"x": -674.908142,
+						"y": -0.333069
+					},
+					"parameters": {
+						"color": {
+							"a": 1,
+							"b": 0,
+							"g": 0.501961,
+							"r": 0.501961,
+							"type": "Color"
+						}
+					},
+					"seed": -61342,
+					"seed_locked": false,
+					"type": "uniform"
+				},
+				{
+					"name": "uniform_3",
+					"node_position": {
+						"x": -676.322693,
+						"y": -271.48642
+					},
+					"parameters": {
+						"color": {
+							"a": 1,
+							"b": 0.58,
+							"g": 0.57,
+							"r": 0.56,
+							"type": "Color"
+						}
+					},
+					"seed": 11477,
+					"seed_locked": false,
+					"type": "uniform"
+				},
+				{
+					"name": "combine",
+					"node_position": {
+						"x": -514.322693,
+						"y": -176.48642
+					},
+					"parameters": {
+
+					},
+					"seed": 31890,
+					"seed_locked": false,
+					"type": "combine"
+				},
+				{
+					"name": "gen_inputs",
+					"node_position": {
+						"x": -847.322693,
+						"y": -143.585464
+					},
+					"parameters": {
+
+					},
+					"ports": [
+
+					],
+					"seed": 63262,
+					"seed_locked": false,
+					"type": "ios"
+				},
+				{
+					"name": "gen_outputs",
+					"node_position": {
+						"x": -206.322693,
+						"y": -144.585464
+					},
+					"parameters": {
+
+					},
+					"ports": [
+						{
+							"group_size": 4,
+							"name": "Albedo",
+							"type": "rgb"
+						},
+						{
+							"name": "ORM",
+							"type": "rgb"
+						},
+						{
+							"name": "Emission",
+							"type": "rgb"
+						},
+						{
+							"name": "Normal",
+							"type": "rgb"
+						}
+					],
+					"seed": 2686,
+					"seed_locked": false,
+					"type": "ios"
+				},
+				{
+					"name": "gen_parameters",
+					"node_position": {
+						"x": -739.30249,
+						"y": -408.925568
+					},
+					"parameters": {
+						"param0": 5,
+						"param1": 0.1
+					},
+					"seed": 55275,
+					"seed_locked": false,
+					"type": "remote",
+					"widgets": [
+						{
+							"configurations": {
+								"Aluminum": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.925,
+											"g": 0.921,
+											"r": 0.913,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Chromium": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.554,
+											"g": 0.556,
+											"r": 0.55,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Cobalt": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.634,
+											"g": 0.655,
+											"r": 0.662,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Copper": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.538,
+											"g": 0.637,
+											"r": 0.955,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Gold": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.336,
+											"g": 0.766,
+											"r": 1,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Iron": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.58,
+											"g": 0.57,
+											"r": 0.56,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Nickel": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.526,
+											"g": 0.609,
+											"r": 0.66,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Platinum": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.585,
+											"g": 0.637,
+											"r": 0.672,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Silver": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.915,
+											"g": 0.96,
+											"r": 0.972,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Titanium": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.449,
+											"g": 0.497,
+											"r": 0.542,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								]
+							},
+							"label": "Metal",
+							"linked_widgets": [
+								{
+									"node": "uniform_3",
+									"widget": "color"
+								}
+							],
+							"name": "param0",
+							"type": "config_control"
+						},
+						{
+							"label": "Roughness",
+							"linked_widgets": [
+								{
+									"node": "uniform_greyscale_3",
+									"widget": "color"
+								}
+							],
+							"name": "param1",
+							"type": "linked_control"
+						}
+					]
+				},
+				{
+					"name": "uniform",
+					"node_position": {
+						"x": -673.80249,
+						"y": -56.425568
+					},
+					"parameters": {
+						"color": {
+							"a": 1,
+							"b": 0,
+							"g": 0,
+							"r": 0,
+							"type": "Color"
+						}
+					},
+					"seed": 53321,
+					"seed_locked": false,
+					"type": "uniform"
+				}
+			],
+			"parameters": {
+				"param0": 5,
+				"param1": 0.1
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"shortdesc": "",
+			"type": "graph"
+		},
+		{
+			"name": "uniform_greyscale",
+			"node_position": {
+				"x": 220,
+				"y": 900
+			},
+			"parameters": {
+				"color": 0.01
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "uniform_greyscale"
+		},
+		{
+			"name": "uniform_greyscale_2",
+			"node_position": {
+				"x": 220,
+				"y": 980
+			},
+			"parameters": {
+				"color": 0.05
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "uniform_greyscale"
+		},
+		{
+			"name": "blend_2",
+			"node_position": {
+				"x": 720,
+				"y": 800
+			},
+			"parameters": {
+				"amount": 1,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "perlin",
+			"node_position": {
+				"x": 760,
+				"y": 940
+			},
+			"parameters": {
+				"iterations": 5,
+				"persistence": 0.5,
+				"scale_x": 16,
+				"scale_y": 16
+			},
+			"seed": 0.706154,
+			"seed_locked": false,
+			"type": "perlin"
+		},
+		{
+			"name": "tones_step_2",
+			"node_position": {
+				"x": 1000,
+				"y": 940
+			},
+			"parameters": {
+				"invert": false,
+				"value": 0.7,
+				"width": 0.05
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "tones_step"
+		},
+		{
+			"name": "uniform",
+			"node_position": {
+				"x": 1040,
+				"y": 660
+			},
+			"parameters": {
+				"color": {
+					"a": 1,
+					"b": 0.189432,
+					"g": 0.436636,
+					"r": 0.628906,
+					"type": "Color"
+				}
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "uniform"
+		},
+		{
+			"name": "blend_3",
+			"node_position": {
+				"x": 1400,
+				"y": 680
+			},
+			"parameters": {
+				"amount": 1,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "blend_4",
+			"node_position": {
+				"x": 1440,
+				"y": 820
+			},
+			"parameters": {
+				"amount": 1,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "uniform_greyscale_3",
+			"node_position": {
+				"x": 980,
+				"y": 860
+			},
+			"parameters": {
+				"color": 1
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "uniform_greyscale"
+		},
+		{
+			"name": "tones_step_3",
+			"node_position": {
+				"x": -80,
+				"y": 560
+			},
+			"parameters": {
+				"invert": false,
+				"value": 0.01,
+				"width": 0.01
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "tones_step"
+		},
+		{
+			"connections": [
+				{
+					"from": "uniform_2",
+					"from_port": 0,
+					"to": "gen_outputs",
+					"to_port": 3
+				},
+				{
+					"from": "uniform_greyscale_3_2",
+					"from_port": 0,
+					"to": "combine",
+					"to_port": 0
+				},
+				{
+					"from": "uniform_greyscale_3",
+					"from_port": 0,
+					"to": "combine",
+					"to_port": 1
+				},
+				{
+					"from": "uniform_greyscale_4",
+					"from_port": 0,
+					"to": "combine",
+					"to_port": 2
+				},
+				{
+					"from": "uniform_3",
+					"from_port": 0,
+					"to": "gen_outputs",
+					"to_port": 0
+				},
+				{
+					"from": "combine",
+					"from_port": 0,
+					"to": "gen_outputs",
+					"to_port": 1
+				},
+				{
+					"from": "uniform",
+					"from_port": 0,
+					"to": "gen_outputs",
+					"to_port": 2
+				}
+			],
+			"label": "Metal",
+			"longdesc": "",
+			"name": "graph_2_4",
+			"node_position": {
+				"x": 180,
+				"y": 540
+			},
+			"nodes": [
+				{
+					"name": "uniform_greyscale_3_2",
+					"node_position": {
+						"x": -712.322693,
+						"y": -216.48642
+					},
+					"parameters": {
+						"color": 1
+					},
+					"seed": 36576,
+					"seed_locked": false,
+					"type": "uniform_greyscale"
+				},
+				{
+					"name": "uniform_greyscale_4",
+					"node_position": {
+						"x": -712.322693,
+						"y": -114.48642
+					},
+					"parameters": {
+						"color": 1
+					},
+					"seed": 36422,
+					"seed_locked": false,
+					"type": "uniform_greyscale"
+				},
+				{
+					"name": "uniform_greyscale_3",
+					"node_position": {
+						"x": -712.322693,
+						"y": -165.48642
+					},
+					"parameters": {
+						"color": 0.1
+					},
+					"seed": 36499,
+					"seed_locked": false,
+					"type": "uniform_greyscale"
+				},
+				{
+					"name": "uniform_2",
+					"node_position": {
+						"x": -674.908142,
+						"y": -0.333069
+					},
+					"parameters": {
+						"color": {
+							"a": 1,
+							"b": 0,
+							"g": 0.501961,
+							"r": 0.501961,
+							"type": "Color"
+						}
+					},
+					"seed": -61342,
+					"seed_locked": false,
+					"type": "uniform"
+				},
+				{
+					"name": "uniform_3",
+					"node_position": {
+						"x": -676.322693,
+						"y": -271.48642
+					},
+					"parameters": {
+						"color": {
+							"a": 1,
+							"b": 0.634,
+							"g": 0.655,
+							"r": 0.662,
+							"type": "Color"
+						}
+					},
+					"seed": 11477,
+					"seed_locked": false,
+					"type": "uniform"
+				},
+				{
+					"name": "combine",
+					"node_position": {
+						"x": -514.322693,
+						"y": -176.48642
+					},
+					"parameters": {
+
+					},
+					"seed": 31890,
+					"seed_locked": false,
+					"type": "combine"
+				},
+				{
+					"name": "gen_inputs",
+					"node_position": {
+						"x": -847.322693,
+						"y": -143.585464
+					},
+					"parameters": {
+
+					},
+					"ports": [
+
+					],
+					"seed": 63262,
+					"seed_locked": false,
+					"type": "ios"
+				},
+				{
+					"name": "gen_outputs",
+					"node_position": {
+						"x": -206.322693,
+						"y": -144.585464
+					},
+					"parameters": {
+
+					},
+					"ports": [
+						{
+							"group_size": 4,
+							"name": "Albedo",
+							"type": "rgb"
+						},
+						{
+							"name": "ORM",
+							"type": "rgb"
+						},
+						{
+							"name": "Emission",
+							"type": "rgb"
+						},
+						{
+							"name": "Normal",
+							"type": "rgb"
+						}
+					],
+					"seed": 2686,
+					"seed_locked": false,
+					"type": "ios"
+				},
+				{
+					"name": "gen_parameters",
+					"node_position": {
+						"x": -739.30249,
+						"y": -408.925568
+					},
+					"parameters": {
+						"param0": 2,
+						"param1": 0.1
+					},
+					"seed": 55275,
+					"seed_locked": false,
+					"type": "remote",
+					"widgets": [
+						{
+							"configurations": {
+								"Aluminum": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.925,
+											"g": 0.921,
+											"r": 0.913,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Chromium": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.554,
+											"g": 0.556,
+											"r": 0.55,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Cobalt": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.634,
+											"g": 0.655,
+											"r": 0.662,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Copper": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.538,
+											"g": 0.637,
+											"r": 0.955,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Gold": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.336,
+											"g": 0.766,
+											"r": 1,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Iron": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.58,
+											"g": 0.57,
+											"r": 0.56,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Nickel": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.526,
+											"g": 0.609,
+											"r": 0.66,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Platinum": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.585,
+											"g": 0.637,
+											"r": 0.672,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Silver": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.915,
+											"g": 0.96,
+											"r": 0.972,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								],
+								"Titanium": [
+									{
+										"node": "uniform_3",
+										"value": {
+											"a": 1,
+											"b": 0.449,
+											"g": 0.497,
+											"r": 0.542,
+											"type": "Color"
+										},
+										"widget": "color"
+									}
+								]
+							},
+							"label": "Metal",
+							"linked_widgets": [
+								{
+									"node": "uniform_3",
+									"widget": "color"
+								}
+							],
+							"name": "param0",
+							"type": "config_control"
+						},
+						{
+							"label": "Roughness",
+							"linked_widgets": [
+								{
+									"node": "uniform_greyscale_3",
+									"widget": "color"
+								}
+							],
+							"name": "param1",
+							"type": "linked_control"
+						}
+					]
+				},
+				{
+					"name": "uniform",
+					"node_position": {
+						"x": -673.80249,
+						"y": -56.425568
+					},
+					"parameters": {
+						"color": {
+							"a": 1,
+							"b": 0,
+							"g": 0,
+							"r": 0,
+							"type": "Color"
+						}
+					},
+					"seed": 53321,
+					"seed_locked": false,
+					"type": "uniform"
+				}
+			],
+			"parameters": {
+				"param0": 2,
+				"param1": 0.1
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"shortdesc": "",
+			"type": "graph"
+		},
+		{
+			"name": "blend_5",
+			"node_position": {
+				"x": 460,
+				"y": 600
+			},
+			"parameters": {
+				"amount": 1,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "blend_6",
+			"node_position": {
+				"x": 431.205811,
+				"y": 1006.455566
+			},
+			"parameters": {
+				"amount": 1,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "uniform_greyscale_4",
+			"node_position": {
+				"x": 220,
+				"y": 1060
+			},
+			"parameters": {
+				"color": 0.5
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "uniform_greyscale"
+		},
+		{
+			"name": "math_4",
+			"node_position": {
+				"x": 1200,
+				"y": 900
+			},
+			"parameters": {
+				"clamp": false,
+				"default_in1": 0,
+				"default_in2": 0,
+				"op": 2
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "math"
+		},
+		{
+			"name": "math_5",
+			"node_position": {
+				"x": 1120,
+				"y": 380
+			},
+			"parameters": {
+				"clamp": true,
+				"default_in1": 0,
+				"default_in2": 0,
+				"op": 1
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "math"
+		},
+		{
+			"name": "text",
+			"node_position": {
+				"x": 580,
+				"y": 240
+			},
+			"parameters": {
+				"center": true,
+				"font": "",
+				"font_size": 300,
+				"text": "CARGO",
+				"x": 0,
+				"y": -0.32
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "text"
+		},
+		{
+			"name": "bevel",
+			"node_position": {
+				"x": 800,
+				"y": 240
+			},
+			"parameters": {
+				"bevel": {
+					"points": [
+						{
+							"ls": 0,
+							"rs": 1,
+							"x": 0,
+							"y": 0
+						},
+						{
+							"ls": 1,
+							"rs": 0,
+							"x": 1,
+							"y": 1
+						}
+					],
+					"type": "Curve"
+				},
+				"distance": 0.05,
+				"size": 10
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "bevel"
+		}
+	],
+	"parameters": {
+
+	},
+	"seed": 0,
+	"seed_locked": false,
+	"shortdesc": "",
+	"type": "graph"
+}

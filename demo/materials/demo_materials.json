@@ -32,6 +32,13 @@
 		"roughness" : 0.05,
 		"is_metal": true
 	},
+	"bolted_metal_crate":
+	{
+		"diffuse": "bolted_metal_crate.png",
+		"normal_map": "bolted_metal_crate_normal.png",
+		"roughness_nap" : "bolted_metal_crate_roughness.png",
+		"is_metal": true
+	},
 	"coal_black":
 	{
 		"diffuse": "coal_black.png"
