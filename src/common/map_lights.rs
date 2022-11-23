@@ -65,6 +65,7 @@ pub fn extract_map_lights(map: &bsp_map_compact::BSPMap) -> Vec<PointLight>
 		let mut intensity = None;
 		let mut color = None;
 		let mut target = None;
+		let mut angle = None;
 
 		// Parse Quake-style lights.
 
@@ -102,6 +103,13 @@ pub fn extract_map_lights(map: &bsp_map_compact::BSPMap) -> Vec<PointLight>
 			{
 				target = Some(value);
 			}
+			if key == "angle"
+			{
+				if let Ok(a) = map_file_common::parse_number(&mut value.clone())
+				{
+					angle = Some(a);
+				}
+			}
 		}
 
 		if is_light_entity
@@ -128,7 +136,7 @@ pub fn extract_map_lights(map: &bsp_map_compact::BSPMap) -> Vec<PointLight>
 						{
 							direction = Some(LightDirection {
 								dir_normalized: dir / dir_len,
-								half_angle_cos: 0.9, // TODO - allow to configure this and choose good default value.
+								half_angle_cos: (angle.unwrap_or(40.0) * (0.5 * std::f32::consts::PI / 180.0)).cos(),
 							});
 						}
 					}
