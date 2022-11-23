@@ -92,6 +92,22 @@
 		"diffuse": "limestone_steps.png",
 		"normal_map": "limestone_steps_normal.png"
 	},
+	"marble_black_column":
+	{
+		"diffuse": "marble_black_column.png",
+		"normal_map": "marble_black_column_normal.png"
+	},
+	"marble_black_tiles":
+	{
+		"diffuse": "marble_black_tiles.png",
+		"normal_map": "marble_black_tiles_normal.png",
+		"roughness": 0.001
+	},
+	"marble_black_trim":
+	{
+		"diffuse": "marble_black_trim.png",
+		"roughness": 0.001
+	},
 	"marble_column":
 	{
 		"diffuse": "marble_column.png",
