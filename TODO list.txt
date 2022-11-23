@@ -23,7 +23,6 @@ Renderer:
 * Emissive textures (lamps, screens)
 
 Lightmapper:
-* Cone lights
 * Colored shadows
 * Shadows from dynamic objects (configurable)
 * Alpha-shadows (with texture fetch in tracing code)
