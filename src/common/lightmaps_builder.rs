@@ -530,12 +530,21 @@ fn build_primary_lightmap(
 				{
 					let vec_to_light = light.pos - pos;
 					let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
-					let angle_cos = plane_normal_normalized.dot(vec_to_light) / vec_to_light_len2.sqrt();
+					let vec_to_light_len = vec_to_light_len2.sqrt();
+					let angle_cos = plane_normal_normalized.dot(vec_to_light) / vec_to_light_len;
 
 					if angle_cos <= 0.0
 					{
 						// Do not determine visibility for light behind polygon plane.
 						continue;
+					}
+
+					if let Some(direction) = &light.direction
+					{
+						if -vec_to_light.dot(direction.dir_normalized) < direction.half_angle_cos * vec_to_light_len
+						{
+							continue;
+						}
 					}
 
 					let shadow_factor = get_shadow_factor(&light.pos, &pos, map, opacity_table);
@@ -1033,11 +1042,20 @@ fn build_polygon_diretional_lightmap(
 				{
 					let vec_to_light = primay_light.pos - pos;
 					let vec_to_light_len2 = vec_to_light.magnitude2().max(MIN_POSITIVE_VALUE);
+					let vec_to_light_len = vec_to_light_len2.sqrt();
 
 					if plane_normal_normalized.dot(vec_to_light) <= 0.0
 					{
 						// Do not determine visibility for light behind polygon plane.
 						continue;
+					}
+
+					if let Some(direction) = &primay_light.direction
+					{
+						if -vec_to_light.dot(direction.dir_normalized) < direction.half_angle_cos * vec_to_light_len
+						{
+							continue;
+						}
 					}
 
 					let shadow_factor = get_shadow_factor(&primay_light.pos, &pos, map, opacity_table);
@@ -1871,6 +1889,15 @@ fn calculate_light_for_grid_point(
 		{
 			let vec_to_light = primay_light.pos - pos;
 			let vec_to_light_len2 = vec_to_light.magnitude2().max(min_light_square_dist);
+			let vec_to_light_len = vec_to_light_len2.sqrt();
+
+			if let Some(direction) = &primay_light.direction
+			{
+				if -vec_to_light.dot(direction.dir_normalized) < direction.half_angle_cos * vec_to_light_len
+				{
+					continue;
+				}
+			}
 
 			let shadow_factor = get_shadow_factor(&primay_light.pos, &pos, map, opacity_table);
 			if shadow_factor <= 0.0
