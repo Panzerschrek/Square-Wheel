@@ -149,17 +149,6 @@
 		"diffuse": "roof_tiles.png",
 		"normal_map": "roof_tiles_normal.png"
 	},
-	"sky":
-	{
-		"diffuse": "sky.png",
-		"emissive_light" : [16.0, 16.0, 20.0],
-		"skybox" :
-		{
-			"side_images" : [ "sky_side.png", "sky_side.png", "sky_side.png", "sky_side.png", "sky_bottom.png", "sky_top.png" ],
-			"brightness" : 0.5
-		},
-		"light" : false
-	},
 	"stained_glass":
 	{
 		"diffuse": "stained_glass.png",

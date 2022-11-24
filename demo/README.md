@@ -60,6 +60,7 @@ Use script with "i686" suffix on 32-bit system, use script with "_generic" suffi
 * Generate textures, using "export_textures.py" script. MaterialMaker v 0.99 (https://github.com/RodZill4/material-maker/) and GIMP 2.10 are required.
 * Compile demo map using "map_compiler" executable and build lightmaps, using "lightmapper" executable.
 * Export models, using blender and newest IQM export script (see iqm directory in repository root).
+* Export skybox textures, using "sky.blend".
 * Package engine executables, demo map, textures, materials and config file together.
 
 
