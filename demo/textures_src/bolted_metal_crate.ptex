@@ -217,21 +217,27 @@
 			"to_port": 0
 		},
 		{
-			"from": "text",
-			"from_port": 0,
-			"to": "bevel",
-			"to_port": 0
-		},
-		{
 			"from": "bevel",
 			"from_port": 0,
 			"to": "math_5",
 			"to_port": 1
+		},
+		{
+			"from": "text",
+			"from_port": 0,
+			"to": "transform2_2",
+			"to_port": 0
+		},
+		{
+			"from": "transform2_2",
+			"from_port": 0,
+			"to": "bevel",
+			"to_port": 0
 		}
 	],
 	"label": "Graph",
 	"longdesc": "",
-	"name": "@@312",
+	"name": "312",
 	"node_position": {
 		"x": 0,
 		"y": 0
@@ -1844,13 +1850,13 @@
 		{
 			"name": "text",
 			"node_position": {
-				"x": 580,
-				"y": 240
+				"x": 320,
+				"y": 200
 			},
 			"parameters": {
 				"center": true,
 				"font": "",
-				"font_size": 300,
+				"font_size": 370,
 				"text": "CARGO",
 				"x": 0,
 				"y": -0.32
@@ -1889,6 +1895,24 @@
 			"seed": 0,
 			"seed_locked": false,
 			"type": "bevel"
+		},
+		{
+			"name": "transform2_2",
+			"node_position": {
+				"x": 560,
+				"y": 240
+			},
+			"parameters": {
+				"mode": 0,
+				"rotate": 0,
+				"scale_x": 1,
+				"scale_y": -1,
+				"translate_x": 0,
+				"translate_y": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "transform2"
 		}
 	],
 	"parameters": {
