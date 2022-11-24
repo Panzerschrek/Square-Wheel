@@ -2,11 +2,11 @@
 	"sky":
 	{
 		"diffuse": "sky.png",
-		"emissive_light" : [0.34, 0.36, 0.5],
+		"emissive_light" : [16.0, 16.0, 20.0],
 		"skybox" :
 		{
 			"side_images" : [ "sky/0001.png", "sky/0002.png", "sky/0003.png", "sky/0004.png", "sky/0005.png", "sky/0006.png" ],
-			"brightness" : 60.0
+			"brightness" : 80.0
 		},
 		"light" : false
 	}
