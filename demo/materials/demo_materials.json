@@ -210,6 +210,7 @@
 	},
 	"wooden_plate_with_rusty_metal":
 	{
-		"diffuse": "wooden_plate_with_rusty_metal.png"
+		"diffuse": "wooden_plate_with_rusty_metal.png",
+		"normal_map": "wooden_plate_with_rusty_metal_normal.png"
 	}
 }
