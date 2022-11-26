@@ -15548,3 +15548,33 @@
 "model" "wormbeak.iqm"
 "angle" "270"
 }
+// entity 76
+{
+"classname" "misc_sprite"
+"origin" "2736 752 -90"
+"light" "20"
+"color" "100 200 255"
+"sprite" "light_sprite.png"
+"blending_mode" "2"
+"orientation" "1"
+}
+// entity 77
+{
+"classname" "misc_sprite"
+"origin" "2960 752 -90"
+"light" "20"
+"color" "100 200 255"
+"sprite" "light_sprite.png"
+"blending_mode" "2"
+"orientation" "1"
+}
+// entity 78
+{
+"classname" "misc_sprite"
+"origin" "2704 912 -58"
+"light" "20"
+"color" "100 200 255"
+"sprite" "light_sprite.png"
+"blending_mode" "2"
+"orientation" "1"
+}
