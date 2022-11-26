@@ -315,7 +315,7 @@ fn spawn_regular_entity(
 				let texture = resources_manager.get_texture_lite(&texture_file_name);
 
 				let position = origin;
-				let rotation = QuaternionF::from_angle_z(Rad(get_entity_angle_rad(map_entity, map)));
+				let rotation = get_entity_rotation(map_entity, map);
 
 				ecs.spawn((
 					SimpleAnimationComponent {},
@@ -381,36 +381,6 @@ fn spawn_regular_entity(
 					};
 				}
 
-				let mut blending_mode = material::BlendingMode::AlphaBlend;
-				if let Some(entity_blending_mode) = get_entity_f32(map_entity, map, "blending_mode")
-				{
-					match entity_blending_mode as u32
-					{
-						0 =>
-						{
-							blending_mode = material::BlendingMode::None;
-						},
-						1 =>
-						{
-							blending_mode = material::BlendingMode::Average;
-						},
-						2 =>
-						{
-							blending_mode = material::BlendingMode::Additive;
-						},
-						3 =>
-						{
-							blending_mode = material::BlendingMode::AlphaTest;
-						},
-						4 =>
-						{
-							blending_mode = material::BlendingMode::AlphaBlend;
-						},
-						_ =>
-						{},
-					};
-				}
-
 				let mut light_add = [0.0, 0.0, 0.0];
 				let mut light_scale = 1.0;
 				if let Some(light) = get_entity_f32(map_entity, map, "light")
@@ -435,8 +405,54 @@ fn spawn_regular_entity(
 					radius,
 					texture,
 					orientation,
-					blending_mode,
+					blending_mode: get_entity_blending_mode(map_entity, map),
 					light_scale,
+					light_add,
+				},));
+			}
+		},
+		Some("misc_decal") =>
+		{
+			if let (Some(decal_file_name), Some(origin)) = (
+				get_entity_key_value(map_entity, map, "decal"),
+				get_entity_origin(map_entity, map),
+			)
+			{
+				let texture = resources_manager.get_texture_lite(decal_file_name);
+
+				let texture_mip0 = &texture[0];
+				let size = Vec3f::new(
+					texture_mip0.size[0].min(texture_mip0.size[1]) as f32,
+					texture_mip0.size[0] as f32,
+					texture_mip0.size[1] as f32,
+				) * 0.5;
+
+				let mut light_add = [0.0, 0.0, 0.0];
+				let mut lightmap_light_scale = 1.0;
+				if let Some(light) = get_entity_f32(map_entity, map, "light")
+				{
+					lightmap_light_scale = 0.0;
+					let mut color = [1.0, 1.0, 1.0];
+					if let Some(entity_color_str) = get_entity_key_value(map_entity, map, "color")
+					{
+						if let Ok(entity_color) = map_file_common::parse_vec3(entity_color_str)
+						{
+							color[0] = (entity_color.x / 255.0).max(0.0).min(1.0);
+							color[1] = (entity_color.y / 255.0).max(0.0).min(1.0);
+							color[2] = (entity_color.z / 255.0).max(0.0).min(1.0);
+						}
+					}
+
+					light_add = color.map(|c| c * light);
+				}
+
+				ecs.spawn((Decal {
+					position: origin,
+					rotation: get_entity_rotation(map_entity, map),
+					scale: size,
+					texture,
+					blending_mode: get_entity_blending_mode(map_entity, map),
+					lightmap_light_scale,
 					light_add,
 				},));
 			}
@@ -446,7 +462,7 @@ fn spawn_regular_entity(
 			if let Some(origin) = get_entity_origin(map_entity, map)
 			{
 				let position = origin;
-				let rotation = QuaternionF::from_angle_z(Rad(get_entity_angle_rad(map_entity, map)));
+				let rotation = get_entity_rotation(map_entity, map);
 
 				ecs.spawn((
 					SimpleAnimationComponent {},
@@ -757,9 +773,27 @@ fn find_first_entity_of_given_class<'a>(
 	None
 }
 
+const TO_RAD: f32 = std::f32::consts::PI / 180.0;
+
 fn get_entity_angle_rad(entity: &bsp_map_compact::Entity, map: &bsp_map_compact::BSPMap) -> f32
 {
-	get_entity_f32(entity, map, "angle").unwrap_or(0.0) * (std::f32::consts::PI / 180.0)
+	get_entity_f32(entity, map, "angle").unwrap_or(0.0) * TO_RAD
+}
+
+fn get_entity_rotation(entity: &bsp_map_compact::Entity, map: &bsp_map_compact::BSPMap) -> QuaternionF
+{
+	// TODO - double check and fix this.
+	if let Some(angles_str) = get_entity_key_value(entity, map, "angles")
+	{
+		if let Ok(angles) = map_file_common::parse_vec3(angles_str)
+		{
+			return QuaternionF::from_angle_x(Rad(angles.x * TO_RAD)) *
+				QuaternionF::from_angle_y(Rad(angles.y * TO_RAD)) *
+				QuaternionF::from_angle_z(Rad(angles.z * TO_RAD));
+		}
+	}
+
+	QuaternionF::from_angle_z(Rad(get_entity_angle_rad(entity, map)))
 }
 
 fn get_entity_f32(entity: &bsp_map_compact::Entity, map: &bsp_map_compact::BSPMap, key: &str) -> Option<f32>
@@ -776,6 +810,27 @@ fn get_entity_origin(entity: &bsp_map_compact::Entity, map: &bsp_map_compact::BS
 	else
 	{
 		None
+	}
+}
+
+fn get_entity_blending_mode(entity: &bsp_map_compact::Entity, map: &bsp_map_compact::BSPMap) -> material::BlendingMode
+{
+	// TODO - fix this mess, use string representations of properties, instead of meaningless numbers.
+	if let Some(blending_mode) = get_entity_f32(entity, map, "blending_mode")
+	{
+		match blending_mode as u32
+		{
+			0 => material::BlendingMode::None,
+			1 => material::BlendingMode::Average,
+			2 => material::BlendingMode::Additive,
+			3 => material::BlendingMode::AlphaTest,
+			4 => material::BlendingMode::AlphaBlend,
+			_ => material::BlendingMode::None,
+		}
+	}
+	else
+	{
+		material::BlendingMode::None
 	}
 }
 
