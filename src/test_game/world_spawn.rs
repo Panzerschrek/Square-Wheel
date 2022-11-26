@@ -299,9 +299,7 @@ fn spawn_regular_entity(
 				get_entity_origin(map_entity, map),
 			)
 			{
-				let model_file_name = model_file_name.to_string();
-
-				let model = resources_manager.get_model(&model_file_name);
+				let model = resources_manager.get_model(model_file_name);
 
 				// TODO - load texture more wisely.
 				let mut texture_file_name = String::new();
@@ -338,6 +336,109 @@ fn spawn_regular_entity(
 						ordering_custom_bbox: None,
 					},
 				));
+			}
+		},
+		Some("misc_sprite") =>
+		{
+			if let (Some(sprite_file_name), Some(origin)) = (
+				get_entity_key_value(map_entity, map, "sprite"),
+				get_entity_origin(map_entity, map),
+			)
+			{
+				let texture = resources_manager.get_texture_lite(sprite_file_name);
+
+				let texture_mip0 = &texture[0];
+				let radius = 0.25 *
+					((texture_mip0.size[0] * texture_mip0.size[0] + texture_mip0.size[1] * texture_mip0.size[1])
+						as f32)
+						.sqrt();
+
+				// TODO - fix this mess, use string representations of properties, instead of meaningless numbers.
+
+				let mut orientation = SpriteOrientation::FacingTowardsCamera;
+				if let Some(entity_orientation) = get_entity_f32(map_entity, map, "orientation")
+				{
+					match entity_orientation as u32
+					{
+						0 =>
+						{
+							orientation = SpriteOrientation::ParallelToCameraPlane;
+						},
+						1 =>
+						{
+							orientation = SpriteOrientation::FacingTowardsCamera;
+						},
+						2 =>
+						{
+							orientation = SpriteOrientation::AlignToZAxisParallelToCameraPlane;
+						},
+						3 =>
+						{
+							orientation = SpriteOrientation::AlignToZAxisFacingTowardsCamera;
+						},
+						_ =>
+						{},
+					};
+				}
+
+				let mut blending_mode = material::BlendingMode::AlphaBlend;
+				if let Some(entity_blending_mode) = get_entity_f32(map_entity, map, "blending_mode")
+				{
+					match entity_blending_mode as u32
+					{
+						0 =>
+						{
+							blending_mode = material::BlendingMode::None;
+						},
+						1 =>
+						{
+							blending_mode = material::BlendingMode::Average;
+						},
+						2 =>
+						{
+							blending_mode = material::BlendingMode::Additive;
+						},
+						3 =>
+						{
+							blending_mode = material::BlendingMode::AlphaTest;
+						},
+						4 =>
+						{
+							blending_mode = material::BlendingMode::AlphaBlend;
+						},
+						_ =>
+						{},
+					};
+				}
+
+				let mut light_add = [0.0, 0.0, 0.0];
+				let mut light_scale = 1.0;
+				if let Some(light) = get_entity_f32(map_entity, map, "light")
+				{
+					light_scale = 0.0;
+					let mut color = [1.0, 1.0, 1.0];
+					if let Some(entity_color_str) = get_entity_key_value(map_entity, map, "color")
+					{
+						if let Ok(entity_color) = map_file_common::parse_vec3(entity_color_str)
+						{
+							color[0] = (entity_color.x / 255.0).max(0.0).min(1.0);
+							color[1] = (entity_color.y / 255.0).max(0.0).min(1.0);
+							color[2] = (entity_color.z / 255.0).max(0.0).min(1.0);
+						}
+					}
+
+					light_add = color.map(|c| c * light);
+				}
+
+				ecs.spawn((Sprite {
+					position: origin,
+					radius,
+					texture,
+					orientation,
+					blending_mode,
+					light_scale,
+					light_add,
+				},));
 			}
 		},
 		Some("light_wall_oil_lamp") =>
