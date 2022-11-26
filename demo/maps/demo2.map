@@ -15513,3 +15513,38 @@
 ( 2208 1880 -48 ) ( 2208 1896 -48 ) ( 2208 1896 -176 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
+// entity 71
+{
+"classname" "misc_model"
+"origin" "3992 1944 -184"
+"model" "necrobot.iqm"
+"angle" "225"
+}
+// entity 72
+{
+"classname" "misc_model"
+"origin" "3803.31 1904 -184"
+"model" "necrobot.iqm"
+"angle" "0"
+}
+// entity 73
+{
+"classname" "misc_model"
+"origin" "2712 88 -184"
+"model" "knight.iqm"
+"angle" "0"
+}
+// entity 74
+{
+"classname" "misc_model"
+"origin" "3032 -344 -184"
+"model" "knight.iqm"
+"angle" "180"
+}
+// entity 75
+{
+"classname" "misc_model"
+"origin" "2848 832 -168"
+"model" "wormbeak.iqm"
+"angle" "270"
+}
