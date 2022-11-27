@@ -786,14 +786,14 @@ fn get_entity_angle_rad(entity: &bsp_map_compact::Entity, map: &bsp_map_compact:
 
 fn get_entity_rotation(entity: &bsp_map_compact::Entity, map: &bsp_map_compact::BSPMap) -> QuaternionF
 {
-	// TODO - double check and fix this.
 	if let Some(angles_str) = get_entity_key_value(entity, map, "angles")
 	{
 		if let Ok(angles) = map_file_common::parse_vec3(angles_str)
 		{
-			return QuaternionF::from_angle_x(Rad(angles.x * TO_RAD)) *
-				QuaternionF::from_angle_y(Rad(angles.y * TO_RAD)) *
-				QuaternionF::from_angle_z(Rad(angles.z * TO_RAD));
+			// Angles in Quake and Quake editors (like TrenchBroom) are in order YZX.
+			return QuaternionF::from_angle_z(Rad(angles.y * TO_RAD)) *
+				QuaternionF::from_angle_y(Rad(angles.x * TO_RAD)) *
+				QuaternionF::from_angle_x(Rad(angles.z * TO_RAD));
 		}
 	}
 
