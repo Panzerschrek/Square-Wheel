@@ -345,13 +345,15 @@ fn spawn_regular_entity(
 				get_entity_origin(map_entity, map),
 			)
 			{
+				let scale = get_entity_f32(map_entity, map, "scale").unwrap_or(1.0);
+
 				let texture = resources_manager.get_texture_lite(sprite_file_name);
 
 				let texture_mip0 = &texture[0];
-				let radius = 0.25 *
-					((texture_mip0.size[0] * texture_mip0.size[0] + texture_mip0.size[1] * texture_mip0.size[1])
-						as f32)
-						.sqrt();
+				let radius = scale *
+					0.25 * ((texture_mip0.size[0] * texture_mip0.size[0] +
+					texture_mip0.size[1] * texture_mip0.size[1]) as f32)
+					.sqrt();
 
 				// TODO - fix this mess, use string representations of properties, instead of meaningless numbers.
 
@@ -418,6 +420,8 @@ fn spawn_regular_entity(
 				get_entity_origin(map_entity, map),
 			)
 			{
+				let scale = get_entity_f32(map_entity, map, "scale").unwrap_or(1.0);
+
 				let texture = resources_manager.get_texture_lite(decal_file_name);
 
 				let texture_mip0 = &texture[0];
@@ -425,7 +429,7 @@ fn spawn_regular_entity(
 					texture_mip0.size[0].min(texture_mip0.size[1]) as f32,
 					texture_mip0.size[0] as f32,
 					texture_mip0.size[1] as f32,
-				) * 0.5;
+				) * 0.5 * scale;
 
 				let mut light_add = [0.0, 0.0, 0.0];
 				let mut lightmap_light_scale = 1.0;
