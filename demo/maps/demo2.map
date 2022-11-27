@@ -15578,3 +15578,84 @@
 "blending_mode" "2"
 "orientation" "1"
 }
+// entity 79
+{
+"classname" "misc_decal"
+"origin" "2632 584 -120"
+"decal" "paper_with_text.png"
+"blending_mode" "0"
+"angle" "45"
+"scale" "0.5"
+}
+// entity 80
+{
+"classname" "misc_decal"
+"origin" "2624 612 -112"
+"decal" "paper_with_text.png"
+"blending_mode" "0"
+"angle" "345"
+"scale" "0.5"
+}
+// entity 81
+{
+"classname" "misc_decal"
+"origin" "3192 1128 -128"
+"decal" "paper_with_text.png"
+"blending_mode" "0"
+"scale" "0.5"
+"angles" "0 0 15"
+}
+// entity 82
+{
+"classname" "misc_decal"
+"origin" "2694.07 895.482 -128"
+"decal" "paper_with_text.png"
+"blending_mode" "0"
+"angle" "30"
+"scale" "0.5"
+}
+// entity 83
+{
+"classname" "misc_decal"
+"origin" "2744 1008 232"
+"decal" "paper_with_text.png"
+"blending_mode" "0"
+"scale" "0.5"
+"angles" "75 60 0"
+}
+// entity 84
+{
+"classname" "misc_decal"
+"origin" "2928 1048 232"
+"decal" "paper_with_text.png"
+"blending_mode" "0"
+"scale" "0.5"
+"angles" "75 -180 0"
+}
+// entity 85
+{
+"classname" "misc_decal"
+"origin" "2848 936 232"
+"decal" "paper_with_text.png"
+"blending_mode" "0"
+"scale" "0.5"
+"angles" "75 -60 0"
+}
+// entity 86
+{
+"classname" "misc_decal"
+"origin" "2764 2808 -128"
+"decal" "paper_with_text.png"
+"blending_mode" "0"
+"scale" "0.5"
+"angles" "0 90 -15"
+}
+// entity 87
+{
+"classname" "misc_decal"
+"origin" "2872 2808 -112"
+"decal" "paper_with_text.png"
+"blending_mode" "0"
+"scale" "0.5"
+"angles" "0 90 -5"
+}
