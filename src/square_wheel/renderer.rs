@@ -816,7 +816,7 @@ impl Renderer
 
 					let v_vec_normalized = -Vec3f::unit_z();
 
-					let u_vec = v_vec_normalized.cross(vec_to_camera);
+					let u_vec = vec_to_camera.cross(v_vec_normalized);
 					let u_vec_len = u_vec.magnitude();
 					let u_vec_normalized = if u_vec_len < 0.0001
 					{
