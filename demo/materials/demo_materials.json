@@ -7,9 +7,10 @@
 	"alpha_blend":
 	{
 		"diffuse": "alpha_blend.png",
+		"normal_map": "alpha_blend_normal.png",
 		"blending_mode": "AlphaBlend",
 		"blocks_view": false,
-		"scroll_speed" : [0.0, -64.0]
+		"scroll_speed" : [0.0, -32.0]
 	},
 	"alpha_grid":
 	{
