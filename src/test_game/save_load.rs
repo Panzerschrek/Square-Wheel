@@ -648,6 +648,7 @@ impl DecalProxy
 struct SpriteProxy
 {
 	position: Vec3f,
+	angle: f32,
 	radius: f32,
 	texture: ResourceSerializationKey,
 	blending_mode: material::BlendingMode,
@@ -662,6 +663,7 @@ impl SpriteProxy
 	{
 		Self {
 			position: sprite.position,
+			angle: sprite.angle,
 			radius: sprite.radius,
 			texture: ResourceSerializationKey::from_resource(&sprite.texture, textures),
 			blending_mode: sprite.blending_mode,
@@ -675,6 +677,7 @@ impl SpriteProxy
 	{
 		Some(Sprite {
 			position: self.position,
+			angle: self.angle,
 			radius: self.radius,
 			texture: self.texture.to_resource(textures)?,
 			blending_mode: self.blending_mode,

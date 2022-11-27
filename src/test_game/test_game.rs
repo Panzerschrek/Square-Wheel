@@ -450,6 +450,7 @@ impl Game
 			TestSpriteComponent {},
 			Sprite {
 				position,
+				angle: 0.0,
 				radius,
 				texture,
 				orientation: SpriteOrientation::FacingTowardsCamera,

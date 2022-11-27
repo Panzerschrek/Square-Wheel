@@ -91,6 +91,7 @@ pub struct Decal
 pub struct Sprite
 {
 	pub position: Vec3f,
+	pub angle: f32, // Rotation around axis, perpendicular to sprite plane.
 	pub radius: f32,
 	pub texture: SharedResourcePtr<TextureLiteWithMips>,
 	pub blending_mode: material::BlendingMode,

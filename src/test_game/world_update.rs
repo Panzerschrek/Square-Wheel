@@ -167,9 +167,11 @@ pub fn update_player_entity(
 			},
 			TestProjectileComponent {
 				velocity: camera_vector * 256.0,
+				angular_velocity: 5.0,
 			},
 			Sprite {
 				position,
+				angle: 0.0,
 				radius: 32.0,
 				texture: resources_manager.get_texture_lite("shot_sprite.png"),
 				orientation: SpriteOrientation::FacingTowardsCamera,
@@ -245,10 +247,14 @@ pub fn despawn_timed_entites(ecs: &mut hecs::World, ecs_command_buffer: &mut hec
 
 pub fn update_test_projectiles(ecs: &mut hecs::World, time_delta_s: f32)
 {
-	for (_id, (test_projectile_component, location_component)) in
-		ecs.query_mut::<(&TestProjectileComponent, &mut LocationComponent)>()
+	for (_id, (test_projectile_component, location_component, sprite_component)) in
+		ecs.query_mut::<(&TestProjectileComponent, &mut LocationComponent, Option<&mut Sprite>)>()
 	{
 		location_component.position += test_projectile_component.velocity * time_delta_s;
+		if let Some(sprite_component) = sprite_component
+		{
+			sprite_component.angle += test_projectile_component.angular_velocity * time_delta_s;
+		}
 	}
 }
 

@@ -404,6 +404,7 @@ fn spawn_regular_entity(
 
 				ecs.spawn((Sprite {
 					position: origin,
+					angle: 0.0,
 					radius,
 					texture,
 					orientation,
@@ -499,6 +500,7 @@ fn spawn_regular_entity(
 
 				ecs.spawn((Sprite {
 					position: position + Vec3f::new(0.0, 0.0, 2.0),
+					angle: 0.0,
 					radius: sprite_radius,
 					texture: sprite_texture,
 					orientation: SpriteOrientation::AlignToZAxisFacingTowardsCamera,

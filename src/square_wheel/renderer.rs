@@ -769,7 +769,7 @@ impl Renderer
 				continue;
 			}
 
-			let (u_vec_normalized, v_vec_normalized) = match sprite.orientation
+			let (mut u_vec_normalized, mut v_vec_normalized) = match sprite.orientation
 			{
 				SpriteOrientation::ParallelToCameraPlane => (u_vec_base, v_vec_base),
 				SpriteOrientation::FacingTowardsCamera =>
@@ -830,6 +830,16 @@ impl Renderer
 					(u_vec_normalized, v_vec_normalized)
 				},
 			};
+
+			if sprite.angle != 0.0
+			{
+				let c = sprite.angle.cos();
+				let s = sprite.angle.sin();
+				(u_vec_normalized, v_vec_normalized) = (
+					u_vec_normalized * c - v_vec_normalized * s,
+					u_vec_normalized * s + v_vec_normalized * c,
+				);
+			}
 
 			let texture_mip0 = &sprite.texture[0];
 			let ratio_h_w = (texture_mip0.size[1] as f32) / (texture_mip0.size[0] as f32);

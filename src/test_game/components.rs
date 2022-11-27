@@ -20,6 +20,8 @@ pub struct TestLightComponent {}
 pub struct TestProjectileComponent
 {
 	pub velocity: Vec3f,
+	// For rotation around velocity axis.
+	pub angular_velocity: f32,
 }
 
 // Drawable submodel with index.
