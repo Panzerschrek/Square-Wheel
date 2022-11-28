@@ -330,7 +330,7 @@ fn spawn_regular_entity(
 						},
 						model,
 						texture,
-						blending_mode: material::BlendingMode::None,
+						blending_mode: get_entity_blending_mode(map_entity, map),
 						lighting: ModelLighting::Default,
 						is_view_model: false,
 						ordering_custom_bbox: None,
