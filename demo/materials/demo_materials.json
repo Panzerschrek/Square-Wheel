@@ -112,6 +112,11 @@
 		"diffuse": "roof_tiles.png",
 		"normal_map": "roof_tiles_normal.png"
 	},
+	"rope":
+	{
+		"diffuse": "rope.png",
+		"normal_map": "rope_normal.png"
+	},
 	"stained_glass":
 	{
 		"diffuse": "stained_glass.png",
