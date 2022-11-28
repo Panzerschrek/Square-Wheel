@@ -15731,3 +15731,20 @@
 "scale" "0.5"
 "angles" "0 90 -5"
 }
+// entity 88
+{
+"classname" "misc_model"
+"origin" "2353 2264 -180"
+"model" "fern.iqm"
+"blending_mode" "4"
+"angle" "0"
+}
+
+// entity 89
+{
+"classname" "misc_model"
+"origin" "2385 2222 -180"
+"model" "fern.iqm"
+"blending_mode" "4"
+"angle" "0"
+}
