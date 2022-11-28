@@ -1264,7 +1264,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					else if BLENDING_MODE == BLENDING_MODE_ALPHA_TEST
 					{
 						let texel_converted: ColorT = texel_vec_lighted.into();
-						if texel_converted.test_alpha()
+						if texel.test_alpha()
 						{
 							*dst_pixel = texel_converted;
 						}
