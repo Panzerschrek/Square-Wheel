@@ -26,23 +26,12 @@
 		"diffuse": "bricks.png",
 		"normal_map": "bricks_normal.png"
 	},
-	"bolted_metal_plate":
-	{
-		"diffuse": "bolted_metal_plate.png",
-		"normal_map": "bolted_metal_plate_normal.png",
-		"roughness" : 0.05,
-		"is_metal": true
-	},
 	"bolted_metal_crate":
 	{
 		"diffuse": "bolted_metal_crate.png",
 		"normal_map": "bolted_metal_crate_normal.png",
 		"roughness_map" : "bolted_metal_crate_roughness.png",
 		"is_metal": true
-	},
-	"coal_black":
-	{
-		"diffuse": "coal_black.png"
 	},
 	"dark_metal":
 	{
@@ -60,16 +49,6 @@
 		"diffuse": "grass.png",
 		"normal_map": "grass_normal.png"
 	},
-	"large_pawment":
-	{
-		"diffuse": "large_pawment.png",
-		"normal_map": "large_pawment_normal.png"
-	},
-	"large_pawment_45":
-	{
-		"diffuse": "large_pawment_45.png",
-		"normal_map": "large_pawment_45_normal.png"
-	},
 	"limestone_column":
 	{
 		"diffuse": "limestone_column.png",
@@ -79,11 +58,6 @@
 	{
 		"diffuse": "limestone_bricks.png",
 		"normal_map": "limestone_bricks_normal.png"
-	},
-	"limestone_fire_holder":
-	{
-		"diffuse": "limestone_fire_holder.png",
-		"normal_map": "limestone_fire_holder_normal.png"
 	},
 	"limestone_floor_tiles":
 	{
@@ -116,11 +90,6 @@
 		"diffuse": "marble_black_trim.png",
 		"roughness": 0.001
 	},
-	"marble_column":
-	{
-		"diffuse": "marble_column.png",
-		"normal_map": "marble_column_normal.png"
-	},
 	"marble_tiles":
 	{
 		"diffuse": "marble_tiles.png",
@@ -137,13 +106,6 @@
 	{
 		"diffuse": "marble_trim.png",
 		"roughness": 0.001
-	},
-	"metals_example":
-	{
-		"diffuse": "metals_example.png",
-		"normal_map": "metals_example_normal.png",
-		"roughness" : 0.0,
-		"is_metal": true
 	},
 	"roof_tiles":
 	{
