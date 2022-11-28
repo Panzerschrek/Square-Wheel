@@ -13,3 +13,7 @@ wormbeak.blend:
 weapons:
 	https://opengameart.org/content/low-poly-animated-guns
 	quaternius
+
+fern.blend:
+	https://opengameart.org/content/fern
+	Gladius.s
