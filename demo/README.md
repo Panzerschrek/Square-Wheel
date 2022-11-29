@@ -8,7 +8,7 @@ It contains single demo map with demonstration of various engine features.
 
 ### System requirements
 
-* CPU  - Intel Haswell or newer, AMD Bulldozer or newer.
+* CPU  - Intel Haswell or newer, AMD Ryzen or newer for default executable version, any other x86_64 processor for "_generic" executable version, Pentium 4 or newer for 32-bit version.
 * OS - 64bit Windows 7 or newer or any modern GNU/Linux distribution with SDL2 libraries installed. But it's possible to build the engine from source code for other platforms.
 * 1Gb of RAM.
 * Keyboard, mouse.
@@ -28,12 +28,14 @@ Use script with "i686" suffix on 32-bit system, use script with "_generic" suffi
 * "D" - move right
 * "SPACE" - jump
 * "C" - fly down (in noclip mode)
+* "F" - toggle flashlight
 * "↑" - turn up
 * "↓" - turn down
 * "←" - turn left
 * "→" - turn right
 * "~" - toggle console
 * Mouse - move camera
+* Mouse left button - launch test projectile
 * "ESC" - quit
 
 
@@ -60,7 +62,8 @@ Use script with "i686" suffix on 32-bit system, use script with "_generic" suffi
 * Generate textures, using "export_textures.py" script. MaterialMaker v 0.99 (https://github.com/RodZill4/material-maker/) and GIMP 2.10 are required.
 * Compile demo map using "map_compiler" executable and build lightmaps, using "lightmapper" executable.
 * Export models, using blender and newest IQM export script (see iqm directory in repository root).
-* Package engine executables, demo map, textures, materials and config file together.
+* Export skybox textures, using "sky.blend".
+* Package engine executables, launch scripts, demo map, textures, materials, models and config file together.
 
 
 ### Authors

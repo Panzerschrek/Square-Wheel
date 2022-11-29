@@ -34,6 +34,26 @@ gimp.pdb.gimp_quit(0)
 	subprocess.run(args)
 
 
+# Perform scale and flip but also extract roughness (n green channel) and put it inot other channels.
+def finalize_image_roughness(in_file, out_file):
+	export_script_template = """
+in_file_name = "{}"
+image = gimp.pdb.gimp_file_load(in_file_name, 0)
+w = gimp.pdb.gimp_image_width(image)
+h = gimp.pdb.gimp_image_height(image)
+layer = gimp.pdb.gimp_image_get_active_layer(image)
+gimp.pdb.gimp_layer_scale(layer, w / 4, h / 4, True)
+gimp.pdb.gimp_flip(layer, 1)
+gimp.pdb.plug_in_colors_channel_mixer(image, layer, 0,  0, 1, 0,  0, 1, 0,  0, 1, 0)
+out_file_name = "{}"
+gimp.pdb.gimp_file_save(image, layer, out_file_name, out_file_name)
+gimp.pdb.gimp_quit(0)
+	"""
+	export_script = export_script_template.format(in_file.replace("\\", "/"), out_file.replace("\\", "/"))
+	args = [gimp_executable, "-idfsc", "--batch-interpreter", "python-fu-eval", "-b", export_script ]
+	subprocess.run(args)
+
+
 def main():
 	parser= argparse.ArgumentParser(description= 'Textures export escript.')
 	parser.add_argument("--input-dir", help= "Directory with source textures", type=str)
@@ -71,6 +91,11 @@ def main():
 		normal_file_path = os.path.join(intermediate_dir, normal_file_name)
 		if os.path.exists(normal_file_path):
 			finalize_image(normal_file_path, os.path.join(output_dir, base_texture_name + "_normal.png"))
+
+		orm_file_name = base_texture_name + "_orm.png"
+		orm_file_path = os.path.join(intermediate_dir, orm_file_name)
+		if os.path.exists(orm_file_path):
+			finalize_image_roughness(orm_file_path, os.path.join(output_dir, base_texture_name + "_roughness.png"))
 
 	print("Remove intermediate directory", flush = True)
 	shutil.rmtree(intermediate_dir)

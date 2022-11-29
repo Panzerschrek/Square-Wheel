@@ -7,88 +7,115 @@
 	"alpha_blend":
 	{
 		"diffuse": "alpha_blend.png",
+		"normal_map": "alpha_blend_normal.png",
 		"blending_mode": "AlphaBlend",
 		"blocks_view": false,
-		"scroll_speed" : [0.0, -64.0]
+		"scroll_speed" : [0.0, -32.0]
 	},
 	"alpha_grid":
 	{
 		"diffuse": "alpha_grid.png",
 		"normal_map": "alpha_grid_normal.png",
-		"roughness" : 0.1,
+		"roughness" : 0.05,
 		"is_metal" : true,
 		"blending_mode": "AlphaTest",
 		"blocks_view": false
 	},
-	"bolted_metal_plate":
+	"bricks":
 	{
-		"diffuse": "bolted_metal_plate.png",
-		"normal_map": "bolted_metal_plate_normal.png",
-		"roughness" : 0.05,
+		"diffuse": "bricks.png",
+		"normal_map": "bricks_normal.png"
+	},
+	"bolted_metal_crate":
+	{
+		"diffuse": "bolted_metal_crate.png",
+		"normal_map": "bolted_metal_crate_normal.png",
+		"roughness_map" : "bolted_metal_crate_roughness.png",
 		"is_metal": true
 	},
-	"large_pawment":
+	"dark_metal":
 	{
-		"diffuse": "large_pawment.png",
-		"normal_map": "large_pawment_normal.png"
+		"diffuse": "dark_metal.png",
+		"roughness" : 0.001,
+		"is_metal": true
 	},
-	"large_pawment_45":
+	"dirt":
 	{
-		"diffuse": "large_pawment_45.png",
-		"normal_map": "large_pawment_45_normal.png"
+		"diffuse": "dirt.png",
+		"normal_map": "dirt_normal.png"
+	},
+	"grass":
+	{
+		"diffuse": "grass.png",
+		"normal_map": "grass_normal.png"
+	},
+	"limestone_column":
+	{
+		"diffuse": "limestone_column.png",
+		"normal_map": "limestone_column_normal.png"
 	},
 	"limestone_bricks":
 	{
 		"diffuse": "limestone_bricks.png",
 		"normal_map": "limestone_bricks_normal.png"
 	},
-	"limestone_fire_holder":
+	"limestone_floor_tiles":
 	{
-		"diffuse": "limestone_fire_holder.png",
-		"normal_map": "limestone_fire_holder_normal.png"
+		"diffuse": "limestone_floor_tiles.png",
+		"normal_map": "limestone_floor_tiles_normal.png"
 	},
-	"marble_column":
+	"limestone_plate":
 	{
-		"diffuse": "marble_column.png",
-		"normal_map": "marble_column_normal.png"
+		"diffuse": "limestone_plate.png",
+		"normal_map": "limestone_plate_normal.png"
+	},
+	"limestone_steps":
+	{
+		"diffuse": "limestone_steps.png",
+		"normal_map": "limestone_steps_normal.png"
+	},
+	"marble_black_column":
+	{
+		"diffuse": "marble_black_column.png",
+		"normal_map": "marble_black_column_normal.png"
+	},
+	"marble_black_tiles":
+	{
+		"diffuse": "marble_black_tiles.png",
+		"normal_map": "marble_black_tiles_normal.png",
+		"roughness": 0.001
+	},
+	"marble_black_trim":
+	{
+		"diffuse": "marble_black_trim.png",
+		"roughness": 0.001
 	},
 	"marble_tiles":
 	{
 		"diffuse": "marble_tiles.png",
 		"normal_map": "marble_tiles_normal.png",
-		"roughness": 0.02
+		"roughness": 0.001
 	},
 	"marble_tiles_large":
 	{
 		"diffuse": "marble_tiles_large.png",
-		"normal_map": "marble_tiles_large_normal.png"
+		"normal_map": "marble_tiles_large_normal.png",
+		"roughness": 0.001
 	},
 	"marble_trim":
 	{
-		"diffuse": "marble_trim.png"
-	},
-	"metals_example":
-	{
-		"diffuse": "metals_example.png",
-		"normal_map": "metals_example_normal.png",
-		"roughness" : 0.0,
-		"is_metal": true
+		"diffuse": "marble_trim.png",
+		"roughness": 0.001
 	},
 	"roof_tiles":
 	{
 		"diffuse": "roof_tiles.png",
 		"normal_map": "roof_tiles_normal.png"
 	},
-	"sky":
+	"rope":
 	{
-		"diffuse": "sky.png",
-		"emissive_light" : [0.34, 0.36, 0.5],
-		"skybox" :
-		{
-			"side_images" : [ "sky_side.png", "sky_side.png", "sky_side.png", "sky_side.png", "sky_bottom.png", "sky_top.png" ],
-			"brightness" : 0.5
-		},
-		"light" : false
+		"diffuse": "rope.png",
+		"normal_map": "rope_normal.png"
 	},
 	"stained_glass":
 	{
@@ -111,6 +138,39 @@
 			"frequency": 0.25
 		}
 	},
+	"water_flowing_slow":
+	{
+		"diffuse": "water.png",
+		"normal_map": "water_normal.png",
+		"roughness": 0.0,
+		"blending_mode": "Average",
+		"blocks_view": false,
+		"scroll_speed": [0.0, -16.0]
+	},
+	"water_flowing_fast":
+	{
+		"diffuse": "water.png",
+		"normal_map": "water_normal.png",
+		"roughness": 0.0,
+		"blending_mode": "Average",
+		"blocks_view": false,
+		"scroll_speed": [0.0, -64.0]
+	},
+	"well_top_limestone_bricks":
+	{
+		"diffuse": "well_top_limestone_bricks.png",
+		"normal_map": "well_top_limestone_bricks_normal.png"
+	},
+	"white_ceiling":
+	{
+		"diffuse": "white_ceiling.png",
+		"normal_map": "white_ceiling_normal.png"
+	},
+	"wooden_beam":
+	{
+		"diffuse": "wooden_beam.png",
+		"normal_map": "wooden_beam_normal.png"
+	},
 	"wooden_planks":
 	{
 		"diffuse": "wooden_planks.png",
@@ -118,6 +178,7 @@
 	},
 	"wooden_plate_with_rusty_metal":
 	{
-		"diffuse": "wooden_plate_with_rusty_metal.png"
+		"diffuse": "wooden_plate_with_rusty_metal.png",
+		"normal_map": "wooden_plate_with_rusty_metal_normal.png"
 	}
 }

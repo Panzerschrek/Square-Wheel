@@ -983,9 +983,9 @@
 				"corner": 0.3,
 				"iterations": 1,
 				"min_size": 0.3,
-				"mortar": 0.02,
+				"mortar": 0.01,
 				"round": 0,
-				"rows": 8
+				"rows": 6
 			},
 			"seed": 0,
 			"seed_locked": false,
