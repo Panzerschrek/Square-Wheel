@@ -37,6 +37,7 @@ Use script with "i686" suffix on 32-bit system, use script with "_generic" suffi
 * Mouse - move camera
 * Mouse left button - launch test projectile
 * "ESC" - quit
+* "F12" - make screenshot
 
 
 ### Useful consloe commands
@@ -54,6 +55,7 @@ Use script with "i686" suffix on 32-bit system, use script with "_generic" suffi
 * "postprocessor.hdr_rendering" (true/false) - Enable/disable HDR rendering.
 * "renderer.use_directional_lightmaps" (true/false) - Enable/disable directional lightmaps.
 * "renderer.textures_mip_bias". Affects textures quality. Default value is 0, negative value for overdetailed textures, positive value for lower quality.
+* "host.frame_scale". Use value greater than 1 to make image pixilated and increase performance.
 
 
 ### How to build this demo

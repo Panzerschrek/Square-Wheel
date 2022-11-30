@@ -60,12 +60,21 @@ pub fn load64(file_path: &std::path::Path) -> Option<Image64>
 
 pub fn save(image: &Image, file_path: &std::path::Path) -> bool
 {
+	let pixels_swapped = image
+		.pixels
+		.iter()
+		.map(|p| {
+			let argb = p.get_argb();
+			Color32::from_rgba(argb[3], argb[2], argb[1], argb[0])
+		})
+		.collect::<Vec<_>>();
+
 	if let Err(e) = image::save_buffer(
 		file_path,
 		unsafe {
 			std::slice::from_raw_parts(
-				image.pixels.as_ptr() as *const u8,
-				image.pixels.len() * std::mem::size_of::<Color32>(),
+				pixels_swapped.as_ptr() as *const u8,
+				pixels_swapped.len() * std::mem::size_of::<Color32>(),
 			)
 		},
 		image.size[0],

@@ -79,6 +79,21 @@ impl Color32
 		]
 	}
 
+	pub fn get_argb(&self) -> [u8; 4]
+	{
+		[
+			((self.0 & 0xFF000000) >> 24) as u8,
+			((self.0 & 0x00FF0000) >> 16) as u8,
+			((self.0 & 0x0000FF00) >> 8) as u8,
+			(self.0 & 0x000000FF) as u8,
+		]
+	}
+
+	pub fn set_alpha(&mut self, alpha: u8)
+	{
+		self.0 = (self.0 & 0x00FFFFFF) | ((alpha as u32) << 24);
+	}
+
 	pub const MAX_RGB_F32_COMPONENTS: [f32; 3] = [255.0 * (256.0 * 256.0), 255.0 * 256.0, 255.0];
 
 	// Result components are shifted.
