@@ -31,6 +31,8 @@ pub fn save_screenshot(pixels: &[Color32], surface_info: &system_window::Surface
 	let mut path = std::path::PathBuf::from(SCREENSHOTS_DIR);
 	path.push(format!("SquareWheel_screenshot_{}.png", t));
 
+	println!("Saving screenshot {:?}", path);
+
 	image::save(&i, &path);
 }
 

@@ -87,6 +87,7 @@ impl Host
 			("map", Host::command_map),
 			("quit", Host::command_quit),
 			("resize_window", Host::command_resize_window),
+			("screenshot", Host::command_screenshot),
 		]);
 
 		commands_processor
@@ -628,6 +629,12 @@ impl Host
 				.unwrap()
 				.add_text("Failed to parse args".to_string());
 		}
+	}
+
+	fn command_screenshot(&mut self, _args: commands_queue::CommandArgs)
+	{
+		self.screenshot_requested = true;
+		self.console.lock().unwrap().add_text("Making screenshot".to_string());
 	}
 }
 
