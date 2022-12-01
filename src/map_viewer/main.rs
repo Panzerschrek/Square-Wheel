@@ -4,7 +4,7 @@ mod debug_renderer;
 use sdl2::{event::Event, keyboard::Keycode};
 use square_wheel_lib::common::{
 	bsp_builder, bsp_map_compact_conversion, bsp_map_save_load, camera_controller, light_trace, lightmaps_builder,
-	map_file_q1, map_polygonizer, material, matrix::*, system_window,
+	map_file_q1, map_polygonizer, material, matrix::*, screenshot::*, system_window,
 };
 use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
@@ -137,6 +137,7 @@ pub fn main()
 
 	'running: loop
 	{
+		let mut screenshot_requested = false;
 		for event in window.get_events()
 		{
 			match event
@@ -146,6 +147,13 @@ pub fn main()
 					keycode: Some(Keycode::Escape),
 					..
 				} => break 'running,
+				Event::KeyDown {
+					keycode: Some(Keycode::F12),
+					..
+				} =>
+				{
+					screenshot_requested = true;
+				},
 				_ =>
 				{},
 			}
@@ -187,7 +195,12 @@ pub fn main()
 				map_bsp_tree_opt.as_ref(),
 				map_bsp_compact_opt.as_ref(),
 				secondary_ligt_sources.as_ref(),
-			)
+			);
+
+			if screenshot_requested
+			{
+				save_screenshot(pixels, surface_info);
+			}
 		});
 
 		window.swap_buffers();

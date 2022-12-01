@@ -26,5 +26,6 @@ pub mod math_types;
 pub mod matrix;
 pub mod plane;
 pub mod pvs;
+pub mod screenshot;
 pub mod shared_mut_slice;
 pub mod system_window;
