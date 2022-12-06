@@ -99,6 +99,8 @@ impl Host
 
 		host_config.update_app_config(&app_config); // Update JSON with struct fields.
 
+		let render_index = host_config.render_index;
+
 		let mut host = Host {
 			config_file_path,
 			app_config: app_config.clone(),
@@ -106,7 +108,7 @@ impl Host
 			commands_queue,
 			commands_processor,
 			console: console.clone(),
-			window: system_window::SystemWindow::new(),
+			window: system_window::SystemWindow::new(render_index),
 			postprocessor: Postprocessor::new(app_config.clone()),
 			frame_upscaler: FrameUpscaler::new(),
 			resources_manager: ResourcesManager::new(app_config, console),

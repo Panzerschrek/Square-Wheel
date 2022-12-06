@@ -59,7 +59,7 @@ pub fn main()
 {
 	let opt = Opt::from_args();
 
-	let mut window = system_window::SystemWindow::new();
+	let mut window = system_window::SystemWindow::new(0);
 	let mut camera_controller = camera_controller::CameraController::new();
 
 	let materials = material::MaterialsMap::new();

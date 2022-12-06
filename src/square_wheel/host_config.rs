@@ -24,6 +24,9 @@ pub struct HostConfig
 
 	#[serde(default)]
 	pub frame_resize_interpolate: bool,
+
+	#[serde(default)]
+	pub render_index: u32,
 }
 
 impl HostConfig
