@@ -14,6 +14,9 @@ pub struct HostConfig
 	pub show_debug_stats: bool,
 
 	#[serde(default = "default_true")]
+	pub show_fps: bool,
+
+	#[serde(default = "default_true")]
 	pub parallel_swap_buffers: bool,
 
 	#[serde(default)]

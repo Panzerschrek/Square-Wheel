@@ -303,6 +303,7 @@ impl Host
 		let frame_duration_counter = &self.frame_duration_counter;
 		let prev_frame_end_time = &mut self.prev_frame_end_time;
 		let screenshot_requested = &mut self.screenshot_requested;
+		let show_fps = self.config.show_fps;
 
 		let mut frame_info = None;
 
@@ -507,18 +508,21 @@ impl Host
 
 			console.lock().unwrap().draw(pixels, surface_info);
 
-			text_printer::print(
-				pixels,
-				surface_info,
-				&format!(
-					"fps {:04.2}\n{:04.2}ms",
-					fps_counter.get_frequency(),
-					frame_duration_counter.get_average_value() * 1000.0
-				),
-				(surface_info.width - 96) as i32,
-				1,
-				Color32::from_rgb(255, 255, 255),
-			);
+			if show_fps
+			{
+				text_printer::print(
+					pixels,
+					surface_info,
+					&format!(
+						"fps {:04.2}\n{:04.2}ms",
+						fps_counter.get_frequency(),
+						frame_duration_counter.get_average_value() * 1000.0
+					),
+					(surface_info.width - 96) as i32,
+					1,
+					Color32::from_rgb(255, 255, 255),
+				);
+			}
 
 			if *screenshot_requested
 			{
