@@ -305,6 +305,7 @@ fn spawn_regular_entity(
 						rotation: QuaternionF::one(),
 						display: CameraPortalDisplay {
 							plane: polygon.plane,
+							tex_coord_equation: polygon.tex_coord_equation,
 							vertices: map.vertices[polygon.first_vertex as usize ..
 								(polygon.first_vertex + polygon.num_vertices) as usize]
 								.iter()

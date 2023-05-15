@@ -146,5 +146,6 @@ pub struct CameraPortal
 pub struct CameraPortalDisplay
 {
 	pub plane: Plane,
+	pub tex_coord_equation: [Plane; 2],
 	pub vertices: Vec<Vec3f>,
 }

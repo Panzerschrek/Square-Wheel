@@ -157,6 +157,10 @@ impl PartialRenderer
 	pub fn set_config(&mut self, config: RendererConfig)
 	{
 		self.config = config;
+		if let Some(d) = &mut self.portals_rendering_data
+		{
+			d.renderer.set_config(config);
+		}
 	}
 
 	pub fn prepare_frame<ColorT: AbstractColor>(
