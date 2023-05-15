@@ -1,7 +1,7 @@
 use super::config;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Default, Debug)]
+#[derive(Copy, Clone, Serialize, Deserialize, Default, Debug)]
 pub struct RendererConfig
 {
 	#[serde(default)]
