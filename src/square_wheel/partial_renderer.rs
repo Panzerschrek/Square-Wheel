@@ -1802,13 +1802,31 @@ impl PartialRenderer
 			return;
 		};
 
+		portals_rendering_data
+			.portals_index
+			.position_portals(&frame_info.portals);
+
 		portals_rendering_data.num_textures_pixels = 0;
 
 		portals_rendering_data.portals_info.clear();
-		for portal in &frame_info.portals
+		for (portal_index, portal) in frame_info.portals.iter().enumerate()
 		{
+			let resolution = if portals_rendering_data
+				.portals_index
+				.get_object_leafs(portal_index)
+				.is_empty()
+			{
+				// This portal is not visible
+				[0, 0]
+			}
+			else
+			{
+				// TODO - set proper resolution
+				[64, 64]
+			};
+
 			let portal_info = PortalInfo {
-				resolution: [64, 64], // TODO - set proper resolution
+				resolution,
 				texture_pixels_offset: portals_rendering_data.num_textures_pixels,
 			};
 			portals_rendering_data.num_textures_pixels +=
@@ -1855,6 +1873,12 @@ impl PartialRenderer
 			.iter()
 			.zip(portals_rendering_data.portals_info.iter())
 		{
+			if portal_info.resolution[0] * portal_info.resolution[1] == 0
+			{
+				// This portal is not visible.
+				continue;
+			}
+
 			let fov = std::f32::consts::PI * 0.5; // TODO - setup it properly.
 			let matrix = build_view_matrix_with_full_rotation(
 				portal.position,
