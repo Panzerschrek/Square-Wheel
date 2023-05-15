@@ -709,6 +709,7 @@ impl GameInterface for Game
 			model_entities: self.collect_drawable_components(),
 			decals: self.collect_drawable_components(),
 			sprites: self.collect_drawable_components(),
+			portals: Vec::new(),
 		}
 	}
 
