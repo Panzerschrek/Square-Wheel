@@ -674,6 +674,7 @@ impl GameInterface for Game
 		world_update::update_decals_locations(&mut self.ecs);
 		world_update::update_sprites_locations(&mut self.ecs);
 		world_update::update_dynamic_lights_locations(&mut self.ecs);
+		world_update::update_camera_portals_locations(&mut self.ecs);
 	}
 
 	fn grab_mouse_input(&self) -> bool
@@ -709,7 +710,7 @@ impl GameInterface for Game
 			model_entities: self.collect_drawable_components(),
 			decals: self.collect_drawable_components(),
 			sprites: self.collect_drawable_components(),
-			portals: Vec::new(),
+			portals: self.collect_drawable_components(),
 		}
 	}
 

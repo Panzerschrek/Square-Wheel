@@ -292,6 +292,43 @@ fn spawn_regular_entity(
 				add_entity_common_components(ecs, map, map_entity, entity);
 			}
 		},
+		Some("func_camera_portal") =>
+		{
+			let index = map_entity.submodel_index as usize;
+			if index < map.submodels.len() && map.submodels[index].num_polygons > 0
+			{
+				let polygon = &map.polygons[map.submodels[index].first_polygon as usize];
+
+				let entity = ecs.spawn((
+					CameraPortal {
+						position: Vec3f::zero(),
+						rotation: QuaternionF::one(),
+						display: CameraPortalDisplay {
+							plane: polygon.plane,
+							vertices: map.vertices[polygon.first_vertex as usize ..
+								(polygon.first_vertex + polygon.num_vertices) as usize]
+								.iter()
+								.map(|v| *v)
+								.collect(),
+						},
+					},
+					CameraPortalTargetLocationLinkComponent {},
+				));
+
+				add_entity_common_components(ecs, map, map_entity, entity);
+			}
+		},
+		Some("info_camera_portal_target") =>
+		{
+			if let Some(origin) = get_entity_origin(map_entity, map)
+			{
+				let entity = ecs.spawn((LocationComponent {
+					position: origin,
+					rotation: get_entity_rotation(map_entity, map),
+				},));
+				add_entity_common_components(ecs, map, map_entity, entity);
+			}
+		},
 		Some("misc_model") =>
 		{
 			if let (Some(model_file_name), Some(origin)) = (

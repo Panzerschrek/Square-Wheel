@@ -363,6 +363,7 @@ impl<'a> hecs::serialize::row::SerializeContext for SerializeContext<'a>
 		// Non-special drawable components.
 		self.try_serialize_component::<SubmodelEntityWithIndex, S>(entity, &mut map)?;
 		self.try_serialize_component::<DynamicLight, S>(entity, &mut map)?;
+		self.try_serialize_component::<CameraPortal, S>(entity, &mut map)?;
 
 		// Perform serialization of components with shared resources, using proxy structs with identical content but changed resource fields.
 		// Collect shared resources and serialize them later.
@@ -453,6 +454,7 @@ impl<'a> hecs::serialize::row::DeserializeContext for DeserializeContext<'a>
 			self.try_deserialize_component::<DecalLocationLinkComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<SpriteLocationLinkComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<DynamicLightLocationLinkComponent, M>(&key, &mut map, entity)?;
+			self.try_deserialize_component::<CameraPortalTargetLocationLinkComponent, M>(&key, &mut map, entity)?;
 
 			self.try_deserialize_component::<SimpleAnimationComponent, M>(&key, &mut map, entity)?;
 
