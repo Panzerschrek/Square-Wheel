@@ -1,6 +1,6 @@
 use super::{
-	dynamic_objects_index::*, equations::*, frame_info::*, frame_number::*, light::*, performance_counter::*,
-	surfaces::*,
+	dynamic_objects_index::*, equations::*, frame_info::*, frame_number::*, light::*,
+	partial_renderer::PartialRenderer, performance_counter::*, surfaces::*,
 };
 use crate::common::{bsp_map_compact, clipping_polygon::*, math_types::*, matrix::*, plane::*};
 
@@ -268,4 +268,23 @@ pub fn create_dynamic_light_projector_shadow_map<'a>(
 		basis_y: rotation.rotate_vector(Vec3f::unit_z()) * inv_half_fov_tan,
 		basis_z: rotation.rotate_vector(-Vec3f::unit_x()),
 	}
+}
+
+pub struct PortalsRenderingData
+{
+	pub renderer: PartialRenderer,
+	pub portals_index: DynamicObjectsIndex,
+	pub portals_info: Vec<PortalInfo>,
+	// Store textures pixels as raw array.
+	// Use specific color while preparing surfaces or performing rasterization.
+	// TODO - make sure alignment is correct.
+	pub textures_pixels: Vec<u8>,
+	pub num_textures_pixels: usize,
+}
+
+pub struct PortalInfo
+{
+	pub resolution: [u32; 2], // zero if invisible
+	pub texture_pixels_offset: usize,
+	// TODO - add mip-level here.
 }

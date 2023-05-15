@@ -54,7 +54,7 @@ pub struct PartialRenderer
 	dynamic_meshes_vertices: Vec<ModelVertex3d>,
 	dynamic_meshes_triangles: Vec<Triangle>,
 
-	portals_renderer: Option<Box<PartialRenderer>>,
+	portals_rendering_data: Option<Box<PortalsRenderingData>>,
 }
 
 impl PartialRenderer
@@ -137,18 +137,19 @@ impl PartialRenderer
 			dynamic_model_to_dynamic_meshes_index: Vec::new(),
 			dynamic_meshes_vertices: Vec::new(),
 			dynamic_meshes_triangles: Vec::new(),
-			portals_renderer: if depth == 0
+			portals_rendering_data: if depth > 0
 			{
-				None
+				Some(Box::new(PortalsRenderingData {
+					renderer: PartialRenderer::new(resources_manager, config, map.clone(), depth - 1),
+					portals_index: DynamicObjectsIndex::new(map.clone()),
+					portals_info: Vec::new(),
+					textures_pixels: Vec::new(),
+					num_textures_pixels: 0,
+				}))
 			}
 			else
 			{
-				Some(Box::new(PartialRenderer::new(
-					resources_manager,
-					config,
-					map,
-					depth - 1,
-				)))
+				None
 			},
 		}
 	}
@@ -207,6 +208,10 @@ impl PartialRenderer
 
 			self.build_polygons_surfaces::<ColorT>(&frame_info.camera_matrices, &frame_info.lights);
 		});
+
+		self.prepare_portals_textures(frame_info);
+		self.allocate_portals_pixels::<ColorT>();
+		self.build_portals_textures::<ColorT>(frame_info);
 	}
 
 	pub fn draw_frame<ColorT: AbstractColor>(
@@ -1783,6 +1788,84 @@ impl PartialRenderer
 		{
 			// Perform parallel surfaces building.
 			self.current_frame_visible_polygons.par_iter().for_each(func);
+		}
+	}
+
+	fn prepare_portals_textures(&mut self, frame_info: &FrameInfo)
+	{
+		let portals_rendering_data = if let Some(d) = &mut self.portals_rendering_data
+		{
+			d
+		}
+		else
+		{
+			return;
+		};
+
+		portals_rendering_data.num_textures_pixels = 0;
+
+		portals_rendering_data.portals_info.clear();
+		for portal in &frame_info.portals
+		{
+			let portal_info = PortalInfo {
+				resolution: [64, 64], // TODO - set proper resolution
+				texture_pixels_offset: portals_rendering_data.num_textures_pixels,
+			};
+			portals_rendering_data.num_textures_pixels +=
+				(portal_info.resolution[0] * portal_info.resolution[1]) as usize;
+
+			portals_rendering_data.portals_info.push(portal_info);
+		}
+	}
+
+	fn allocate_portals_pixels<ColorT>(&mut self)
+	{
+		let portals_rendering_data = if let Some(d) = &mut self.portals_rendering_data
+		{
+			d
+		}
+		else
+		{
+			return;
+		};
+
+		// Resize textures pixels vector only up to avoid filling it with zeros each frame.
+		let target_size = portals_rendering_data.num_textures_pixels * std::mem::size_of::<ColorT>();
+		if portals_rendering_data.textures_pixels.len() < target_size
+		{
+			portals_rendering_data.textures_pixels.resize(target_size, 0);
+		}
+	}
+
+	fn build_portals_textures<ColorT>(&mut self, frame_info: &FrameInfo)
+	{
+		let portals_rendering_data = if let Some(d) = &mut self.portals_rendering_data
+		{
+			d
+		}
+		else
+		{
+			return;
+		};
+
+		let textures_pixels_casted = unsafe { portals_rendering_data.textures_pixels.align_to_mut::<ColorT>().1 };
+
+		for (portal, portal_info) in frame_info
+			.portals
+			.iter()
+			.zip(portals_rendering_data.portals_info.iter())
+		{
+			let fov = std::f32::consts::PI * 0.5; // TODO - setup it properly.
+			let matrix = build_view_matrix_with_full_rotation(
+				portal.position,
+				portal.rotation,
+				fov,
+				portal_info.resolution[0] as f32,
+				portal_info.resolution[1] as f32,
+			);
+
+			let texture_data = &mut textures_pixels_casted[portal_info.texture_pixels_offset ..
+				portal_info.texture_pixels_offset + (portal_info.resolution[0] * portal_info.resolution[1]) as usize];
 		}
 	}
 
