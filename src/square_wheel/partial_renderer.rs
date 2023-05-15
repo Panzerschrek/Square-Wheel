@@ -2150,7 +2150,18 @@ impl PartialRenderer
 		let leaf_submodels = self.inline_models_index.get_leaf_models(leaf_index);
 		let leaf_dynamic_models = self.dynamic_models_index.get_leaf_objects(leaf_index);
 		let leaf_sprites = self.sprites_index.get_leaf_objects(leaf_index);
-		if leaf_submodels.is_empty() && leaf_dynamic_models.is_empty() && leaf_sprites.is_empty()
+		let leaf_portals = if let Some(d) = &self.portals_rendering_data
+		{
+			d.portals_index.get_leaf_objects(leaf_index)
+		}
+		else
+		{
+			&[]
+		};
+		if leaf_submodels.is_empty() &&
+			leaf_dynamic_models.is_empty() &&
+			leaf_sprites.is_empty() &&
+			leaf_portals.is_empty()
 		{
 			return;
 		}
@@ -2225,6 +2236,7 @@ impl PartialRenderer
 
 		const DYNAMIC_MESH_INDEX_ADD: u32 = 65536;
 		const SPRITE_INDEX_ADD: u32 = DYNAMIC_MESH_INDEX_ADD + 65536;
+		const PORTAL_INDEX_ADD: u32 = SPRITE_INDEX_ADD + 65536;
 
 		for (&model_index, model_for_sorting) in leaf_submodels.iter().zip(models_for_sorting.iter_mut())
 		{
@@ -2292,12 +2304,37 @@ impl PartialRenderer
 			num_models += 1;
 		}
 
+		for portal_index in leaf_portals
+		{
+			if num_models == MAX_SUBMODELS_IN_LEAF
+			{
+				break;
+			}
+
+			let portal = &frame_info.portals[*portal_index as usize];
+
+			let mut bbox = BBox::from_point(&portal.display.vertices[0]);
+			for v in &portal.display.vertices[1 ..]
+			{
+				bbox.extend_with_point(v);
+			}
+
+			models_for_sorting[num_models] = (
+				portal_index + PORTAL_INDEX_ADD,
+				draw_ordering::project_bbox(&bbox, &frame_info.camera_matrices),
+			);
+			num_models += 1;
+		}
+
 		draw_ordering::order_bboxes(&mut models_for_sorting[.. num_models]);
 
 		// Draw dynamic models and submodels, located in this leaf, after leaf polygons.
 		for (submodel_index, _bbox) in &models_for_sorting[.. num_models]
 		{
-			if *submodel_index >= SPRITE_INDEX_ADD
+			if *submodel_index >= PORTAL_INDEX_ADD
+			{
+			}
+			else if *submodel_index >= SPRITE_INDEX_ADD
 			{
 				self.draw_sprite(
 					rasterizer,
