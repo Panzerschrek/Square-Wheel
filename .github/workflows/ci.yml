@@ -21,7 +21,7 @@ jobs:
         toolchain: 1.60.0
     # Install non-Rust dependencies
     - name: Install SDL2
-      run: sudo apt-get update && sudo apt-get install libsdl2-dev libsdl2-image-dev
+      run: sudo apt-get update && sudo apt-get install libsdl2-dev
     # Build debug
     - name: BuildDebug
       working-directory: src
