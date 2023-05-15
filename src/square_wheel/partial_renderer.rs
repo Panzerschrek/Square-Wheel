@@ -163,6 +163,7 @@ impl PartialRenderer
 		&mut self,
 		surface_info: &system_window::SurfaceInfo,
 		frame_info: &FrameInfo,
+		camera_matrices: &CameraMatrices,
 	)
 	{
 		let performance_counters_ptr = self.performance_counters.clone();
@@ -183,30 +184,30 @@ impl PartialRenderer
 			let frame_bounds =
 				ClippingPolygon::from_box(0.0, 0.0, surface_info.width as f32, surface_info.height as f32);
 			self.visibility_calculator
-				.update_visibility(&frame_info.camera_matrices, &frame_bounds);
+				.update_visibility(camera_matrices, &frame_bounds);
 		});
 
-		self.prepare_dynamic_lights(frame_info);
+		self.prepare_dynamic_lights(frame_info, camera_matrices);
 		performance_counters.shadow_maps_building.run_with_measure(|| {
 			self.build_shadow_maps(&frame_info.lights);
 		});
 
-		self.prepare_submodels(frame_info);
+		self.prepare_submodels(frame_info, camera_matrices);
 
 		performance_counters.triangle_models_preparation.run_with_measure(|| {
-			self.prepare_dynamic_models(&frame_info.camera_matrices, &frame_info.model_entities);
+			self.prepare_dynamic_models(camera_matrices, &frame_info.model_entities);
 			self.build_dynamic_models_buffers(&frame_info.lights, &frame_info.model_entities);
 		});
 
-		self.prepare_decals(frame_info);
+		self.prepare_decals(frame_info, camera_matrices);
 
-		self.prepare_sprites(frame_info);
+		self.prepare_sprites(frame_info, camera_matrices);
 
 		performance_counters.surfaces_preparation.run_with_measure(|| {
-			self.prepare_polygons_surfaces(&frame_info.camera_matrices);
+			self.prepare_polygons_surfaces(camera_matrices);
 			self.allocate_surfaces_pixels::<ColorT>();
 
-			self.build_polygons_surfaces::<ColorT>(&frame_info.camera_matrices, &frame_info.lights);
+			self.build_polygons_surfaces::<ColorT>(camera_matrices, &frame_info.lights);
 		});
 
 		self.prepare_portals_textures(frame_info);
@@ -219,6 +220,7 @@ impl PartialRenderer
 		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
 		frame_info: &FrameInfo,
+		camera_matrices: &CameraMatrices,
 		debug_stats_printer: &mut DebugStatsPrinter,
 	)
 	{
@@ -237,7 +239,7 @@ impl PartialRenderer
 
 		performance_counters
 			.rasterization
-			.run_with_measure(|| self.perform_rasterization(pixels, surface_info, frame_info));
+			.run_with_measure(|| self.perform_rasterization(pixels, surface_info, frame_info, camera_matrices));
 
 		if debug_stats_printer.show_debug_stats()
 		{
@@ -420,7 +422,7 @@ impl PartialRenderer
 		debug_stats_printer.add_line(format!("mip bias: {}", self.mip_bias));
 	}
 
-	fn prepare_dynamic_lights(&mut self, frame_info: &FrameInfo)
+	fn prepare_dynamic_lights(&mut self, frame_info: &FrameInfo, camera_matrices: &CameraMatrices)
 	{
 		let lights = &frame_info.lights;
 
@@ -460,7 +462,7 @@ impl PartialRenderer
 				},
 				DynamicLightShadowType::Cubemap =>
 				{
-					let dist_from_camera = (frame_info.camera_matrices.position - light.position).magnitude();
+					let dist_from_camera = (camera_matrices.position - light.position).magnitude();
 					let dist_to_closest_point = dist_from_camera - light.radius;
 					let min_shadow_map_size = 64;
 					let max_shadow_map_size = 256;
@@ -517,7 +519,7 @@ impl PartialRenderer
 					{
 						let v_transformed = (light_matrix * v.extend(1.0)).truncate();
 						closest_square_dist =
-							closest_square_dist.min((frame_info.camera_matrices.position - v_transformed).magnitude2());
+							closest_square_dist.min((camera_matrices.position - v_transformed).magnitude2());
 					}
 
 					let closest_dist = closest_square_dist.sqrt();
@@ -612,7 +614,7 @@ impl PartialRenderer
 	}
 
 	// Call this only after dynamic lights preparation.
-	fn prepare_submodels(&mut self, frame_info: &FrameInfo)
+	fn prepare_submodels(&mut self, frame_info: &FrameInfo, camera_matrices: &CameraMatrices)
 	{
 		self.inline_models_index.position_models(&frame_info.submodel_entities);
 
@@ -626,9 +628,9 @@ impl PartialRenderer
 				Some(VisibleSubmodelMatrices {
 					world_planes_matrix: model_matrix_inverse,
 					camera_matrices: CameraMatrices {
-						view_matrix: frame_info.camera_matrices.view_matrix * model_matrix,
-						planes_matrix: frame_info.camera_matrices.planes_matrix * model_matrix_inverse,
-						position: frame_info.camera_matrices.position,
+						view_matrix: camera_matrices.view_matrix * model_matrix,
+						planes_matrix: camera_matrices.planes_matrix * model_matrix_inverse,
+						position: camera_matrices.position,
 					},
 				})
 			}
@@ -682,7 +684,7 @@ impl PartialRenderer
 	}
 
 	// Call this after lights preparation.
-	fn prepare_decals(&mut self, frame_info: &FrameInfo)
+	fn prepare_decals(&mut self, frame_info: &FrameInfo, camera_matrices: &CameraMatrices)
 	{
 		self.decals_index.position_decals(&frame_info.decals);
 
@@ -693,8 +695,7 @@ impl PartialRenderer
 
 			let decal_matrix = get_object_matrix_with_scale(decal.position, decal.rotation, decal.scale);
 
-			let camera_planes_matrix =
-				frame_info.camera_matrices.planes_matrix * decal_matrix.transpose().invert().unwrap();
+			let camera_planes_matrix = camera_matrices.planes_matrix * decal_matrix.transpose().invert().unwrap();
 
 			// Calculate light cube for this decal.
 			// Do it only for one position within decal.
@@ -760,11 +761,11 @@ impl PartialRenderer
 	}
 
 	// Call this after visible leafs search.
-	fn prepare_sprites(&mut self, frame_info: &FrameInfo)
+	fn prepare_sprites(&mut self, frame_info: &FrameInfo, camera_matrices: &CameraMatrices)
 	{
 		self.sprites_index.position_sprites(&frame_info.sprites);
 
-		let view_matrix_inverse = frame_info.camera_matrices.view_matrix.invert().unwrap();
+		let view_matrix_inverse = camera_matrices.view_matrix.invert().unwrap();
 
 		let u_vec_base_initial = (view_matrix_inverse * Vec4f::unit_x()).truncate();
 		let u_vec_base = u_vec_base_initial / u_vec_base_initial.magnitude();
@@ -796,7 +797,7 @@ impl PartialRenderer
 				SpriteOrientation::ParallelToCameraPlane => (u_vec_base, v_vec_base),
 				SpriteOrientation::FacingTowardsCamera =>
 				{
-					let vec_to_camera = frame_info.camera_matrices.position - sprite.position;
+					let vec_to_camera = camera_matrices.position - sprite.position;
 					let plane_normal = vec_to_camera / vec_to_camera.magnitude().max(0.001);
 
 					let u_vec_projected_to_plane = u_vec_base - plane_normal * u_vec_base.dot(plane_normal);
@@ -834,7 +835,7 @@ impl PartialRenderer
 				},
 				SpriteOrientation::AlignToZAxisFacingTowardsCamera =>
 				{
-					let vec_to_camera = frame_info.camera_matrices.position - sprite.position;
+					let vec_to_camera = camera_matrices.position - sprite.position;
 
 					let v_vec_normalized = -Vec3f::unit_z();
 
@@ -879,7 +880,7 @@ impl PartialRenderer
 			];
 
 			let vertices_projected = vertices.map(|v| {
-				let v_projected = frame_info.camera_matrices.view_matrix * v.extend(1.0);
+				let v_projected = camera_matrices.view_matrix * v.extend(1.0);
 				Vec3f::new(v_projected.x, v_projected.y, v_projected.w)
 			});
 
@@ -1205,6 +1206,7 @@ impl PartialRenderer
 		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
 		frame_info: &FrameInfo,
+		camera_matrices: &CameraMatrices,
 	)
 	{
 		let screen_rect = rect_splitting::Rect {
@@ -1233,7 +1235,12 @@ impl PartialRenderer
 				screen_rect.max.y,
 			);
 
-			self.perform_rasterization_for_viewport_part(&mut rasterizer, frame_info, &viewport_clipping_polygon);
+			self.perform_rasterization_for_viewport_part(
+				&mut rasterizer,
+				frame_info,
+				camera_matrices,
+				&viewport_clipping_polygon,
+			);
 		}
 		else
 		{
@@ -1274,7 +1281,12 @@ impl PartialRenderer
 					rect_corrected.max.y,
 				);
 
-				self.perform_rasterization_for_viewport_part(&mut rasterizer, frame_info, &viewport_clipping_polygon);
+				self.perform_rasterization_for_viewport_part(
+					&mut rasterizer,
+					frame_info,
+					camera_matrices,
+					&viewport_clipping_polygon,
+				);
 			});
 		}
 	}
@@ -1283,6 +1295,7 @@ impl PartialRenderer
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		frame_info: &FrameInfo,
+		camera_matrices: &CameraMatrices,
 		viewport_clipping_polygon: &ClippingPolygon,
 	)
 	{
@@ -1290,20 +1303,26 @@ impl PartialRenderer
 		{
 			self.draw_skybox(
 				rasterizer,
-				&frame_info.camera_matrices,
+				camera_matrices,
 				&frame_info.skybox_rotation,
 				&viewport_clipping_polygon,
 			);
 		}
 
 		let root_node = bsp_map_compact::get_root_node_index(&self.map);
-		self.draw_tree_r(rasterizer, frame_info, &viewport_clipping_polygon, root_node);
+		self.draw_tree_r(
+			rasterizer,
+			frame_info,
+			camera_matrices,
+			&viewport_clipping_polygon,
+			root_node,
+		);
 
 		if self.config.invert_polygons_order
 		{
 			self.draw_skybox(
 				rasterizer,
-				&frame_info.camera_matrices,
+				camera_matrices,
 				&frame_info.skybox_rotation,
 				&viewport_clipping_polygon,
 			);
@@ -2062,6 +2081,7 @@ impl PartialRenderer
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		frame_info: &FrameInfo,
+		camera_matrices: &CameraMatrices,
 		viewport_clipping_polygon: &ClippingPolygon,
 		current_index: u32,
 	)
@@ -2074,14 +2094,14 @@ impl PartialRenderer
 				leaf_bounds.intersect(viewport_clipping_polygon);
 				if leaf_bounds.is_valid_and_non_empty()
 				{
-					self.draw_leaf(rasterizer, frame_info, &leaf_bounds, leaf);
+					self.draw_leaf(rasterizer, frame_info, camera_matrices, &leaf_bounds, leaf);
 				}
 			}
 		}
 		else
 		{
 			let node = &self.map.nodes[current_index as usize];
-			let plane_transformed = frame_info.camera_matrices.planes_matrix * node.plane.vec.extend(-node.plane.dist);
+			let plane_transformed = camera_matrices.planes_matrix * node.plane.vec.extend(-node.plane.dist);
 			let mut mask = if plane_transformed.w >= 0.0 { 1 } else { 0 };
 			if self.config.invert_polygons_order
 			{
@@ -2092,6 +2112,7 @@ impl PartialRenderer
 				self.draw_tree_r(
 					rasterizer,
 					frame_info,
+					camera_matrices,
 					viewport_clipping_polygon,
 					node.children[(i ^ mask) as usize],
 				);
@@ -2103,6 +2124,7 @@ impl PartialRenderer
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		frame_info: &FrameInfo,
+		camera_matrices: &CameraMatrices,
 		bounds: &ClippingPolygon,
 		leaf_index: u32,
 	)
@@ -2177,8 +2199,7 @@ impl PartialRenderer
 		// Transform leaf clip planes.
 		for (dst_plane, src_plane) in leaf_clip_planes.iter_mut().zip(leaf_clip_planes_src.iter())
 		{
-			let plane_transformed_vec4 =
-				frame_info.camera_matrices.planes_matrix * src_plane.vec.extend(-src_plane.dist);
+			let plane_transformed_vec4 = camera_matrices.planes_matrix * src_plane.vec.extend(-src_plane.dist);
 			*dst_plane = Plane {
 				vec: plane_transformed_vec4.truncate(),
 				dist: -plane_transformed_vec4.w,
@@ -2299,7 +2320,7 @@ impl PartialRenderer
 
 			models_for_sorting[num_models] = (
 				sprite_index + SPRITE_INDEX_ADD,
-				draw_ordering::project_bbox(&bbox, &frame_info.camera_matrices),
+				draw_ordering::project_bbox(&bbox, camera_matrices),
 			);
 			num_models += 1;
 		}
@@ -2321,7 +2342,7 @@ impl PartialRenderer
 
 			models_for_sorting[num_models] = (
 				portal_index + PORTAL_INDEX_ADD,
-				draw_ordering::project_bbox(&bbox, &frame_info.camera_matrices),
+				draw_ordering::project_bbox(&bbox, camera_matrices),
 			);
 			num_models += 1;
 		}

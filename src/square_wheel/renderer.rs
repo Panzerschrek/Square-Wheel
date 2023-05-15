@@ -38,7 +38,8 @@ impl Renderer
 	)
 	{
 		self.synchronize_config();
-		self.root_renderer.prepare_frame::<ColorT>(surface_info, frame_info)
+		self.root_renderer
+			.prepare_frame::<ColorT>(surface_info, frame_info, &frame_info.camera_matrices)
 	}
 
 	pub fn draw_frame<ColorT: AbstractColor>(
@@ -49,8 +50,13 @@ impl Renderer
 		debug_stats_printer: &mut DebugStatsPrinter,
 	)
 	{
-		self.root_renderer
-			.draw_frame(pixels, surface_info, frame_info, debug_stats_printer)
+		self.root_renderer.draw_frame(
+			pixels,
+			surface_info,
+			frame_info,
+			&frame_info.camera_matrices,
+			debug_stats_printer,
+		)
 	}
 
 	fn synchronize_config(&mut self)
