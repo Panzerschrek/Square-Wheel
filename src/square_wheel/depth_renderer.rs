@@ -244,7 +244,7 @@ impl DepthRenderer
 			.iter()
 			.zip(vertices_transformed[.. vertex_count].iter_mut())
 		{
-			*out_vertex = (camera_matrices.view_matrix * in_vertex.extend(1.0)).truncate();
+			*out_vertex = view_matrix_transform_vertex(&camera_matrices.view_matrix, in_vertex);
 		}
 
 		draw_depth_polygon::<DEPTH_TEST>(

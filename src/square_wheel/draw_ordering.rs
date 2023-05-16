@@ -122,7 +122,7 @@ fn project_plane(plane: &Plane, planes_matrix: &Mat4f) -> Plane
 fn project_bbox_vertices(bbox: &BBox, view_matrix: &Mat4f) -> BBoxVerticesProjected
 {
 	bbox.get_corners_vertices()
-		.map(|pos| (view_matrix * pos.extend(1.0)).truncate())
+		.map(|pos| view_matrix_transform_vertex(view_matrix, &pos))
 }
 
 fn compare_projected_bboxes(l: &ProjectedBBox, r: &ProjectedBBox) -> bool

@@ -92,3 +92,9 @@ pub fn get_object_matrix_with_scale(position: Vec3f, rotation: QuaternionF, scal
 {
 	get_object_matrix(position, rotation) * Mat4f::from_nonuniform_scale(scale.x, scale.y, scale.z)
 }
+
+// Transform vertex into screen, using CameraMatrices::view_matrix, that was previously prepared via "complete_view_matrix" function.
+pub fn view_matrix_transform_vertex(view_matrix: &Mat4f, vertex: &Vec3f) -> Vec3f
+{
+	(view_matrix * vertex.extend(1.0)).truncate()
+}

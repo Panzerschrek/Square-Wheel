@@ -242,7 +242,7 @@ fn project_portal(
 		.iter()
 		.zip(vertices_transformed.iter_mut())
 	{
-		*out_vertex = (view_matrix * in_vertex.extend(1.0)).truncate();
+		*out_vertex = view_matrix_transform_vertex(view_matrix, in_vertex);
 	}
 
 	// Perform z_near clipping. Use very small z_near to avoid clipping portals.

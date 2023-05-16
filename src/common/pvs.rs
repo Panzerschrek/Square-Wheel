@@ -1,4 +1,4 @@
-use super::{bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, matrix};
+use super::{bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, matrix::*};
 use rayon::prelude::*;
 use std::{io::Write, sync::atomic};
 
@@ -237,7 +237,7 @@ fn calculate_portal_view_matrices(
 	{
 		// It's not important what exact FOV and viewport size to use.
 		let viewport_size = 1.0;
-		let mat = matrix::build_view_matrix(
+		let mat = build_view_matrix(
 			*vertex,
 			Rad(azimuth),
 			Rad(elevation),
@@ -272,7 +272,7 @@ fn project_portal(
 			.iter()
 			.zip(vertices_transformed.iter_mut())
 		{
-			*out_vertex = (view_matrix * in_vertex.extend(1.0)).truncate();
+			*out_vertex = view_matrix_transform_vertex(view_matrix, in_vertex);
 		}
 
 		// Perform z_near clipping. Use very small z_near to avoid clipping portals.

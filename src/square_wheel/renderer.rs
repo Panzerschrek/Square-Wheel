@@ -857,7 +857,7 @@ impl Renderer
 			];
 
 			let vertices_projected =
-				vertices.map(|v| (frame_info.camera_matrices.view_matrix * v.extend(1.0)).truncate());
+				vertices.map(|v| view_matrix_transform_vertex(&frame_info.camera_matrices.view_matrix, &v));
 
 			let mip = if vertices_projected[0].z > 0.0 &&
 				vertices_projected[1].z > 0.0 &&
@@ -1019,7 +1019,7 @@ impl Renderer
 			let bbox = get_current_triangle_model_bbox(&model.model, &model.animation);
 			let bbox_vertices_transformed = bbox
 				.get_corners_vertices()
-				.map(|pos| (model_view_matrix * pos.extend(1.0)).truncate());
+				.map(|pos| view_matrix_transform_vertex(&model_view_matrix, &pos));
 
 			let clipping_polygon = if let Some(c) = calculate_triangle_model_screen_polygon(&bbox_vertices_transformed)
 			{
@@ -1453,7 +1453,7 @@ impl Renderer
 
 		for (in_vertex, out_vertex) in polygon_vertices.iter().zip(polygon_vertices_transformed.iter_mut())
 		{
-			*out_vertex = (camera_matrices.view_matrix * in_vertex.extend(1.0)).truncate();
+			*out_vertex = view_matrix_transform_vertex(&camera_matrices.view_matrix, in_vertex);
 		}
 
 		let mut vertices_2d = [Vec2f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
@@ -1858,7 +1858,7 @@ impl Renderer
 		let skybox_planes_matrix = camera_matrices.planes_matrix * skybox_matrix_inverse;
 
 		let box_vertices_transformed =
-			BOX_VERTICES.map(|v| (skybox_view_matrix * (Vec3f::from(v) * 4.0).extend(1.0)).truncate());
+			BOX_VERTICES.map(|v| view_matrix_transform_vertex(&skybox_view_matrix, &(Vec3f::from(v) * 4.0)));
 
 		let clip_planes = bounds.get_clip_planes();
 
