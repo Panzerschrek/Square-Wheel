@@ -288,4 +288,9 @@ pub struct PortalInfo
 	pub resolution: [u32; 2], // zero if invisible
 	pub texture_pixels_offset: usize,
 	// TODO - add mip-level here.
+
+	// Projected equations for current frame.
+	pub depth_equation: DepthEquation,
+	pub tex_coord_equation: TexCoordEquation,
+	pub tc_min: [i32; 2],
 }

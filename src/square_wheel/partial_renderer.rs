@@ -214,7 +214,7 @@ impl PartialRenderer
 			self.build_polygons_surfaces::<ColorT>(camera_matrices, &frame_info.lights);
 		});
 
-		self.prepare_portals_textures(frame_info);
+		self.prepare_portals_textures(frame_info, camera_matrices);
 		self.allocate_portals_pixels::<ColorT>();
 		self.build_portals_textures::<ColorT>(frame_info);
 	}
@@ -1814,7 +1814,7 @@ impl PartialRenderer
 		}
 	}
 
-	fn prepare_portals_textures(&mut self, frame_info: &FrameInfo)
+	fn prepare_portals_textures(&mut self, frame_info: &FrameInfo, camera_matrices: &CameraMatrices)
 	{
 		let portals_rendering_data = if let Some(d) = &mut self.portals_rendering_data
 		{
@@ -1834,23 +1834,82 @@ impl PartialRenderer
 		portals_rendering_data.portals_info.clear();
 		for (portal_index, portal) in frame_info.portals.iter().enumerate()
 		{
-			let resolution = if portals_rendering_data
-				.portals_index
-				.get_object_leafs(portal_index)
-				.is_empty()
+			let display = &portal.display;
+
+			let inf = (1 << 29) as f32;
+			let mut tc_min = [inf, inf];
+			let mut tc_max = [-inf, -inf];
+			for &vertex in &display.vertices
 			{
-				// This portal is not visible
-				[0, 0]
+				for i in 0 .. 2
+				{
+					let tc = display.tex_coord_equation[i].vec.dot(vertex) + display.tex_coord_equation[i].dist;
+					if tc < tc_min[i]
+					{
+						tc_min[i] = tc;
+					}
+					if tc > tc_max[i]
+					{
+						tc_max[i] = tc;
+					}
+				}
 			}
-			else
+
+			for i in 0 .. 2
 			{
-				// TODO - set proper resolution
-				[64, 64]
-			};
+				// Reduce min/max texture coordinates slightly to avoid adding extra pixels
+				// in case if min/max tex coord is exact integer, but slightly changed due to computational errors.
+				let tc_reduce_eps = 1.0 / 32.0;
+				tc_min[i] += tc_reduce_eps;
+				tc_max[i] -= tc_reduce_eps;
+			}
+
+			let tex_coord_min = [tc_min[0].floor() as i32, tc_min[1].floor() as i32];
+			let tex_coord_max = [
+				(tc_max[0].ceil() as i32).max(tex_coord_min[0] + 1),
+				(tc_max[1].ceil() as i32).max(tex_coord_min[1] + 1),
+			];
+
+			let resolution = [
+				(tex_coord_max[0] - tex_coord_min[0]) as u32,
+				(tex_coord_max[1] - tex_coord_min[1]) as u32,
+			];
+
+			let plane_transformed = camera_matrices.planes_matrix * display.plane.vec.extend(-display.plane.dist);
+			if plane_transformed.w <= 0.0
+			{
+				// TODO - skip it
+			}
+
+			let depth_equation = DepthEquation::from_transformed_plane_equation(&plane_transformed);
+
+			// Calculate texture coordinates equations.
+			let tex_coord_equation = &display.tex_coord_equation;
+			let tc_basis_transformed = [
+				camera_matrices.planes_matrix * tex_coord_equation[0].vec.extend(tex_coord_equation[0].dist),
+				camera_matrices.planes_matrix * tex_coord_equation[1].vec.extend(tex_coord_equation[1].dist),
+			];
+			// Equation projeted to polygon plane.
+			let mut tc_equation = TexCoordEquation::from_depth_equation_and_transformed_tex_coord_equations(
+				&depth_equation,
+				&tc_basis_transformed,
+			);
+
+			// Correct texture coordinates equation to compensate shift to surface rect.
+			for i in 0 .. 2
+			{
+				let tc_min = tex_coord_min[i] as f32;
+				tc_equation.d_tc_dx[i] -= tc_min * depth_equation.d_inv_z_dx;
+				tc_equation.d_tc_dy[i] -= tc_min * depth_equation.d_inv_z_dy;
+				tc_equation.k[i] -= tc_min * depth_equation.k;
+			}
 
 			let portal_info = PortalInfo {
 				resolution,
 				texture_pixels_offset: portals_rendering_data.num_textures_pixels,
+				depth_equation: depth_equation,
+				tex_coord_equation: tc_equation,
+				tc_min: tex_coord_min,
 			};
 			portals_rendering_data.num_textures_pixels +=
 				(portal_info.resolution[0] * portal_info.resolution[1]) as usize;
@@ -2358,6 +2417,13 @@ impl PartialRenderer
 		{
 			if *submodel_index >= PORTAL_INDEX_ADD
 			{
+				self.draw_portal_display(
+					rasterizer,
+					&clip_planes,
+					&frame_info.portals,
+					camera_matrices,
+					*submodel_index - PORTAL_INDEX_ADD,
+				);
 			}
 			else if *submodel_index >= SPRITE_INDEX_ADD
 			{
@@ -3273,6 +3339,51 @@ impl PartialRenderer
 				} // for subtriangles
 			} // For triangles
 		}
+	}
+
+	fn draw_portal_display<'a, ColorT: AbstractColor>(
+		&self,
+		rasterizer: &mut Rasterizer<'a, ColorT>,
+		clip_planes: &ClippingPolygonPlanes,
+		portals: &[CameraPortal],
+		camera_matrices: &CameraMatrices,
+		portal_index: u32,
+	)
+	{
+		let portals_rendering_data = if let Some(d) = &self.portals_rendering_data
+		{
+			d
+		}
+		else
+		{
+			return;
+		};
+
+		let display = &portals[portal_index as usize].display;
+		let portal_info = &portals_rendering_data.portals_info[portal_index as usize];
+
+		let mut vertices_3d = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
+		for (in_vertex, out_vertex) in display.vertices.iter().zip(vertices_3d.iter_mut())
+		{
+			let vertex_transformed = camera_matrices.view_matrix * in_vertex.extend(1.0);
+			*out_vertex = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
+		}
+
+		let pixels_casted = unsafe { portals_rendering_data.textures_pixels.align_to::<ColorT>().1 };
+
+		let portal_pixels = &pixels_casted[portal_info.texture_pixels_offset ..
+			portal_info.texture_pixels_offset + ((portal_info.resolution[0] * portal_info.resolution[1]) as usize)];
+
+		draw_polygon(
+			rasterizer,
+			&clip_planes,
+			&vertices_3d[.. std::cmp::min(MAX_VERTICES, display.vertices.len())],
+			&portal_info.depth_equation,
+			&portal_info.tex_coord_equation,
+			&portal_info.resolution,
+			portal_pixels,
+			material::BlendingMode::None,
+		);
 	}
 
 	fn get_polygon_surface_data<ColorT>(&self, polygon_data: &DrawPolygonData) -> &[ColorT]
