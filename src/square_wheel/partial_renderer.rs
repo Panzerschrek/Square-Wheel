@@ -1937,7 +1937,7 @@ impl PartialRenderer
 		}
 	}
 
-	fn build_portals_textures<ColorT>(&mut self, frame_info: &FrameInfo)
+	fn build_portals_textures<ColorT: AbstractColor>(&mut self, frame_info: &FrameInfo)
 	{
 		let portals_rendering_data = if let Some(d) = &mut self.portals_rendering_data
 		{
@@ -1949,6 +1949,8 @@ impl PartialRenderer
 		};
 
 		let textures_pixels_casted = unsafe { portals_rendering_data.textures_pixels.align_to_mut::<ColorT>().1 };
+
+		let mut debug_stats_printer = DebugStatsPrinter::new(false);
 
 		for (portal, portal_info) in frame_info
 			.portals
@@ -1962,7 +1964,7 @@ impl PartialRenderer
 			}
 
 			let fov = std::f32::consts::PI * 0.5; // TODO - setup it properly.
-			let matrix = build_view_matrix_with_full_rotation(
+			let camera_matrices = build_view_matrix_with_full_rotation(
 				portal.position,
 				portal.rotation,
 				fov,
@@ -1970,8 +1972,24 @@ impl PartialRenderer
 				portal_info.resolution[1] as f32,
 			);
 
-			let texture_data = &mut textures_pixels_casted[portal_info.texture_pixels_offset ..
-				portal_info.texture_pixels_offset + (portal_info.resolution[0] * portal_info.resolution[1]) as usize];
+			let surface_info = system_window::SurfaceInfo {
+				width: portal_info.resolution[0] as usize,
+				height: portal_info.resolution[1] as usize,
+				pitch: portal_info.resolution[0] as usize,
+			};
+			portals_rendering_data
+				.renderer
+				.prepare_frame::<ColorT>(&surface_info, frame_info, &camera_matrices);
+
+			portals_rendering_data.renderer.draw_frame(
+				&mut textures_pixels_casted[portal_info.texture_pixels_offset ..
+					portal_info.texture_pixels_offset +
+						(portal_info.resolution[0] * portal_info.resolution[1]) as usize],
+				&surface_info,
+				frame_info,
+				&camera_matrices,
+				&mut debug_stats_printer,
+			);
 		}
 	}
 
