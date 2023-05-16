@@ -1070,11 +1070,8 @@ type WorldLine = (Vec3f, Vec3f, Color32);
 
 fn draw_line(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, line: &WorldLine)
 {
-	let v0 = transform_matrix * line.0.extend(1.0);
-	let v1 = transform_matrix * line.1.extend(1.0);
-
-	let mut v0 = Vec3f::new(v0.x, v0.y, v0.w);
-	let mut v1 = Vec3f::new(v1.x, v1.y, v1.w);
+	let mut v0 = view_matrix_transform_vertex(transform_matrix, &line.0);
+	let mut v1 = view_matrix_transform_vertex(transform_matrix, &line.1);
 
 	// Perform z_near clipping.
 	const Z_NEAR: f32 = 1.0;
