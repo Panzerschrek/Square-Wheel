@@ -244,8 +244,7 @@ impl DepthRenderer
 			.iter()
 			.zip(vertices_transformed[.. vertex_count].iter_mut())
 		{
-			let vertex_transformed = camera_matrices.view_matrix * in_vertex.extend(1.0);
-			*out_vertex = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
+			*out_vertex = (camera_matrices.view_matrix * in_vertex.extend(1.0)).truncate();
 		}
 
 		draw_depth_polygon::<DEPTH_TEST>(

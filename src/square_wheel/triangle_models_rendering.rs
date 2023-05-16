@@ -30,10 +30,9 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 		{
 			for (v, dst_v) in v.iter().zip(dst_vertices.iter_mut())
 			{
-				let pos_transformed = model_view_matrix * v.position.extend(1.0);
 				let normal_transformed = normals_matrix * v.normal;
 				*dst_v = ModelVertex3d {
-					pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
+					pos: (model_view_matrix * v.position.extend(1.0)).truncate(),
 					tc: Vec2f::from(v.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
 					light: get_vertex_light(light, &normal_transformed),
 				};
@@ -54,11 +53,10 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 					.zip(dst_vertices.iter_mut())
 				{
 					let position_lerped = v_v0.position * lerp0 + v_v1.position * lerp1;
-					let pos_transformed = model_view_matrix * position_lerped.extend(1.0);
 					let normal_lerped = v_v0.normal * lerp0 + v_v1.normal * lerp1;
 					let normal_transformed = normals_matrix * normal_lerped;
 					*dst_v = ModelVertex3d {
-						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
+						pos: (model_view_matrix * position_lerped.extend(1.0)).truncate(),
 						tc: Vec2f::from(v_c.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
 						light: get_vertex_light(light, &normal_transformed),
 					};
@@ -80,10 +78,9 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 					.zip(constant.iter())
 					.zip(dst_vertices.iter_mut())
 				{
-					let pos_transformed = model_view_matrix * v_v.position.extend(1.0);
 					let normal_transformed = normals_matrix * v_v.normal;
 					*dst_v = ModelVertex3d {
-						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
+						pos: (model_view_matrix * v_v.position.extend(1.0)).truncate(),
 						tc: Vec2f::from(v_c.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
 						light: get_vertex_light(light, &normal_transformed),
 					};
@@ -97,10 +94,9 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 				// No animation - just use source vertces.
 				for (v, dst_v) in v.iter().zip(dst_vertices.iter_mut())
 				{
-					let pos_transformed = model_view_matrix * v.position.extend(1.0);
 					let normal_transformed = normals_matrix * v.normal;
 					*dst_v = ModelVertex3d {
-						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
+						pos: (model_view_matrix * v.position.extend(1.0)).truncate(),
 						tc: Vec2f::from(v.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
 						light: get_vertex_light(light, &normal_transformed),
 					};
@@ -183,10 +179,9 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 						}
 					}
 
-					let pos_transformed = mat * v.position.extend(1.0);
 					let normal_transformed = normal_mat * v.normal;
 					*dst_v = ModelVertex3d {
-						pos: Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w),
+						pos: (mat * v.position.extend(1.0)).truncate(),
 						tc: Vec2f::from(v.tex_coord).mul_element_wise(*tc_scale) + tc_shift,
 						light: get_vertex_light(light, &normal_transformed),
 					};

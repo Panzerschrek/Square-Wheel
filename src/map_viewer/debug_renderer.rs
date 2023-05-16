@@ -859,8 +859,7 @@ fn draw_polygon_decomposed(
 	let mut vertices_transformed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
 	for (index, vertex) in vertices.iter().enumerate().take(MAX_VERTICES)
 	{
-		let vertex_transformed = camera_matrices.view_matrix * vertex.extend(1.0);
-		vertices_transformed[index] = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
+		vertices_transformed[index] = (camera_matrices.view_matrix * vertex.extend(1.0)).truncate();
 	}
 
 	// Perform z_near clipping.

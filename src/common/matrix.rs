@@ -62,30 +62,21 @@ pub fn complete_view_matrix(
 	let inv_half_fov_tan = 1.0 / ((fov * 0.5).tan());
 	let aspect = viewport_width / viewport_height;
 	let perspective = Mat4f::from_nonuniform_scale(inv_half_fov_tan / aspect, inv_half_fov_tan, 1.0);
-	// Perform Z and W manipulations only for view matrix, but not for planes equation matrix.
-	let mut perspective_finalization = Mat4f::identity();
-	perspective_finalization.w.z = 1.0;
-	perspective_finalization.z.z = 0.0;
-	perspective_finalization.z.w = 1.0;
-	perspective_finalization.w.w = 0.0;
 
 	let resize_to_viewport = Mat4f::from_nonuniform_scale(viewport_width * 0.5, viewport_height * 0.5, 1.0);
-	let shift_to_viewport_center =
-		Mat4f::from_translation(Vec3f::new(viewport_width * 0.5, viewport_height * 0.5, 0.0));
 
-	let mut planes_shift_to_viewport_center = Mat4f::identity();
-	planes_shift_to_viewport_center.x.z = -viewport_width * 0.5;
-	planes_shift_to_viewport_center.y.z = -viewport_height * 0.5;
+	let mut shift_to_viewport_center = Mat4f::identity();
+	shift_to_viewport_center.z.x = viewport_width * 0.5;
+	shift_to_viewport_center.z.y = viewport_height * 0.5;
 
 	// Perform transformations in reverse order in order to perform transformation via "matrix * vector".
 	// TODO - perform calculations in "double" for better pericision?
-	let base_view_matrix = resize_to_viewport * perspective * rotation_matrix * translate;
-	// TODO - maybe avoid clculation of inverse matrix and perform direct matrix calculation?
-	let planes_matrix = base_view_matrix.transpose().invert().unwrap();
+	let base_view_matrix = shift_to_viewport_center * resize_to_viewport * perspective * rotation_matrix * translate;
 	CameraMatrices {
 		position,
-		view_matrix: shift_to_viewport_center * perspective_finalization * base_view_matrix,
-		planes_matrix: planes_shift_to_viewport_center * planes_matrix,
+		view_matrix: base_view_matrix,
+		// TODO - maybe avoid calculation of inverse matrix and perform direct matrix calculation?
+		planes_matrix: base_view_matrix.transpose().invert().unwrap(),
 	}
 }
 
