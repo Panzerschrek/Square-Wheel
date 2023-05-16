@@ -22,7 +22,6 @@ pub struct PartialRenderer
 	visibility_calculator: MapVisibilityCalculator,
 	shadows_maps_renderer: DepthRenderer,
 	// Store precalculated list of bounding planes for each leaf.
-	leafs_planes: Vec<LeafClipPlanes>,
 	polygons_data: Vec<DrawPolygonData>,
 	vertices_transformed: Vec<Vec3f>,
 	// Store surfaces pixels as raw array.
@@ -32,20 +31,14 @@ pub struct PartialRenderer
 	num_visible_surfaces_pixels: usize,
 	current_frame_visible_polygons: Vec<u32>,
 	mip_bias: f32,
-	inline_models_index: InlineModelsIndex,
 	submodels_info: Vec<VisibleSubmodelInfo>,
 	// Material index and clipping polygon of current frame sky.
 	current_sky: Option<(u32, ClippingPolygon)>,
-	materials_processor: MapMaterialsProcessor, // TODO - store in once per whole renderer
 	performance_counters: Arc<Mutex<RendererPerformanceCounters>>,
 	dynamic_lights_info: Vec<DynamicLightInfo>,
 	shadow_maps_data: Vec<ShadowMapElement>,
-	dynamic_models_index: DynamicObjectsIndex,
-	decals_index: DynamicObjectsIndex,
 	decals_info: Vec<DecalInfo>,
-	sprites_index: DynamicObjectsIndex,
 	sprites_info: Vec<SpriteInfo>,
-	dynamic_lights_index: DynamicObjectsIndex,
 	// TODO - maybe extract dynamic models-related stuff into separate class?
 	// Store transformed models vertices and triangles in separate buffer.
 	// This is needed to avoid transforming/sorting model's vertices/triangles in each BSP leaf where this model is located.
@@ -66,9 +59,6 @@ impl PartialRenderer
 		depth: u32, // if zero portals renderer will not be created
 	) -> Self
 	{
-		// TODO -move some initializations steps into "Renderer" class.
-		let materials_processor = MapMaterialsProcessor::new(resources_manager.clone(), &*map);
-
 		let mut polygons_data: Vec<DrawPolygonData> = map
 			.polygons
 			.iter()
@@ -103,36 +93,25 @@ impl PartialRenderer
 			}
 		}
 
-		let leafs_planes = (0 .. map.leafs.len())
-			.map(|leaf_index| get_leaf_clip_planes(&map, leaf_index as u32))
-			.collect();
-
 		Self {
 			config,
 			current_frame: FrameNumber::default(),
-			leafs_planes,
 			polygons_data,
 			vertices_transformed: vec![Vec3f::new(0.0, 0.0, 0.0); map.vertices.len()],
 			surfaces_pixels: Vec::new(),
 			num_visible_surfaces_pixels: 0,
 			current_frame_visible_polygons: Vec::with_capacity(map.polygons.len()),
 			mip_bias: 0.0,
-			inline_models_index: InlineModelsIndex::new(map.clone()),
 			submodels_info: vec![VisibleSubmodelInfo::default(); map.submodels.len()],
 			current_sky: None,
 			visibility_calculator: MapVisibilityCalculator::new(map.clone()),
 			shadows_maps_renderer: DepthRenderer::new(resources_manager.clone(), map.clone()),
 			map: map.clone(),
-			materials_processor,
 			performance_counters: Arc::new(Mutex::new(RendererPerformanceCounters::new())),
 			dynamic_lights_info: Vec::new(),
 			shadow_maps_data: Vec::new(),
-			dynamic_models_index: DynamicObjectsIndex::new(map.clone()),
-			decals_index: DynamicObjectsIndex::new(map.clone()),
 			decals_info: Vec::new(),
-			sprites_index: DynamicObjectsIndex::new(map.clone()),
 			sprites_info: Vec::new(),
-			dynamic_lights_index: DynamicObjectsIndex::new(map.clone()),
 			visible_dynamic_meshes_list: Vec::new(),
 			dynamic_model_to_dynamic_meshes_index: Vec::new(),
 			dynamic_meshes_vertices: Vec::new(),
@@ -141,7 +120,6 @@ impl PartialRenderer
 			{
 				Some(Box::new(PortalsRenderingData {
 					renderer: PartialRenderer::new(resources_manager, config, map.clone(), depth - 1),
-					portals_index: DynamicObjectsIndex::new(map.clone()),
 					portals_info: Vec::new(),
 					textures_pixels: Vec::new(),
 					num_textures_pixels: 0,
@@ -168,6 +146,7 @@ impl PartialRenderer
 		surface_info: &system_window::SurfaceInfo,
 		frame_info: &FrameInfo,
 		camera_matrices: &CameraMatrices,
+		renderers_common_data: &RenderersCommonData,
 	)
 	{
 		let performance_counters_ptr = self.performance_counters.clone();
@@ -176,10 +155,6 @@ impl PartialRenderer
 		self.update_mip_bias();
 
 		self.current_frame.next();
-
-		performance_counters
-			.materials_update
-			.run_with_measure(|| self.materials_processor.update(frame_info.game_time_s));
 
 		performance_counters.visible_leafs_search.run_with_measure(|| {
 			// TODO - before preparing frame try to shift camera a little bit away from all planes of BSP nodes before current leaf.
@@ -191,32 +166,45 @@ impl PartialRenderer
 				.update_visibility(camera_matrices, &frame_bounds);
 		});
 
-		self.prepare_dynamic_lights(frame_info, camera_matrices);
+		self.prepare_dynamic_lights(frame_info, camera_matrices, &renderers_common_data.dynamic_lights_index);
 		performance_counters.shadow_maps_building.run_with_measure(|| {
-			self.build_shadow_maps(&frame_info.lights);
+			self.build_shadow_maps(&frame_info.lights, &renderers_common_data.inline_models_index);
 		});
 
-		self.prepare_submodels(frame_info, camera_matrices);
+		self.prepare_submodels(frame_info, camera_matrices, &renderers_common_data.inline_models_index);
 
 		performance_counters.triangle_models_preparation.run_with_measure(|| {
-			self.prepare_dynamic_models(camera_matrices, &frame_info.model_entities);
+			self.prepare_dynamic_models(
+				camera_matrices,
+				&frame_info.model_entities,
+				&renderers_common_data.dynamic_models_index,
+			);
 			self.build_dynamic_models_buffers(&frame_info.lights, &frame_info.model_entities);
 		});
 
 		self.prepare_decals(frame_info, camera_matrices);
 
-		self.prepare_sprites(frame_info, camera_matrices);
+		self.prepare_sprites(frame_info, camera_matrices, &renderers_common_data.sprites_index);
 
 		performance_counters.surfaces_preparation.run_with_measure(|| {
-			self.prepare_polygons_surfaces(camera_matrices);
+			self.prepare_polygons_surfaces(
+				camera_matrices,
+				&renderers_common_data.inline_models_index,
+				&renderers_common_data.materials_processor,
+			);
 			self.allocate_surfaces_pixels::<ColorT>();
 
-			self.build_polygons_surfaces::<ColorT>(camera_matrices, &frame_info.lights);
+			self.build_polygons_surfaces::<ColorT>(
+				camera_matrices,
+				&renderers_common_data.dynamic_lights_index,
+				&renderers_common_data.materials_processor,
+				&frame_info.lights,
+			);
 		});
 
-		self.prepare_portals_textures(frame_info, camera_matrices);
+		self.prepare_portals_textures(frame_info, camera_matrices, &renderers_common_data.portals_index);
 		self.allocate_portals_pixels::<ColorT>();
-		self.build_portals_textures::<ColorT>(frame_info);
+		self.build_portals_textures::<ColorT>(frame_info, renderers_common_data);
 	}
 
 	pub fn draw_frame<ColorT: AbstractColor>(
@@ -225,6 +213,7 @@ impl PartialRenderer
 		surface_info: &system_window::SurfaceInfo,
 		frame_info: &FrameInfo,
 		camera_matrices: &CameraMatrices,
+		renderers_common_data: &RenderersCommonData,
 		debug_stats_printer: &mut DebugStatsPrinter,
 	)
 	{
@@ -241,13 +230,14 @@ impl PartialRenderer
 			}
 		});
 
-		performance_counters
-			.rasterization
-			.run_with_measure(|| self.perform_rasterization(pixels, surface_info, frame_info, camera_matrices));
+		performance_counters.rasterization.run_with_measure(|| {
+			self.perform_rasterization(pixels, surface_info, frame_info, camera_matrices, renderers_common_data)
+		});
 
 		if debug_stats_printer.show_debug_stats()
 		{
-			self.print_debug_stats(frame_info, debug_stats_printer, &performance_counters);
+			// TODO
+			// self.print_debug_stats(frame_info, debug_stats_printer, &performance_counters);
 		}
 
 		if self.config.debug_draw_depth
@@ -272,165 +262,14 @@ impl PartialRenderer
 		}
 	}
 
-	fn print_debug_stats(
+	fn prepare_dynamic_lights(
 		&mut self,
 		frame_info: &FrameInfo,
-		debug_stats_printer: &mut DebugStatsPrinter,
-		performance_counters: &RendererPerformanceCounters,
+		camera_matrices: &CameraMatrices,
+		dynamic_lights_index: &DynamicObjectsIndex,
 	)
 	{
-		let mut num_visible_leafs = 0;
-		let mut num_visible_submodels_parts = 0;
-		let mut num_visible_meshes_parts = 0;
-		for leaf_index in 0 .. self.map.leafs.len() as u32
-		{
-			if self
-				.visibility_calculator
-				.get_current_frame_leaf_bounds(leaf_index)
-				.is_some()
-			{
-				num_visible_leafs += 1;
-				num_visible_submodels_parts += self.inline_models_index.get_leaf_models(leaf_index as u32).len();
-				num_visible_meshes_parts += self.dynamic_models_index.get_leaf_objects(leaf_index as u32).len();
-			}
-		}
-
-		let mut triangles = 0;
-		let mut triangle_vertices = 0;
-		for visible_dynamic_mesh in &self.visible_dynamic_meshes_list
-		{
-			triangles += visible_dynamic_mesh.num_visible_triangles;
-			triangle_vertices += match &frame_info.model_entities[visible_dynamic_mesh.entity_index as usize]
-				.model
-				.meshes[visible_dynamic_mesh.mesh_index as usize]
-				.vertex_data
-			{
-				VertexData::NonAnimated(v) => v.len(),
-				VertexData::VertexAnimated { constant, .. } => constant.len(),
-				VertexData::SkeletonAnimated(v) => v.len(),
-			};
-		}
-
-		let mut decals = 0;
-		let mut decals_leafs_parts = 0;
-		for i in 0 .. frame_info.decals.len()
-		{
-			let mut visible = false;
-			for leaf_index in self.decals_index.get_object_leafs(i)
-			{
-				if self
-					.visibility_calculator
-					.get_current_frame_leaf_bounds(*leaf_index)
-					.is_some()
-				{
-					decals_leafs_parts += 1;
-					visible = true;
-				}
-			}
-			if visible
-			{
-				decals += 1;
-			}
-		}
-
-		let mut sprites = 0;
-		let mut sprites_leafs_parts = 0;
-		for i in 0 .. frame_info.sprites.len()
-		{
-			let mut visible = false;
-			for leaf_index in self.sprites_index.get_object_leafs(i)
-			{
-				if self
-					.visibility_calculator
-					.get_current_frame_leaf_bounds(*leaf_index)
-					.is_some()
-				{
-					sprites_leafs_parts += 1;
-					visible = true;
-				}
-			}
-			if visible
-			{
-				sprites += 1;
-			}
-		}
-
-		let mut visible_lights = 0;
-		let mut visible_lights_with_shadow = 0;
-		for (light, light_info) in frame_info.lights.iter().zip(self.dynamic_lights_info.iter_mut())
-		{
-			if light_info.visible
-			{
-				visible_lights += 1;
-				if let DynamicLightShadowType::None = light.shadow_type
-				{
-				}
-				else
-				{
-					visible_lights_with_shadow += 1;
-				}
-			}
-		}
-
-		debug_stats_printer.add_line(format!(
-			"materials update: {:04.2}ms",
-			performance_counters.materials_update.get_average_value() * 1000.0
-		));
-		debug_stats_printer.add_line(format!(
-			"visible leafs search: {:04.2}ms",
-			performance_counters.visible_leafs_search.get_average_value() * 1000.0
-		));
-		debug_stats_printer.add_line(format!(
-			"triangle models preparation: {:04.2}ms",
-			performance_counters.triangle_models_preparation.get_average_value() * 1000.0
-		));
-		debug_stats_printer.add_line(format!(
-			"surfaces preparation: {:04.2}ms",
-			performance_counters.surfaces_preparation.get_average_value() * 1000.0
-		));
-		debug_stats_printer.add_line(format!(
-			"shadow maps building: {:04.2}ms",
-			performance_counters.shadow_maps_building.get_average_value() * 1000.0
-		));
-		debug_stats_printer.add_line(format!(
-			"background fill: {:04.2}ms",
-			performance_counters.background_fill.get_average_value() * 1000.0
-		));
-		debug_stats_printer.add_line(format!(
-			"rasterization: {:04.2}ms",
-			performance_counters.rasterization.get_average_value() * 1000.0
-		));
-		debug_stats_printer.add_line(format!("leafs: {}/{}", num_visible_leafs, self.map.leafs.len()));
-		debug_stats_printer.add_line(format!("submodels parts: {}", num_visible_submodels_parts));
-		debug_stats_printer.add_line(format!("polygons: {}", self.current_frame_visible_polygons.len()));
-		debug_stats_printer.add_line(format!(
-			"dynamic meshes : {}, parts: {}, triangles: {}, vertices: {}",
-			self.visible_dynamic_meshes_list.len(),
-			num_visible_meshes_parts,
-			triangles,
-			triangle_vertices
-		));
-		debug_stats_printer.add_line(format!("decals: {}, (parsts in leafs: {})", decals, decals_leafs_parts));
-		debug_stats_printer.add_line(format!(
-			"sprites: {}, (parsts in leafs: {})",
-			sprites, sprites_leafs_parts
-		));
-		debug_stats_printer.add_line(format!(
-			"dynamic lights: {}, (with shadow: {})",
-			visible_lights, visible_lights_with_shadow
-		));
-		debug_stats_printer.add_line(format!(
-			"surfaces pixels: {}k",
-			(self.num_visible_surfaces_pixels + 1023) / 1024
-		));
-		debug_stats_printer.add_line(format!("mip bias: {}", self.mip_bias));
-	}
-
-	fn prepare_dynamic_lights(&mut self, frame_info: &FrameInfo, camera_matrices: &CameraMatrices)
-	{
 		let lights = &frame_info.lights;
-
-		self.dynamic_lights_index.position_dynamic_lights(lights);
 
 		self.dynamic_lights_info
 			.resize(lights.len(), DynamicLightInfo::default());
@@ -440,7 +279,7 @@ impl PartialRenderer
 		for (index, (light, light_info)) in lights.iter().zip(self.dynamic_lights_info.iter_mut()).enumerate()
 		{
 			light_info.visible = false;
-			for leaf_index in self.dynamic_lights_index.get_object_leafs(index)
+			for leaf_index in dynamic_lights_index.get_object_leafs(index)
 			{
 				if self
 					.visibility_calculator
@@ -550,7 +389,7 @@ impl PartialRenderer
 	}
 
 	// Call this only after dynamic lights preparation.
-	fn build_shadow_maps(&mut self, lights: &[DynamicLight])
+	fn build_shadow_maps(&mut self, lights: &[DynamicLight], inline_models_index: &InlineModelsIndex)
 	{
 		// TODO - use multithreading.
 		for (light, light_info) in lights.iter().zip(self.dynamic_lights_info.iter_mut())
@@ -586,7 +425,7 @@ impl PartialRenderer
 							light_info.shadow_map_size,
 							light_info.shadow_map_size,
 							&depth_matrices,
-							&self.inline_models_index,
+							inline_models_index,
 						);
 					}
 				},
@@ -608,7 +447,7 @@ impl PartialRenderer
 						light_info.shadow_map_size,
 						light_info.shadow_map_size,
 						&depth_matrices,
-						&self.inline_models_index,
+						inline_models_index,
 					);
 
 					make_shadow_map_circle(depth_data, light_info.shadow_map_size);
@@ -618,13 +457,16 @@ impl PartialRenderer
 	}
 
 	// Call this only after dynamic lights preparation.
-	fn prepare_submodels(&mut self, frame_info: &FrameInfo, camera_matrices: &CameraMatrices)
+	fn prepare_submodels(
+		&mut self,
+		frame_info: &FrameInfo,
+		camera_matrices: &CameraMatrices,
+		inline_models_index: &InlineModelsIndex,
+	)
 	{
-		self.inline_models_index.position_models(&frame_info.submodel_entities);
-
 		for (index, submodel_info) in self.submodels_info.iter_mut().enumerate()
 		{
-			let model_matrix_opt = self.inline_models_index.get_model_matrix(index as u32);
+			let model_matrix_opt = inline_models_index.get_model_matrix(index as u32);
 
 			submodel_info.matrices = if let Some(model_matrix) = model_matrix_opt
 			{
@@ -648,8 +490,7 @@ impl PartialRenderer
 			if let Some(model_matrix) = model_matrix_opt
 			{
 				// Get initial bounding box, transformm its vertices and obtain new bounding box (around transformed vertices).
-				let bbox_vertices_transformed = self
-					.inline_models_index
+				let bbox_vertices_transformed = inline_models_index
 					.get_model_bbox_initial(index as u32)
 					.get_corners_vertices()
 					.map(|v| (model_matrix * v.extend(1.0)).truncate());
@@ -690,8 +531,6 @@ impl PartialRenderer
 	// Call this after lights preparation.
 	fn prepare_decals(&mut self, frame_info: &FrameInfo, camera_matrices: &CameraMatrices)
 	{
-		self.decals_index.position_decals(&frame_info.decals);
-
 		self.decals_info.clear();
 		for decal in &frame_info.decals
 		{
@@ -765,10 +604,13 @@ impl PartialRenderer
 	}
 
 	// Call this after visible leafs search.
-	fn prepare_sprites(&mut self, frame_info: &FrameInfo, camera_matrices: &CameraMatrices)
+	fn prepare_sprites(
+		&mut self,
+		frame_info: &FrameInfo,
+		camera_matrices: &CameraMatrices,
+		sprites_index: &DynamicObjectsIndex,
+	)
 	{
-		self.sprites_index.position_sprites(&frame_info.sprites);
-
 		let view_matrix_inverse = camera_matrices.view_matrix.invert().unwrap();
 
 		let u_vec_base_initial = (view_matrix_inverse * Vec4f::unit_x()).truncate();
@@ -789,7 +631,7 @@ impl PartialRenderer
 		self.sprites_info.clear();
 		for (sprite_index, sprite) in frame_info.sprites.iter().enumerate()
 		{
-			if self.sprites_index.get_object_leafs(sprite_index).is_empty()
+			if sprites_index.get_object_leafs(sprite_index).is_empty()
 			{
 				// This sprite is not visible. Avoid costly computations for it.
 				self.sprites_info.push(dummy_sprite_info);
@@ -1020,10 +862,13 @@ impl PartialRenderer
 	}
 
 	// Call this after visible leafs search.
-	fn prepare_dynamic_models(&mut self, camera_matrices: &CameraMatrices, models: &[ModelEntity])
+	fn prepare_dynamic_models(
+		&mut self,
+		camera_matrices: &CameraMatrices,
+		models: &[ModelEntity],
+		dynamic_models_index: &DynamicObjectsIndex,
+	)
 	{
-		self.dynamic_models_index.position_models(models);
-
 		self.visible_dynamic_meshes_list.clear();
 
 		self.dynamic_model_to_dynamic_meshes_index
@@ -1062,7 +907,7 @@ impl PartialRenderer
 			};
 
 			let mut visible = model.is_view_model;
-			for leaf_index in self.dynamic_models_index.get_object_leafs(entity_index)
+			for leaf_index in dynamic_models_index.get_object_leafs(entity_index)
 			{
 				if let Some(mut leaf_clipping_polygon) =
 					self.visibility_calculator.get_current_frame_leaf_bounds(*leaf_index)
@@ -1211,6 +1056,7 @@ impl PartialRenderer
 		surface_info: &system_window::SurfaceInfo,
 		frame_info: &FrameInfo,
 		camera_matrices: &CameraMatrices,
+		renderers_common_data: &RenderersCommonData,
 	)
 	{
 		let screen_rect = rect_splitting::Rect {
@@ -1243,6 +1089,7 @@ impl PartialRenderer
 				&mut rasterizer,
 				frame_info,
 				camera_matrices,
+				renderers_common_data,
 				&viewport_clipping_polygon,
 			);
 		}
@@ -1289,6 +1136,7 @@ impl PartialRenderer
 					&mut rasterizer,
 					frame_info,
 					camera_matrices,
+					renderers_common_data,
 					&viewport_clipping_polygon,
 				);
 			});
@@ -1300,6 +1148,7 @@ impl PartialRenderer
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		frame_info: &FrameInfo,
 		camera_matrices: &CameraMatrices,
+		renderers_common_data: &RenderersCommonData,
 		viewport_clipping_polygon: &ClippingPolygon,
 	)
 	{
@@ -1308,6 +1157,7 @@ impl PartialRenderer
 			self.draw_skybox(
 				rasterizer,
 				camera_matrices,
+				&renderers_common_data.materials_processor,
 				&frame_info.skybox_rotation,
 				&viewport_clipping_polygon,
 			);
@@ -1318,6 +1168,7 @@ impl PartialRenderer
 			rasterizer,
 			frame_info,
 			camera_matrices,
+			renderers_common_data,
 			&viewport_clipping_polygon,
 			root_node,
 		);
@@ -1327,6 +1178,7 @@ impl PartialRenderer
 			self.draw_skybox(
 				rasterizer,
 				camera_matrices,
+				&renderers_common_data.materials_processor,
 				&frame_info.skybox_rotation,
 				&viewport_clipping_polygon,
 			);
@@ -1335,7 +1187,12 @@ impl PartialRenderer
 		self.draw_view_models(rasterizer, &viewport_clipping_polygon, &frame_info.model_entities);
 	}
 
-	fn prepare_polygons_surfaces(&mut self, camera_matrices: &CameraMatrices)
+	fn prepare_polygons_surfaces(
+		&mut self,
+		camera_matrices: &CameraMatrices,
+		inline_models_index: &InlineModelsIndex,
+		materials_processor: &MapMaterialsProcessor,
+	)
 	{
 		self.current_frame_visible_polygons.clear();
 
@@ -1355,6 +1212,7 @@ impl PartialRenderer
 				{
 					self.prepare_polygon_surface(
 						camera_matrices,
+						materials_processor,
 						&clip_planes,
 						&mut surfaces_pixels_accumulated_offset,
 						polygon_index as usize,
@@ -1377,7 +1235,7 @@ impl PartialRenderer
 			};
 
 			let mut bounds: Option<ClippingPolygon> = None;
-			for &leaf_index in self.inline_models_index.get_model_leafs(index as u32)
+			for &leaf_index in inline_models_index.get_model_leafs(index as u32)
 			{
 				if let Some(leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf_index)
 				{
@@ -1407,6 +1265,7 @@ impl PartialRenderer
 			{
 				self.prepare_polygon_surface(
 					&submodel_matrices.camera_matrices,
+					materials_processor,
 					&clip_planes,
 					&mut surfaces_pixels_accumulated_offset,
 					polygon_index,
@@ -1468,6 +1327,7 @@ impl PartialRenderer
 	fn prepare_polygon_surface(
 		&mut self,
 		camera_matrices: &CameraMatrices,
+		materials_processor: &MapMaterialsProcessor,
 		clip_planes: &ClippingPolygonPlanes,
 		surfaces_pixels_accumulated_offset: &mut usize,
 		polygon_index: usize,
@@ -1484,7 +1344,7 @@ impl PartialRenderer
 			return;
 		}
 
-		let material = self.materials_processor.get_material(polygon.texture);
+		let material = materials_processor.get_material(polygon.texture);
 
 		if !material.draw
 		{
@@ -1644,6 +1504,8 @@ impl PartialRenderer
 	fn build_polygons_surfaces<ColorT: AbstractColor>(
 		&mut self,
 		camera_matrices: &CameraMatrices,
+		dynamic_lights_index: &DynamicObjectsIndex,
+		materials_processor: &MapMaterialsProcessor,
 		dynamic_lights: &[DynamicLight],
 	)
 	{
@@ -1675,7 +1537,6 @@ impl PartialRenderer
 		let directional_lightmaps_data = &self.map.directional_lightmaps_data;
 		let polygons = &self.map.polygons;
 		let polygons_data = &self.polygons_data;
-		let materials_processor = &self.materials_processor;
 
 		let use_directional_lightmap = self.config.use_directional_lightmaps && !directional_lightmaps_data.is_empty();
 
@@ -1696,7 +1557,7 @@ impl PartialRenderer
 				DrawPolygonParent::Leaf(leaf_index) =>
 				{
 					// Check only lights, located inside leaf of this polygon.
-					self.dynamic_lights_index.get_leaf_objects(leaf_index)
+					dynamic_lights_index.get_leaf_objects(leaf_index)
 				},
 				DrawPolygonParent::Submodel(submodel_index) =>
 				{
@@ -1814,7 +1675,12 @@ impl PartialRenderer
 		}
 	}
 
-	fn prepare_portals_textures(&mut self, frame_info: &FrameInfo, camera_matrices: &CameraMatrices)
+	fn prepare_portals_textures(
+		&mut self,
+		frame_info: &FrameInfo,
+		camera_matrices: &CameraMatrices,
+		portals_index: &DynamicObjectsIndex,
+	)
 	{
 		let portals_rendering_data = if let Some(d) = &mut self.portals_rendering_data
 		{
@@ -1824,10 +1690,6 @@ impl PartialRenderer
 		{
 			return;
 		};
-
-		portals_rendering_data
-			.portals_index
-			.position_portals(&frame_info.portals);
 
 		portals_rendering_data.num_textures_pixels = 0;
 
@@ -1900,7 +1762,7 @@ impl PartialRenderer
 			}
 
 			let mut visible = false;
-			for &leaf_index in portals_rendering_data.portals_index.get_object_leafs(portal_index)
+			for &leaf_index in portals_index.get_object_leafs(portal_index)
 			{
 				if self
 					.visibility_calculator
@@ -1957,7 +1819,11 @@ impl PartialRenderer
 		}
 	}
 
-	fn build_portals_textures<ColorT: AbstractColor>(&mut self, frame_info: &FrameInfo)
+	fn build_portals_textures<ColorT: AbstractColor>(
+		&mut self,
+		frame_info: &FrameInfo,
+		renderers_common_data: &RenderersCommonData,
+	)
 	{
 		let portals_rendering_data = if let Some(d) = &mut self.portals_rendering_data
 		{
@@ -1997,9 +1863,12 @@ impl PartialRenderer
 				height: portal_info.resolution[1] as usize,
 				pitch: portal_info.resolution[0] as usize,
 			};
-			portals_rendering_data
-				.renderer
-				.prepare_frame::<ColorT>(&surface_info, frame_info, &camera_matrices);
+			portals_rendering_data.renderer.prepare_frame::<ColorT>(
+				&surface_info,
+				frame_info,
+				&camera_matrices,
+				renderers_common_data,
+			);
 
 			portals_rendering_data.renderer.draw_frame(
 				&mut textures_pixels_casted[portal_info.texture_pixels_offset ..
@@ -2008,6 +1877,7 @@ impl PartialRenderer
 				&surface_info,
 				frame_info,
 				&camera_matrices,
+				renderers_common_data,
 				&mut debug_stats_printer,
 			);
 		}
@@ -2044,6 +1914,7 @@ impl PartialRenderer
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		camera_matrices: &CameraMatrices,
+		materials_processor: &MapMaterialsProcessor,
 		skybox_rotation: &QuaternionF,
 		viewport_clipping_polygon: &ClippingPolygon,
 	)
@@ -2063,7 +1934,7 @@ impl PartialRenderer
 			return;
 		}
 
-		let skybox_textures = if let Some(t) = self.materials_processor.get_skybox_textures(material_index)
+		let skybox_textures = if let Some(t) = materials_processor.get_skybox_textures(material_index)
 		{
 			t
 		}
@@ -2183,6 +2054,7 @@ impl PartialRenderer
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		frame_info: &FrameInfo,
 		camera_matrices: &CameraMatrices,
+		renderers_common_data: &RenderersCommonData,
 		viewport_clipping_polygon: &ClippingPolygon,
 		current_index: u32,
 	)
@@ -2195,7 +2067,14 @@ impl PartialRenderer
 				leaf_bounds.intersect(viewport_clipping_polygon);
 				if leaf_bounds.is_valid_and_non_empty()
 				{
-					self.draw_leaf(rasterizer, frame_info, camera_matrices, &leaf_bounds, leaf);
+					self.draw_leaf(
+						rasterizer,
+						frame_info,
+						camera_matrices,
+						renderers_common_data,
+						&leaf_bounds,
+						leaf,
+					);
 				}
 			}
 		}
@@ -2214,6 +2093,7 @@ impl PartialRenderer
 					rasterizer,
 					frame_info,
 					camera_matrices,
+					renderers_common_data,
 					viewport_clipping_polygon,
 					node.children[(i ^ mask) as usize],
 				);
@@ -2226,6 +2106,7 @@ impl PartialRenderer
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		frame_info: &FrameInfo,
 		camera_matrices: &CameraMatrices,
+		renderers_common_data: &RenderersCommonData,
 		bounds: &ClippingPolygon,
 		leaf_index: u32,
 	)
@@ -2254,33 +2135,36 @@ impl PartialRenderer
 				&polygon_data.tex_coord_equation,
 				&polygon_data.surface_size,
 				self.get_polygon_surface_data(polygon_data),
-				self.materials_processor.get_material(polygon.texture).blending_mode,
+				renderers_common_data
+					.materials_processor
+					.get_material(polygon.texture)
+					.blending_mode,
 			);
 		}
 
 		// Draw decals after all leaf polygons.
-		let leaf_decals = self.decals_index.get_leaf_objects(leaf_index);
+		let leaf_decals = renderers_common_data.decals_index.get_leaf_objects(leaf_index);
 		if !leaf_decals.is_empty()
 		{
 			for polygon_index in leaf.first_polygon .. (leaf.first_polygon + leaf.num_polygons)
 			{
-				self.draw_polygon_decals(rasterizer, &clip_planes, polygon_index, &frame_info.decals, leaf_decals);
+				self.draw_polygon_decals(
+					rasterizer,
+					&renderers_common_data.materials_processor,
+					&clip_planes,
+					polygon_index,
+					&frame_info.decals,
+					leaf_decals,
+				);
 			}
 		}
 
 		// Draw contents of leaf - submodels and triangle models.
 
-		let leaf_submodels = self.inline_models_index.get_leaf_models(leaf_index);
-		let leaf_dynamic_models = self.dynamic_models_index.get_leaf_objects(leaf_index);
-		let leaf_sprites = self.sprites_index.get_leaf_objects(leaf_index);
-		let leaf_portals = if let Some(d) = &self.portals_rendering_data
-		{
-			d.portals_index.get_leaf_objects(leaf_index)
-		}
-		else
-		{
-			&[]
-		};
+		let leaf_submodels = renderers_common_data.inline_models_index.get_leaf_models(leaf_index);
+		let leaf_dynamic_models = renderers_common_data.dynamic_models_index.get_leaf_objects(leaf_index);
+		let leaf_sprites = renderers_common_data.sprites_index.get_leaf_objects(leaf_index);
+		let leaf_portals = renderers_common_data.portals_index.get_leaf_objects(leaf_index);
 
 		let total_objects = leaf_submodels.len() + leaf_dynamic_models.len() + leaf_sprites.len() + leaf_portals.len();
 		if total_objects == 0
@@ -2294,7 +2178,7 @@ impl PartialRenderer
 			dist: 0.0,
 		}; MAX_LEAF_CLIP_PLANES];
 
-		let leaf_clip_planes_src = &self.leafs_planes[leaf_index as usize];
+		let leaf_clip_planes_src = &renderers_common_data.leafs_planes[leaf_index as usize];
 
 		// Transform leaf clip planes.
 		for (dst_plane, src_plane) in leaf_clip_planes.iter_mut().zip(leaf_clip_planes_src.iter())
@@ -2316,6 +2200,7 @@ impl PartialRenderer
 			{
 				self.draw_submodel_in_leaf(
 					rasterizer,
+					&renderers_common_data.materials_processor,
 					frame_info,
 					&clip_planes,
 					used_leaf_clip_planes,
@@ -2378,7 +2263,9 @@ impl PartialRenderer
 				*model_for_sorting = (
 					model_index + SUBMODEL_INDEX_ADD,
 					draw_ordering::project_bbox(
-						&self.inline_models_index.get_model_bbox_for_ordering(model_index),
+						&renderers_common_data
+							.inline_models_index
+							.get_model_bbox_for_ordering(model_index),
 						&submodel_matrices.camera_matrices,
 					),
 				);
@@ -2499,6 +2386,7 @@ impl PartialRenderer
 			{
 				self.draw_submodel_in_leaf(
 					rasterizer,
+					&renderers_common_data.materials_processor,
 					frame_info,
 					&clip_planes,
 					used_leaf_clip_planes,
@@ -2512,6 +2400,7 @@ impl PartialRenderer
 	fn draw_polygon_decals<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
+		materials_processor: &MapMaterialsProcessor,
 		clip_planes: &ClippingPolygonPlanes,
 		polygon_index: u32,
 		decals: &[Decal],
@@ -2526,7 +2415,7 @@ impl PartialRenderer
 
 		let polygon = &self.map.polygons[polygon_index as usize];
 
-		if !self.materials_processor.get_material(polygon.texture).decals
+		if !materials_processor.get_material(polygon.texture).decals
 		{
 			return;
 		}
@@ -2815,6 +2704,7 @@ impl PartialRenderer
 	fn draw_submodel_in_leaf<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
+		materials_processor: &MapMaterialsProcessor,
 		frame_info: &FrameInfo,
 		clip_planes: &ClippingPolygonPlanes,
 		leaf_clip_planes: &[Plane],
@@ -2827,6 +2717,7 @@ impl PartialRenderer
 			let submodel = &self.map.submodels[submodel_index as usize];
 			self.draw_submodel_bsp_node_r(
 				rasterizer,
+				materials_processor,
 				frame_info,
 				&submodel_matrices.camera_matrices.planes_matrix,
 				clip_planes,
@@ -2840,6 +2731,7 @@ impl PartialRenderer
 	fn draw_submodel_bsp_node_r<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
+		materials_processor: &MapMaterialsProcessor,
 		frame_info: &FrameInfo,
 		submodel_planes_matrix: &Mat4f,
 		clip_planes: &ClippingPolygonPlanes,
@@ -2865,6 +2757,7 @@ impl PartialRenderer
 		{
 			self.draw_submodel_bsp_node_r(
 				rasterizer,
+				materials_processor,
 				frame_info,
 				submodel_planes_matrix,
 				clip_planes,
@@ -2876,11 +2769,24 @@ impl PartialRenderer
 
 		for polygon_index in node.first_polygon .. (node.first_polygon + node.num_polygons)
 		{
-			self.draw_submodel_polygon(rasterizer, &clip_planes, leaf_clip_planes, polygon_index);
+			self.draw_submodel_polygon(
+				rasterizer,
+				materials_processor,
+				&clip_planes,
+				leaf_clip_planes,
+				polygon_index,
+			);
 
 			if !leaf_decals.is_empty()
 			{
-				self.draw_polygon_decals(rasterizer, clip_planes, polygon_index, &frame_info.decals, leaf_decals);
+				self.draw_polygon_decals(
+					rasterizer,
+					materials_processor,
+					clip_planes,
+					polygon_index,
+					&frame_info.decals,
+					leaf_decals,
+				);
 			}
 		}
 
@@ -2888,6 +2794,7 @@ impl PartialRenderer
 		{
 			self.draw_submodel_bsp_node_r(
 				rasterizer,
+				materials_processor,
 				frame_info,
 				submodel_planes_matrix,
 				clip_planes,
@@ -2901,6 +2808,7 @@ impl PartialRenderer
 	fn draw_submodel_polygon<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
+		materials_processor: &MapMaterialsProcessor,
 		clip_planes: &ClippingPolygonPlanes,
 		leaf_clip_planes: &[Plane],
 		polygon_index: u32,
@@ -2956,7 +2864,7 @@ impl PartialRenderer
 			&polygon_data.tex_coord_equation,
 			&polygon_data.surface_size,
 			self.get_polygon_surface_data(polygon_data),
-			self.materials_processor.get_material(polygon.texture).blending_mode,
+			materials_processor.get_material(polygon.texture).blending_mode,
 		);
 	}
 

@@ -1,6 +1,7 @@
 use super::{
-	abstract_color::*, config, debug_stats_printer::*, frame_info::*, partial_renderer::PartialRenderer,
-	renderer_config::*, resources_manager::*,
+	abstract_color::*, config, debug_stats_printer::*, dynamic_objects_index::*, frame_info::*, inline_models_index::*,
+	map_materials_processor::*, partial_renderer::PartialRenderer, renderer_config::*, renderer_structs::*,
+	resources_manager::*,
 };
 use crate::common::{bsp_map_compact, system_window};
 use std::sync::Arc;
@@ -9,6 +10,7 @@ pub struct Renderer
 {
 	app_config: config::ConfigSharedPtr,
 	config: RendererConfig,
+	common_data: RenderersCommonData,
 	root_renderer: PartialRenderer,
 }
 
@@ -27,6 +29,18 @@ impl Renderer
 		Self {
 			app_config,
 			config: config_parsed,
+			common_data: RenderersCommonData {
+				materials_processor: MapMaterialsProcessor::new(resources_manager.clone(), &*map),
+				inline_models_index: InlineModelsIndex::new(map.clone()),
+				dynamic_models_index: DynamicObjectsIndex::new(map.clone()),
+				decals_index: DynamicObjectsIndex::new(map.clone()),
+				sprites_index: DynamicObjectsIndex::new(map.clone()),
+				dynamic_lights_index: DynamicObjectsIndex::new(map.clone()),
+				portals_index: DynamicObjectsIndex::new(map.clone()),
+				leafs_planes: (0 .. map.leafs.len())
+					.map(|leaf_index| get_leaf_clip_planes(&map, leaf_index as u32))
+					.collect(),
+			},
 			root_renderer: PartialRenderer::new(resources_manager, config_parsed, map, depth),
 		}
 	}
@@ -38,8 +52,28 @@ impl Renderer
 	)
 	{
 		self.synchronize_config();
-		self.root_renderer
-			.prepare_frame::<ColorT>(surface_info, frame_info, &frame_info.camera_matrices)
+
+		self.common_data.materials_processor.update(frame_info.game_time_s);
+
+		self.common_data
+			.inline_models_index
+			.position_models(&frame_info.submodel_entities);
+		self.common_data
+			.dynamic_models_index
+			.position_models(&frame_info.model_entities);
+		self.common_data.decals_index.position_decals(&frame_info.decals);
+		self.common_data.sprites_index.position_sprites(&frame_info.sprites);
+		self.common_data
+			.dynamic_lights_index
+			.position_dynamic_lights(&frame_info.lights);
+		self.common_data.portals_index.position_portals(&frame_info.portals);
+
+		self.root_renderer.prepare_frame::<ColorT>(
+			surface_info,
+			frame_info,
+			&frame_info.camera_matrices,
+			&self.common_data,
+		)
 	}
 
 	pub fn draw_frame<ColorT: AbstractColor>(
@@ -55,6 +89,7 @@ impl Renderer
 			surface_info,
 			frame_info,
 			&frame_info.camera_matrices,
+			&self.common_data,
 			debug_stats_printer,
 		)
 	}

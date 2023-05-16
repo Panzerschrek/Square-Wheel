@@ -1,6 +1,6 @@
 use super::{
-	dynamic_objects_index::*, equations::*, frame_info::*, frame_number::*, light::*,
-	partial_renderer::PartialRenderer, performance_counter::*, surfaces::*,
+	dynamic_objects_index::*, equations::*, frame_info::*, frame_number::*, inline_models_index::*, light::*,
+	map_materials_processor::*, partial_renderer::PartialRenderer, performance_counter::*, surfaces::*,
 };
 use crate::common::{bsp_map_compact, clipping_polygon::*, math_types::*, matrix::*, plane::*};
 
@@ -30,6 +30,21 @@ impl RendererPerformanceCounters
 			rasterization: PerformanceCounter::new(window_size),
 		}
 	}
+}
+
+// Data shared across multiple PartialRenderer instances (independent on view point).
+pub struct RenderersCommonData
+{
+	pub materials_processor: MapMaterialsProcessor,
+	pub inline_models_index: InlineModelsIndex,
+	pub dynamic_models_index: DynamicObjectsIndex,
+	pub decals_index: DynamicObjectsIndex,
+	pub sprites_index: DynamicObjectsIndex,
+	pub dynamic_lights_index: DynamicObjectsIndex,
+	// Index of drawable portals polygons (not view point polygons).
+	pub portals_index: DynamicObjectsIndex,
+	// Store precalculated list of clip planes for each leaf in order to clip dynamic objects with these planes.
+	pub leafs_planes: Vec<LeafClipPlanes>,
 }
 
 pub type LeafClipPlanes = Vec<Plane>;
@@ -274,7 +289,6 @@ pub struct PortalsRenderingData
 {
 	pub renderer: PartialRenderer,
 	// Index of drawable portals polygons (not view point polygons).
-	pub portals_index: DynamicObjectsIndex,
 	pub portals_info: Vec<PortalInfo>,
 	// Store textures pixels as raw array.
 	// Use specific color while preparing surfaces or performing rasterization.
