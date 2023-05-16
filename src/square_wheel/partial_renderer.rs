@@ -1870,11 +1870,6 @@ impl PartialRenderer
 				(tc_max[1].ceil() as i32).max(tex_coord_min[1] + 1),
 			];
 
-			let resolution = [
-				(tex_coord_max[0] - tex_coord_min[0]) as u32,
-				(tex_coord_max[1] - tex_coord_min[1]) as u32,
-			];
-
 			let plane_transformed = camera_matrices.planes_matrix * display.plane.vec.extend(-display.plane.dist);
 			if plane_transformed.w <= 0.0
 			{
@@ -1903,6 +1898,31 @@ impl PartialRenderer
 				tc_equation.d_tc_dy[i] -= tc_min * depth_equation.d_inv_z_dy;
 				tc_equation.k[i] -= tc_min * depth_equation.k;
 			}
+
+			let mut visible = false;
+			for &leaf_index in portals_rendering_data.portals_index.get_object_leafs(portal_index)
+			{
+				if self
+					.visibility_calculator
+					.get_current_frame_leaf_bounds(leaf_index)
+					.is_some()
+				{
+					visible = true;
+					break;
+				}
+			}
+
+			let resolution = if visible
+			{
+				[
+					(tex_coord_max[0] - tex_coord_min[0]) as u32,
+					(tex_coord_max[1] - tex_coord_min[1]) as u32,
+				]
+			}
+			else
+			{
+				[0, 0]
+			};
 
 			let portal_info = PortalInfo {
 				resolution,
@@ -2261,10 +2281,9 @@ impl PartialRenderer
 		{
 			&[]
 		};
-		if leaf_submodels.is_empty() &&
-			leaf_dynamic_models.is_empty() &&
-			leaf_sprites.is_empty() &&
-			leaf_portals.is_empty()
+
+		let total_objects = leaf_submodels.len() + leaf_dynamic_models.len() + leaf_sprites.len() + leaf_portals.len();
+		if total_objects == 0
 		{
 			return;
 		}
@@ -2290,62 +2309,74 @@ impl PartialRenderer
 		let num_clip_planes = std::cmp::min(leaf_clip_planes.len(), leaf_clip_planes_src.len());
 		let used_leaf_clip_planes = &mut leaf_clip_planes[.. num_clip_planes];
 
-		// Fast path for cases with single model, to avoid expensive sorting structures preparations.
-		if leaf_submodels.len() == 1 && leaf_dynamic_models.len() == 0 && leaf_sprites.len() == 0
+		if total_objects == 1
 		{
-			self.draw_submodel_in_leaf(
-				rasterizer,
-				frame_info,
-				&clip_planes,
-				used_leaf_clip_planes,
-				leaf_decals,
-				leaf_submodels[0],
-			);
-			return;
-		}
-		if leaf_submodels.len() == 0 && leaf_dynamic_models.len() == 1 && leaf_sprites.len() == 0
-		{
-			let entry = self.dynamic_model_to_dynamic_meshes_index[leaf_dynamic_models[0] as usize];
-			for visible_mesh_index in entry.first_visible_mesh .. entry.first_visible_mesh + entry.num_visible_meshes
+			// Fast path for cases with single object in leaf, to avoid expensive sorting structures preparations.
+			if leaf_submodels.len() == 1
 			{
-				self.draw_mesh(
+				self.draw_submodel_in_leaf(
 					rasterizer,
-					&bounds,
+					frame_info,
+					&clip_planes,
 					used_leaf_clip_planes,
-					&frame_info.model_entities,
-					&self.visible_dynamic_meshes_list[visible_mesh_index as usize],
+					leaf_decals,
+					leaf_submodels[0],
 				);
 			}
-			return;
-		}
-		if leaf_submodels.len() == 0 && leaf_dynamic_models.len() == 0 && leaf_sprites.len() == 1
-		{
-			self.draw_sprite(
-				rasterizer,
-				&clip_planes,
-				used_leaf_clip_planes,
-				&frame_info.sprites,
-				leaf_sprites[0],
-			);
-			return;
+			else if leaf_dynamic_models.len() == 1
+			{
+				let entry = self.dynamic_model_to_dynamic_meshes_index[leaf_dynamic_models[0] as usize];
+				for visible_mesh_index in
+					entry.first_visible_mesh .. entry.first_visible_mesh + entry.num_visible_meshes
+				{
+					self.draw_mesh(
+						rasterizer,
+						&bounds,
+						used_leaf_clip_planes,
+						&frame_info.model_entities,
+						&self.visible_dynamic_meshes_list[visible_mesh_index as usize],
+					);
+				}
+			}
+			else if leaf_sprites.len() == 1
+			{
+				self.draw_sprite(
+					rasterizer,
+					&clip_planes,
+					used_leaf_clip_planes,
+					&frame_info.sprites,
+					leaf_sprites[0],
+				);
+			}
+			else if leaf_portals.len() == 1
+			{
+				self.draw_portal_display(
+					rasterizer,
+					&clip_planes,
+					&frame_info.portals,
+					camera_matrices,
+					leaf_portals[0],
+				);
+			}
 		}
 
-		// Multiple models. Sort them.
+		// Multiple objects. Sort them.
 
 		// TODO - use uninitialized memory and increase this value.
-		const MAX_SUBMODELS_IN_LEAF: usize = 12;
-		let mut models_for_sorting = [draw_ordering::BBoxForDrawOrdering::default(); MAX_SUBMODELS_IN_LEAF];
+		const MAX_OBJECTS_IN_LEAF: usize = 12;
+		let mut objects_for_sorting = [draw_ordering::BBoxForDrawOrdering::default(); MAX_OBJECTS_IN_LEAF];
 
-		const DYNAMIC_MESH_INDEX_ADD: u32 = 65536;
+		const SUBMODEL_INDEX_ADD: u32 = 0;
+		const DYNAMIC_MESH_INDEX_ADD: u32 = SUBMODEL_INDEX_ADD + 65536;
 		const SPRITE_INDEX_ADD: u32 = DYNAMIC_MESH_INDEX_ADD + 65536;
 		const PORTAL_INDEX_ADD: u32 = SPRITE_INDEX_ADD + 65536;
 
-		for (&model_index, model_for_sorting) in leaf_submodels.iter().zip(models_for_sorting.iter_mut())
+		for (&model_index, model_for_sorting) in leaf_submodels.iter().zip(objects_for_sorting.iter_mut())
 		{
 			if let Some(submodel_matrices) = &self.submodels_info[model_index as usize].matrices
 			{
 				*model_for_sorting = (
-					model_index,
+					model_index + SUBMODEL_INDEX_ADD,
 					draw_ordering::project_bbox(
 						&self.inline_models_index.get_model_bbox_for_ordering(model_index),
 						&submodel_matrices.camera_matrices,
@@ -2353,11 +2384,11 @@ impl PartialRenderer
 				);
 			}
 		}
-		let mut num_models = std::cmp::min(leaf_submodels.len(), MAX_SUBMODELS_IN_LEAF);
+		let mut num_objects = std::cmp::min(leaf_submodels.len(), MAX_OBJECTS_IN_LEAF);
 
 		for dynamic_model_index in leaf_dynamic_models
 		{
-			if num_models == MAX_SUBMODELS_IN_LEAF
+			if num_objects == MAX_OBJECTS_IN_LEAF
 			{
 				break;
 			}
@@ -2375,23 +2406,23 @@ impl PartialRenderer
 			let entry = self.dynamic_model_to_dynamic_meshes_index[*dynamic_model_index as usize];
 			for visible_mesh_index in entry.first_visible_mesh .. entry.first_visible_mesh + entry.num_visible_meshes
 			{
-				if num_models == MAX_SUBMODELS_IN_LEAF
+				if num_objects == MAX_OBJECTS_IN_LEAF
 				{
 					break;
 				}
 
 				let mesh = &self.visible_dynamic_meshes_list[visible_mesh_index as usize];
-				models_for_sorting[num_models] = (
+				objects_for_sorting[num_objects] = (
 					visible_mesh_index + DYNAMIC_MESH_INDEX_ADD,
 					draw_ordering::project_bbox(&bbox, &mesh.camera_matrices),
 				);
-				num_models += 1;
+				num_objects += 1;
 			}
 		}
 
 		for sprite_index in leaf_sprites
 		{
-			if num_models == MAX_SUBMODELS_IN_LEAF
+			if num_objects == MAX_OBJECTS_IN_LEAF
 			{
 				break;
 			}
@@ -2399,16 +2430,16 @@ impl PartialRenderer
 			let extend_vec = Vec3f::new(sprite.radius, sprite.radius, sprite.radius);
 			let bbox = BBox::from_min_max(sprite.position - extend_vec, sprite.position + extend_vec);
 
-			models_for_sorting[num_models] = (
+			objects_for_sorting[num_objects] = (
 				sprite_index + SPRITE_INDEX_ADD,
 				draw_ordering::project_bbox(&bbox, camera_matrices),
 			);
-			num_models += 1;
+			num_objects += 1;
 		}
 
 		for portal_index in leaf_portals
 		{
-			if num_models == MAX_SUBMODELS_IN_LEAF
+			if num_objects == MAX_OBJECTS_IN_LEAF
 			{
 				break;
 			}
@@ -2421,41 +2452,41 @@ impl PartialRenderer
 				bbox.extend_with_point(v);
 			}
 
-			models_for_sorting[num_models] = (
+			objects_for_sorting[num_objects] = (
 				portal_index + PORTAL_INDEX_ADD,
 				draw_ordering::project_bbox(&bbox, camera_matrices),
 			);
-			num_models += 1;
+			num_objects += 1;
 		}
 
-		draw_ordering::order_bboxes(&mut models_for_sorting[.. num_models]);
+		draw_ordering::order_bboxes(&mut objects_for_sorting[.. num_objects]);
 
-		// Draw dynamic models and submodels, located in this leaf, after leaf polygons.
-		for (submodel_index, _bbox) in &models_for_sorting[.. num_models]
+		// Draw dynamic objects located in this leaf, after leaf polygons.
+		for (object_index, _bbox) in &objects_for_sorting[.. num_objects]
 		{
-			if *submodel_index >= PORTAL_INDEX_ADD
+			if *object_index >= PORTAL_INDEX_ADD
 			{
 				self.draw_portal_display(
 					rasterizer,
 					&clip_planes,
 					&frame_info.portals,
 					camera_matrices,
-					*submodel_index - PORTAL_INDEX_ADD,
+					*object_index - PORTAL_INDEX_ADD,
 				);
 			}
-			else if *submodel_index >= SPRITE_INDEX_ADD
+			else if *object_index >= SPRITE_INDEX_ADD
 			{
 				self.draw_sprite(
 					rasterizer,
 					&clip_planes,
 					used_leaf_clip_planes,
 					&frame_info.sprites,
-					*submodel_index - SPRITE_INDEX_ADD,
+					*object_index - SPRITE_INDEX_ADD,
 				);
 			}
-			else if *submodel_index >= DYNAMIC_MESH_INDEX_ADD
+			else if *object_index >= DYNAMIC_MESH_INDEX_ADD
 			{
-				let visible_mesh_index = *submodel_index - DYNAMIC_MESH_INDEX_ADD;
+				let visible_mesh_index = *object_index - DYNAMIC_MESH_INDEX_ADD;
 				self.draw_mesh(
 					rasterizer,
 					bounds,
@@ -2464,7 +2495,7 @@ impl PartialRenderer
 					&self.visible_dynamic_meshes_list[visible_mesh_index as usize],
 				);
 			}
-			else
+			else if *object_index >= SUBMODEL_INDEX_ADD
 			{
 				self.draw_submodel_in_leaf(
 					rasterizer,
@@ -2472,7 +2503,7 @@ impl PartialRenderer
 					&clip_planes,
 					used_leaf_clip_planes,
 					leaf_decals,
-					*submodel_index,
+					*object_index - SUBMODEL_INDEX_ADD,
 				);
 			}
 		}
@@ -3380,6 +3411,12 @@ impl PartialRenderer
 		let display = &portals[portal_index as usize].display;
 		let portal_info = &portals_rendering_data.portals_info[portal_index as usize];
 
+		let area = portal_info.resolution[0] * portal_info.resolution[1];
+		if area == 0
+		{
+			return;
+		}
+
 		let mut vertices_3d = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
 		for (in_vertex, out_vertex) in display.vertices.iter().zip(vertices_3d.iter_mut())
 		{
@@ -3389,8 +3426,8 @@ impl PartialRenderer
 
 		let pixels_casted = unsafe { portals_rendering_data.textures_pixels.align_to::<ColorT>().1 };
 
-		let portal_pixels = &pixels_casted[portal_info.texture_pixels_offset ..
-			portal_info.texture_pixels_offset + ((portal_info.resolution[0] * portal_info.resolution[1]) as usize)];
+		let portal_pixels =
+			&pixels_casted[portal_info.texture_pixels_offset .. portal_info.texture_pixels_offset + (area as usize)];
 
 		draw_polygon(
 			rasterizer,
