@@ -1132,18 +1132,18 @@ fn draw_triangle(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, ver
 	let width = rasterizer.get_width() as f32;
 	let height = rasterizer.get_height() as f32;
 
-	let v0 = transform_matrix * vertices[0].extend(1.0);
-	let v1 = transform_matrix * vertices[1].extend(1.0);
-	let v2 = transform_matrix * vertices[2].extend(1.0);
+	let v0 = view_matrix_transform_vertex(transform_matrix, &vertices[0]);
+	let v1 = view_matrix_transform_vertex(transform_matrix, &vertices[1]);
+	let v2 = view_matrix_transform_vertex(transform_matrix, &vertices[2]);
 
 	// TODO - perform proper clipping
-	if v0.w <= 0.1 || v1.w <= 0.1 || v2.w <= 0.1
+	if v0.z <= 0.1 || v1.z <= 0.1 || v2.z <= 0.1
 	{
 		return;
 	}
-	let v0 = v0.truncate() / v0.w;
-	let v1 = v1.truncate() / v1.w;
-	let v2 = v2.truncate() / v2.w;
+	let v0 = Vec3f::new(v0.x / v0.z, v0.y / v0.z, v0.z);
+	let v1 = Vec3f::new(v1.x / v1.z, v1.y / v1.z, v1.z);
+	let v2 = Vec3f::new(v2.x / v2.z, v2.y / v2.z, v2.z);
 
 	if v0.x < 0.0 ||
 		v0.x > width ||
@@ -1171,17 +1171,17 @@ fn draw_triangle(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f, ver
 			PointProjectedWithZ {
 				x: f32_to_fixed16(v0.x),
 				y: f32_to_fixed16(v0.y),
-				z: v0.z,
+				z: 1.0 / v0.z,
 			},
 			PointProjectedWithZ {
 				x: f32_to_fixed16(v1.x),
 				y: f32_to_fixed16(v1.y),
-				z: v1.z,
+				z: 1.0 / v1.z,
 			},
 			PointProjectedWithZ {
 				x: f32_to_fixed16(v2.x),
 				y: f32_to_fixed16(v2.y),
-				z: v2.z,
+				z: 1.0 / v2.z,
 			},
 		],
 		color,
