@@ -1808,30 +1808,63 @@ impl PartialRenderer
 		portals_rendering_data.portals_info.clear();
 		for (portal_index, portal) in frame_info.portals.iter().enumerate()
 		{
-			let mut visible = false;
+			let mut bounds: Option<ClippingPolygon> = None;
 			for &leaf_index in portals_index.get_object_leafs(portal_index)
 			{
-				if self
-					.visibility_calculator
-					.get_current_frame_leaf_bounds(leaf_index)
-					.is_some()
+				if let Some(leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf_index)
 				{
-					visible = true;
-					break;
+					if let Some(bounds) = &mut bounds
+					{
+						bounds.extend(&leaf_bounds);
+					}
+					else
+					{
+						bounds = Some(leaf_bounds);
+					}
 				}
 			}
 
-			if !visible
+			let clip_planes = if let Some(b) = bounds
 			{
+				b.get_clip_planes()
+			}
+			else
+			{
+				// Portal is located in invisible leafs.
 				portals_rendering_data.portals_info.push(PortalInfo::default());
 				continue;
-			}
+			};
 
 			let display = &portal.display;
 
 			let plane_transformed = camera_matrices.planes_matrix * display.plane.vec.extend(-display.plane.dist);
 			if plane_transformed.w <= 0.0
 			{
+				portals_rendering_data.portals_info.push(PortalInfo::default());
+				continue;
+			}
+
+			// Transform portal vertices.
+			let mut vertices_3d = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
+			for (in_vertex, out_vertex) in display.vertices.iter().zip(vertices_3d.iter_mut())
+			{
+				*out_vertex = view_matrix_transform_vertex(&camera_matrices.view_matrix, in_vertex);
+			}
+
+			let vertex_count = std::cmp::min(MAX_VERTICES, display.vertices.len());
+			if vertex_count < 3
+			{
+				portals_rendering_data.portals_info.push(PortalInfo::default());
+				continue;
+			}
+
+			// Project and clip portal polygon. Use clip planes of combined bounding polygon of all visible leafs, where this portal is located.
+			let mut vertices_2d = [Vec2f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
+			let vertex_count =
+				project_and_clip_polygon(&clip_planes, &vertices_3d[.. vertex_count], &mut vertices_2d[..]);
+			if vertex_count < 3
+			{
+				// Portal is fully clipped.
 				portals_rendering_data.portals_info.push(PortalInfo::default());
 				continue;
 			}

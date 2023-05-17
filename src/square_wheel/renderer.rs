@@ -158,11 +158,11 @@ impl Renderer
 			debug_stats.num_triangle_vertices
 		));
 		debug_stats_printer.add_line(format!(
-			"decals: {}, (parsts in leafs: {})",
+			"decals: {}, (parts in leafs: {})",
 			debug_stats.num_decals, debug_stats.num_decals_leafs_parts
 		));
 		debug_stats_printer.add_line(format!(
-			"sprites: {}, (parsts in leafs: {})",
+			"sprites: {}, (parts in leafs: {})",
 			debug_stats.num_sprites, debug_stats.num_sprites_leafs_parts
 		));
 		debug_stats_printer.add_line(format!(
