@@ -1691,7 +1691,33 @@ impl PartialRenderer
 		portals_rendering_data.portals_info.clear();
 		for (portal_index, portal) in frame_info.portals.iter().enumerate()
 		{
+			let mut visible = false;
+			for &leaf_index in portals_index.get_object_leafs(portal_index)
+			{
+				if self
+					.visibility_calculator
+					.get_current_frame_leaf_bounds(leaf_index)
+					.is_some()
+				{
+					visible = true;
+					break;
+				}
+			}
+
+			if !visible
+			{
+				portals_rendering_data.portals_info.push(PortalInfo::default());
+				continue;
+			}
+
 			let display = &portal.display;
+
+			let plane_transformed = camera_matrices.planes_matrix * display.plane.vec.extend(-display.plane.dist);
+			if plane_transformed.w <= 0.0
+			{
+				portals_rendering_data.portals_info.push(PortalInfo::default());
+				continue;
+			}
 
 			let inf = (1 << 29) as f32;
 			let mut tc_min = [inf, inf];
@@ -1727,12 +1753,6 @@ impl PartialRenderer
 				(tc_max[1].ceil() as i32).max(tex_coord_min[1] + 1),
 			];
 
-			let plane_transformed = camera_matrices.planes_matrix * display.plane.vec.extend(-display.plane.dist);
-			if plane_transformed.w <= 0.0
-			{
-				// TODO - skip it
-			}
-
 			let depth_equation = DepthEquation::from_transformed_plane_equation(&plane_transformed);
 
 			// Calculate texture coordinates equations.
@@ -1756,30 +1776,10 @@ impl PartialRenderer
 				tc_equation.k[i] -= tc_min * depth_equation.k;
 			}
 
-			let mut visible = false;
-			for &leaf_index in portals_index.get_object_leafs(portal_index)
-			{
-				if self
-					.visibility_calculator
-					.get_current_frame_leaf_bounds(leaf_index)
-					.is_some()
-				{
-					visible = true;
-					break;
-				}
-			}
-
-			let resolution = if visible
-			{
-				[
-					(tex_coord_max[0] - tex_coord_min[0]) as u32,
-					(tex_coord_max[1] - tex_coord_min[1]) as u32,
-				]
-			}
-			else
-			{
-				[0, 0]
-			};
+			let resolution = [
+				(tex_coord_max[0] - tex_coord_min[0]) as u32,
+				(tex_coord_max[1] - tex_coord_min[1]) as u32,
+			];
 
 			let portal_info = PortalInfo {
 				resolution,
@@ -1793,6 +1793,8 @@ impl PartialRenderer
 
 			portals_rendering_data.portals_info.push(portal_info);
 		}
+
+		debug_assert!(portals_rendering_data.portals_info.len() == frame_info.portals.len());
 	}
 
 	fn allocate_portals_pixels<ColorT>(&mut self)

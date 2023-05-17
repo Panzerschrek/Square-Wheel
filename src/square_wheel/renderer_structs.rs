@@ -297,6 +297,7 @@ pub struct PortalsRenderingData
 	pub num_textures_pixels: usize,
 }
 
+#[derive(Copy, Clone, Default)]
 pub struct PortalInfo
 {
 	pub resolution: [u32; 2], // zero if invisible
