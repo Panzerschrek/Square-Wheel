@@ -98,6 +98,7 @@ impl Renderer
 			&frame_info.camera_matrices,
 			&self.common_data,
 			&mut self.debug_stats,
+			true, // Draw view models.
 		);
 
 		self.print_debug_stats(debug_stats_printer);

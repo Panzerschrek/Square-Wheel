@@ -224,6 +224,7 @@ impl PartialRenderer
 		camera_matrices: &CameraMatrices,
 		renderers_common_data: &RenderersCommonData,
 		debug_stats: &mut RendererDebugStats,
+		draw_view_models: bool,
 	)
 	{
 		let performance_counters_ptr = self.performance_counters.clone();
@@ -240,7 +241,14 @@ impl PartialRenderer
 		});
 
 		performance_counters.rasterization.run_with_measure(|| {
-			self.perform_rasterization(pixels, surface_info, frame_info, camera_matrices, renderers_common_data)
+			self.perform_rasterization(
+				pixels,
+				surface_info,
+				frame_info,
+				camera_matrices,
+				renderers_common_data,
+				draw_view_models,
+			)
 		});
 
 		self.populate_debug_stats(frame_info, renderers_common_data, debug_stats);
@@ -1172,6 +1180,7 @@ impl PartialRenderer
 		frame_info: &FrameInfo,
 		camera_matrices: &CameraMatrices,
 		renderers_common_data: &RenderersCommonData,
+		draw_view_models: bool,
 	)
 	{
 		let screen_rect = rect_splitting::Rect {
@@ -1206,6 +1215,7 @@ impl PartialRenderer
 				camera_matrices,
 				renderers_common_data,
 				&viewport_clipping_polygon,
+				draw_view_models,
 			);
 		}
 		else
@@ -1253,6 +1263,7 @@ impl PartialRenderer
 					camera_matrices,
 					renderers_common_data,
 					&viewport_clipping_polygon,
+					draw_view_models,
 				);
 			});
 		}
@@ -1265,6 +1276,7 @@ impl PartialRenderer
 		camera_matrices: &CameraMatrices,
 		renderers_common_data: &RenderersCommonData,
 		viewport_clipping_polygon: &ClippingPolygon,
+		draw_view_models: bool,
 	)
 	{
 		if !self.config.invert_polygons_order
@@ -1299,7 +1311,10 @@ impl PartialRenderer
 			);
 		}
 
-		self.draw_view_models(rasterizer, &viewport_clipping_polygon, &frame_info.model_entities);
+		if draw_view_models
+		{
+			self.draw_view_models(rasterizer, &viewport_clipping_polygon, &frame_info.model_entities);
+		}
 	}
 
 	fn prepare_polygons_surfaces(
@@ -2042,6 +2057,7 @@ impl PartialRenderer
 				&camera_matrices,
 				renderers_common_data,
 				debug_stats,
+				false, // Do not draw view models through portals.
 			);
 		}
 	}
