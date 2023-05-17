@@ -71,12 +71,12 @@ pub fn complete_view_matrix(
 
 	// Perform transformations in reverse order in order to perform transformation via "matrix * vector".
 	// TODO - perform calculations in "double" for better pericision?
-	let base_view_matrix = shift_to_viewport_center * resize_to_viewport * perspective * rotation_matrix * translate;
+	let view_matrix = shift_to_viewport_center * resize_to_viewport * perspective * rotation_matrix * translate;
 	CameraMatrices {
 		position,
-		view_matrix: base_view_matrix,
+		view_matrix,
 		// TODO - maybe avoid calculation of inverse matrix and perform direct matrix calculation?
-		planes_matrix: base_view_matrix.transpose().invert().unwrap(),
+		planes_matrix: view_matrix.transpose().invert().unwrap(),
 	}
 }
 
