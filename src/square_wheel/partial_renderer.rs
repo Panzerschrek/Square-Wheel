@@ -367,9 +367,11 @@ impl PartialRenderer
 		{
 			for portal_info in &portals_rendering_data.portals_info
 			{
-				if portal_info.resolution[0] * portal_info.resolution[1] > 0
+				let area = (portal_info.resolution[0] * portal_info.resolution[1]) as usize;
+				if area > 0
 				{
 					debug_stats.num_visible_portals += 1;
+					debug_stats.num_portals_pixels += area;
 				}
 			}
 		}
@@ -1869,6 +1871,7 @@ impl PartialRenderer
 				continue;
 			}
 
+			// Calculate initial texture coordinates.
 			let inf = (1 << 29) as f32;
 			let mut tc_min = [inf, inf];
 			let mut tc_max = [-inf, -inf];
@@ -1897,12 +1900,6 @@ impl PartialRenderer
 				tc_max[i] -= tc_reduce_eps;
 			}
 
-			let tex_coord_min = [tc_min[0].floor() as i32, tc_min[1].floor() as i32];
-			let tex_coord_max = [
-				(tc_max[0].ceil() as i32).max(tex_coord_min[0] + 1),
-				(tc_max[1].ceil() as i32).max(tex_coord_min[1] + 1),
-			];
-
 			let depth_equation = DepthEquation::from_transformed_plane_equation(&plane_transformed);
 
 			// Calculate texture coordinates equations.
@@ -1912,10 +1909,31 @@ impl PartialRenderer
 				camera_matrices.planes_matrix * tex_coord_equation[1].vec.extend(tex_coord_equation[1].dist),
 			];
 			// Equation projeted to polygon plane.
-			let mut tc_equation = TexCoordEquation::from_depth_equation_and_transformed_tex_coord_equations(
+			let tc_equation = TexCoordEquation::from_depth_equation_and_transformed_tex_coord_equations(
 				&depth_equation,
 				&tc_basis_transformed,
 			);
+
+			let mip = calculate_mip(
+				&vertices_2d[.. vertex_count],
+				&depth_equation,
+				&tc_equation,
+				self.mip_bias,
+			);
+
+			let mip_scale = 1.0 / ((1 << mip) as f32);
+
+			// Rescale texture coordinates equation to selected mip-level.
+			let mut tc_equation = tc_equation * mip_scale;
+
+			let tex_coord_min = [
+				(tc_min[0].floor() * mip_scale) as i32,
+				(tc_min[1].floor() * mip_scale) as i32,
+			];
+			let tex_coord_max = [
+				((tc_max[0].ceil() * mip_scale) as i32).max(tex_coord_min[0] + 1),
+				((tc_max[1].ceil() * mip_scale) as i32).max(tex_coord_min[1] + 1),
+			];
 
 			// Correct texture coordinates equation to compensate shift to surface rect.
 			for i in 0 .. 2
@@ -1926,13 +1944,11 @@ impl PartialRenderer
 				tc_equation.k[i] -= tc_min * depth_equation.k;
 			}
 
-			let resolution = [
-				(tex_coord_max[0] - tex_coord_min[0]) as u32,
-				(tex_coord_max[1] - tex_coord_min[1]) as u32,
-			];
-
 			let portal_info = PortalInfo {
-				resolution,
+				resolution: [
+					(tex_coord_max[0] - tex_coord_min[0]) as u32,
+					(tex_coord_max[1] - tex_coord_min[1]) as u32,
+				],
 				texture_pixels_offset: portals_rendering_data.num_textures_pixels,
 				depth_equation: depth_equation,
 				tex_coord_equation: tc_equation,

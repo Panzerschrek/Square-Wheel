@@ -50,6 +50,7 @@ pub struct RendererDebugStats
 	pub num_visible_lights: usize,
 	pub num_visible_lights_with_shadow: usize,
 	pub num_visible_portals: usize,
+	pub num_portals_pixels: usize,
 	pub num_visible_polygons: usize,
 	pub num_surfaces_pixels: usize,
 }

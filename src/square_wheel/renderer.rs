@@ -169,7 +169,11 @@ impl Renderer
 			"dynamic lights: {}, (with shadow: {})",
 			debug_stats.num_visible_lights, debug_stats.num_visible_lights_with_shadow
 		));
-		debug_stats_printer.add_line(format!("visible portals: {}", debug_stats.num_visible_portals,));
+		debug_stats_printer.add_line(format!(
+			"visible portals: {}, pixels: {}k",
+			debug_stats.num_visible_portals,
+			(debug_stats.num_portals_pixels + 1023) / 1024
+		));
 		debug_stats_printer.add_line(format!(
 			"surfaces pixels: {}k",
 			(debug_stats.num_surfaces_pixels + 1023) / 1024
