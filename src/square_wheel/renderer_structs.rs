@@ -12,6 +12,7 @@ pub struct RendererPerformanceCounters
 	pub surfaces_preparation: PerformanceCounter,
 	pub shadow_maps_building: PerformanceCounter,
 	pub background_fill: PerformanceCounter,
+	pub portals_rendering: PerformanceCounter,
 	pub rasterization: PerformanceCounter,
 }
 
@@ -27,9 +28,30 @@ impl RendererPerformanceCounters
 			surfaces_preparation: PerformanceCounter::new(window_size),
 			shadow_maps_building: PerformanceCounter::new(window_size),
 			background_fill: PerformanceCounter::new(window_size),
+			portals_rendering: PerformanceCounter::new(window_size),
 			rasterization: PerformanceCounter::new(window_size),
 		}
 	}
+}
+
+#[derive(Default)]
+pub struct RendererDebugStats
+{
+	pub num_visible_leafs: usize,
+	pub num_visible_submodels_parts: usize,
+	pub num_visible_meshes: usize,
+	pub num_visible_meshes_parts: usize,
+	pub num_triangles: usize,
+	pub num_triangle_vertices: usize,
+	pub num_decals: usize,
+	pub num_decals_leafs_parts: usize,
+	pub num_sprites: usize,
+	pub num_sprites_leafs_parts: usize,
+	pub num_visible_lights: usize,
+	pub num_visible_lights_with_shadow: usize,
+	pub num_visible_portals: usize,
+	pub num_visible_polygons: usize,
+	pub num_surfaces_pixels: usize,
 }
 
 // Data shared across multiple PartialRenderer instances (independent on view point).

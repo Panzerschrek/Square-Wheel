@@ -11,7 +11,9 @@ pub struct Renderer
 	app_config: config::ConfigSharedPtr,
 	config: RendererConfig,
 	common_data: RenderersCommonData,
+	map: Arc<bsp_map_compact::BSPMap>,
 	root_renderer: PartialRenderer,
+	debug_stats: RendererDebugStats,
 }
 
 impl Renderer
@@ -41,7 +43,9 @@ impl Renderer
 					.map(|leaf_index| get_leaf_clip_planes(&map, leaf_index as u32))
 					.collect(),
 			},
+			map: map.clone(),
 			root_renderer: PartialRenderer::new(resources_manager, config_parsed, map, depth),
+			debug_stats: RendererDebugStats::default(),
 		}
 	}
 
@@ -52,6 +56,8 @@ impl Renderer
 	)
 	{
 		self.synchronize_config();
+
+		self.debug_stats = RendererDebugStats::default();
 
 		self.common_data.materials_processor.update(frame_info.game_time_s);
 
@@ -73,6 +79,7 @@ impl Renderer
 			frame_info,
 			&frame_info.camera_matrices,
 			&self.common_data,
+			&mut self.debug_stats,
 		)
 	}
 
@@ -90,8 +97,84 @@ impl Renderer
 			frame_info,
 			&frame_info.camera_matrices,
 			&self.common_data,
-			debug_stats_printer,
-		)
+			&mut self.debug_stats,
+		);
+
+		self.print_debug_stats(debug_stats_printer);
+	}
+
+	fn print_debug_stats(&self, debug_stats_printer: &mut DebugStatsPrinter)
+	{
+		let performance_counters_ptr = self.root_renderer.get_performance_counters();
+		let performance_counters = performance_counters_ptr.lock().unwrap();
+
+		debug_stats_printer.add_line(format!(
+			"materials update: {:04.2}ms",
+			performance_counters.materials_update.get_average_value() * 1000.0
+		));
+		debug_stats_printer.add_line(format!(
+			"visible leafs search: {:04.2}ms",
+			performance_counters.visible_leafs_search.get_average_value() * 1000.0
+		));
+		debug_stats_printer.add_line(format!(
+			"triangle models preparation: {:04.2}ms",
+			performance_counters.triangle_models_preparation.get_average_value() * 1000.0
+		));
+		debug_stats_printer.add_line(format!(
+			"surfaces preparation: {:04.2}ms",
+			performance_counters.surfaces_preparation.get_average_value() * 1000.0
+		));
+		debug_stats_printer.add_line(format!(
+			"shadow maps building: {:04.2}ms",
+			performance_counters.shadow_maps_building.get_average_value() * 1000.0
+		));
+		debug_stats_printer.add_line(format!(
+			"background fill: {:04.2}ms",
+			performance_counters.background_fill.get_average_value() * 1000.0
+		));
+		debug_stats_printer.add_line(format!(
+			"portals rendering: {:04.2}ms",
+			performance_counters.portals_rendering.get_average_value() * 1000.0
+		));
+		debug_stats_printer.add_line(format!(
+			"rasterization: {:04.2}ms",
+			performance_counters.rasterization.get_average_value() * 1000.0
+		));
+
+		let debug_stats = &self.debug_stats;
+
+		debug_stats_printer.add_line(format!(
+			"leafs: {}/{}",
+			debug_stats.num_visible_leafs,
+			self.map.leafs.len()
+		));
+		debug_stats_printer.add_line(format!("submodels parts: {}", debug_stats.num_visible_submodels_parts));
+		debug_stats_printer.add_line(format!("polygons: {}", debug_stats.num_visible_polygons));
+		debug_stats_printer.add_line(format!(
+			"dynamic meshes : {}, parts: {}, triangles: {}, vertices: {}",
+			debug_stats.num_visible_meshes,
+			debug_stats.num_visible_meshes_parts,
+			debug_stats.num_triangles,
+			debug_stats.num_triangle_vertices
+		));
+		debug_stats_printer.add_line(format!(
+			"decals: {}, (parsts in leafs: {})",
+			debug_stats.num_decals, debug_stats.num_decals_leafs_parts
+		));
+		debug_stats_printer.add_line(format!(
+			"sprites: {}, (parsts in leafs: {})",
+			debug_stats.num_sprites, debug_stats.num_sprites_leafs_parts
+		));
+		debug_stats_printer.add_line(format!(
+			"dynamic lights: {}, (with shadow: {})",
+			debug_stats.num_visible_lights, debug_stats.num_visible_lights_with_shadow
+		));
+		debug_stats_printer.add_line(format!("visible portals: {}", debug_stats.num_visible_portals,));
+		debug_stats_printer.add_line(format!(
+			"surfaces pixels: {}k",
+			(debug_stats.num_surfaces_pixels + 1023) / 1024
+		));
+		// debug_stats_printer.add_line(format!("mip bias: {}", self.mip_bias));
 	}
 
 	fn synchronize_config(&mut self)

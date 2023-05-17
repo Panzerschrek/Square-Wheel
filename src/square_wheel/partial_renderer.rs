@@ -1,9 +1,8 @@
 use super::{
-	abstract_color::*, debug_stats_printer::*, depth_renderer::*, draw_ordering, dynamic_objects_index::*,
-	equations::*, fast_math::*, frame_info::*, frame_number::*, inline_models_index::*, light::*,
-	map_materials_processor::*, map_visibility_calculator::*, rasterizer::*, rect_splitting, renderer_config::*,
-	renderer_structs::*, resources_manager::*, surfaces::*, textures::*, triangle_model::*,
-	triangle_models_rendering::*,
+	abstract_color::*, depth_renderer::*, draw_ordering, dynamic_objects_index::*, equations::*, fast_math::*,
+	frame_info::*, frame_number::*, inline_models_index::*, light::*, map_materials_processor::*,
+	map_visibility_calculator::*, rasterizer::*, rect_splitting, renderer_config::*, renderer_structs::*,
+	resources_manager::*, surfaces::*, textures::*, triangle_model::*, triangle_models_rendering::*,
 };
 use crate::common::{
 	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, light_cube::*, lightmap, material,
@@ -34,7 +33,7 @@ pub struct PartialRenderer
 	submodels_info: Vec<VisibleSubmodelInfo>,
 	// Material index and clipping polygon of current frame sky.
 	current_sky: Option<(u32, ClippingPolygon)>,
-	performance_counters: Arc<Mutex<RendererPerformanceCounters>>,
+	performance_counters: PerformanceCountersPtr,
 	dynamic_lights_info: Vec<DynamicLightInfo>,
 	shadow_maps_data: Vec<ShadowMapElement>,
 	decals_info: Vec<DecalInfo>,
@@ -49,6 +48,8 @@ pub struct PartialRenderer
 
 	portals_rendering_data: Option<Box<PortalsRenderingData>>,
 }
+
+pub type PerformanceCountersPtr = Arc<Mutex<RendererPerformanceCounters>>;
 
 impl PartialRenderer
 {
@@ -141,12 +142,18 @@ impl PartialRenderer
 		}
 	}
 
+	pub fn get_performance_counters(&self) -> PerformanceCountersPtr
+	{
+		Arc::clone(&self.performance_counters)
+	}
+
 	pub fn prepare_frame<ColorT: AbstractColor>(
 		&mut self,
 		surface_info: &system_window::SurfaceInfo,
 		frame_info: &FrameInfo,
 		camera_matrices: &CameraMatrices,
 		renderers_common_data: &RenderersCommonData,
+		debug_stats: &mut RendererDebugStats,
 	)
 	{
 		let performance_counters_ptr = self.performance_counters.clone();
@@ -202,9 +209,11 @@ impl PartialRenderer
 			);
 		});
 
-		self.prepare_portals_textures(frame_info, camera_matrices, &renderers_common_data.portals_index);
-		self.allocate_portals_pixels::<ColorT>();
-		self.build_portals_textures::<ColorT>(frame_info, renderers_common_data);
+		performance_counters.portals_rendering.run_with_measure(|| {
+			self.prepare_portals_textures(frame_info, camera_matrices, &renderers_common_data.portals_index);
+			self.allocate_portals_pixels::<ColorT>();
+			self.build_portals_textures::<ColorT>(frame_info, renderers_common_data, debug_stats);
+		});
 	}
 
 	pub fn draw_frame<ColorT: AbstractColor>(
@@ -214,7 +223,7 @@ impl PartialRenderer
 		frame_info: &FrameInfo,
 		camera_matrices: &CameraMatrices,
 		renderers_common_data: &RenderersCommonData,
-		debug_stats_printer: &mut DebugStatsPrinter,
+		debug_stats: &mut RendererDebugStats,
 	)
 	{
 		let performance_counters_ptr = self.performance_counters.clone();
@@ -234,11 +243,7 @@ impl PartialRenderer
 			self.perform_rasterization(pixels, surface_info, frame_info, camera_matrices, renderers_common_data)
 		});
 
-		if debug_stats_printer.show_debug_stats()
-		{
-			// TODO
-			// self.print_debug_stats(frame_info, debug_stats_printer, &performance_counters);
-		}
+		self.populate_debug_stats(frame_info, renderers_common_data, debug_stats);
 
 		if self.config.debug_draw_depth
 		{
@@ -260,6 +265,118 @@ impl PartialRenderer
 				}
 			}
 		}
+	}
+
+	fn populate_debug_stats(
+		&self,
+		frame_info: &FrameInfo,
+		renderers_common_data: &RenderersCommonData,
+		debug_stats: &mut RendererDebugStats,
+	)
+	{
+		for leaf_index in 0 .. self.map.leafs.len() as u32
+		{
+			if self
+				.visibility_calculator
+				.get_current_frame_leaf_bounds(leaf_index)
+				.is_some()
+			{
+				debug_stats.num_visible_leafs += 1;
+				debug_stats.num_visible_submodels_parts += renderers_common_data
+					.inline_models_index
+					.get_leaf_models(leaf_index as u32)
+					.len();
+				debug_stats.num_visible_meshes_parts += renderers_common_data
+					.dynamic_models_index
+					.get_leaf_objects(leaf_index as u32)
+					.len();
+			}
+		}
+
+		for visible_dynamic_mesh in &self.visible_dynamic_meshes_list
+		{
+			debug_stats.num_triangles += visible_dynamic_mesh.num_visible_triangles;
+			debug_stats.num_triangle_vertices += match &frame_info.model_entities
+				[visible_dynamic_mesh.entity_index as usize]
+				.model
+				.meshes[visible_dynamic_mesh.mesh_index as usize]
+				.vertex_data
+			{
+				VertexData::NonAnimated(v) => v.len(),
+				VertexData::VertexAnimated { constant, .. } => constant.len(),
+				VertexData::SkeletonAnimated(v) => v.len(),
+			};
+		}
+
+		for i in 0 .. frame_info.decals.len()
+		{
+			let mut visible = false;
+			for leaf_index in renderers_common_data.decals_index.get_object_leafs(i)
+			{
+				if self
+					.visibility_calculator
+					.get_current_frame_leaf_bounds(*leaf_index)
+					.is_some()
+				{
+					debug_stats.num_decals_leafs_parts += 1;
+					visible = true;
+				}
+			}
+			if visible
+			{
+				debug_stats.num_decals += 1;
+			}
+		}
+
+		for i in 0 .. frame_info.sprites.len()
+		{
+			let mut visible = false;
+			for leaf_index in renderers_common_data.sprites_index.get_object_leafs(i)
+			{
+				if self
+					.visibility_calculator
+					.get_current_frame_leaf_bounds(*leaf_index)
+					.is_some()
+				{
+					debug_stats.num_sprites_leafs_parts += 1;
+					visible = true;
+				}
+			}
+			if visible
+			{
+				debug_stats.num_sprites += 1;
+			}
+		}
+
+		for (light, light_info) in frame_info.lights.iter().zip(self.dynamic_lights_info.iter())
+		{
+			if light_info.visible
+			{
+				debug_stats.num_visible_lights += 1;
+				if let DynamicLightShadowType::None = light.shadow_type
+				{
+				}
+				else
+				{
+					debug_stats.num_visible_lights_with_shadow += 1;
+				}
+			}
+		}
+
+		if let Some(portals_rendering_data) = &self.portals_rendering_data
+		{
+			for portal_info in &portals_rendering_data.portals_info
+			{
+				if portal_info.resolution[0] * portal_info.resolution[1] > 0
+				{
+					debug_stats.num_visible_portals += 1;
+				}
+			}
+		}
+
+		debug_stats.num_visible_polygons += self.current_frame_visible_polygons.len();
+		debug_stats.num_visible_meshes += self.visible_dynamic_meshes_list.len();
+		debug_stats.num_surfaces_pixels += self.num_visible_surfaces_pixels;
 	}
 
 	fn prepare_dynamic_lights(
@@ -1820,6 +1937,7 @@ impl PartialRenderer
 		&mut self,
 		frame_info: &FrameInfo,
 		renderers_common_data: &RenderersCommonData,
+		debug_stats: &mut RendererDebugStats,
 	)
 	{
 		let portals_rendering_data = if let Some(d) = &mut self.portals_rendering_data
@@ -1832,8 +1950,6 @@ impl PartialRenderer
 		};
 
 		let textures_pixels_casted = unsafe { portals_rendering_data.textures_pixels.align_to_mut::<ColorT>().1 };
-
-		let mut debug_stats_printer = DebugStatsPrinter::new(false);
 
 		for (portal, portal_info) in frame_info
 			.portals
@@ -1865,6 +1981,7 @@ impl PartialRenderer
 				frame_info,
 				&camera_matrices,
 				renderers_common_data,
+				debug_stats,
 			);
 
 			portals_rendering_data.renderer.draw_frame(
@@ -1875,7 +1992,7 @@ impl PartialRenderer
 				frame_info,
 				&camera_matrices,
 				renderers_common_data,
-				&mut debug_stats_printer,
+				debug_stats,
 			);
 		}
 	}
