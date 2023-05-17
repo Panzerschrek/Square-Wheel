@@ -725,10 +725,7 @@ impl PartialRenderer
 				sprite.position - u_vec + v_vec,
 			];
 
-			let vertices_projected = vertices.map(|v| {
-				let v_projected = camera_matrices.view_matrix * v.extend(1.0);
-				Vec3f::new(v_projected.x, v_projected.y, v_projected.w)
-			});
+			let vertices_projected = vertices.map(|v| view_matrix_transform_vertex(&camera_matrices.view_matrix, &v));
 
 			let mip = if vertices_projected[0].z > 0.0 &&
 				vertices_projected[1].z > 0.0 &&
@@ -891,10 +888,9 @@ impl PartialRenderer
 
 			// Transform bbox.
 			let bbox = get_current_triangle_model_bbox(&model.model, &model.animation);
-			let bbox_vertices_transformed = bbox.get_corners_vertices().map(|pos| {
-				let pos_transformed = model_view_matrix * pos.extend(1.0);
-				Vec3f::new(pos_transformed.x, pos_transformed.y, pos_transformed.w)
-			});
+			let bbox_vertices_transformed = bbox
+				.get_corners_vertices()
+				.map(|pos| view_matrix_transform_vertex(&model_view_matrix, &pos));
 
 			let clipping_polygon = if let Some(c) = calculate_triangle_model_screen_polygon(&bbox_vertices_transformed)
 			{
@@ -1361,8 +1357,7 @@ impl PartialRenderer
 
 		for (in_vertex, out_vertex) in polygon_vertices.iter().zip(polygon_vertices_transformed.iter_mut())
 		{
-			let vertex_transformed = camera_matrices.view_matrix * in_vertex.extend(1.0);
-			*out_vertex = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
+			*out_vertex = view_matrix_transform_vertex(&camera_matrices.view_matrix, in_vertex);
 		}
 
 		let mut vertices_2d = [Vec2f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
@@ -1976,10 +1971,8 @@ impl PartialRenderer
 		let skybox_view_matrix = camera_matrices.view_matrix * skybox_matrix;
 		let skybox_planes_matrix = camera_matrices.planes_matrix * skybox_matrix_inverse;
 
-		let box_vertices_transformed = BOX_VERTICES.map(|v| {
-			let v_transformed = skybox_view_matrix * (Vec3f::from(v) * 4.0).extend(1.0);
-			Vec3f::new(v_transformed.x, v_transformed.y, v_transformed.w)
-		});
+		let box_vertices_transformed =
+			BOX_VERTICES.map(|v| view_matrix_transform_vertex(&skybox_view_matrix, &(Vec3f::from(v) * 4.0)));
 
 		let clip_planes = bounds.get_clip_planes();
 
@@ -3328,8 +3321,7 @@ impl PartialRenderer
 		let mut vertices_3d = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
 		for (in_vertex, out_vertex) in display.vertices.iter().zip(vertices_3d.iter_mut())
 		{
-			let vertex_transformed = camera_matrices.view_matrix * in_vertex.extend(1.0);
-			*out_vertex = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
+			*out_vertex = view_matrix_transform_vertex(&camera_matrices.view_matrix, in_vertex);
 		}
 
 		let pixels_casted = unsafe { portals_rendering_data.textures_pixels.align_to::<ColorT>().1 };

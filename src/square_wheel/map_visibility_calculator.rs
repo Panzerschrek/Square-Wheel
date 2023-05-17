@@ -242,8 +242,7 @@ fn project_portal(
 		.iter()
 		.zip(vertices_transformed.iter_mut())
 	{
-		let vertex_transformed = view_matrix * in_vertex.extend(1.0);
-		*out_vertex = Vec3f::new(vertex_transformed.x, vertex_transformed.y, vertex_transformed.w);
+		*out_vertex = view_matrix_transform_vertex(view_matrix, in_vertex);
 	}
 
 	// Perform z_near clipping. Use very small z_near to avoid clipping portals.
