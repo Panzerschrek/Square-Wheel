@@ -2203,8 +2203,10 @@ impl PartialRenderer
 		let skybox_view_matrix = camera_matrices.view_matrix * skybox_matrix;
 		let skybox_planes_matrix = camera_matrices.planes_matrix * skybox_matrix_inverse;
 
+		const SKY_SCALE: f32 = 4096.0; // use really huge scale, in order to prevent clipping in portals and mirrors.
+
 		let box_vertices_transformed =
-			BOX_VERTICES.map(|v| view_matrix_transform_vertex(&skybox_view_matrix, &(Vec3f::from(v) * 4.0)));
+			BOX_VERTICES.map(|v| view_matrix_transform_vertex(&skybox_view_matrix, &(Vec3f::from(v) * SKY_SCALE)));
 
 		let clip_planes = bounds.get_clip_planes();
 
