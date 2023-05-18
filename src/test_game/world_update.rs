@@ -846,21 +846,24 @@ pub fn update_dynamic_lights_locations(ecs: &mut hecs::World)
 pub fn update_camera_portals_locations(ecs: &mut hecs::World)
 {
 	// Update location of camera portals, using location of target.
-	for (_id, (camera_portal, _camera_portal_target_location_link_component, target_name_component)) in ecs
+	for (_id, (view_portal, _camera_portal_target_location_link_component, target_name_component)) in ecs
 		.query::<(
-			&mut CameraPortal,
-			&CameraPortalTargetLocationLinkComponent,
+			&mut ViewPortal,
+			&ViewPortalTargetLocationLinkComponent,
 			&TargetNameComponent,
 		)>()
 		.iter()
 	{
-		for (_target_id, (named_target_component, location_component)) in
-			ecs.query::<(&NamedTargetComponent, &LocationComponent)>().iter()
+		if let PortalView::CameraAtPosition { position, rotation } = &mut view_portal.view
 		{
-			if named_target_component.name == target_name_component.name
+			for (_target_id, (named_target_component, location_component)) in
+				ecs.query::<(&NamedTargetComponent, &LocationComponent)>().iter()
 			{
-				camera_portal.position = location_component.position;
-				camera_portal.rotation = location_component.rotation;
+				if named_target_component.name == target_name_component.name
+				{
+					*position = location_component.position;
+					*rotation = location_component.rotation;
+				}
 			}
 		}
 	}

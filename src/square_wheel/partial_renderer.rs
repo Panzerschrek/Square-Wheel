@@ -1852,9 +1852,7 @@ impl PartialRenderer
 				continue;
 			};
 
-			let display = &portal.display;
-
-			let plane_transformed = camera_matrices.planes_matrix * display.plane.vec.extend(-display.plane.dist);
+			let plane_transformed = camera_matrices.planes_matrix * portal.plane.vec.extend(-portal.plane.dist);
 			if plane_transformed.w <= 0.0
 			{
 				portals_rendering_data.portals_info.push(PortalInfo::default());
@@ -1863,12 +1861,12 @@ impl PartialRenderer
 
 			// Transform portal vertices.
 			let mut vertices_3d = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-			for (in_vertex, out_vertex) in display.vertices.iter().zip(vertices_3d.iter_mut())
+			for (in_vertex, out_vertex) in portal.vertices.iter().zip(vertices_3d.iter_mut())
 			{
 				*out_vertex = view_matrix_transform_vertex(&camera_matrices.view_matrix, in_vertex);
 			}
 
-			let vertex_count = std::cmp::min(MAX_VERTICES, display.vertices.len());
+			let vertex_count = std::cmp::min(MAX_VERTICES, portal.vertices.len());
 			if vertex_count < 3
 			{
 				portals_rendering_data.portals_info.push(PortalInfo::default());
@@ -1890,11 +1888,11 @@ impl PartialRenderer
 			let inf = (1 << 29) as f32;
 			let mut tc_min = [inf, inf];
 			let mut tc_max = [-inf, -inf];
-			for &vertex in &display.vertices
+			for &vertex in &portal.vertices
 			{
 				for i in 0 .. 2
 				{
-					let tc = display.tex_coord_equation[i].vec.dot(vertex) + display.tex_coord_equation[i].dist;
+					let tc = portal.tex_coord_equation[i].vec.dot(vertex) + portal.tex_coord_equation[i].dist;
 					if tc < tc_min[i]
 					{
 						tc_min[i] = tc;
@@ -1918,7 +1916,7 @@ impl PartialRenderer
 			let depth_equation = DepthEquation::from_transformed_plane_equation(&plane_transformed);
 
 			// Calculate texture coordinates equations.
-			let tex_coord_equation = &display.tex_coord_equation;
+			let tex_coord_equation = &portal.tex_coord_equation;
 			let tc_basis_transformed = [
 				camera_matrices.planes_matrix * tex_coord_equation[0].vec.extend(tex_coord_equation[0].dist),
 				camera_matrices.planes_matrix * tex_coord_equation[1].vec.extend(tex_coord_equation[1].dist),
@@ -2026,14 +2024,25 @@ impl PartialRenderer
 				continue;
 			}
 
-			let fov = std::f32::consts::PI * 0.5; // TODO - setup it properly.
-			let camera_matrices = build_view_matrix_with_full_rotation(
-				portal.position,
-				portal.rotation,
-				fov,
-				portal_info.resolution[0] as f32,
-				portal_info.resolution[1] as f32,
-			);
+			let camera_matrices = match &portal.view
+			{
+				PortalView::CameraAtPosition { position, rotation } =>
+				{
+					let fov = std::f32::consts::PI * 0.5; // TODO - setup it properly.
+					build_view_matrix_with_full_rotation(
+						*position,
+						*rotation,
+						fov,
+						portal_info.resolution[0] as f32,
+						portal_info.resolution[1] as f32,
+					)
+				},
+				PortalView::Mirror {} =>
+				{
+					// TODO
+					frame_info.camera_matrices
+				},
+			};
 
 			let surface_info = system_window::SurfaceInfo {
 				width: portal_info.resolution[0] as usize,
@@ -2412,7 +2421,7 @@ impl PartialRenderer
 			}
 			else if leaf_portals.len() == 1
 			{
-				self.draw_portal_display(
+				self.draw_portal(
 					rasterizer,
 					&clip_planes,
 					&frame_info.portals,
@@ -2510,8 +2519,8 @@ impl PartialRenderer
 
 			let portal = &frame_info.portals[*portal_index as usize];
 
-			let mut bbox = BBox::from_point(&portal.display.vertices[0]);
-			for v in &portal.display.vertices[1 ..]
+			let mut bbox = BBox::from_point(&portal.vertices[0]);
+			for v in &portal.vertices[1 ..]
 			{
 				bbox.extend_with_point(v);
 			}
@@ -2530,7 +2539,7 @@ impl PartialRenderer
 		{
 			if *object_index >= PORTAL_INDEX_ADD
 			{
-				self.draw_portal_display(
+				self.draw_portal(
 					rasterizer,
 					&clip_planes,
 					&frame_info.portals,
@@ -3475,11 +3484,11 @@ impl PartialRenderer
 		}
 	}
 
-	fn draw_portal_display<'a, ColorT: AbstractColor>(
+	fn draw_portal<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		clip_planes: &ClippingPolygonPlanes,
-		portals: &[CameraPortal],
+		portals: &[ViewPortal],
 		camera_matrices: &CameraMatrices,
 		portal_index: u32,
 	)
@@ -3493,7 +3502,7 @@ impl PartialRenderer
 			return;
 		};
 
-		let display = &portals[portal_index as usize].display;
+		let portal = &portals[portal_index as usize];
 		let portal_info = &portals_rendering_data.portals_info[portal_index as usize];
 
 		let area = portal_info.resolution[0] * portal_info.resolution[1];
@@ -3503,7 +3512,7 @@ impl PartialRenderer
 		}
 
 		let mut vertices_3d = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-		for (in_vertex, out_vertex) in display.vertices.iter().zip(vertices_3d.iter_mut())
+		for (in_vertex, out_vertex) in portal.vertices.iter().zip(vertices_3d.iter_mut())
 		{
 			*out_vertex = view_matrix_transform_vertex(&camera_matrices.view_matrix, in_vertex);
 		}
@@ -3516,7 +3525,7 @@ impl PartialRenderer
 		draw_polygon(
 			rasterizer,
 			&clip_planes,
-			&vertices_3d[.. std::cmp::min(MAX_VERTICES, display.vertices.len())],
+			&vertices_3d[.. std::cmp::min(MAX_VERTICES, portal.vertices.len())],
 			&portal_info.depth_equation,
 			&portal_info.tex_coord_equation,
 			&portal_info.resolution,

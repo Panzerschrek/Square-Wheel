@@ -300,20 +300,20 @@ fn spawn_regular_entity(
 				let polygon = &map.polygons[map.submodels[index].first_polygon as usize];
 
 				let entity = ecs.spawn((
-					CameraPortal {
-						position: Vec3f::zero(),
-						rotation: QuaternionF::one(),
-						display: CameraPortalDisplay {
-							plane: polygon.plane,
-							tex_coord_equation: polygon.tex_coord_equation,
-							vertices: map.vertices[polygon.first_vertex as usize ..
-								(polygon.first_vertex + polygon.num_vertices) as usize]
-								.iter()
-								.map(|v| *v)
-								.collect(),
+					ViewPortal {
+						view: PortalView::CameraAtPosition {
+							position: Vec3f::zero(),
+							rotation: QuaternionF::one(),
 						},
+						plane: polygon.plane,
+						tex_coord_equation: polygon.tex_coord_equation,
+						vertices: map.vertices
+							[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize]
+							.iter()
+							.map(|v| *v)
+							.collect(),
 					},
-					CameraPortalTargetLocationLinkComponent {},
+					ViewPortalTargetLocationLinkComponent {},
 				));
 
 				add_entity_common_components(ecs, map, map_entity, entity);
@@ -337,26 +337,15 @@ fn spawn_regular_entity(
 			{
 				let polygon = &map.polygons[map.submodels[index].first_polygon as usize];
 
-				let vertices = map.vertices
-					[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize]
-					.iter()
-					.map(|v| *v)
-					.collect::<Vec<Vec3f>>();
-
-				let dir = polygon.plane.vec;
-				let azimuth = (-dir.x).atan2(dir.y);
-				let elevation = dir.z.atan2((dir.x * dir.x + dir.y * dir.y).sqrt());
-				let rotation = QuaternionF::from_angle_z(Rad(azimuth) + Rad(std::f32::consts::PI * 0.5)) *
-					QuaternionF::from_angle_y(-Rad(elevation));
-
-				let entity = ecs.spawn((CameraPortal {
-					position: vertices[0],
-					rotation,
-					display: CameraPortalDisplay {
-						plane: polygon.plane,
-						tex_coord_equation: polygon.tex_coord_equation,
-						vertices,
-					},
+				let entity = ecs.spawn((ViewPortal {
+					view: PortalView::Mirror {},
+					plane: polygon.plane,
+					tex_coord_equation: polygon.tex_coord_equation,
+					vertices: map.vertices
+						[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize]
+						.iter()
+						.map(|v| *v)
+						.collect(),
 				},));
 
 				add_entity_common_components(ecs, map, map_entity, entity);

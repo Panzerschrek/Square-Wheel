@@ -12,7 +12,7 @@ pub struct FrameInfo
 	pub decals: Vec<Decal>,
 	pub sprites: Vec<Sprite>,
 	pub lights: Vec<DynamicLight>,
-	pub portals: Vec<CameraPortal>, // TODO - implement other kinds of portals.
+	pub portals: Vec<ViewPortal>,
 	pub skybox_rotation: QuaternionF,
 }
 
@@ -131,21 +131,22 @@ pub enum DynamicLightShadowType
 	},
 }
 
-// Portal of "Camera" type.
-
 #[derive(Clone, Serialize, Deserialize)]
-pub struct CameraPortal
+pub struct ViewPortal
 {
-	pub position: Vec3f,
-	pub rotation: QuaternionF,
-	// TODO - implement multiple displays.
-	pub display: CameraPortalDisplay,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct CameraPortalDisplay
-{
+	pub view: PortalView,
 	pub plane: Plane,
 	pub tex_coord_equation: [Plane; 2],
 	pub vertices: Vec<Vec3f>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub enum PortalView
+{
+	CameraAtPosition
+	{
+		position: Vec3f,
+		rotation: QuaternionF,
+	},
+	Mirror {},
 }

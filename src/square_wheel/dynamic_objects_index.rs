@@ -141,7 +141,7 @@ impl DynamicObjectsIndex
 	}
 
 	// Reset internal state and position new set of portals.
-	pub fn position_portals(&mut self, portals: &[CameraPortal])
+	pub fn position_portals(&mut self, portals: &[ViewPortal])
 	{
 		// Clear previous portals.
 		self.clear();
@@ -152,7 +152,7 @@ impl DynamicObjectsIndex
 		self.allocate_objects(portals.len());
 		for (index, portal) in portals.iter().enumerate()
 		{
-			self.position_object_convex_hull_r(index as DynamicObjectId, &portal.display.vertices, root_node);
+			self.position_object_convex_hull_r(index as DynamicObjectId, &portal.vertices, root_node);
 		}
 	}
 

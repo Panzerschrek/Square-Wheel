@@ -101,9 +101,9 @@ pub struct SpriteLocationLinkComponent {}
 #[derive(Serialize, Deserialize)]
 pub struct DynamicLightLocationLinkComponent {}
 
-// Component that sets CameraPortal position/rotation using target location.
+// Component that sets ViewPortal position/rotation using target location.
 #[derive(Serialize, Deserialize)]
-pub struct CameraPortalTargetLocationLinkComponent {}
+pub struct ViewPortalTargetLocationLinkComponent {}
 
 // Just play animation consisting of all model frames.
 #[derive(Serialize, Deserialize)]
