@@ -212,7 +212,7 @@ impl PartialRenderer
 		performance_counters.portals_rendering.run_with_measure(|| {
 			self.prepare_portals_textures(frame_info, camera_matrices, &renderers_common_data.portals_index);
 			self.allocate_portals_pixels::<ColorT>();
-			self.build_portals_textures::<ColorT>(frame_info, renderers_common_data, debug_stats);
+			self.build_portals_textures::<ColorT>(frame_info, camera_matrices, renderers_common_data, debug_stats);
 		});
 	}
 
@@ -1966,6 +1966,7 @@ impl PartialRenderer
 				depth_equation: depth_equation,
 				tex_coord_equation: tc_equation,
 				tc_min: tex_coord_min,
+				mip,
 			};
 			portals_rendering_data.num_textures_pixels +=
 				(portal_info.resolution[0] * portal_info.resolution[1]) as usize;
@@ -1998,6 +1999,7 @@ impl PartialRenderer
 	fn build_portals_textures<ColorT: AbstractColor>(
 		&mut self,
 		frame_info: &FrameInfo,
+		camera_matrices: &CameraMatrices,
 		renderers_common_data: &RenderersCommonData,
 		debug_stats: &mut RendererDebugStats,
 	)
@@ -2024,7 +2026,7 @@ impl PartialRenderer
 				continue;
 			}
 
-			let camera_matrices = match &portal.view
+			let portal_camera_matrices = match &portal.view
 			{
 				PortalView::CameraAtPosition { position, rotation } =>
 				{
@@ -2039,8 +2041,45 @@ impl PartialRenderer
 				},
 				PortalView::Mirror {} =>
 				{
-					// TODO
-					frame_info.camera_matrices
+					let normal_len = portal.plane.vec.magnitude();
+
+					let dist = portal.plane.vec.dot(camera_matrices.position) - portal.plane.dist;
+					let position_reflected =
+						camera_matrices.position - portal.plane.vec * (2.0 * dist / portal.plane.vec.magnitude2());
+					let dist_normalized = dist / normal_len;
+
+					let mip_scale = 1.0 / ((1 << portal_info.mip) as f32);
+
+					let vec_x = portal.tex_coord_equation[0]
+						.vec
+						.extend(portal.tex_coord_equation[0].dist) *
+						mip_scale;
+					let vec_y = portal.tex_coord_equation[1]
+						.vec
+						.extend(portal.tex_coord_equation[1].dist) *
+						mip_scale;
+					let vec_z = portal.plane.vec.extend(-portal.plane.dist) * (mip_scale / normal_len);
+
+					let tex_coord_basis =
+						Mat4f::from_cols(vec_x, vec_y, vec_z, Vec4f::new(0.0, 0.0, 0.0, 1.0)).transpose();
+
+					let position_reflected_tex_coord_space =
+						(tex_coord_basis * position_reflected.extend(1.0)).truncate();
+
+					let translate = Mat4f::from_translation(-position_reflected_tex_coord_space);
+
+					let mut shift_to_viewport = Mat4f::identity();
+					shift_to_viewport.z.x = -portal_info.tc_min[0] as f32 + position_reflected_tex_coord_space.x;
+					shift_to_viewport.z.y = -portal_info.tc_min[1] as f32 + position_reflected_tex_coord_space.y;
+
+					let z_scale = Mat4f::from_nonuniform_scale(1.0, 1.0, 1.0 / (dist_normalized * mip_scale));
+
+					let mirror_matrix = shift_to_viewport * z_scale * translate * tex_coord_basis;
+					CameraMatrices {
+						position: position_reflected,
+						view_matrix: mirror_matrix,
+						planes_matrix: mirror_matrix.transpose().invert().unwrap(),
+					}
 				},
 			};
 
@@ -2052,7 +2091,7 @@ impl PartialRenderer
 			portals_rendering_data.renderer.prepare_frame::<ColorT>(
 				&surface_info,
 				frame_info,
-				&camera_matrices,
+				&portal_camera_matrices,
 				renderers_common_data,
 				debug_stats,
 			);
@@ -2063,7 +2102,7 @@ impl PartialRenderer
 						(portal_info.resolution[0] * portal_info.resolution[1]) as usize],
 				&surface_info,
 				frame_info,
-				&camera_matrices,
+				&portal_camera_matrices,
 				renderers_common_data,
 				debug_stats,
 				false, // Do not draw view models through portals.
