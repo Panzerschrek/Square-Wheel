@@ -330,6 +330,38 @@ fn spawn_regular_entity(
 				add_entity_common_components(ecs, map, map_entity, entity);
 			}
 		},
+		Some("func_mirror") =>
+		{
+			let index = map_entity.submodel_index as usize;
+			if index < map.submodels.len() && map.submodels[index].num_polygons > 0
+			{
+				let polygon = &map.polygons[map.submodels[index].first_polygon as usize];
+
+				let vertices = map.vertices
+					[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize]
+					.iter()
+					.map(|v| *v)
+					.collect::<Vec<Vec3f>>();
+
+				let dir = polygon.plane.vec;
+				let azimuth = (-dir.x).atan2(dir.y);
+				let elevation = dir.z.atan2((dir.x * dir.x + dir.y * dir.y).sqrt());
+				let rotation = QuaternionF::from_angle_z(Rad(azimuth) + Rad(std::f32::consts::PI * 0.5)) *
+					QuaternionF::from_angle_y(-Rad(elevation));
+
+				let entity = ecs.spawn((CameraPortal {
+					position: vertices[0],
+					rotation,
+					display: CameraPortalDisplay {
+						plane: polygon.plane,
+						tex_coord_equation: polygon.tex_coord_equation,
+						vertices,
+					},
+				},));
+
+				add_entity_common_components(ecs, map, map_entity, entity);
+			}
+		},
 		Some("misc_model") =>
 		{
 			if let (Some(model_file_name), Some(origin)) = (
