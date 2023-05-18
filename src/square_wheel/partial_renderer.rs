@@ -2460,9 +2460,10 @@ impl PartialRenderer
 			}
 			else if leaf_portals.len() == 1
 			{
-				self.draw_portal(
+				self.draw_view_portal(
 					rasterizer,
 					&clip_planes,
+					used_leaf_clip_planes,
 					&frame_info.portals,
 					camera_matrices,
 					leaf_portals[0],
@@ -2578,9 +2579,10 @@ impl PartialRenderer
 		{
 			if *object_index >= PORTAL_INDEX_ADD
 			{
-				self.draw_portal(
+				self.draw_view_portal(
 					rasterizer,
 					&clip_planes,
+					used_leaf_clip_planes,
 					&frame_info.portals,
 					camera_matrices,
 					*object_index - PORTAL_INDEX_ADD,
@@ -3523,10 +3525,11 @@ impl PartialRenderer
 		}
 	}
 
-	fn draw_portal<'a, ColorT: AbstractColor>(
+	fn draw_view_portal<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		clip_planes: &ClippingPolygonPlanes,
+		leaf_clip_planes: &[Plane],
 		portals: &[ViewPortal],
 		camera_matrices: &CameraMatrices,
 		portal_index: u32,
@@ -3550,10 +3553,26 @@ impl PartialRenderer
 			return;
 		}
 
-		let mut vertices_3d = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
-		for (in_vertex, out_vertex) in portal.vertices.iter().zip(vertices_3d.iter_mut())
+		// Transform vertices.
+		let mut vertices_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
+		for (in_vertex, out_vertex) in portal.vertices.iter().zip(vertices_clipped.iter_mut())
 		{
 			*out_vertex = view_matrix_transform_vertex(&camera_matrices.view_matrix, in_vertex);
+		}
+
+		let mut vertex_count = std::cmp::min(portal.vertices.len(), MAX_VERTICES);
+
+		// Clip vertices, using leaf clip planes.
+		let mut vertices_temp = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
+		for clip_plane in leaf_clip_planes
+		{
+			vertex_count =
+				clip_3d_polygon_by_plane(&vertices_clipped[.. vertex_count], clip_plane, &mut vertices_temp[..]);
+			if vertex_count < 3
+			{
+				return;
+			}
+			vertices_clipped[.. vertex_count].copy_from_slice(&vertices_temp[.. vertex_count]);
 		}
 
 		let pixels_casted = unsafe { portals_rendering_data.textures_pixels.align_to::<ColorT>().1 };
@@ -3564,7 +3583,7 @@ impl PartialRenderer
 		draw_polygon(
 			rasterizer,
 			&clip_planes,
-			&vertices_3d[.. std::cmp::min(MAX_VERTICES, portal.vertices.len())],
+			&vertices_clipped[.. std::cmp::min(MAX_VERTICES, portal.vertices.len())],
 			&portal_info.depth_equation,
 			&portal_info.tex_coord_equation,
 			&portal_info.resolution,
