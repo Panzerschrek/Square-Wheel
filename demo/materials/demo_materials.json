@@ -109,11 +109,13 @@
 	},
 	"mirror":
 	{
-		"diffuse": "mirror.png"
+		"diffuse": "mirror.png",
+		"light" : false
 	},
 	"portal":
 	{
-		"diffuse": "portal.png"
+		"diffuse": "portal.png",
+		"portal" : false
 	},
 	"roof_tiles":
 	{
