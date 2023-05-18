@@ -337,10 +337,22 @@ fn spawn_regular_entity(
 			{
 				let polygon = &map.polygons[map.submodels[index].first_polygon as usize];
 
+				let mut tex_coord_equation = polygon.tex_coord_equation;
+				if tex_coord_equation[0]
+					.vec
+					.cross(tex_coord_equation[1].vec)
+					.dot(polygon.plane.vec) <
+					0.0
+				{
+					// Make sure mirror basis has proper orientation.
+					tex_coord_equation[0].vec *= -1.0;
+					tex_coord_equation[0].dist *= -1.0;
+				}
+
 				let entity = ecs.spawn((ViewPortal {
 					view: PortalView::Mirror {},
 					plane: polygon.plane,
-					tex_coord_equation: polygon.tex_coord_equation,
+					tex_coord_equation: tex_coord_equation,
 					vertices: map.vertices
 						[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize]
 						.iter()
