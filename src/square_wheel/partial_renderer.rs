@@ -2492,6 +2492,7 @@ impl PartialRenderer
 					leaf_portals[0],
 				);
 			}
+			return;
 		}
 
 		// Multiple objects. Sort them.
