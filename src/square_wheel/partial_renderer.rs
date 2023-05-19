@@ -46,7 +46,7 @@ pub struct PartialRenderer
 	dynamic_meshes_vertices: Vec<ModelVertex3d>,
 	dynamic_meshes_triangles: Vec<Triangle>,
 
-	portals_rendering_data: Option<Box<PortalsRenderingData>>,
+	portals_rendering_data: PortalsRenderingData,
 }
 
 pub type PerformanceCountersPtr = Arc<Mutex<RendererPerformanceCounters>>;
@@ -117,18 +117,23 @@ impl PartialRenderer
 			dynamic_model_to_dynamic_meshes_index: Vec::new(),
 			dynamic_meshes_vertices: Vec::new(),
 			dynamic_meshes_triangles: Vec::new(),
-			portals_rendering_data: if depth > 0
-			{
-				Some(Box::new(PortalsRenderingData {
-					renderer: PartialRenderer::new(resources_manager, config, map.clone(), depth - 1),
-					portals_info: Vec::new(),
-					textures_pixels: Vec::new(),
-					num_textures_pixels: 0,
-				}))
-			}
-			else
-			{
-				None
+			portals_rendering_data: PortalsRenderingData {
+				renderer: if depth > 0
+				{
+					Some(Box::new(PartialRenderer::new(
+						resources_manager,
+						config,
+						map.clone(),
+						depth - 1,
+					)))
+				}
+				else
+				{
+					None
+				},
+				portals_info: Vec::new(),
+				textures_pixels: Vec::new(),
+				num_textures_pixels: 0,
 			},
 		}
 	}
@@ -136,9 +141,9 @@ impl PartialRenderer
 	pub fn set_config(&mut self, config: RendererConfig)
 	{
 		self.config = config;
-		if let Some(d) = &mut self.portals_rendering_data
+		if let Some(r) = &mut self.portals_rendering_data.renderer
 		{
-			d.renderer.set_config(config);
+			r.set_config(config);
 		}
 	}
 
@@ -383,16 +388,13 @@ impl PartialRenderer
 			}
 		}
 
-		if let Some(portals_rendering_data) = &self.portals_rendering_data
+		for portal_info in &self.portals_rendering_data.portals_info
 		{
-			for portal_info in &portals_rendering_data.portals_info
+			let area = (portal_info.resolution[0] * portal_info.resolution[1]) as usize;
+			if area > 0
 			{
-				let area = (portal_info.resolution[0] * portal_info.resolution[1]) as usize;
-				if area > 0
-				{
-					debug_stats.num_visible_portals += 1;
-					debug_stats.num_portals_pixels += area;
-				}
+				debug_stats.num_visible_portals += 1;
+				debug_stats.num_portals_pixels += area;
 			}
 		}
 
@@ -1823,18 +1825,9 @@ impl PartialRenderer
 		portals_index: &DynamicObjectsIndex,
 	)
 	{
-		let portals_rendering_data = if let Some(d) = &mut self.portals_rendering_data
-		{
-			d
-		}
-		else
-		{
-			return;
-		};
+		self.portals_rendering_data.num_textures_pixels = 0;
 
-		portals_rendering_data.num_textures_pixels = 0;
-
-		portals_rendering_data.portals_info.clear();
+		self.portals_rendering_data.portals_info.clear();
 		for (portal_index, portal) in frame_info.portals.iter().enumerate()
 		{
 			let mut bounds: Option<ClippingPolygon> = None;
@@ -1860,14 +1853,14 @@ impl PartialRenderer
 			else
 			{
 				// Portal is located in invisible leafs.
-				portals_rendering_data.portals_info.push(PortalInfo::default());
+				self.portals_rendering_data.portals_info.push(PortalInfo::default());
 				continue;
 			};
 
 			let plane_transformed = camera_matrices.planes_matrix * portal.plane.vec.extend(-portal.plane.dist);
 			if plane_transformed.w <= 0.0
 			{
-				portals_rendering_data.portals_info.push(PortalInfo::default());
+				self.portals_rendering_data.portals_info.push(PortalInfo::default());
 				continue;
 			}
 
@@ -1881,7 +1874,7 @@ impl PartialRenderer
 			let vertex_count = std::cmp::min(MAX_VERTICES, portal.vertices.len());
 			if vertex_count < 3
 			{
-				portals_rendering_data.portals_info.push(PortalInfo::default());
+				self.portals_rendering_data.portals_info.push(PortalInfo::default());
 				continue;
 			}
 
@@ -1892,7 +1885,7 @@ impl PartialRenderer
 			if vertex_count < 3
 			{
 				// Portal is fully clipped.
-				portals_rendering_data.portals_info.push(PortalInfo::default());
+				self.portals_rendering_data.portals_info.push(PortalInfo::default());
 				continue;
 			}
 
@@ -1974,37 +1967,28 @@ impl PartialRenderer
 					(tex_coord_max[0] - tex_coord_min[0]) as u32,
 					(tex_coord_max[1] - tex_coord_min[1]) as u32,
 				],
-				texture_pixels_offset: portals_rendering_data.num_textures_pixels,
+				texture_pixels_offset: self.portals_rendering_data.num_textures_pixels,
 				depth_equation: depth_equation,
 				tex_coord_equation: tc_equation,
 				tc_min: tex_coord_min,
 				mip,
 			};
-			portals_rendering_data.num_textures_pixels +=
+			self.portals_rendering_data.num_textures_pixels +=
 				(portal_info.resolution[0] * portal_info.resolution[1]) as usize;
 
-			portals_rendering_data.portals_info.push(portal_info);
+			self.portals_rendering_data.portals_info.push(portal_info);
 		}
 
-		debug_assert!(portals_rendering_data.portals_info.len() == frame_info.portals.len());
+		debug_assert!(self.portals_rendering_data.portals_info.len() == frame_info.portals.len());
 	}
 
 	fn allocate_portals_pixels<ColorT>(&mut self)
 	{
-		let portals_rendering_data = if let Some(d) = &mut self.portals_rendering_data
-		{
-			d
-		}
-		else
-		{
-			return;
-		};
-
 		// Resize textures pixels vector only up to avoid filling it with zeros each frame.
-		let target_size = portals_rendering_data.num_textures_pixels * std::mem::size_of::<ColorT>();
-		if portals_rendering_data.textures_pixels.len() < target_size
+		let target_size = self.portals_rendering_data.num_textures_pixels * std::mem::size_of::<ColorT>();
+		if self.portals_rendering_data.textures_pixels.len() < target_size
 		{
-			portals_rendering_data.textures_pixels.resize(target_size, 0);
+			self.portals_rendering_data.textures_pixels.resize(target_size, 0);
 		}
 	}
 
@@ -2016,21 +2000,12 @@ impl PartialRenderer
 		debug_stats: &mut RendererDebugStats,
 	)
 	{
-		let portals_rendering_data = if let Some(d) = &mut self.portals_rendering_data
-		{
-			d
-		}
-		else
-		{
-			return;
-		};
-
-		let textures_pixels_casted = unsafe { portals_rendering_data.textures_pixels.align_to_mut::<ColorT>().1 };
+		let textures_pixels_casted = unsafe { self.portals_rendering_data.textures_pixels.align_to_mut::<ColorT>().1 };
 
 		for (portal_index, (portal, portal_info)) in frame_info
 			.portals
 			.iter()
-			.zip(portals_rendering_data.portals_info.iter())
+			.zip(self.portals_rendering_data.portals_info.iter())
 			.enumerate()
 		{
 			if portal_info.resolution[0] * portal_info.resolution[1] == 0
@@ -2038,6 +2013,17 @@ impl PartialRenderer
 				// This portal is not visible.
 				continue;
 			}
+
+			let renderer = if let Some(r) = &mut self.portals_rendering_data.renderer
+			{
+				r
+			}
+			else
+			{
+				// Portal/mirror depth limit reached.
+				// This is not a problem - just skip building buffers for portals and draw portals polygon with completely black texture.
+				continue;
+			};
 
 			let (portal_camera_matrices, visibility_search_start_leafs) = match &portal.view
 			{
@@ -2108,7 +2094,7 @@ impl PartialRenderer
 				height: portal_info.resolution[1] as usize,
 				pitch: portal_info.resolution[0] as usize,
 			};
-			portals_rendering_data.renderer.prepare_frame::<ColorT>(
+			renderer.prepare_frame::<ColorT>(
 				&surface_info,
 				frame_info,
 				&portal_camera_matrices,
@@ -2117,7 +2103,7 @@ impl PartialRenderer
 				debug_stats,
 			);
 
-			portals_rendering_data.renderer.draw_frame(
+			renderer.draw_frame(
 				&mut textures_pixels_casted[portal_info.texture_pixels_offset ..
 					portal_info.texture_pixels_offset +
 						(portal_info.resolution[0] * portal_info.resolution[1]) as usize],
@@ -3559,17 +3545,8 @@ impl PartialRenderer
 		portal_index: u32,
 	)
 	{
-		let portals_rendering_data = if let Some(d) = &self.portals_rendering_data
-		{
-			d
-		}
-		else
-		{
-			return;
-		};
-
 		let portal = &portals[portal_index as usize];
-		let portal_info = &portals_rendering_data.portals_info[portal_index as usize];
+		let portal_info = &self.portals_rendering_data.portals_info[portal_index as usize];
 
 		let area = portal_info.resolution[0] * portal_info.resolution[1];
 		if area == 0
@@ -3599,7 +3576,7 @@ impl PartialRenderer
 			vertices_clipped[.. vertex_count].copy_from_slice(&vertices_temp[.. vertex_count]);
 		}
 
-		let pixels_casted = unsafe { portals_rendering_data.textures_pixels.align_to::<ColorT>().1 };
+		let pixels_casted = unsafe { self.portals_rendering_data.textures_pixels.align_to::<ColorT>().1 };
 
 		let portal_pixels =
 			&pixels_casted[portal_info.texture_pixels_offset .. portal_info.texture_pixels_offset + (area as usize)];

@@ -310,7 +310,7 @@ pub fn create_dynamic_light_projector_shadow_map<'a>(
 
 pub struct PortalsRenderingData
 {
-	pub renderer: PartialRenderer,
+	pub renderer: Option<Box<PartialRenderer>>,
 	// Index of drawable portals polygons (not view point polygons).
 	pub portals_info: Vec<PortalInfo>,
 	// Store textures pixels as raw array.
