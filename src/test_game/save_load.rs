@@ -546,7 +546,7 @@ impl ResourceSerializationKey
 
 	fn to_resource<T>(self, resources: &ResourcesMap<T>) -> Option<resources_manager::SharedResourcePtr<T>>
 	{
-		resources.get(&self).map(|x| x.clone())
+		resources.get(&self).cloned()
 	}
 }
 

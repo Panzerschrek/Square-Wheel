@@ -310,7 +310,7 @@ fn spawn_regular_entity(
 						vertices: map.vertices
 							[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize]
 							.iter()
-							.map(|v| *v)
+							.copied()
 							.collect(),
 						blending_mode: get_entity_blending_mode(map_entity, map),
 					},
@@ -356,7 +356,7 @@ fn spawn_regular_entity(
 					vertices: map.vertices
 						[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize]
 						.iter()
-						.map(|v| *v)
+						.copied()
 						.collect(),
 					blending_mode: get_entity_blending_mode(map_entity, map),
 				},));
