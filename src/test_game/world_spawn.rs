@@ -346,8 +346,7 @@ fn spawn_regular_entity(
 					0.0
 				{
 					// Make sure mirror basis has proper orientation.
-					tex_coord_equation[0].vec *= -1.0;
-					tex_coord_equation[0].dist *= -1.0;
+					tex_coord_equation[0] = tex_coord_equation[0].get_inverted();
 				}
 
 				let entity = ecs.spawn((ViewPortal {
