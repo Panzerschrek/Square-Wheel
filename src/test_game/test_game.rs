@@ -554,9 +554,9 @@ impl Game
 		];
 
 		let tc_basis = [
-			Vec4f::new(0.5, 0.0, 0.0, 0.0),
-			Vec4f::new(0.0, 0.5, 0.0, 0.0),
-			Vec4f::new(0.0, 0.0, 0.5, 0.0),
+			Vec4f::new(2.0, 0.0, 0.0, 0.0),
+			Vec4f::new(0.0, 2.0, 0.0, 0.0),
+			Vec4f::new(0.0, 0.0, 1.0, 0.0),
 		];
 
 		let translate = Mat4f::from_translation(position);
