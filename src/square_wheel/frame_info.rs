@@ -138,6 +138,7 @@ pub struct ViewPortal
 	pub plane: Plane,
 	pub tex_coord_equation: [Plane; 2],
 	pub vertices: Vec<Vec3f>,
+	pub blending_mode: material::BlendingMode,
 }
 
 #[derive(Clone, Serialize, Deserialize)]

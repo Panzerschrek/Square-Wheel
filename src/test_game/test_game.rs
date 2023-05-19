@@ -545,7 +545,7 @@ impl Game
 	{
 		let (position, rotation) = self.get_camera_location();
 
-		let scale = 48.0;
+		let scale = 64.0;
 		let vertices = [
 			Vec3f::new(1.0, 1.0, 0.0),
 			Vec3f::new(1.0, -1.0, 0.0),
@@ -554,9 +554,9 @@ impl Game
 		];
 
 		let tc_basis = [
-			Vec4f::new(1.0, 0.0, 0.0, 0.0),
-			Vec4f::new(0.0, 1.0, 0.0, 0.0),
-			Vec4f::new(0.0, 0.0, 1.0, 0.0),
+			Vec4f::new(0.5, 0.0, 0.0, 0.0),
+			Vec4f::new(0.0, 0.5, 0.0, 0.0),
+			Vec4f::new(0.0, 0.0, 0.5, 0.0),
 		];
 
 		let translate = Mat4f::from_translation(position);
@@ -591,6 +591,7 @@ impl Game
 				.iter()
 				.map(|v| (mat * (scale * v).extend(1.0)).truncate())
 				.collect(),
+			blending_mode: material::BlendingMode::Average,
 		},));
 	}
 

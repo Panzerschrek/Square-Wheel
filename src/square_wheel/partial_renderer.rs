@@ -3611,7 +3611,7 @@ impl PartialRenderer
 			&portal_info.tex_coord_equation,
 			&portal_info.resolution,
 			portal_pixels,
-			material::BlendingMode::None,
+			portal.blending_mode,
 		);
 	}
 

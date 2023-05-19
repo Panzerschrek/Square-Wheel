@@ -312,6 +312,7 @@ fn spawn_regular_entity(
 							.iter()
 							.map(|v| *v)
 							.collect(),
+						blending_mode: get_entity_blending_mode(map_entity, map),
 					},
 					ViewPortalTargetLocationLinkComponent {},
 				));
@@ -358,6 +359,7 @@ fn spawn_regular_entity(
 						.iter()
 						.map(|v| *v)
 						.collect(),
+					blending_mode: get_entity_blending_mode(map_entity, map),
 				},));
 
 				add_entity_common_components(ecs, map, map_entity, entity);
