@@ -152,6 +152,7 @@ impl PartialRenderer
 		surface_info: &system_window::SurfaceInfo,
 		frame_info: &FrameInfo,
 		camera_matrices: &CameraMatrices,
+		visibility_search_start_leafs: Option<&[u32]>,
 		renderers_common_data: &RenderersCommonData,
 		debug_stats: &mut RendererDebugStats,
 	)
@@ -169,8 +170,19 @@ impl PartialRenderer
 
 			let frame_bounds =
 				ClippingPolygon::from_box(0.0, 0.0, surface_info.width as f32, surface_info.height as f32);
-			self.visibility_calculator
-				.update_visibility(camera_matrices, &frame_bounds);
+			if let Some(start_leafs) = visibility_search_start_leafs
+			{
+				self.visibility_calculator.update_visibility_with_start_leafs(
+					camera_matrices,
+					&frame_bounds,
+					start_leafs,
+				);
+			}
+			else
+			{
+				self.visibility_calculator
+					.update_visibility(camera_matrices, &frame_bounds);
+			}
 		});
 
 		self.prepare_dynamic_lights(frame_info, camera_matrices, &renderers_common_data.dynamic_lights_index);
@@ -2015,10 +2027,11 @@ impl PartialRenderer
 
 		let textures_pixels_casted = unsafe { portals_rendering_data.textures_pixels.align_to_mut::<ColorT>().1 };
 
-		for (portal, portal_info) in frame_info
+		for (portal_index, (portal, portal_info)) in frame_info
 			.portals
 			.iter()
 			.zip(portals_rendering_data.portals_info.iter())
+			.enumerate()
 		{
 			if portal_info.resolution[0] * portal_info.resolution[1] == 0
 			{
@@ -2026,17 +2039,20 @@ impl PartialRenderer
 				continue;
 			}
 
-			let portal_camera_matrices = match &portal.view
+			let (portal_camera_matrices, visibility_search_start_leafs) = match &portal.view
 			{
 				PortalView::CameraAtPosition { position, rotation } =>
 				{
 					let fov = std::f32::consts::PI * 0.5; // TODO - setup it properly.
-					build_view_matrix_with_full_rotation(
-						*position,
-						*rotation,
-						fov,
-						portal_info.resolution[0] as f32,
-						portal_info.resolution[1] as f32,
+					(
+						build_view_matrix_with_full_rotation(
+							*position,
+							*rotation,
+							fov,
+							portal_info.resolution[0] as f32,
+							portal_info.resolution[1] as f32,
+						),
+						None,
 					)
 				},
 				PortalView::Mirror {} =>
@@ -2075,11 +2091,15 @@ impl PartialRenderer
 					let z_scale = Mat4f::from_nonuniform_scale(1.0, 1.0, 1.0 / (dist_normalized * mip_scale));
 
 					let mirror_matrix = shift_to_viewport * z_scale * translate * tex_coord_basis;
-					CameraMatrices {
-						position: position_reflected,
-						view_matrix: mirror_matrix,
-						planes_matrix: mirror_matrix.transpose().invert().unwrap(),
-					}
+					(
+						CameraMatrices {
+							position: position_reflected,
+							view_matrix: mirror_matrix,
+							planes_matrix: mirror_matrix.transpose().invert().unwrap(),
+						},
+						// Start visible leafs search with leafs, where this mirror is located.
+						Some(renderers_common_data.portals_index.get_object_leafs(portal_index)),
+					)
 				},
 			};
 
@@ -2092,6 +2112,7 @@ impl PartialRenderer
 				&surface_info,
 				frame_info,
 				&portal_camera_matrices,
+				visibility_search_start_leafs,
 				renderers_common_data,
 				debug_stats,
 			);

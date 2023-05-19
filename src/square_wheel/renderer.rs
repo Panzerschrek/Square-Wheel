@@ -78,6 +78,7 @@ impl Renderer
 			surface_info,
 			frame_info,
 			&frame_info.camera_matrices,
+			None,
 			&self.common_data,
 			&mut self.debug_stats,
 		)
