@@ -2074,7 +2074,9 @@ impl PartialRenderer
 					shift_to_viewport.z.x = -portal_info.tc_min[0] as f32 + position_reflected_tex_coord_space.x;
 					shift_to_viewport.z.y = -portal_info.tc_min[1] as f32 + position_reflected_tex_coord_space.y;
 
-					let z_scale = Mat4f::from_nonuniform_scale(1.0, 1.0, 1.0 / (dist_normalized * mip_scale));
+					// Make sure mirror plane is Z_NEAR.
+					// Doing so we clip all geometry behind the mirror.
+					let z_scale = Mat4f::from_nonuniform_scale(Z_NEAR, Z_NEAR, Z_NEAR / (dist_normalized * mip_scale));
 
 					let mirror_matrix = shift_to_viewport * z_scale * translate * tex_coord_basis;
 					(
@@ -2210,7 +2212,7 @@ impl PartialRenderer
 		let skybox_view_matrix = camera_matrices.view_matrix * skybox_matrix;
 		let skybox_planes_matrix = camera_matrices.planes_matrix * skybox_matrix_inverse;
 
-		const SKY_SCALE: f32 = 4096.0; // use really huge scale, in order to prevent clipping in portals and mirrors.
+		const SKY_SCALE: f32 = 16384.0; // use really huge scale, in order to prevent clipping in portals and mirrors.
 
 		let box_vertices_transformed =
 			BOX_VERTICES.map(|v| view_matrix_transform_vertex(&skybox_view_matrix, &(Vec3f::from(v) * SKY_SCALE)));
@@ -4102,6 +4104,7 @@ const TC_ERROR_THRESHOLD: f32 = 0.75;
 pub const MAX_VERTICES: usize = 24;
 const MAX_LEAF_CLIP_PLANES: usize = 20;
 
+// TODO - increase it?
 const Z_NEAR: f32 = 1.0;
 
 // Returns number of result vertices. < 3 if polygon is clipped.
