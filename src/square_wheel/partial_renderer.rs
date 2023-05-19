@@ -3606,7 +3606,7 @@ impl PartialRenderer
 		draw_polygon(
 			rasterizer,
 			&clip_planes,
-			&vertices_clipped[.. std::cmp::min(MAX_VERTICES, portal.vertices.len())],
+			&vertices_clipped[.. vertex_count],
 			&portal_info.depth_equation,
 			&portal_info.tex_coord_equation,
 			&portal_info.resolution,
