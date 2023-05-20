@@ -227,9 +227,9 @@ impl PartialRenderer
 		});
 
 		performance_counters.portals_rendering.run_with_measure(|| {
-			self.prepare_portals_textures(frame_info, camera_matrices, &renderers_common_data.portals_index);
-			self.allocate_portals_pixels::<ColorT>();
-			self.build_portals_textures::<ColorT>(frame_info, camera_matrices, renderers_common_data, debug_stats);
+			self.prepare_view_portals_textures(frame_info, camera_matrices, &renderers_common_data.portals_index);
+			self.allocate_view_portals_pixels::<ColorT>();
+			self.build_view_portals_textures::<ColorT>(frame_info, camera_matrices, renderers_common_data, debug_stats);
 		});
 	}
 
@@ -1818,7 +1818,7 @@ impl PartialRenderer
 		}
 	}
 
-	fn prepare_portals_textures(
+	fn prepare_view_portals_textures(
 		&mut self,
 		frame_info: &FrameInfo,
 		camera_matrices: &CameraMatrices,
@@ -1982,7 +1982,7 @@ impl PartialRenderer
 		debug_assert!(self.portals_rendering_data.portals_info.len() == frame_info.portals.len());
 	}
 
-	fn allocate_portals_pixels<ColorT>(&mut self)
+	fn allocate_view_portals_pixels<ColorT>(&mut self)
 	{
 		// Resize textures pixels vector only up to avoid filling it with zeros each frame.
 		let target_size = self.portals_rendering_data.num_textures_pixels * std::mem::size_of::<ColorT>();
@@ -1992,7 +1992,7 @@ impl PartialRenderer
 		}
 	}
 
-	fn build_portals_textures<ColorT: AbstractColor>(
+	fn build_view_portals_textures<ColorT: AbstractColor>(
 		&mut self,
 		frame_info: &FrameInfo,
 		camera_matrices: &CameraMatrices,
