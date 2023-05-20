@@ -16,17 +16,19 @@ pub trait GameInterface: Send + Sync
 		false
 	}
 
-	fn get_frame_info(&self, surface_info: &system_window::SurfaceInfo) -> FrameInfo;
+	fn set_map(&mut self, map: Option<Arc<BSPMap>>);
+
+	// Returns None if has no active map or has one, but didn't want to show it.
+	fn get_frame_info(&self, surface_info: &system_window::SurfaceInfo) -> Option<FrameInfo>;
 
 	fn draw_frame_overlay(&self, _pixels: &mut [Color32], _surface_info: &system_window::SurfaceInfo) {}
+
+	fn get_draw_loading_screen_function(&self) -> LoadingStringDrawFunction;
 }
+
+pub type LoadingStringDrawFunction = fn(&mut [Color32], &system_window::SurfaceInfo, &str, usize);
 
 pub type GameInterfacePtr = Box<dyn GameInterface>;
 
-pub type GameCreationFunction = fn(
-	ConfigSharedPtr,
-	CommandsProcessorPtr,
-	ConsoleSharedPtr,
-	ResourcesManagerSharedPtr,
-	Arc<BSPMap>,
-) -> GameInterfacePtr;
+pub type GameCreationFunction =
+	fn(ConfigSharedPtr, CommandsProcessorPtr, ConsoleSharedPtr, ResourcesManagerSharedPtr) -> GameInterfacePtr;

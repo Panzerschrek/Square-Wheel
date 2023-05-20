@@ -1,6 +1,7 @@
 pub mod components;
+pub mod game;
+pub mod game_map;
 pub mod save_load;
-pub mod test_game;
 pub mod test_game_physics;
 pub mod world_spawn;
 pub mod world_update;
@@ -29,7 +30,7 @@ pub fn main()
 	let mut h = host::Host::new(
 		opt.config.unwrap_or_else(|| PathBuf::from("config.json")),
 		opt.exec,
-		|a, b, c, d, e| Box::new(test_game::Game::new(a, b, c, d, e)),
+		|a, b, c, d| Box::new(game::Game::new(a, b, c, d)),
 	);
 	loop
 	{

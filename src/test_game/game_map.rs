@@ -1,18 +1,18 @@
 use super::{
-	commands_processor, commands_queue, components::*, config, console, frame_info::*, game_interface::*,
-	resources_manager::*, test_game_physics, world_spawn, world_update,
+	commands_processor, commands_queue, components::*, console, frame_info::*, resources_manager::*, test_game_physics,
+	world_spawn, world_update,
 };
 use square_wheel_lib::common::{
 	bsp_map_compact, color::*, material, math_types::*, matrix::*, plane::*, system_window,
 };
 use std::sync::Arc;
 
-pub struct Game
+pub struct GameMap
 {
 	commands_processor: commands_processor::CommandsProcessorPtr,
 	console: console::ConsoleSharedPtr,
 	resources_manager: ResourcesManagerSharedPtr,
-	commands_queue: commands_queue::CommandsQueuePtr<Game>,
+	commands_queue: commands_queue::CommandsQueuePtr<GameMap>,
 	commands_queue_dyn: commands_queue::CommandsQueueDynPtr,
 	map: Arc<bsp_map_compact::BSPMap>,
 	physics: test_game_physics::TestGamePhysics,
@@ -23,10 +23,9 @@ pub struct Game
 	camera_view_offset: Vec3f,
 }
 
-impl Game
+impl GameMap
 {
 	pub fn new(
-		_config: config::ConfigSharedPtr,
 		commands_processor: commands_processor::CommandsProcessorPtr,
 		console: console::ConsoleSharedPtr,
 		resources_manager: ResourcesManagerSharedPtr,
@@ -34,26 +33,26 @@ impl Game
 	) -> Self
 	{
 		let commands_queue = commands_queue::CommandsQueue::new(vec![
-			("get_pos", Game::command_get_pos),
-			("set_pos", Game::command_set_pos),
-			("get_angles", Game::command_get_angles),
-			("set_angles", Game::command_set_angles),
-			("add_test_light", Game::command_add_test_light),
-			("add_test_projector_light", Game::command_add_test_projector_light),
-			("reset_test_lights", Game::command_reset_test_lights),
-			("add_test_model", Game::command_add_test_model),
-			("reset_test_models", Game::command_reset_test_models),
-			("add_test_decal", Game::command_add_test_decal),
-			("reset_test_decals", Game::command_reset_test_decals),
-			("add_test_sprite", Game::command_add_test_sprite),
-			("reset_test_sprites", Game::command_reset_test_sprites),
-			("set_view_model", Game::command_set_view_model),
-			("reset_view_model", Game::command_reset_view_model),
-			("add_test_mirror", Game::command_add_test_mirror),
-			("reset_test_mirrors", Game::command_reset_test_mirrors),
-			("noclip", Game::command_noclip),
-			("save", Game::command_save),
-			("load", Game::command_load),
+			("get_pos", Self::command_get_pos),
+			("set_pos", Self::command_set_pos),
+			("get_angles", Self::command_get_angles),
+			("set_angles", Self::command_set_angles),
+			("add_test_light", Self::command_add_test_light),
+			("add_test_projector_light", Self::command_add_test_projector_light),
+			("reset_test_lights", Self::command_reset_test_lights),
+			("add_test_model", Self::command_add_test_model),
+			("reset_test_models", Self::command_reset_test_models),
+			("add_test_decal", Self::command_add_test_decal),
+			("reset_test_decals", Self::command_reset_test_decals),
+			("add_test_sprite", Self::command_add_test_sprite),
+			("reset_test_sprites", Self::command_reset_test_sprites),
+			("set_view_model", Self::command_set_view_model),
+			("reset_view_model", Self::command_reset_view_model),
+			("add_test_mirror", Self::command_add_test_mirror),
+			("reset_test_mirrors", Self::command_reset_test_mirrors),
+			("noclip", Self::command_noclip),
+			("save", Self::command_save),
+			("load", Self::command_load),
 		]);
 
 		let commands_queue_dyn = commands_queue.clone() as commands_queue::CommandsQueueDynPtr;
@@ -687,11 +686,8 @@ impl Game
 			self.console.lock().unwrap().add_text("Failed to load".to_string());
 		}
 	}
-}
 
-impl GameInterface for Game
-{
-	fn update(
+	pub fn update(
 		&mut self,
 		keyboard_state: &system_window::KeyboardState,
 		events: &[sdl2::event::Event],
@@ -747,12 +743,12 @@ impl GameInterface for Game
 		world_update::update_camera_portals_locations(&mut self.ecs);
 	}
 
-	fn grab_mouse_input(&self) -> bool
+	pub fn grab_mouse_input(&self) -> bool
 	{
 		true
 	}
 
-	fn get_frame_info(&self, surface_info: &system_window::SurfaceInfo) -> FrameInfo
+	pub fn get_frame_info(&self, surface_info: &system_window::SurfaceInfo) -> FrameInfo
 	{
 		let (pos, angles) = self.get_camera_location();
 
@@ -784,7 +780,7 @@ impl GameInterface for Game
 		}
 	}
 
-	fn draw_frame_overlay(&self, pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo)
+	pub fn draw_frame_overlay(&self, pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo)
 	{
 		let center_x = surface_info.width / 2;
 		let center_y = surface_info.height / 2;
@@ -810,7 +806,7 @@ impl GameInterface for Game
 	}
 }
 
-impl Drop for Game
+impl Drop for GameMap
 {
 	fn drop(&mut self)
 	{

@@ -20,7 +20,7 @@ pub struct Host
 	postprocessor: Postprocessor,
 	frame_upscaler: FrameUpscaler,
 	resources_manager: ResourcesManagerSharedPtr,
-	game_creation_function: GameCreationFunction,
+	game: GameInterfacePtr,
 	active_map: Option<ActiveMap>,
 	prev_time: std::time::Instant,
 	prev_frame_end_time: std::time::Instant,
@@ -32,7 +32,6 @@ pub struct Host
 
 struct ActiveMap
 {
-	game: GameInterfacePtr,
 	renderer: renderer::Renderer,
 	debug_stats_printer: DebugStatsPrinter,
 }
@@ -99,18 +98,20 @@ impl Host
 
 		host_config.update_app_config(&app_config); // Update JSON with struct fields.
 
+		let resources_manager = ResourcesManager::new(app_config.clone(), console.clone());
+
 		let mut host = Host {
 			config_file_path,
 			app_config: app_config.clone(),
 			config: host_config,
 			commands_queue,
-			commands_processor,
+			commands_processor: commands_processor.clone(),
 			console: console.clone(),
 			window: system_window::SystemWindow::new(),
 			postprocessor: Postprocessor::new(app_config.clone()),
 			frame_upscaler: FrameUpscaler::new(),
-			resources_manager: ResourcesManager::new(app_config, console),
-			game_creation_function,
+			resources_manager: resources_manager.clone(),
+			game: game_creation_function(app_config, commands_processor, console, resources_manager),
 			active_map: None,
 			prev_time: cur_time,
 			prev_frame_end_time: cur_time,
@@ -258,14 +259,7 @@ impl Host
 
 		let console_is_active = self.console.lock().unwrap().is_active();
 		{
-			let game_grab_mouse_input = if let Some(active_map) = &self.active_map
-			{
-				active_map.game.grab_mouse_input()
-			}
-			else
-			{
-				false
-			};
+			let game_grab_mouse_input = self.game.grab_mouse_input();
 			self.window
 				.set_relative_mouse(game_grab_mouse_input && !console_is_active);
 		}
@@ -294,6 +288,7 @@ impl Host
 		let window = &mut self.window;
 		let postprocessor = &mut self.postprocessor;
 		let frame_upscaler = &mut self.frame_upscaler;
+		let game = &mut self.game;
 		let active_map = &mut self.active_map;
 		let console = self.console.clone();
 		let fps_counter = &mut self.fps_counter;
@@ -310,23 +305,20 @@ impl Host
 		// First, only prepare frame without accessing surface pixels.
 		let surface_info_initial = window.get_window_surface_info();
 		let mut prepare_frame_func = || {
-			if let Some(active_map) = active_map
+			// Process game logic.
+			game.update(&keyboard_state, &events, time_delta_s);
+			// Perform rendering frame preparation.
+			if frame_scale > 1
 			{
-				// Process game logic.
-				active_map.game.update(&keyboard_state, &events, time_delta_s);
+				// In case of scaled buffer perform frame preparation, rendering and postprocessing now.
 
-				// Perform rendering frame preparation.
-				if frame_scale > 1
+				let (pixels_scaled, surface_info_scaled) =
+					frame_upscaler.get_draw_buffer(&surface_info_initial, frame_scale as usize);
+
+				// Get frame info from game code.
+				frame_info = game.get_frame_info(&surface_info_scaled);
+				if let (Some(active_map), Some(frame_info_ref)) = (active_map.as_mut(), frame_info.as_ref())
 				{
-					// In case of scaled buffer perform frame preparation, rendering and postprocessing now.
-
-					let (pixels_scaled, surface_info_scaled) =
-						frame_upscaler.get_draw_buffer(&surface_info_initial, frame_scale as usize);
-
-					// Get frame info from game code.
-					frame_info = Some(active_map.game.get_frame_info(&surface_info_scaled));
-					let frame_info_ref = frame_info.as_ref().unwrap();
-
 					if postprocessor.use_hdr_rendering()
 					{
 						let hdr_buffer_size = [surface_info_scaled.width, surface_info_scaled.height];
@@ -369,15 +361,16 @@ impl Host
 							&mut active_map.debug_stats_printer,
 						);
 					}
-
-					active_map.game.draw_frame_overlay(pixels_scaled, &surface_info_scaled);
 				}
-				else
-				{
-					// Get frame info from game code.
-					frame_info = Some(active_map.game.get_frame_info(&surface_info_initial));
-					let frame_info_ref = frame_info.as_ref().unwrap();
 
+				game.draw_frame_overlay(pixels_scaled, &surface_info_scaled);
+			}
+			else
+			{
+				// Get frame info from game code.
+				frame_info = game.get_frame_info(&surface_info_initial);
+				if let (Some(active_map), Some(frame_info_ref)) = (active_map.as_mut(), frame_info.as_ref())
+				{
 					if postprocessor.use_hdr_rendering()
 					{
 						// Postprocessing is enabled - perform frame preparation and rendering.
@@ -455,20 +448,14 @@ impl Host
 				return;
 			}
 
-			if let Some(active_map) = active_map
+			if frame_scale > 1
 			{
-				if frame_scale > 1
-				{
-					// In case of scaled buffer just perform upscaling into screen buffer.
-
-					frame_upscaler.perform_upscale(
-						pixels,
-						surface_info,
-						frame_scale as usize,
-						frame_resize_interpolate,
-					);
-				}
-				else
+				// In case of scaled buffer just perform upscaling into screen buffer.
+				frame_upscaler.perform_upscale(pixels, surface_info, frame_scale as usize, frame_resize_interpolate);
+			}
+			else
+			{
+				if let (Some(active_map), Some(frame_info_ref)) = (active_map.as_mut(), frame_info.as_ref())
 				{
 					if postprocessor.use_hdr_rendering()
 					{
@@ -483,7 +470,6 @@ impl Host
 					else
 					{
 						// No intermediate buffer or postprocessing - perform rendering directly into screen buffer.
-						let frame_info_ref = frame_info.as_ref().unwrap();
 						active_map.renderer.draw_frame(
 							pixels,
 							surface_info,
@@ -491,19 +477,14 @@ impl Host
 							&mut active_map.debug_stats_printer,
 						);
 					}
-
-					active_map.game.draw_frame_overlay(pixels, surface_info);
 				}
 
-				active_map.debug_stats_printer.flush(pixels, surface_info);
+				game.draw_frame_overlay(pixels, surface_info);
 			}
-			else
+
+			if let Some(active_map) = active_map
 			{
-				// Just clear background. TODO - maybe draw some background pattern or image?
-				for pixel in pixels.iter_mut()
-				{
-					*pixel = Color32::black();
-				}
+				active_map.debug_stats_printer.flush(pixels, surface_info);
 			}
 
 			console.lock().unwrap().draw(pixels, surface_info);
@@ -553,14 +534,16 @@ impl Host
 				.add_text("Expected map file name".to_string());
 			return;
 		}
+		self.game.set_map(None);
 		self.active_map = None;
 
 		let map_name = &args[0];
 
-		let loading_text = format!("Loading map \"{}\"", map_name);
-
 		let map_loading_start_time = std::time::Instant::now();
-		self.console.lock().unwrap().add_text(loading_text.clone());
+		self.console
+			.lock()
+			.unwrap()
+			.add_text(format!("Loading map \"{}\"", map_name));
 
 		// Fade current image.
 		self.window.update_window_surface(|pixels, _surface_info| {
@@ -572,10 +555,10 @@ impl Host
 		self.window.swap_buffers();
 
 		let resources_manager = &self.resources_manager;
-		let game_creation_function = self.game_creation_function;
+		let game = &mut self.game;
+		let loading_screen_draw_function = game.get_draw_loading_screen_function();
 		let active_map = &mut self.active_map;
 		let app_config = &self.app_config;
-		let commands_processor = &self.commands_processor;
 		let console = &self.console;
 		let config = &self.config;
 		let window = &mut self.window;
@@ -589,16 +572,8 @@ impl Host
 				if let Some(map) = map_opt
 				{
 					// Create game and renderer in parallel in order to reduce total loading time.
-					let (game, renderer) = rayon::join(
-						|| {
-							game_creation_function(
-								app_config.clone(),
-								commands_processor.clone(),
-								console.clone(),
-								resources_manager.clone(),
-								map.clone(),
-							)
-						},
+					let (_, renderer) = rayon::join(
+						|| game.set_map(Some(map.clone())),
 						|| {
 							renderer::Renderer::new(
 								resources_manager.clone(),
@@ -610,7 +585,6 @@ impl Host
 					);
 
 					*active_map = Some(ActiveMap {
-						game,
 						renderer,
 						debug_stats_printer: DebugStatsPrinter::new(config.show_debug_stats),
 					});
@@ -627,7 +601,12 @@ impl Host
 			{
 				// Process events while loading map, but ignore them, because we have no way to do something while loading the map (quit, abort, etc.).
 				let _events = window.get_events();
-				draw_loading_screen(window, &loading_text, step);
+
+				window.update_window_surface(|pixels, surface_info| {
+					loading_screen_draw_function(pixels, surface_info, map_name, step)
+				});
+				window.swap_buffers();
+
 				step += 1;
 
 				if done.load(atomic::Ordering::SeqCst)
@@ -685,60 +664,4 @@ impl Drop for Host
 	{
 		config::save(&self.app_config.lock().unwrap(), &self.config_file_path);
 	}
-}
-
-fn draw_loading_screen(window: &mut system_window::SystemWindow, loading_text: &str, step: usize)
-{
-	let progress_bar_cells = [
-		[0, 0],
-		[1, 0],
-		[2, 0],
-		[3, 0],
-		[3, 1],
-		[3, 2],
-		[3, 3],
-		[2, 3],
-		[1, 3],
-		[0, 3],
-		[0, 2],
-		[0, 1],
-	];
-
-	let cell_size = 16;
-	let padding = 1;
-
-	let current_step = step % progress_bar_cells.len();
-
-	window.update_window_surface(|pixels, surface_info| {
-		for (cell_index, cell) in progress_bar_cells.iter().enumerate()
-		{
-			let start_x = surface_info.width / 2 - cell_size * 2;
-			let start_y = surface_info.height / 2 + cell_size * 2;
-
-			let dist = (progress_bar_cells.len() + cell_index - current_step) % progress_bar_cells.len();
-			let brightness = (255 * dist / progress_bar_cells.len()) as u8;
-			let color = Color32::from_rgb(brightness, brightness, brightness);
-
-			for y in start_y + cell[1] * cell_size + padding .. start_y + (cell[1] + 1) * cell_size - padding
-			{
-				let dst_line = &mut pixels[y * surface_info.pitch .. (y + 1) * surface_info.pitch];
-				for pixel in &mut dst_line
-					[start_x + cell[0] * cell_size + padding .. start_x + (cell[0] + 1) * cell_size - padding]
-				{
-					*pixel = color;
-				}
-			}
-		}
-
-		text_printer::print(
-			pixels,
-			surface_info,
-			loading_text,
-			((surface_info.width / 2) as i32) - ((loading_text.len() * text_printer::GLYPH_WIDTH / 2) as i32),
-			((surface_info.height / 2) as i32) - ((text_printer::GLYPH_HEIGHT / 2) as i32),
-			Color32::from_rgb(255, 255, 255),
-		);
-	});
-
-	window.swap_buffers();
 }
