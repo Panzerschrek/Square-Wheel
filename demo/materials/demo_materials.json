@@ -107,6 +107,16 @@
 		"diffuse": "marble_trim.png",
 		"roughness": 0.001
 	},
+	"mirror":
+	{
+		"diffuse": "mirror.png",
+		"light" : false
+	},
+	"portal":
+	{
+		"diffuse": "portal.png",
+		"portal" : false
+	},
 	"roof_tiles":
 	{
 		"diffuse": "roof_tiles.png",

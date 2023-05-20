@@ -2,7 +2,9 @@ use super::{
 	commands_processor, commands_queue, components::*, config, console, frame_info::*, game_interface::*,
 	resources_manager::*, test_game_physics, world_spawn, world_update,
 };
-use square_wheel_lib::common::{bsp_map_compact, color::*, material, math_types::*, matrix::*, system_window};
+use square_wheel_lib::common::{
+	bsp_map_compact, color::*, material, math_types::*, matrix::*, plane::*, system_window,
+};
 use std::sync::Arc;
 
 pub struct Game
@@ -47,6 +49,8 @@ impl Game
 			("reset_test_sprites", Game::command_reset_test_sprites),
 			("set_view_model", Game::command_set_view_model),
 			("reset_view_model", Game::command_reset_view_model),
+			("add_test_mirror", Game::command_add_test_mirror),
+			("reset_test_mirrors", Game::command_reset_test_mirrors),
 			("noclip", Game::command_noclip),
 			("save", Game::command_save),
 			("load", Game::command_load),
@@ -538,6 +542,72 @@ impl Game
 		}
 	}
 
+	fn command_add_test_mirror(&mut self, _args: commands_queue::CommandArgs)
+	{
+		let (position, rotation) = self.get_camera_location();
+
+		let scale = 64.0;
+		let vertices = [
+			Vec3f::new(1.0, 1.0, 0.0),
+			Vec3f::new(1.0, -1.0, 0.0),
+			Vec3f::new(-1.0, -1.0, 0.0),
+			Vec3f::new(-1.0, 1.0, 0.0),
+		];
+
+		let tc_basis = [
+			Vec4f::new(2.0, 0.0, 0.0, 0.0),
+			Vec4f::new(0.0, 2.0, 0.0, 0.0),
+			Vec4f::new(0.0, 0.0, 1.0, 0.0),
+		];
+
+		let translate = Mat4f::from_translation(position);
+		let rotate = Mat4f::from(rotation) * Mat4f::from_angle_y(-Rad(std::f32::consts::PI * 0.5));
+
+		let mat = translate * rotate;
+		let plane_mat = mat.transpose().invert().unwrap();
+
+		let basis_transformed = [
+			plane_mat * tc_basis[0],
+			plane_mat * tc_basis[1],
+			plane_mat * tc_basis[2],
+		];
+
+		self.ecs.spawn((
+			ViewPortal {
+				view: PortalView::Mirror {},
+				plane: Plane {
+					vec: basis_transformed[2].truncate(),
+					dist: -basis_transformed[2].w,
+				},
+				tex_coord_equation: [
+					Plane {
+						vec: basis_transformed[0].truncate(),
+						dist: basis_transformed[0].w,
+					},
+					Plane {
+						vec: basis_transformed[1].truncate(),
+						dist: basis_transformed[1].w,
+					},
+				],
+				vertices: vertices
+					.iter()
+					.map(|v| (mat * (scale * v).extend(1.0)).truncate())
+					.collect(),
+				blending_mode: material::BlendingMode::Average,
+			},
+			TestMirrorComponent {},
+		));
+	}
+
+	fn command_reset_test_mirrors(&mut self, _args: commands_queue::CommandArgs)
+	{
+		for (id, (_test_mirror_component,)) in self.ecs.query_mut::<(&TestMirrorComponent,)>()
+		{
+			self.ecs_command_buffer.despawn(id)
+		}
+		self.ecs_command_buffer.run_on(&mut self.ecs);
+	}
+
 	fn command_noclip(&mut self, _args: commands_queue::CommandArgs)
 	{
 		let mut q = self
@@ -674,6 +744,7 @@ impl GameInterface for Game
 		world_update::update_decals_locations(&mut self.ecs);
 		world_update::update_sprites_locations(&mut self.ecs);
 		world_update::update_dynamic_lights_locations(&mut self.ecs);
+		world_update::update_camera_portals_locations(&mut self.ecs);
 	}
 
 	fn grab_mouse_input(&self) -> bool
@@ -709,6 +780,7 @@ impl GameInterface for Game
 			model_entities: self.collect_drawable_components(),
 			decals: self.collect_drawable_components(),
 			sprites: self.collect_drawable_components(),
+			portals: self.collect_drawable_components(),
 		}
 	}
 

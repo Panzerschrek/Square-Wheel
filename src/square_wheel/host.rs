@@ -593,7 +593,12 @@ impl Host
 					self.resources_manager.clone(),
 					map.clone(),
 				),
-				renderer: renderer::Renderer::new(self.resources_manager.clone(), self.app_config.clone(), map.clone()),
+				renderer: renderer::Renderer::new(
+					self.resources_manager.clone(),
+					self.app_config.clone(),
+					self.console.clone(),
+					map.clone(),
+				),
 				debug_stats_printer: DebugStatsPrinter::new(self.config.show_debug_stats),
 			});
 

@@ -2,8 +2,8 @@ use super::{
 	equations::*,
 	inline_models_index::*,
 	map_visibility_calculator::*,
+	partial_renderer::{project_and_clip_polygon, MAX_VERTICES},
 	rasterizer::*,
-	renderer::{project_and_clip_polygon, MAX_VERTICES},
 	resources_manager::*,
 };
 use crate::common::{bsp_map_compact, clipping_polygon::*, fixed_math::*, math_types::*, matrix::*};

@@ -1,6 +1,6 @@
 use super::{
-	dynamic_objects_index::*, equations::*, frame_info::*, frame_number::*, light::*, performance_counter::*,
-	surfaces::*,
+	dynamic_objects_index::*, equations::*, frame_info::*, frame_number::*, inline_models_index::*, light::*,
+	map_materials_processor::*, partial_renderer::PartialRenderer, performance_counter::*, surfaces::*,
 };
 use crate::common::{bsp_map_compact, clipping_polygon::*, math_types::*, matrix::*, plane::*};
 
@@ -12,6 +12,7 @@ pub struct RendererPerformanceCounters
 	pub surfaces_preparation: PerformanceCounter,
 	pub shadow_maps_building: PerformanceCounter,
 	pub background_fill: PerformanceCounter,
+	pub portals_rendering: PerformanceCounter,
 	pub rasterization: PerformanceCounter,
 }
 
@@ -27,9 +28,46 @@ impl RendererPerformanceCounters
 			surfaces_preparation: PerformanceCounter::new(window_size),
 			shadow_maps_building: PerformanceCounter::new(window_size),
 			background_fill: PerformanceCounter::new(window_size),
+			portals_rendering: PerformanceCounter::new(window_size),
 			rasterization: PerformanceCounter::new(window_size),
 		}
 	}
+}
+
+#[derive(Default)]
+pub struct RendererDebugStats
+{
+	pub num_visible_leafs: usize,
+	pub num_visible_submodels_parts: usize,
+	pub num_visible_meshes: usize,
+	pub num_visible_meshes_parts: usize,
+	pub num_triangles: usize,
+	pub num_triangle_vertices: usize,
+	pub num_decals: usize,
+	pub num_decals_leafs_parts: usize,
+	pub num_sprites: usize,
+	pub num_sprites_leafs_parts: usize,
+	pub num_visible_lights: usize,
+	pub num_visible_lights_with_shadow: usize,
+	pub num_visible_portals: usize,
+	pub num_portals_pixels: usize,
+	pub num_visible_polygons: usize,
+	pub num_surfaces_pixels: usize,
+}
+
+// Data shared across multiple PartialRenderer instances (independent on view point).
+pub struct RenderersCommonData
+{
+	pub materials_processor: MapMaterialsProcessor,
+	pub inline_models_index: InlineModelsIndex,
+	pub dynamic_models_index: DynamicObjectsIndex,
+	pub decals_index: DynamicObjectsIndex,
+	pub sprites_index: DynamicObjectsIndex,
+	pub dynamic_lights_index: DynamicObjectsIndex,
+	// Index of drawable portals polygons (not view point polygons).
+	pub portals_index: DynamicObjectsIndex,
+	// Store precalculated list of clip planes for each leaf in order to clip dynamic objects with these planes.
+	pub leafs_planes: Vec<LeafClipPlanes>,
 }
 
 pub type LeafClipPlanes = Vec<Plane>;
@@ -268,4 +306,28 @@ pub fn create_dynamic_light_projector_shadow_map<'a>(
 		basis_y: rotation.rotate_vector(Vec3f::unit_z()) * inv_half_fov_tan,
 		basis_z: rotation.rotate_vector(-Vec3f::unit_x()),
 	}
+}
+
+pub struct PortalsRenderingData
+{
+	pub renderer: Option<Box<PartialRenderer>>,
+	// Index of drawable portals polygons (not view point polygons).
+	pub portals_info: Vec<PortalInfo>,
+	// Store textures pixels as raw array.
+	// Use specific color while preparing surfaces or performing rasterization.
+	// TODO - make sure alignment is correct.
+	pub textures_pixels: Vec<u8>,
+	pub num_textures_pixels: usize,
+}
+
+#[derive(Copy, Clone, Default)]
+pub struct PortalInfo
+{
+	pub resolution: [u32; 2], // zero if invisible
+	pub texture_pixels_offset: usize,
+	// Projected equations for current frame.
+	pub depth_equation: DepthEquation,
+	pub tex_coord_equation: TexCoordEquation,
+	pub tc_min: [i32; 2],
+	pub mip: u32,
 }

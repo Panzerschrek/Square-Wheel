@@ -1312,7 +1312,7 @@ pub fn split_long_polygons(polygons: &[Polygon], materials: &material::Materials
 		let mut need_split = true;
 		if let Some(material) = materials.get(&polygon.texture_info.texture)
 		{
-			if !material.light && material.skybox.is_some()
+			if !material.light || material.skybox.is_some()
 			{
 				need_split = false;
 			}

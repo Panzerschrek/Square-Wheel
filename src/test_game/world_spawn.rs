@@ -292,6 +292,79 @@ fn spawn_regular_entity(
 				add_entity_common_components(ecs, map, map_entity, entity);
 			}
 		},
+		Some("func_camera_portal") =>
+		{
+			let index = map_entity.submodel_index as usize;
+			if index < map.submodels.len() && map.submodels[index].num_polygons > 0
+			{
+				let polygon = &map.polygons[map.submodels[index].first_polygon as usize];
+
+				let entity = ecs.spawn((
+					ViewPortal {
+						view: PortalView::CameraAtPosition {
+							position: Vec3f::zero(),
+							rotation: QuaternionF::one(),
+							fov: Rad(get_entity_f32(map_entity, map, "fov").unwrap_or(90.0) * TO_RAD),
+						},
+						plane: polygon.plane,
+						tex_coord_equation: polygon.tex_coord_equation,
+						vertices: map.vertices
+							[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize]
+							.iter()
+							.copied()
+							.collect(),
+						blending_mode: get_entity_blending_mode(map_entity, map),
+					},
+					ViewPortalTargetLocationLinkComponent {},
+				));
+
+				add_entity_common_components(ecs, map, map_entity, entity);
+			}
+		},
+		Some("info_camera_portal_target") =>
+		{
+			if let Some(origin) = get_entity_origin(map_entity, map)
+			{
+				let entity = ecs.spawn((LocationComponent {
+					position: origin,
+					rotation: get_entity_rotation(map_entity, map),
+				},));
+				add_entity_common_components(ecs, map, map_entity, entity);
+			}
+		},
+		Some("func_mirror") =>
+		{
+			let index = map_entity.submodel_index as usize;
+			if index < map.submodels.len() && map.submodels[index].num_polygons > 0
+			{
+				let polygon = &map.polygons[map.submodels[index].first_polygon as usize];
+
+				let mut tex_coord_equation = polygon.tex_coord_equation;
+				if tex_coord_equation[0]
+					.vec
+					.cross(tex_coord_equation[1].vec)
+					.dot(polygon.plane.vec) <
+					0.0
+				{
+					// Make sure mirror basis has proper orientation.
+					tex_coord_equation[0] = tex_coord_equation[0].get_inverted();
+				}
+
+				let entity = ecs.spawn((ViewPortal {
+					view: PortalView::Mirror {},
+					plane: polygon.plane,
+					tex_coord_equation: tex_coord_equation,
+					vertices: map.vertices
+						[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize]
+						.iter()
+						.copied()
+						.collect(),
+					blending_mode: get_entity_blending_mode(map_entity, map),
+				},));
+
+				add_entity_common_components(ecs, map, map_entity, entity);
+			}
+		},
 		Some("misc_model") =>
 		{
 			if let (Some(model_file_name), Some(origin)) = (

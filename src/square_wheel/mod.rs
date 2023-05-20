@@ -21,6 +21,7 @@ pub mod inline_models_index;
 pub mod light;
 pub mod map_materials_processor;
 pub mod map_visibility_calculator;
+pub mod partial_renderer;
 pub mod performance_counter;
 pub mod postprocessor;
 pub mod postprocessor_config;

@@ -843,6 +843,32 @@ pub fn update_dynamic_lights_locations(ecs: &mut hecs::World)
 	}
 }
 
+pub fn update_camera_portals_locations(ecs: &mut hecs::World)
+{
+	// Update location of camera portals, using location of target.
+	for (_id, (view_portal, _camera_portal_target_location_link_component, target_name_component)) in ecs
+		.query::<(
+			&mut ViewPortal,
+			&ViewPortalTargetLocationLinkComponent,
+			&TargetNameComponent,
+		)>()
+		.iter()
+	{
+		if let PortalView::CameraAtPosition { position, rotation, .. } = &mut view_portal.view
+		{
+			for (_target_id, (named_target_component, location_component)) in
+				ecs.query::<(&NamedTargetComponent, &LocationComponent)>().iter()
+			{
+				if named_target_component.name == target_name_component.name
+				{
+					*position = location_component.position;
+					*rotation = location_component.rotation;
+				}
+			}
+		}
+	}
+}
+
 fn move_towards_target(position: &Vec3f, target_position: &Vec3f, speed: f32, time_delta: f32) -> Vec3f
 {
 	let step = speed * time_delta;

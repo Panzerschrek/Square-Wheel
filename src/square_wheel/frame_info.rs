@@ -1,5 +1,5 @@
 use super::{resources_manager::*, textures::*, triangle_model::*};
-use crate::common::{bbox::*, material, math_types::*, matrix::*};
+use crate::common::{bbox::*, material, math_types::*, matrix::*, plane::*};
 use serde::{Deserialize, Serialize};
 
 pub struct FrameInfo
@@ -12,6 +12,7 @@ pub struct FrameInfo
 	pub decals: Vec<Decal>,
 	pub sprites: Vec<Sprite>,
 	pub lights: Vec<DynamicLight>,
+	pub portals: Vec<ViewPortal>,
 	pub skybox_rotation: QuaternionF,
 }
 
@@ -128,4 +129,26 @@ pub enum DynamicLightShadowType
 		rotation: QuaternionF,
 		fov: RadiansF,
 	},
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ViewPortal
+{
+	pub view: PortalView,
+	pub plane: Plane,
+	pub tex_coord_equation: [Plane; 2],
+	pub vertices: Vec<Vec3f>,
+	pub blending_mode: material::BlendingMode,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub enum PortalView
+{
+	CameraAtPosition
+	{
+		position: Vec3f,
+		rotation: QuaternionF,
+		fov: RadiansF,
+	},
+	Mirror {},
 }

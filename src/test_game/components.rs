@@ -15,6 +15,8 @@ pub struct TestDecalComponent {}
 pub struct TestSpriteComponent {}
 #[derive(Serialize, Deserialize)]
 pub struct TestLightComponent {}
+#[derive(Serialize, Deserialize)]
+pub struct TestMirrorComponent {}
 
 #[derive(Serialize, Deserialize)]
 pub struct TestProjectileComponent
@@ -100,6 +102,10 @@ pub struct SpriteLocationLinkComponent {}
 // Component that sets DynamicLight position/rotation using LocationComponent.
 #[derive(Serialize, Deserialize)]
 pub struct DynamicLightLocationLinkComponent {}
+
+// Component that sets ViewPortal position/rotation using target location.
+#[derive(Serialize, Deserialize)]
+pub struct ViewPortalTargetLocationLinkComponent {}
 
 // Just play animation consisting of all model frames.
 #[derive(Serialize, Deserialize)]

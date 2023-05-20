@@ -1,7 +1,7 @@
 use super::math_types::*;
 
 #[repr(C)] // Require C representation in order to get stable fileds order for binary serialization.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Plane
 {
 	pub vec: Vec3f, // Unnormalized direction

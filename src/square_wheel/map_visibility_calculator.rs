@@ -54,9 +54,25 @@ impl MapVisibilityCalculator
 		self.current_frame.next();
 		let root_node = bsp_map_compact::get_root_node_index(&self.map);
 		let current_leaf = self.find_current_leaf(root_node, &camera_matrices.planes_matrix);
-		self.mark_reachable_leafs_iterative(current_leaf, camera_matrices, &frame_bounds);
+		self.mark_reachable_leafs_iterative(&[current_leaf], camera_matrices, &frame_bounds);
 
 		self.is_inside_leaf_volume = self.is_inside_leaf_volume(camera_matrices, current_leaf);
+	}
+
+	// Use this method for portals or mirrors
+	// - where camera position can be far away from actual visibility search start point (position of portal or mirror).
+	pub fn update_visibility_with_start_leafs(
+		&mut self,
+		camera_matrices: &CameraMatrices,
+		frame_bounds: &ClippingPolygon,
+		start_leafs: &[u32],
+	)
+	{
+		self.current_frame.next();
+		self.mark_reachable_leafs_iterative(start_leafs, camera_matrices, &frame_bounds);
+
+		// Can't properly determine this.
+		self.is_inside_leaf_volume = true;
 	}
 
 	pub fn get_current_frame_leaf_bounds(&self, leaf_index: u32) -> Option<ClippingPolygon>
@@ -101,7 +117,7 @@ impl MapVisibilityCalculator
 
 	fn mark_reachable_leafs_iterative(
 		&mut self,
-		start_leaf: u32,
+		start_leafs: &[u32],
 		camera_matrices: &CameraMatrices,
 		start_bounds: &ClippingPolygon,
 	)
@@ -112,9 +128,12 @@ impl MapVisibilityCalculator
 		cur_wave.clear();
 		next_wave.clear();
 
-		cur_wave.push(start_leaf);
-		self.leafs_data[start_leaf as usize].current_frame_bounds = *start_bounds;
-		self.leafs_data[start_leaf as usize].visible_frame = self.current_frame;
+		for &start_leaf in start_leafs
+		{
+			cur_wave.push(start_leaf);
+			self.leafs_data[start_leaf as usize].current_frame_bounds = *start_bounds;
+			self.leafs_data[start_leaf as usize].visible_frame = self.current_frame;
+		}
 
 		let mut depth = 0;
 		while !cur_wave.is_empty()

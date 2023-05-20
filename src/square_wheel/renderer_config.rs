@@ -1,7 +1,7 @@
 use super::config;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Default, Debug)]
+#[derive(Copy, Clone, Serialize, Deserialize, Default, Debug)]
 pub struct RendererConfig
 {
 	#[serde(default)]
@@ -22,6 +22,9 @@ pub struct RendererConfig
 	#[serde(default)]
 	// In range [-1; 1]
 	pub shadows_quality: f32,
+
+	#[serde(default = "default_portals_depth")]
+	pub portals_depth: u32,
 
 	#[serde(default = "default_true")]
 	pub use_directional_lightmaps: bool,
@@ -46,4 +49,9 @@ impl RendererConfig
 fn default_true() -> bool
 {
 	true
+}
+
+fn default_portals_depth() -> u32
+{
+	2
 }

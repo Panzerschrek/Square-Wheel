@@ -140,6 +140,22 @@ impl DynamicObjectsIndex
 		}
 	}
 
+	// Reset internal state and position new set of portals.
+	pub fn position_portals(&mut self, portals: &[ViewPortal])
+	{
+		// Clear previous portals.
+		self.clear();
+
+		let root_node = bsp_map_compact::get_root_node_index(&self.map);
+
+		// Position new portals.
+		self.allocate_objects(portals.len());
+		for (index, portal) in portals.iter().enumerate()
+		{
+			self.position_object_convex_hull_r(index as DynamicObjectId, &portal.vertices, root_node);
+		}
+	}
+
 	fn position_object_bbox(&mut self, id: DynamicObjectId, bbox: &BBox, transform_matrix: &Mat4f)
 	{
 		// transform bbox vertices.
@@ -153,12 +169,7 @@ impl DynamicObjectsIndex
 	}
 
 	// Recursively place object in leafs. Perform convex hull vertices check against BPS node planes in order to do this.
-	fn position_object_convex_hull_r<const NUM_VERTICES: usize>(
-		&mut self,
-		id: DynamicObjectId,
-		vertices: &[Vec3f; NUM_VERTICES],
-		node_index: u32,
-	)
+	fn position_object_convex_hull_r(&mut self, id: DynamicObjectId, vertices: &[Vec3f], node_index: u32)
 	{
 		if node_index >= bsp_map_compact::FIRST_LEAF_INDEX
 		{
