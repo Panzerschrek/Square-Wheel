@@ -240,17 +240,21 @@ pub fn get_submodel_bbox(map: &BSPMap, submodel: &Submodel) -> BBox
 		max: Vec3f::new(-inf, -inf, -inf),
 	};
 
-	for &polygon in
-		&map.polygons[(submodel.first_polygon as usize) .. ((submodel.first_polygon + submodel.num_polygons) as usize)]
+	for polygon in
+		&map.polygons[submodel.first_polygon as usize .. (submodel.first_polygon + submodel.num_polygons) as usize]
 	{
-		for vertex in
-			&map.vertices[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)]
+		for vertex in get_polygon_vertices(map, polygon)
 		{
 			bbox.extend_with_point(vertex);
 		}
 	}
 
 	bbox
+}
+
+pub fn get_polygon_vertices<'a>(map: &'a BSPMap, polygon: &Polygon) -> &'a [Vec3f]
+{
+	&map.vertices[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize]
 }
 
 pub fn get_leaf_for_point(map: &BSPMap, point: &Vec3f) -> u32

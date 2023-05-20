@@ -239,8 +239,7 @@ impl DepthRenderer
 
 		let mut vertices_transformed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
 		let vertex_count = std::cmp::min(polygon.num_vertices as usize, MAX_VERTICES);
-		for (in_vertex, out_vertex) in self.map.vertices
-			[(polygon.first_vertex as usize) .. (polygon.first_vertex as usize) + vertex_count]
+		for (in_vertex, out_vertex) in bsp_map_compact::get_polygon_vertices(&self.map, polygon)
 			.iter()
 			.zip(vertices_transformed[.. vertex_count].iter_mut())
 		{

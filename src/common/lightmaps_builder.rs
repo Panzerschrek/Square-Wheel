@@ -1274,7 +1274,7 @@ fn get_polygon_center(map: &bsp_map_compact::BSPMap, polygon: &bsp_map_compact::
 	// TODO - improve this.
 	// Calculate real center (center of mass?), not just average values of all vertices.
 	let mut polygon_vertices_average = Vec3f::new(0.0, 0.0, 0.0);
-	for &v in &map.vertices[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize]
+	for &v in bsp_map_compact::get_polygon_vertices(map, polygon)
 	{
 		polygon_vertices_average += v;
 	}
@@ -1411,8 +1411,7 @@ fn create_secondary_light_source(
 	// Shift pos slightly towards direction of normal to avoid self-shadowing artifacts.
 	let start_pos = lightmap_basis.pos + plane_normal_normalized * TEXEL_NORMAL_SHIFT;
 
-	let polygon_vertices =
-		&map.vertices[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize];
+	let polygon_vertices = bsp_map_compact::get_polygon_vertices(map, polygon);
 
 	// Use constant albedo for whole polygon.
 	// TODO - maybe perform per-pixel albedo fetch?

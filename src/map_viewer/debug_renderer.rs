@@ -479,8 +479,7 @@ fn draw_map_bsp_compact_leaf(
 			rasterizer,
 			camera_matrices,
 			&polygon.plane,
-			&bsp_map.vertices
-				[(polygon.first_vertex as usize) .. ((polygon.first_vertex + polygon.num_vertices) as usize)],
+			bsp_map_compact::get_polygon_vertices(bsp_map, polygon),
 			&polygon.tex_coord_equation,
 			color,
 			draw_polygon_normals,

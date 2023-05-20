@@ -308,8 +308,7 @@ fn spawn_regular_entity(
 						},
 						plane: polygon.plane,
 						tex_coord_equation: polygon.tex_coord_equation,
-						vertices: map.vertices
-							[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize]
+						vertices: bsp_map_compact::get_polygon_vertices(map, polygon)
 							.iter()
 							.copied()
 							.collect(),
@@ -354,8 +353,7 @@ fn spawn_regular_entity(
 					view: PortalView::Mirror {},
 					plane: polygon.plane,
 					tex_coord_equation: tex_coord_equation,
-					vertices: map.vertices
-						[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize]
+					vertices: bsp_map_compact::get_polygon_vertices(map, polygon)
 						.iter()
 						.copied()
 						.collect(),
