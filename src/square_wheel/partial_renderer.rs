@@ -2043,27 +2043,29 @@ impl PartialRenderer
 				),
 				PortalView::Mirror {} =>
 				{
-					let normal_len = portal.plane.vec.magnitude();
+					let normal_square_len = portal.plane.vec.magnitude2();
+					let normal_len = normal_square_len.sqrt();
 
 					let dist = portal.plane.vec.dot(camera_matrices.position) - portal.plane.dist;
 					let position_reflected =
-						camera_matrices.position - portal.plane.vec * (2.0 * dist / portal.plane.vec.magnitude2());
+						camera_matrices.position - portal.plane.vec * (2.0 * dist / normal_square_len);
 					let dist_normalized = dist / normal_len;
 
 					let mip_scale = 1.0 / ((1 << portal_info.mip) as f32);
 
-					let vec_x = portal.tex_coord_equation[0]
-						.vec
-						.extend(portal.tex_coord_equation[0].dist) *
-						mip_scale;
-					let vec_y = portal.tex_coord_equation[1]
-						.vec
-						.extend(portal.tex_coord_equation[1].dist) *
-						mip_scale;
-					let vec_z = portal.plane.vec.extend(-portal.plane.dist) * (mip_scale / normal_len);
-
-					let tex_coord_basis =
-						Mat4f::from_cols(vec_x, vec_y, vec_z, Vec4f::new(0.0, 0.0, 0.0, 1.0)).transpose();
+					let tex_coord_basis = Mat4f::from_cols(
+						portal.tex_coord_equation[0]
+							.vec
+							.extend(portal.tex_coord_equation[0].dist) *
+							mip_scale,
+						portal.tex_coord_equation[1]
+							.vec
+							.extend(portal.tex_coord_equation[1].dist) *
+							mip_scale,
+						portal.plane.vec.extend(-portal.plane.dist) * (mip_scale / normal_len),
+						Vec4f::new(0.0, 0.0, 0.0, 1.0),
+					)
+					.transpose();
 
 					let position_reflected_tex_coord_space =
 						(tex_coord_basis * position_reflected.extend(1.0)).truncate();
@@ -2071,8 +2073,8 @@ impl PartialRenderer
 					let translate = Mat4f::from_translation(-position_reflected_tex_coord_space);
 
 					let mut shift_to_viewport = Mat4f::identity();
-					shift_to_viewport.z.x = -portal_info.tc_min[0] as f32 + position_reflected_tex_coord_space.x;
-					shift_to_viewport.z.y = -portal_info.tc_min[1] as f32 + position_reflected_tex_coord_space.y;
+					shift_to_viewport.z.x = position_reflected_tex_coord_space.x - portal_info.tc_min[0] as f32;
+					shift_to_viewport.z.y = position_reflected_tex_coord_space.y - portal_info.tc_min[1] as f32;
 
 					// Make sure mirror plane is Z_NEAR.
 					// Doing so we clip all geometry behind the mirror.
