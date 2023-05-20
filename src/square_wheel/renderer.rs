@@ -1,7 +1,7 @@
 use super::{
-	abstract_color::*, config, debug_stats_printer::*, dynamic_objects_index::*, frame_info::*, inline_models_index::*,
-	map_materials_processor::*, partial_renderer::PartialRenderer, renderer_config::*, renderer_structs::*,
-	resources_manager::*,
+	abstract_color::*, config, console::*, debug_stats_printer::*, dynamic_objects_index::*, frame_info::*,
+	inline_models_index::*, map_materials_processor::*, partial_renderer::PartialRenderer, renderer_config::*,
+	renderer_structs::*, resources_manager::*,
 };
 use crate::common::{bsp_map_compact, system_window};
 use std::sync::Arc;
@@ -10,6 +10,7 @@ pub struct Renderer
 {
 	app_config: config::ConfigSharedPtr,
 	config: RendererConfig,
+	console: ConsoleSharedPtr,
 	common_data: RenderersCommonData,
 	map: Arc<bsp_map_compact::BSPMap>,
 	root_renderer: PartialRenderer,
@@ -21,16 +22,20 @@ impl Renderer
 	pub fn new(
 		resources_manager: ResourcesManagerSharedPtr,
 		app_config: config::ConfigSharedPtr,
+		console: ConsoleSharedPtr,
 		map: Arc<bsp_map_compact::BSPMap>,
 	) -> Self
 	{
-		let config_parsed = RendererConfig::from_app_config(&app_config);
+		let mut config_parsed = RendererConfig::from_app_config(&app_config);
+
+		config_parsed.portals_depth = std::cmp::min(config_parsed.portals_depth, 8);
+
 		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
 
-		let depth = 2; // TODO - read from config
 		Self {
 			app_config,
 			config: config_parsed,
+			console,
 			common_data: RenderersCommonData {
 				materials_processor: MapMaterialsProcessor::new(resources_manager.clone(), &*map),
 				inline_models_index: InlineModelsIndex::new(map.clone()),
@@ -44,7 +49,7 @@ impl Renderer
 					.collect(),
 			},
 			map: map.clone(),
-			root_renderer: PartialRenderer::new(resources_manager, config_parsed, map, depth),
+			root_renderer: PartialRenderer::new(resources_manager, config_parsed, map, config_parsed.portals_depth),
 			debug_stats: RendererDebugStats::default(),
 		}
 	}
@@ -185,7 +190,16 @@ impl Renderer
 
 	fn synchronize_config(&mut self)
 	{
-		self.config = RendererConfig::from_app_config(&self.app_config);
+		let config_updated = RendererConfig::from_app_config(&self.app_config);
+		if config_updated.portals_depth != self.config.portals_depth
+		{
+			self.console
+				.lock()
+				.unwrap()
+				.add_text("portals_depth setting will be applied after map reloading".to_string());
+		}
+
+		self.config = config_updated;
 
 		// Make sure that config values are reasonable.
 		let mut config_is_dirty = false;

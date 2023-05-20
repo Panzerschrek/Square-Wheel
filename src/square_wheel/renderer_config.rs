@@ -23,6 +23,9 @@ pub struct RendererConfig
 	// In range [-1; 1]
 	pub shadows_quality: f32,
 
+	#[serde(default = "default_portals_depth")]
+	pub portals_depth: u32,
+
 	#[serde(default = "default_true")]
 	pub use_directional_lightmaps: bool,
 }
@@ -46,4 +49,9 @@ impl RendererConfig
 fn default_true() -> bool
 {
 	true
+}
+
+fn default_portals_depth() -> u32
+{
+	2
 }
