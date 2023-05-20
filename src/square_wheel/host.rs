@@ -588,20 +588,30 @@ impl Host
 				let map_opt = resources_manager.lock().unwrap().get_map(&args[0]);
 				if let Some(map) = map_opt
 				{
+					// Create game and renderer in parallel in order to reduce total loading time.
+					let (game, renderer) = rayon::join(
+						|| {
+							game_creation_function(
+								app_config.clone(),
+								commands_processor.clone(),
+								console.clone(),
+								resources_manager.clone(),
+								map.clone(),
+							)
+						},
+						|| {
+							renderer::Renderer::new(
+								resources_manager.clone(),
+								app_config.clone(),
+								console.clone(),
+								map.clone(),
+							)
+						},
+					);
+
 					*active_map = Some(ActiveMap {
-						game: game_creation_function(
-							app_config.clone(),
-							commands_processor.clone(),
-							console.clone(),
-							resources_manager.clone(),
-							map.clone(),
-						),
-						renderer: renderer::Renderer::new(
-							resources_manager.clone(),
-							app_config.clone(),
-							console.clone(),
-							map.clone(),
-						),
+						game,
+						renderer,
 						debug_stats_printer: DebugStatsPrinter::new(config.show_debug_stats),
 					});
 
