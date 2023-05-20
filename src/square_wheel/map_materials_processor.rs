@@ -26,7 +26,6 @@ impl MapMaterialsProcessor
 		let num_textures = map.textures.len();
 
 		let mut materials = Vec::with_capacity(num_textures);
-		let mut textures = Vec::with_capacity(num_textures);
 		let mut skybox_textures_32 = HashMap::new();
 		let mut skybox_textures_64 = HashMap::new();
 		for (texture_index, texture_name) in map.textures.iter().enumerate()
@@ -51,10 +50,12 @@ impl MapMaterialsProcessor
 			}
 
 			materials.push(material);
-			textures.push(r.get_material_texture(material_name));
 		}
 
+		let textures = r.get_map_material_textures(map);
 		let textures_modified = vec![TextureWithMips::default(); textures.len()];
+
+		debug_assert!(textures.len() == materials.len());
 
 		Self {
 			materials,

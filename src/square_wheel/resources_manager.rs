@@ -3,6 +3,7 @@ use super::{
 	triangle_model_md3,
 };
 use crate::common::{bbox::*, bsp_map_compact::*, bsp_map_save_load::*, color::*, image, material::*, math_types::*};
+use rayon::prelude::*;
 use std::{
 	collections::HashMap,
 	path::PathBuf,
@@ -224,6 +225,58 @@ impl ResourcesManager
 		self.material_textures.insert(key.to_string(), ptr.clone());
 
 		ptr
+	}
+
+	// Load all textures for giving map in parallel.
+	pub fn get_map_material_textures(&mut self, map: &BSPMap) -> Vec<SharedResourcePtr<TextureWithMips>>
+	{
+		if rayon::current_num_threads() == 1
+		{
+			// Single thread - load textures sequentially.
+			return map
+				.textures
+				.iter()
+				.map(|key| self.get_material_texture(get_texture_string(key)))
+				.collect();
+		}
+
+		// Load first only missing textures (in parallel).
+		// Assume, that "par_iter" + "collect" preserver order.
+		let textures: Vec<SharedResourcePtr<TextureWithMips>> = map
+			.textures
+			.par_iter()
+			.map(get_texture_string)
+			.map(|texture_name| {
+				if let Some(p) = self.material_textures.get(texture_name)
+				{
+					p.clone()
+				}
+				else
+				{
+					let material = self.materials.get(texture_name).unwrap_or_else(|| {
+						self.console
+							.lock()
+							.unwrap()
+							.add_text(format!("Failed to find material {:?}", texture_name));
+						&self.default_material
+					});
+
+					SharedResourcePtr::new(load_texture(material, &self.config.textures_path))
+				}
+			})
+			.collect();
+
+		// Update internal caches (sequentially).
+		for (texture_name, texture_ptr) in map.textures.iter().map(get_texture_string).zip(textures.iter())
+		{
+			if !self.material_textures.contains_key(texture_name)
+			{
+				self.material_textures
+					.insert(texture_name.to_string(), texture_ptr.clone());
+			}
+		}
+
+		textures
 	}
 
 	pub fn get_texture_lite(&mut self, key: &str) -> SharedResourcePtr<TextureLiteWithMips>
