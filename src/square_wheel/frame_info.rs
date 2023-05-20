@@ -148,6 +148,7 @@ pub enum PortalView
 	{
 		position: Vec3f,
 		rotation: QuaternionF,
+		fov: RadiansF,
 	},
 	Mirror {},
 }

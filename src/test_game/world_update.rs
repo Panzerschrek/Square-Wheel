@@ -854,7 +854,7 @@ pub fn update_camera_portals_locations(ecs: &mut hecs::World)
 		)>()
 		.iter()
 	{
-		if let PortalView::CameraAtPosition { position, rotation } = &mut view_portal.view
+		if let PortalView::CameraAtPosition { position, rotation, .. } = &mut view_portal.view
 		{
 			for (_target_id, (named_target_component, location_component)) in
 				ecs.query::<(&NamedTargetComponent, &LocationComponent)>().iter()

@@ -2027,20 +2027,20 @@ impl PartialRenderer
 
 			let (portal_camera_matrices, visibility_search_start_leafs) = match &portal.view
 			{
-				PortalView::CameraAtPosition { position, rotation } =>
-				{
-					let fov = std::f32::consts::PI * 0.5; // TODO - setup it properly.
-					(
-						build_view_matrix_with_full_rotation(
-							*position,
-							*rotation,
-							fov,
-							portal_info.resolution[0] as f32,
-							portal_info.resolution[1] as f32,
-						),
-						None,
-					)
-				},
+				PortalView::CameraAtPosition {
+					position,
+					rotation,
+					fov,
+				} => (
+					build_view_matrix_with_full_rotation(
+						*position,
+						*rotation,
+						fov.0,
+						portal_info.resolution[0] as f32,
+						portal_info.resolution[1] as f32,
+					),
+					None,
+				),
 				PortalView::Mirror {} =>
 				{
 					let normal_len = portal.plane.vec.magnitude();

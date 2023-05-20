@@ -304,6 +304,7 @@ fn spawn_regular_entity(
 						view: PortalView::CameraAtPosition {
 							position: Vec3f::zero(),
 							rotation: QuaternionF::one(),
+							fov: Rad(get_entity_f32(map_entity, map, "fov").unwrap_or(90.0) * TO_RAD),
 						},
 						plane: polygon.plane,
 						tex_coord_equation: polygon.tex_coord_equation,
