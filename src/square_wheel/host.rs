@@ -5,7 +5,7 @@ use super::{
 };
 use crate::common::{color::*, screenshot::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
-use std::time::Duration;
+use std::{sync::atomic, time::Duration};
 
 pub struct Host
 {
@@ -562,56 +562,78 @@ impl Host
 		let map_loading_start_time = std::time::Instant::now();
 		self.console.lock().unwrap().add_text(loading_text.clone());
 
-		// Draw single frame with loading text.
-		self.window.update_window_surface(|pixels, surface_info| {
+		// Fade current image.
+		self.window.update_window_surface(|pixels, _surface_info| {
 			for pixel in pixels.iter_mut()
 			{
 				*pixel = pixel.get_half_dark();
 			}
-
-			text_printer::print(
-				pixels,
-				surface_info,
-				&loading_text,
-				((surface_info.width / 2) as i32) - ((loading_text.len() * text_printer::GLYPH_WIDTH / 2) as i32),
-				((surface_info.height / 2) as i32) - ((text_printer::GLYPH_HEIGHT / 2) as i32),
-				Color32::from_rgb(255, 255, 255),
-			);
 		});
 		self.window.swap_buffers();
 
-		// Perform actual map loading.
-		let map_opt = self.resources_manager.lock().unwrap().get_map(&args[0]);
-		if let Some(map) = map_opt
-		{
-			let game_creation_function = self.game_creation_function;
-			self.active_map = Some(ActiveMap {
-				game: game_creation_function(
-					self.app_config.clone(),
-					self.commands_processor.clone(),
-					self.console.clone(),
-					self.resources_manager.clone(),
-					map.clone(),
-				),
-				renderer: renderer::Renderer::new(
-					self.resources_manager.clone(),
-					self.app_config.clone(),
-					self.console.clone(),
-					map.clone(),
-				),
-				debug_stats_printer: DebugStatsPrinter::new(self.config.show_debug_stats),
+		let resources_manager = &self.resources_manager;
+		let game_creation_function = self.game_creation_function;
+		let active_map = &mut self.active_map;
+		let app_config = &self.app_config;
+		let commands_processor = &self.commands_processor;
+		let console = &self.console;
+		let config = &self.config;
+		let window = &mut self.window;
+
+		let done = atomic::AtomicBool::new(false);
+		rayon::in_place_scope(|s| {
+			// Start map loading.
+			s.spawn(|_s| {
+				// Perform actual map loading in separate thread.
+				let map_opt = resources_manager.lock().unwrap().get_map(&args[0]);
+				if let Some(map) = map_opt
+				{
+					*active_map = Some(ActiveMap {
+						game: game_creation_function(
+							app_config.clone(),
+							commands_processor.clone(),
+							console.clone(),
+							resources_manager.clone(),
+							map.clone(),
+						),
+						renderer: renderer::Renderer::new(
+							resources_manager.clone(),
+							app_config.clone(),
+							console.clone(),
+							map.clone(),
+						),
+						debug_stats_printer: DebugStatsPrinter::new(config.show_debug_stats),
+					});
+
+					// Clear unused resources from previous map.
+					resources_manager.lock().unwrap().clear_cache();
+				}
+
+				done.store(true, atomic::Ordering::SeqCst);
 			});
 
-			// Clear unused resources from previous map.
-			self.resources_manager.lock().unwrap().clear_cache();
+			let mut step = 0;
+			while !done.load(atomic::Ordering::SeqCst)
+			{
+				// Process events while loading map, but ignore them, because we have no way to do something while loading the map (quit, abort, etc.).
+				let _events = window.get_events();
+				draw_loading_screen(window, &loading_text, step);
+				step += 1;
 
-			let map_loading_end_time = std::time::Instant::now();
-			let loading_duration = (map_loading_end_time - map_loading_start_time).as_secs_f32();
-			self.console.lock().unwrap().add_text(format!(
-				"Loading map \"{}\" finished in {} seconds",
-				map_name, loading_duration
-			));
-		}
+				if done.load(atomic::Ordering::SeqCst)
+				{
+					break;
+				}
+				std::thread::sleep(Duration::from_secs_f32(1.0 / 16.0));
+			}
+		});
+
+		let map_loading_end_time = std::time::Instant::now();
+		let loading_duration = (map_loading_end_time - map_loading_start_time).as_secs_f32();
+		console.lock().unwrap().add_text(format!(
+			"Loading map \"{}\" finished in {} seconds",
+			map_name, loading_duration
+		));
 	}
 
 	fn command_quit(&mut self, _args: commands_queue::CommandArgs)
@@ -653,4 +675,60 @@ impl Drop for Host
 	{
 		config::save(&self.app_config.lock().unwrap(), &self.config_file_path);
 	}
+}
+
+fn draw_loading_screen(window: &mut system_window::SystemWindow, loading_text: &str, step: usize)
+{
+	let progress_bar_cells = [
+		[0, 0],
+		[1, 0],
+		[2, 0],
+		[3, 0],
+		[3, 1],
+		[3, 2],
+		[3, 3],
+		[2, 3],
+		[1, 3],
+		[0, 3],
+		[0, 2],
+		[0, 1],
+	];
+
+	let cell_size = 16;
+	let padding = 1;
+
+	let current_step = step % progress_bar_cells.len();
+
+	window.update_window_surface(|pixels, surface_info| {
+		for (cell_index, cell) in progress_bar_cells.iter().enumerate()
+		{
+			let start_x = surface_info.width / 2 - cell_size * 2;
+			let start_y = surface_info.height / 2 + cell_size * 2;
+
+			let dist = (progress_bar_cells.len() + cell_index - current_step) % progress_bar_cells.len();
+			let brightness = (255 * dist / progress_bar_cells.len()) as u8;
+			let color = Color32::from_rgb(brightness, brightness, brightness);
+
+			for y in start_y + cell[1] * cell_size + padding .. start_y + (cell[1] + 1) * cell_size - padding
+			{
+				let dst_line = &mut pixels[y * surface_info.pitch .. (y + 1) * surface_info.pitch];
+				for pixel in &mut dst_line
+					[start_x + cell[0] * cell_size + padding .. start_x + (cell[0] + 1) * cell_size - padding]
+				{
+					*pixel = color;
+				}
+			}
+		}
+
+		text_printer::print(
+			pixels,
+			surface_info,
+			loading_text,
+			((surface_info.width / 2) as i32) - ((loading_text.len() * text_printer::GLYPH_WIDTH / 2) as i32),
+			((surface_info.height / 2) as i32) - ((text_printer::GLYPH_HEIGHT / 2) as i32),
+			Color32::from_rgb(255, 255, 255),
+		);
+	});
+
+	window.swap_buffers();
 }
