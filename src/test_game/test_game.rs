@@ -50,6 +50,7 @@ impl Game
 			("set_view_model", Game::command_set_view_model),
 			("reset_view_model", Game::command_reset_view_model),
 			("add_test_mirror", Game::command_add_test_mirror),
+			("reset_test_mirrors", Game::command_reset_test_mirrors),
 			("noclip", Game::command_noclip),
 			("save", Game::command_save),
 			("load", Game::command_load),
@@ -571,28 +572,40 @@ impl Game
 			plane_mat * tc_basis[2],
 		];
 
-		self.ecs.spawn((ViewPortal {
-			view: PortalView::Mirror {},
-			plane: Plane {
-				vec: basis_transformed[2].truncate(),
-				dist: -basis_transformed[2].w,
+		self.ecs.spawn((
+			ViewPortal {
+				view: PortalView::Mirror {},
+				plane: Plane {
+					vec: basis_transformed[2].truncate(),
+					dist: -basis_transformed[2].w,
+				},
+				tex_coord_equation: [
+					Plane {
+						vec: basis_transformed[0].truncate(),
+						dist: basis_transformed[0].w,
+					},
+					Plane {
+						vec: basis_transformed[1].truncate(),
+						dist: basis_transformed[1].w,
+					},
+				],
+				vertices: vertices
+					.iter()
+					.map(|v| (mat * (scale * v).extend(1.0)).truncate())
+					.collect(),
+				blending_mode: material::BlendingMode::Average,
 			},
-			tex_coord_equation: [
-				Plane {
-					vec: basis_transformed[0].truncate(),
-					dist: basis_transformed[0].w,
-				},
-				Plane {
-					vec: basis_transformed[1].truncate(),
-					dist: basis_transformed[1].w,
-				},
-			],
-			vertices: vertices
-				.iter()
-				.map(|v| (mat * (scale * v).extend(1.0)).truncate())
-				.collect(),
-			blending_mode: material::BlendingMode::Average,
-		},));
+			TestMirrorComponent {},
+		));
+	}
+
+	fn command_reset_test_mirrors(&mut self, _args: commands_queue::CommandArgs)
+	{
+		for (id, (_test_mirror_component,)) in self.ecs.query_mut::<(&TestMirrorComponent,)>()
+		{
+			self.ecs_command_buffer.despawn(id)
+		}
+		self.ecs_command_buffer.run_on(&mut self.ecs);
 	}
 
 	fn command_noclip(&mut self, _args: commands_queue::CommandArgs)
