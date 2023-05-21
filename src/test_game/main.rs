@@ -1,18 +1,18 @@
-pub mod components;
-pub mod game;
-pub mod game_map;
-pub mod save_load;
-pub mod test_game_physics;
-pub mod world_spawn;
-pub mod world_update;
+mod components;
+mod game;
+mod game_map;
+mod save_load;
+mod test_game_physics;
+mod world_spawn;
+mod world_update;
 
-pub use square_wheel_lib::square_wheel::*;
+use square_wheel_lib::square_wheel::*;
 
 use std::path::PathBuf;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "square_wheel", about = "SquareWheel engine.")]
+#[structopt(name = "square_wheel", about = "SquareWheel engine demo.")]
 struct Opt
 {
 	/// Optional command to execute on start.
