@@ -14,6 +14,7 @@ pub struct FrameInfo
 	pub lights: Vec<DynamicLight>,
 	pub portals: Vec<ViewPortal>,
 	pub skybox_rotation: QuaternionF,
+	pub is_third_person_view: bool,
 }
 
 pub type SubmodelEntityOpt = Option<SubmodelEntity>;
@@ -36,10 +37,7 @@ pub struct ModelEntity
 	pub texture: SharedResourcePtr<TextureLiteWithMips>,
 	pub blending_mode: material::BlendingMode,
 	pub lighting: ModelLighting,
-
-	// Weapon or thing in player's hands.
-	// Draw it always and after any other models.
-	pub is_view_model: bool,
+	pub flags: ModelEntityDrawFlags,
 
 	// Use it to override bbox (in object-space) to improve models ordering.
 	// For example, use bbox with size reduced relative to true model bbox.
@@ -73,6 +71,18 @@ pub enum ModelLighting
 		// May be different from model position (for various reasons).
 		position: Vec3f,
 	},
+}
+
+bitflags::bitflags! {
+#[derive(Serialize, Deserialize)]
+pub struct ModelEntityDrawFlags: u8
+{
+	// Weapon or thing in player's hands.
+	// Draw it always and after any other models.
+	const VIEW_MODEL = 1;
+	// Draw only in portals/mirrors, but not from intial view point.
+	const ONLY_THIRD_PERSON_VIEW = 2;
+}
 }
 
 #[derive(Clone)]

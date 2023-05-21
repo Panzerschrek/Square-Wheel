@@ -561,7 +561,7 @@ struct ModelEntityProxy
 	texture: ResourceSerializationKey,
 	blending_mode: material::BlendingMode,
 	lighting: ModelLighting,
-	is_view_model: bool,
+	flags: ModelEntityDrawFlags,
 	ordering_custom_bbox: Option<BBox>,
 }
 
@@ -581,7 +581,7 @@ impl ModelEntityProxy
 			texture: ResourceSerializationKey::from_resource(&model_entity.texture, textures),
 			blending_mode: model_entity.blending_mode,
 			lighting: model_entity.lighting,
-			is_view_model: model_entity.is_view_model,
+			flags: model_entity.flags,
 			ordering_custom_bbox: model_entity.ordering_custom_bbox,
 		}
 	}
@@ -600,7 +600,7 @@ impl ModelEntityProxy
 			texture: self.texture.to_resource(textures)?,
 			blending_mode: self.blending_mode,
 			lighting: self.lighting,
-			is_view_model: self.is_view_model,
+			flags: self.flags,
 			ordering_custom_bbox: self.ordering_custom_bbox,
 		})
 	}
