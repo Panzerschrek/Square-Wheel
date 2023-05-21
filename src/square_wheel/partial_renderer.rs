@@ -157,6 +157,7 @@ impl PartialRenderer
 		surface_info: &system_window::SurfaceInfo,
 		frame_info: &FrameInfo,
 		camera_matrices: &CameraMatrices,
+		is_third_person_view: bool,
 		visibility_search_start_leafs: Option<&[u32]>,
 		renderers_common_data: &RenderersCommonData,
 		debug_stats: &mut RendererDebugStats,
@@ -200,6 +201,7 @@ impl PartialRenderer
 		performance_counters.triangle_models_preparation.run_with_measure(|| {
 			self.prepare_dynamic_models(
 				camera_matrices,
+				is_third_person_view,
 				&frame_info.model_entities,
 				&renderers_common_data.dynamic_models_index,
 			);
@@ -241,7 +243,6 @@ impl PartialRenderer
 		camera_matrices: &CameraMatrices,
 		renderers_common_data: &RenderersCommonData,
 		debug_stats: &mut RendererDebugStats,
-		draw_view_models: bool,
 	)
 	{
 		let performance_counters_ptr = self.performance_counters.clone();
@@ -258,14 +259,7 @@ impl PartialRenderer
 		});
 
 		performance_counters.rasterization.run_with_measure(|| {
-			self.perform_rasterization(
-				pixels,
-				surface_info,
-				frame_info,
-				camera_matrices,
-				renderers_common_data,
-				draw_view_models,
-			)
+			self.perform_rasterization(pixels, surface_info, frame_info, camera_matrices, renderers_common_data)
 		});
 
 		self.populate_debug_stats(frame_info, renderers_common_data, debug_stats);
@@ -1003,6 +997,7 @@ impl PartialRenderer
 	fn prepare_dynamic_models(
 		&mut self,
 		camera_matrices: &CameraMatrices,
+		is_third_person_view: bool,
 		models: &[ModelEntity],
 		dynamic_models_index: &DynamicObjectsIndex,
 	)
@@ -1042,6 +1037,15 @@ impl PartialRenderer
 				// Model is behind camera plane.
 				continue;
 			};
+
+			if model.flags.contains(ModelEntityDrawFlags::ONLY_THIRD_PERSON_VIEW) && !is_third_person_view
+			{
+				continue;
+			}
+			if model.flags.contains(ModelEntityDrawFlags::VIEW_MODEL) && is_third_person_view
+			{
+				continue;
+			}
 
 			let mut visible = model.flags.contains(ModelEntityDrawFlags::VIEW_MODEL);
 			for leaf_index in dynamic_models_index.get_object_leafs(entity_index)
@@ -1194,7 +1198,6 @@ impl PartialRenderer
 		frame_info: &FrameInfo,
 		camera_matrices: &CameraMatrices,
 		renderers_common_data: &RenderersCommonData,
-		draw_view_models: bool,
 	)
 	{
 		let screen_rect = rect_splitting::Rect {
@@ -1229,7 +1232,6 @@ impl PartialRenderer
 				camera_matrices,
 				renderers_common_data,
 				&viewport_clipping_polygon,
-				draw_view_models,
 			);
 		}
 		else
@@ -1277,7 +1279,6 @@ impl PartialRenderer
 					camera_matrices,
 					renderers_common_data,
 					&viewport_clipping_polygon,
-					draw_view_models,
 				);
 			});
 		}
@@ -1290,7 +1291,6 @@ impl PartialRenderer
 		camera_matrices: &CameraMatrices,
 		renderers_common_data: &RenderersCommonData,
 		viewport_clipping_polygon: &ClippingPolygon,
-		draw_view_models: bool,
 	)
 	{
 		if !self.config.invert_polygons_order
@@ -1325,10 +1325,7 @@ impl PartialRenderer
 			);
 		}
 
-		if draw_view_models
-		{
-			self.draw_view_models(rasterizer, &viewport_clipping_polygon, &frame_info.model_entities);
-		}
+		self.draw_view_models(rasterizer, &viewport_clipping_polygon, &frame_info.model_entities);
 	}
 
 	fn prepare_polygons_surfaces(
@@ -2098,10 +2095,13 @@ impl PartialRenderer
 				height: portal_info.resolution[1] as usize,
 				pitch: portal_info.resolution[0] as usize,
 			};
+			let is_third_person_view = true;
+
 			renderer.prepare_frame::<ColorT>(
 				&surface_info,
 				frame_info,
 				&portal_camera_matrices,
+				is_third_person_view,
 				visibility_search_start_leafs,
 				renderers_common_data,
 				debug_stats,
@@ -2116,7 +2116,6 @@ impl PartialRenderer
 				&portal_camera_matrices,
 				renderers_common_data,
 				debug_stats,
-				false, // Do not draw view models through portals.
 			);
 		}
 	}

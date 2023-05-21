@@ -83,6 +83,7 @@ impl Renderer
 			surface_info,
 			frame_info,
 			&frame_info.camera_matrices,
+			frame_info.is_third_person_view,
 			None,
 			&self.common_data,
 			&mut self.debug_stats,
@@ -104,7 +105,6 @@ impl Renderer
 			&frame_info.camera_matrices,
 			&self.common_data,
 			&mut self.debug_stats,
-			true, // Draw view models.
 		);
 
 		self.print_debug_stats(debug_stats_printer);

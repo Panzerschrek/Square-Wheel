@@ -14,6 +14,7 @@ pub struct FrameInfo
 	pub lights: Vec<DynamicLight>,
 	pub portals: Vec<ViewPortal>,
 	pub skybox_rotation: QuaternionF,
+	pub is_third_person_view: bool,
 }
 
 pub type SubmodelEntityOpt = Option<SubmodelEntity>;

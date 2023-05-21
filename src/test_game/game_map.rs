@@ -822,6 +822,7 @@ impl GameMap
 			decals: self.collect_drawable_components(),
 			sprites: self.collect_drawable_components(),
 			portals: self.collect_drawable_components(),
+			is_third_person_view: false,
 		}
 	}
 
