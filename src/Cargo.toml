@@ -13,6 +13,7 @@ rasterizer_unchecked_div = []
 
 [dependencies]
 bincode = "1.3.3"
+bitflags = "1.3.2"
 cgmath = { version = "0.18", features = ["serde" ] }
 hecs = { version = "0.9.0", features = ["column-serialize", "row-serialize" ] }
 image = { version = "0.24.3", default-features = false, features = ["png", "jpeg", "tga"] }

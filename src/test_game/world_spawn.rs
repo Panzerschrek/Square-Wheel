@@ -403,7 +403,7 @@ fn spawn_regular_entity(
 						texture,
 						blending_mode: get_entity_blending_mode(map_entity, map),
 						lighting: ModelLighting::Default,
-						is_view_model: false,
+						flags: ModelEntityDrawFlags::empty(),
 						ordering_custom_bbox: None,
 					},
 				));
@@ -555,7 +555,7 @@ fn spawn_regular_entity(
 						texture: resources_manager.get_texture_lite("wall_oil_lamp.png"),
 						blending_mode: material::BlendingMode::None,
 						lighting: ModelLighting::Default,
-						is_view_model: false,
+						flags: ModelEntityDrawFlags::empty(),
 						ordering_custom_bbox: None,
 					},
 				));

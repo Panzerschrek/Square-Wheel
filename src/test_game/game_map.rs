@@ -348,7 +348,7 @@ impl GameMap
 				texture,
 				blending_mode: material::BlendingMode::None,
 				lighting: ModelLighting::Default,
-				is_view_model: false,
+				flags: ModelEntityDrawFlags::empty(),
 				ordering_custom_bbox: None,
 			},
 		));
@@ -502,7 +502,7 @@ impl GameMap
 						texture: r.get_texture_lite(&args[1]),
 						blending_mode: material::BlendingMode::None,
 						lighting: ModelLighting::Default,
-						is_view_model: false,
+						flags: ModelEntityDrawFlags::ONLY_THIRD_PERSON_VIEW,
 						ordering_custom_bbox: None,
 					},
 					ModelEntityLocationLinkComponent {},
@@ -556,7 +556,7 @@ impl GameMap
 				texture,
 				blending_mode: material::BlendingMode::None,
 				lighting: ModelLighting::Default,
-				is_view_model: true,
+				flags: ModelEntityDrawFlags::VIEW_MODEL,
 				ordering_custom_bbox: None,
 			},
 		));

@@ -1043,7 +1043,7 @@ impl PartialRenderer
 				continue;
 			};
 
-			let mut visible = model.is_view_model;
+			let mut visible = model.flags.contains(ModelEntityDrawFlags::VIEW_MODEL);
 			for leaf_index in dynamic_models_index.get_object_leafs(entity_index)
 			{
 				if let Some(mut leaf_clipping_polygon) =
@@ -2130,7 +2130,7 @@ impl PartialRenderer
 	{
 		for (dynamic_model_index, model) in models.iter().enumerate()
 		{
-			if !model.is_view_model
+			if !model.flags.contains(ModelEntityDrawFlags::VIEW_MODEL)
 			{
 				continue;
 			}

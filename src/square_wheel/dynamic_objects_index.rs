@@ -58,7 +58,7 @@ impl DynamicObjectsIndex
 		self.allocate_objects(models.len());
 		for (index, model) in models.iter().enumerate()
 		{
-			if model.is_view_model
+			if model.flags.contains(ModelEntityDrawFlags::VIEW_MODEL)
 			{
 				// Do not place view models in BSP tree.
 				continue;
