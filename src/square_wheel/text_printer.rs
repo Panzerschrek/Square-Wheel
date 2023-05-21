@@ -26,12 +26,12 @@ pub fn print(
 		}
 
 		let mut c_num = c as usize;
-		if c_num < 32 || c_num >= 128
+		if c_num < FIRST_GLYPH || c_num > LAST_GLYPH
 		{
 			c_num = '?' as usize;
 		}
 
-		let glyph_index = (c_num as usize) - 32;
+		let glyph_index = c_num - FIRST_GLYPH;
 		for glyph_y in 0 .. GLYPH_HEIGHT
 		{
 			let dst_y = cur_y + (glyph_y as i32);
@@ -41,12 +41,12 @@ pub fn print(
 			}
 			let glyph_line_byte = src_bitmap[glyph_index + ((GLYPH_HEIGHT - 1) - glyph_y) * NUM_GLYPHS];
 			let dst_base = dst_y * (surface_info.pitch as i32);
-			for glyph_x in 0 .. (GLYPH_WIDTH as i32)
+			for glyph_x in 0 .. GLYPH_WIDTH as i32
 			{
 				if (glyph_line_byte & (1 << ((glyph_x & 7) ^ 7))) != 0
 				{
 					let dst_x = cur_x + glyph_x;
-					if dst_x >= 0 && dst_x < (surface_info.width as i32)
+					if dst_x >= 0 && dst_x < surface_info.width as i32
 					{
 						pixels[(dst_base + dst_x) as usize] = color;
 					}
@@ -84,23 +84,23 @@ pub fn print_scaled(
 		}
 
 		let mut c_num = c as usize;
-		if c_num < 32 || c_num >= 128
+		if c_num < FIRST_GLYPH || c_num > LAST_GLYPH
 		{
 			c_num = '?' as usize;
 		}
 
-		let glyph_index = (c_num as usize) - 32;
+		let glyph_index = c_num - FIRST_GLYPH;
 		for glyph_y in 0 .. GLYPH_HEIGHT
 		{
 			let glyph_line_byte = src_bitmap[glyph_index + ((GLYPH_HEIGHT - 1) - glyph_y) * NUM_GLYPHS];
-			for glyph_x in 0 .. (GLYPH_WIDTH as i32)
+			for glyph_x in 0 .. GLYPH_WIDTH as i32
 			{
 				if (glyph_line_byte & (1 << ((glyph_x & 7) ^ 7))) != 0
 				{
 					for pix_y in 0 .. scale
 					{
 						let dst_y = cur_y + (pix_y as i32) + (glyph_y as i32) * (scale as i32);
-						if dst_y < 0 || dst_y >= (surface_info.height as i32)
+						if dst_y < 0 || dst_y >= surface_info.height as i32
 						{
 							continue;
 						}
@@ -125,6 +125,8 @@ pub const GLYPH_WIDTH: usize = 8;
 pub const GLYPH_HEIGHT: usize = 18;
 const NUM_GLYPHS: usize = 96;
 const BMP_HEADER_LEN: usize = 62;
+const FIRST_GLYPH: usize = 32;
+const LAST_GLYPH: usize = FIRST_GLYPH + NUM_GLYPHS - 1;
 // 1 bit font bitmap.
 const FONT_BITMAP_FILE_CONTENT: &[u8; BMP_HEADER_LEN + GLYPH_WIDTH * GLYPH_HEIGHT * NUM_GLYPHS / 8] =
 	include_bytes!("fixedsys8x18.bmp");
