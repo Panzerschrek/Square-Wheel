@@ -25,6 +25,7 @@ Main features are related to world static geometry:
 * Skyboxes
 * "Turb" effects for textures
 * Decals (for bullet holes, blood spots, etc.)
+* Portals and mirrors
 
 Triangle models rendering is supported too, including:
 
@@ -92,7 +93,7 @@ For building maps for SquareWheel you may use any map editor with support of Qua
 Mapping rules are almost like in Quake - you should avoid leaked maps (but this is not enforced).
 It's better to use material with "bsp=false" flag for invisible sides of brushes in order to simplify work of map compiler's work to use better (balanced) BSP tree.
 
-Lightmapper supports simple point lights, surfaces with emissive lights (like sky or lamps), sun light, semitransparent surfaces.
+Lightmapper supports simple point and projector lights, surfaces with emissive lights (like sky or lamps), sun light, semitransparent surfaces.
 
 Entities are preserved by map compiler as is, so, you may use any keys and values, specific for your game.
 
@@ -232,6 +233,24 @@ Skybox brush in the middle of a room will not be displayed properly.
 But it's still possible to mark as skybox wall polygon of a room with other room behind it, as soon, as visibility determination code rejects all polygons of other room.
 
 
+### Portals and mirrors
+
+Portals and mirrors are just polygons with special generated on-fly texture.
+Separate rendering pass is used to render image in portal or mirror.
+
+Because of that approach the image look pixelated when looking too close.
+But this approach is relatively simple and requires no modification of main rendering code, which can slow down it.
+
+Depth of rendering is limited in order to avoid infinite recursion in cases like two mirrors facing each other.
+When depth is reached  black texture is used for portal or mirror image.
+
+It is also important to limit portals rendering depth, because for each recursive step of portals rendering separate Renderer class instance is created - including some intermediate structs.
+So, if portals rendering limit is too hight, too much memory for such structs will be wasted.
+
+View models (weapon in player hands) are not shown in portals and mirrors.
+Models with special flag (like player model) are only shown in portals and mirrors.
+
+
 ### Multithreading
 
 It's absolutely necessary to use multithreading in order to achieve acceptable performance.
@@ -244,6 +263,10 @@ Models are independent on each other too, so, models preparation code (animation
 Rasterization itself is (obviously) multithreaded, Each thread performs rasterization into its own rectangular screen region.
 HDR postprocessor uses multithreading too, but it gives very little performance increase, since postprocessing is mostly memory-bounding operation.
 Lastly, game code may be executed in parallel with final screen update (BitBlt/SwapBuffers call) for previous frame.
+
+Some non-rendering code parts use multithreading too.
+This includes map textures loading (in order to speed-up decoding of png/jpg images).
+Renderer loading and map-dependent game logic loading is also performing in parallel.
 
 
 ### Materials
@@ -272,7 +295,7 @@ These instructions are supported by Intel processors starting with Haswell and A
 ## Authors
 
 SquareWheel code:
-Copyright © 2022 Artöm "Panzerscrek" Kunç.
+Copyright © 2022-2023 Artöm "Panzerscrek" Kunç.
 
 IQM library:
 Copyright (c) 2010-2019 Lee Salzman.
