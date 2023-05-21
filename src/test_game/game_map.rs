@@ -46,6 +46,8 @@ impl GameMap
 			("reset_test_decals", Self::command_reset_test_decals),
 			("add_test_sprite", Self::command_add_test_sprite),
 			("reset_test_sprites", Self::command_reset_test_sprites),
+			("set_player_model", Self::command_set_player_model),
+			("reset_player_model", Self::command_reset_player_model),
 			("set_view_model", Self::command_set_view_model),
 			("reset_view_model", Self::command_reset_view_model),
 			("add_test_mirror", Self::command_add_test_mirror),
@@ -471,6 +473,49 @@ impl GameMap
 			self.ecs_command_buffer.despawn(id)
 		}
 		self.ecs_command_buffer.run_on(&mut self.ecs);
+	}
+
+	fn command_set_player_model(&mut self, args: commands_queue::CommandArgs)
+	{
+		self.command_reset_player_model(Vec::new());
+
+		if args.len() < 2
+		{
+			self.console.lock().unwrap().add_text("Expected 2 args".to_string());
+			return;
+		}
+
+		let mut r = self.resources_manager.lock().unwrap();
+
+		self.ecs
+			.insert(
+				self.player_entity,
+				(
+					ModelEntity {
+						position: Vec3f::zero(),
+						rotation: QuaternionF::one(),
+						animation: AnimationPoint {
+							frames: [0, 0],
+							lerp: 0.0,
+						},
+						model: r.get_model(&args[0]),
+						texture: r.get_texture_lite(&args[1]),
+						blending_mode: material::BlendingMode::None,
+						lighting: ModelLighting::Default,
+						is_view_model: false,
+						ordering_custom_bbox: None,
+					},
+					ModelEntityLocationLinkComponent {},
+				),
+			)
+			.ok();
+	}
+
+	fn command_reset_player_model(&mut self, _args: commands_queue::CommandArgs)
+	{
+		self.ecs
+			.remove::<(ModelEntity, ModelEntityLocationLinkComponent)>(self.player_entity)
+			.ok();
 	}
 
 	fn command_set_view_model(&mut self, args: commands_queue::CommandArgs)
