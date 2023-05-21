@@ -28,7 +28,7 @@ impl Console
 			is_active: false,
 			start_time: std::time::Instant::now(),
 			lines: VecDeque::with_capacity(LINES_BUFFER_LEN),
-			input_history: VecDeque::with_capacity(LINES_BUFFER_LEN),
+			input_history: VecDeque::with_capacity(HISTORY_BUFFER_LEN),
 			current_history_index: 0,
 			input_line: String::new(),
 		}))
