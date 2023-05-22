@@ -161,4 +161,5 @@ pub enum PortalView
 		fov: RadiansF,
 	},
 	Mirror {},
+	ParallaxPortal {}, // TODO - add transformation here
 }

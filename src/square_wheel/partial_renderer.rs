@@ -2088,6 +2088,56 @@ impl PartialRenderer
 						Some(renderers_common_data.portals_index.get_object_leafs(portal_index)),
 					)
 				},
+				PortalView::ParallaxPortal {} =>
+				{
+					let normal_len = portal.plane.vec.magnitude();
+					let dist_normalized =
+						(portal.plane.dist - portal.plane.vec.dot(camera_matrices.position)) / normal_len;
+
+					let mip_scale = 1.0 / ((1 << portal_info.mip) as f32);
+
+					let tex_coord_basis = Mat4f::from_cols(
+						portal.tex_coord_equation[0]
+							.vec
+							.extend(portal.tex_coord_equation[0].dist) *
+							mip_scale,
+						portal.tex_coord_equation[1]
+							.vec
+							.extend(portal.tex_coord_equation[1].dist) *
+							mip_scale,
+						portal.plane.vec.extend(-portal.plane.dist) * (mip_scale / normal_len),
+						Vec4f::new(0.0, 0.0, 0.0, 1.0),
+					)
+					.transpose();
+
+					let camera_position_tex_coord_space =
+						(tex_coord_basis * camera_matrices.position.extend(1.0)).truncate();
+
+					let translate = Mat4f::from_translation(-camera_position_tex_coord_space);
+
+					let mut shift_to_viewport = Mat4f::identity();
+					shift_to_viewport.z.x = camera_position_tex_coord_space.x - portal_info.tc_min[0] as f32;
+					shift_to_viewport.z.y = camera_position_tex_coord_space.y - portal_info.tc_min[1] as f32;
+
+					// Make sure portal plane is Z_NEAR.
+					// Doing so we clip all geometry behind the mirror.
+					let z_scale = Mat4f::from_nonuniform_scale(Z_NEAR, Z_NEAR, Z_NEAR / (dist_normalized * mip_scale));
+
+					// TODO - perform transformation to portal point here.
+					let view_point_transform = Mat4f::identity();
+
+					let portal_matrix =
+						shift_to_viewport * z_scale * translate * tex_coord_basis * view_point_transform;
+					(
+						CameraMatrices {
+							position: (view_point_transform * camera_matrices.position.extend(1.0)).truncate(),
+							view_matrix: portal_matrix,
+							planes_matrix: portal_matrix.transpose().invert().unwrap(),
+						},
+						// Start visible leafs search with leafs, where this mirror is located.
+						Some(renderers_common_data.portals_index.get_object_leafs(portal_index)),
+					)
+				},
 			};
 
 			let surface_info = system_window::SurfaceInfo {
