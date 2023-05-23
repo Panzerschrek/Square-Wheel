@@ -134,6 +134,7 @@ impl PartialRenderer
 				portals_info: Vec::new(),
 				textures_pixels: Vec::new(),
 				num_textures_pixels: 0,
+				transformed_portal_leafs: Vec::new(),
 			},
 		}
 	}
@@ -2090,6 +2091,27 @@ impl PartialRenderer
 				},
 				PortalView::ParallaxPortal { transform_matrix } =>
 				{
+					let transform_matrix_inverse = transform_matrix.invert().unwrap();
+
+					{
+						// Transform portal vertices and determine BSP leafs, where it is located.
+						// Use this list as start point for visibility calculation algorithm.
+						let mut portal_vertices_transofrmed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
+						for (out_vertex, in_vertex) in
+							portal_vertices_transofrmed.iter_mut().zip(portal.vertices.iter())
+						{
+							*out_vertex = (transform_matrix_inverse * in_vertex.extend(1.0)).truncate();
+						}
+
+						self.portals_rendering_data.transformed_portal_leafs.clear();
+						get_convex_hull_bsp_leafs_r(
+							&self.map,
+							bsp_map_compact::get_root_node_index(&self.map),
+							&portal_vertices_transofrmed[.. std::cmp::min(portal.vertices.len(), MAX_VERTICES)],
+							&mut self.portals_rendering_data.transformed_portal_leafs,
+						);
+					}
+
 					let normal_len = portal.plane.vec.magnitude();
 					let dist_normalized =
 						(portal.plane.dist - portal.plane.vec.dot(camera_matrices.position)) / normal_len;
@@ -2126,12 +2148,11 @@ impl PartialRenderer
 					let portal_matrix = shift_to_viewport * z_scale * translate * tex_coord_basis * transform_matrix;
 					(
 						CameraMatrices {
-							position: (transform_matrix * camera_matrices.position.extend(1.0)).truncate(),
+							position: (transform_matrix_inverse * camera_matrices.position.extend(1.0)).truncate(),
 							view_matrix: portal_matrix,
 							planes_matrix: portal_matrix.transpose().invert().unwrap(),
 						},
-						// TODO - use leafs, where transformed portal is located
-						None,
+						Some(&self.portals_rendering_data.transformed_portal_leafs as &[u32]),
 					)
 				},
 			};
@@ -4003,6 +4024,43 @@ fn draw_polygon<'a, ColorT: AbstractColor>(
 				TetureCoordinatesInterpolationMode::FullPerspective,
 				blending_mode,
 			);
+		}
+	}
+}
+
+fn get_convex_hull_bsp_leafs_r(
+	map: &bsp_map_compact::BSPMap,
+	node_index: u32,
+	vertices: &[Vec3f],
+	out_leafs: &mut Vec<u32>,
+)
+{
+	if node_index >= bsp_map_compact::FIRST_LEAF_INDEX
+	{
+		out_leafs.push(node_index - bsp_map_compact::FIRST_LEAF_INDEX);
+	}
+	else
+	{
+		let node = &map.nodes[node_index as usize];
+
+		let mut vertices_front = 0;
+		for &vertex in vertices
+		{
+			if node.plane.vec.dot(vertex) > node.plane.dist
+			{
+				vertices_front += 1;
+			}
+		}
+
+		let node_children = node.children;
+
+		if vertices_front > 0
+		{
+			get_convex_hull_bsp_leafs_r(map, node_children[0], vertices, out_leafs);
+		}
+		if vertices_front < vertices.len()
+		{
+			get_convex_hull_bsp_leafs_r(map, node_children[1], vertices, out_leafs);
 		}
 	}
 }
