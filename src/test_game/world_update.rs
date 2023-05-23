@@ -843,9 +843,9 @@ pub fn update_dynamic_lights_locations(ecs: &mut hecs::World)
 	}
 }
 
-pub fn update_camera_portals_locations(ecs: &mut hecs::World)
+pub fn update_portals_locations(ecs: &mut hecs::World)
 {
-	// Update location of camera portals, using location of target.
+	// Update locations of portals, using location of target.
 	for (_id, (view_portal, _camera_portal_target_location_link_component, target_name_component)) in ecs
 		.query::<(
 			&mut ViewPortal,
@@ -861,17 +861,21 @@ pub fn update_camera_portals_locations(ecs: &mut hecs::World)
 			{
 				if let PortalView::CameraAtPosition { position, rotation, .. } = &mut view_portal.view
 				{
+					// Simple camera portal - just use position and location of target.
 					*position = location_component.position;
 					*rotation = location_component.rotation;
 				}
 				if let PortalView::ParallaxPortal { transform_matrix } = &mut view_portal.view
 				{
+					// Parallax portal - calculate transformation matrix.
+					// Use portal polygon center and texture axis for this.
+
+					// TODO - implement also transformation with scale.
+
 					let portal_rotation_matrix = Mat4f::from_cols(
-						-view_portal.plane.vec.extend(0.0) / view_portal.plane.vec.magnitude(),
-						-view_portal.tex_coord_equation[0].vec.extend(0.0) /
-							view_portal.tex_coord_equation[0].vec.magnitude(),
-						-view_portal.tex_coord_equation[1].vec.extend(0.0) /
-							view_portal.tex_coord_equation[1].vec.magnitude(),
+						-view_portal.plane.vec.normalize().extend(0.0),
+						-view_portal.tex_coord_equation[0].vec.normalize().extend(0.0),
+						-view_portal.tex_coord_equation[1].vec.normalize().extend(0.0),
 						Vec4f::new(0.0, 0.0, 0.0, 1.0),
 					)
 					.transpose();

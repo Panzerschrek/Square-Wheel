@@ -2102,9 +2102,8 @@ impl PartialRenderer
 						}
 
 						self.portals_rendering_data.transformed_portal_leafs.clear();
-						get_convex_hull_bsp_leafs_r(
+						bsp_map_compact::get_convex_hull_bsp_leafs(
 							&self.map,
-							bsp_map_compact::get_root_node_index(&self.map),
 							&portal_vertices_transofrmed[.. std::cmp::min(portal.vertices.len(), MAX_VERTICES)],
 							&mut self.portals_rendering_data.transformed_portal_leafs,
 						);
@@ -2140,7 +2139,7 @@ impl PartialRenderer
 					shift_to_viewport.z.y = camera_position_tex_coord_space.y - portal_info.tc_min[1] as f32;
 
 					// Make sure portal plane is Z_NEAR.
-					// Doing so we clip all geometry behind the mirror.
+					// Doing so we clip all geometry behind the portal.
 					let z_scale = Mat4f::from_nonuniform_scale(Z_NEAR, Z_NEAR, Z_NEAR / (dist_normalized * mip_scale));
 
 					let portal_matrix =
@@ -4023,43 +4022,6 @@ fn draw_polygon<'a, ColorT: AbstractColor>(
 				TetureCoordinatesInterpolationMode::FullPerspective,
 				blending_mode,
 			);
-		}
-	}
-}
-
-fn get_convex_hull_bsp_leafs_r(
-	map: &bsp_map_compact::BSPMap,
-	node_index: u32,
-	vertices: &[Vec3f],
-	out_leafs: &mut Vec<u32>,
-)
-{
-	if node_index >= bsp_map_compact::FIRST_LEAF_INDEX
-	{
-		out_leafs.push(node_index - bsp_map_compact::FIRST_LEAF_INDEX);
-	}
-	else
-	{
-		let node = &map.nodes[node_index as usize];
-
-		let mut vertices_front = 0;
-		for &vertex in vertices
-		{
-			if node.plane.vec.dot(vertex) > node.plane.dist
-			{
-				vertices_front += 1;
-			}
-		}
-
-		let node_children = node.children;
-
-		if vertices_front > 0
-		{
-			get_convex_hull_bsp_leafs_r(map, node_children[0], vertices, out_leafs);
-		}
-		if vertices_front < vertices.len()
-		{
-			get_convex_hull_bsp_leafs_r(map, node_children[1], vertices, out_leafs);
 		}
 	}
 }

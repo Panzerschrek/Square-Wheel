@@ -283,3 +283,49 @@ pub fn get_root_node_index(map: &BSPMap) -> u32
 {
 	(map.nodes.len() - 1) as u32
 }
+
+pub fn get_convex_hull_bsp_leafs<Collection: std::iter::Extend<u32>>(
+	map: &BSPMap,
+	vertices: &[Vec3f],
+	out_leafs: &mut Collection,
+)
+{
+	get_convex_hull_bsp_leafs_r(map, get_root_node_index(map), vertices, out_leafs)
+}
+
+fn get_convex_hull_bsp_leafs_r<Collection: std::iter::Extend<u32>>(
+	map: &BSPMap,
+	node_index: u32,
+	vertices: &[Vec3f],
+	out_leafs: &mut Collection,
+)
+{
+	if node_index >= FIRST_LEAF_INDEX
+	{
+		out_leafs.extend([node_index - FIRST_LEAF_INDEX]);
+	}
+	else
+	{
+		let node = &map.nodes[node_index as usize];
+
+		let mut vertices_front = 0;
+		for &vertex in vertices
+		{
+			if node.plane.vec.dot(vertex) > node.plane.dist
+			{
+				vertices_front += 1;
+			}
+		}
+
+		let node_children = node.children;
+
+		if vertices_front > 0
+		{
+			get_convex_hull_bsp_leafs_r(map, node_children[0], vertices, out_leafs);
+		}
+		if vertices_front < vertices.len()
+		{
+			get_convex_hull_bsp_leafs_r(map, node_children[1], vertices, out_leafs);
+		}
+	}
+}
