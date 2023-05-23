@@ -308,10 +308,7 @@ fn spawn_regular_entity(
 						},
 						plane: polygon.plane,
 						tex_coord_equation: polygon.tex_coord_equation,
-						vertices: bsp_map_compact::get_polygon_vertices(map, polygon)
-							.iter()
-							.copied()
-							.collect(),
+						vertices: Vec::from(bsp_map_compact::get_polygon_vertices(map, polygon)),
 						blending_mode: get_entity_blending_mode(map_entity, map),
 					},
 					ViewPortalTargetLocationLinkComponent {},
@@ -353,10 +350,36 @@ fn spawn_regular_entity(
 					view: PortalView::Mirror {},
 					plane: polygon.plane,
 					tex_coord_equation: tex_coord_equation,
-					vertices: bsp_map_compact::get_polygon_vertices(map, polygon)
-						.iter()
-						.copied()
-						.collect(),
+					vertices: Vec::from(bsp_map_compact::get_polygon_vertices(map, polygon)),
+					blending_mode: get_entity_blending_mode(map_entity, map),
+				},));
+
+				add_entity_common_components(ecs, map, map_entity, entity);
+			}
+		},
+		Some("func_parallax_portal") =>
+		{
+			let index = map_entity.submodel_index as usize;
+			if index < map.submodels.len() && map.submodels[index].num_polygons > 0
+			{
+				let polygon = &map.polygons[map.submodels[index].first_polygon as usize];
+
+				let mut tex_coord_equation = polygon.tex_coord_equation;
+				if tex_coord_equation[0]
+					.vec
+					.cross(tex_coord_equation[1].vec)
+					.dot(polygon.plane.vec) >
+					0.0
+				{
+					// Make sure portal basis has proper orientation.
+					tex_coord_equation[0] = tex_coord_equation[0].get_inverted();
+				}
+
+				let entity = ecs.spawn((ViewPortal {
+					view: PortalView::ParallaxPortal {},
+					plane: polygon.plane,
+					tex_coord_equation: tex_coord_equation,
+					vertices: Vec::from(bsp_map_compact::get_polygon_vertices(map, polygon)),
 					blending_mode: get_entity_blending_mode(map_entity, map),
 				},));
 

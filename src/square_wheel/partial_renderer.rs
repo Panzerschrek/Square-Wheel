@@ -2134,8 +2134,8 @@ impl PartialRenderer
 							view_matrix: portal_matrix,
 							planes_matrix: portal_matrix.transpose().invert().unwrap(),
 						},
-						// Start visible leafs search with leafs, where this mirror is located.
-						Some(renderers_common_data.portals_index.get_object_leafs(portal_index)),
+						// TODO - use leafs, where transformed portal is located
+						None,
 					)
 				},
 			};
