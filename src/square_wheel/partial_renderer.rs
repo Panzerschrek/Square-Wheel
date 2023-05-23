@@ -2091,8 +2091,6 @@ impl PartialRenderer
 				},
 				PortalView::ParallaxPortal { transform_matrix } =>
 				{
-					let transform_matrix_inverse = transform_matrix.invert().unwrap();
-
 					{
 						// Transform portal vertices and determine BSP leafs, where it is located.
 						// Use this list as start point for visibility calculation algorithm.
@@ -2100,7 +2098,7 @@ impl PartialRenderer
 						for (out_vertex, in_vertex) in
 							portal_vertices_transofrmed.iter_mut().zip(portal.vertices.iter())
 						{
-							*out_vertex = (transform_matrix_inverse * in_vertex.extend(1.0)).truncate();
+							*out_vertex = (transform_matrix * in_vertex.extend(1.0)).truncate();
 						}
 
 						self.portals_rendering_data.transformed_portal_leafs.clear();
@@ -2145,10 +2143,11 @@ impl PartialRenderer
 					// Doing so we clip all geometry behind the mirror.
 					let z_scale = Mat4f::from_nonuniform_scale(Z_NEAR, Z_NEAR, Z_NEAR / (dist_normalized * mip_scale));
 
-					let portal_matrix = shift_to_viewport * z_scale * translate * tex_coord_basis * transform_matrix;
+					let portal_matrix =
+						shift_to_viewport * z_scale * translate * tex_coord_basis * transform_matrix.invert().unwrap();
 					(
 						CameraMatrices {
-							position: (transform_matrix_inverse * camera_matrices.position.extend(1.0)).truncate(),
+							position: (transform_matrix * camera_matrices.position.extend(1.0)).truncate(),
 							view_matrix: portal_matrix,
 							planes_matrix: portal_matrix.transpose().invert().unwrap(),
 						},

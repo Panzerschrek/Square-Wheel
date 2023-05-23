@@ -163,6 +163,7 @@ pub enum PortalView
 	Mirror {},
 	ParallaxPortal
 	{
+		// Matrix that transforms camera position into camera position of view point of this portal.
 		transform_matrix: Mat4f,
 	},
 }
