@@ -854,15 +854,39 @@ pub fn update_camera_portals_locations(ecs: &mut hecs::World)
 		)>()
 		.iter()
 	{
-		if let PortalView::CameraAtPosition { position, rotation, .. } = &mut view_portal.view
+		for (_target_id, (named_target_component, location_component)) in
+			ecs.query::<(&NamedTargetComponent, &LocationComponent)>().iter()
 		{
-			for (_target_id, (named_target_component, location_component)) in
-				ecs.query::<(&NamedTargetComponent, &LocationComponent)>().iter()
+			if named_target_component.name == target_name_component.name
 			{
-				if named_target_component.name == target_name_component.name
+				if let PortalView::CameraAtPosition { position, rotation, .. } = &mut view_portal.view
 				{
 					*position = location_component.position;
 					*rotation = location_component.rotation;
+				}
+				if let PortalView::ParallaxPortal { transform_matrix } = &mut view_portal.view
+				{
+					let portal_rotation_matrix = Mat4f::from_cols(
+						view_portal.tex_coord_equation[0].vec.extend(0.0) /
+							view_portal.tex_coord_equation[0].vec.magnitude(),
+						view_portal.tex_coord_equation[1].vec.extend(0.0) /
+							view_portal.tex_coord_equation[1].vec.magnitude(),
+						-view_portal.plane.vec.extend(0.0) / view_portal.plane.vec.magnitude(),
+						Vec4f::new(0.0, 0.0, 0.0, 1.0),
+					)
+					.transpose();
+
+					// TODO - perform calculation of center of mass instead.
+					let mut portal_center = Vec3f::new(0.0, 0.0, 0.0);
+					for v in &view_portal.vertices
+					{
+						portal_center += *v;
+					}
+					portal_center /= view_portal.vertices.len() as f32;
+
+					*transform_matrix = Mat4f::from_translation(portal_center) *
+						portal_rotation_matrix * Mat4f::from(location_component.rotation.conjugate()) *
+						Mat4f::from_translation(-location_component.position);
 				}
 			}
 		}

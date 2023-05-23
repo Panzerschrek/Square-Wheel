@@ -2088,7 +2088,7 @@ impl PartialRenderer
 						Some(renderers_common_data.portals_index.get_object_leafs(portal_index)),
 					)
 				},
-				PortalView::ParallaxPortal {} =>
+				PortalView::ParallaxPortal { transform_matrix } =>
 				{
 					let normal_len = portal.plane.vec.magnitude();
 					let dist_normalized =
@@ -2123,14 +2123,10 @@ impl PartialRenderer
 					// Doing so we clip all geometry behind the mirror.
 					let z_scale = Mat4f::from_nonuniform_scale(Z_NEAR, Z_NEAR, Z_NEAR / (dist_normalized * mip_scale));
 
-					// TODO - perform transformation to portal point here.
-					let view_point_transform = Mat4f::identity();
-
-					let portal_matrix =
-						shift_to_viewport * z_scale * translate * tex_coord_basis * view_point_transform;
+					let portal_matrix = shift_to_viewport * z_scale * translate * tex_coord_basis * transform_matrix;
 					(
 						CameraMatrices {
-							position: (view_point_transform * camera_matrices.position.extend(1.0)).truncate(),
+							position: (transform_matrix * camera_matrices.position.extend(1.0)).truncate(),
 							view_matrix: portal_matrix,
 							planes_matrix: portal_matrix.transpose().invert().unwrap(),
 						},

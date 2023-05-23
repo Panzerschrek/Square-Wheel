@@ -375,13 +375,18 @@ fn spawn_regular_entity(
 					tex_coord_equation[0] = tex_coord_equation[0].get_inverted();
 				}
 
-				let entity = ecs.spawn((ViewPortal {
-					view: PortalView::ParallaxPortal {},
-					plane: polygon.plane,
-					tex_coord_equation: tex_coord_equation,
-					vertices: Vec::from(bsp_map_compact::get_polygon_vertices(map, polygon)),
-					blending_mode: get_entity_blending_mode(map_entity, map),
-				},));
+				let entity = ecs.spawn((
+					ViewPortal {
+						view: PortalView::ParallaxPortal {
+							transform_matrix: Mat4f::identity(),
+						},
+						plane: polygon.plane,
+						tex_coord_equation: tex_coord_equation,
+						vertices: Vec::from(bsp_map_compact::get_polygon_vertices(map, polygon)),
+						blending_mode: get_entity_blending_mode(map_entity, map),
+					},
+					ViewPortalTargetLocationLinkComponent {},
+				));
 
 				add_entity_common_components(ecs, map, map_entity, entity);
 			}
