@@ -41,6 +41,22 @@ impl GameInterface for Game
 		time_delta_s: f32,
 	)
 	{
+		for event in events
+		{
+			match event
+			{
+				sdl2::event::Event::KeyDown { keycode, .. } =>
+				{
+					if *keycode == Some(sdl2::keyboard::Keycode::Escape)
+					{
+						self.commands_processor.lock().unwrap().process_command("quit");
+					}
+				},
+				_ =>
+				{},
+			}
+		}
+
 		if let Some(game_map) = &mut self.game_map
 		{
 			game_map.update(keyboard_state, events, time_delta_s);

@@ -157,10 +157,6 @@ impl Host
 						{
 							console.toggle();
 						}
-						else
-						{
-							self.quit_requested = true;
-						}
 					}
 					if *keycode == Some(Keycode::F12)
 					{
