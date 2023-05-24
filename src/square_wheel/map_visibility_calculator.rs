@@ -1,4 +1,4 @@
-use super::frame_number::*;
+use super::{frame_number::*, renderer_utils::*};
 use crate::common::{bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, matrix::*};
 use std::sync::Arc;
 
@@ -251,7 +251,6 @@ fn project_portal(
 	view_matrix: &Mat4f,
 ) -> Option<ClippingPolygon>
 {
-	const MAX_VERTICES: usize = 24;
 	let mut vertex_count = std::cmp::min(portal.num_vertices as usize, MAX_VERTICES);
 
 	// Perform initial matrix tranformation, obtain 3d vertices in camera-aligned space.
