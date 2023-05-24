@@ -3126,21 +3126,13 @@ impl PartialRenderer
 			return;
 		}
 
-		// HACK! Shift polygon vertices a bit away from camera to fix buggy polygon clipping,
-		// when polygon lies exactly on clip plane.
-		// Such hack doesn't solve problems completely, but it resolves most actual cases.
-		let vertex_pos_shift_eps = 1.0 / 4.0;
-
 		let mut vertices_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
 		let mut vertex_count = std::cmp::min(polygon.num_vertices as usize, MAX_VERTICES);
 
-		for (in_vertex, out_vertex) in self.vertices_transformed
-			[(polygon.first_vertex as usize) .. (polygon.first_vertex as usize) + vertex_count]
-			.iter()
-			.zip(vertices_clipped[.. vertex_count].iter_mut())
-		{
-			*out_vertex = Vec3f::new(in_vertex.x, in_vertex.y, in_vertex.z + vertex_pos_shift_eps);
-		}
+		vertices_clipped[.. vertex_count].copy_from_slice(
+			&self.vertices_transformed
+				[(polygon.first_vertex as usize) .. (polygon.first_vertex as usize) + vertex_count],
+		);
 
 		let mut vertices_temp = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
 
@@ -3153,12 +3145,6 @@ impl PartialRenderer
 				return;
 			}
 			vertices_clipped[.. vertex_count].copy_from_slice(&vertices_temp[.. vertex_count]);
-		}
-
-		// Shift clipped vertices back.
-		for v in &mut vertices_clipped[.. vertex_count]
-		{
-			v.z -= vertex_pos_shift_eps;
 		}
 
 		draw_polygon(
