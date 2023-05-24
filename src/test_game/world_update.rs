@@ -872,10 +872,17 @@ pub fn update_portals_locations(ecs: &mut hecs::World)
 
 					// TODO - implement also transformation with scale.
 
+					// Make sure u/v vecs are in polygon plane and are normalized and perpendicular.
+					let normal = view_portal.plane.vec.normalize();
+					let u_vec = (view_portal.tex_coord_equation[0].vec -
+						view_portal.tex_coord_equation[0].vec.dot(normal) * normal)
+						.normalize();
+					let v_vec = u_vec.cross(normal);
+
 					let portal_rotation_matrix = Mat4f::from_cols(
-						-view_portal.plane.vec.normalize().extend(0.0),
-						-view_portal.tex_coord_equation[0].vec.normalize().extend(0.0),
-						-view_portal.tex_coord_equation[1].vec.normalize().extend(0.0),
+						-normal.extend(0.0),
+						-u_vec.extend(0.0),
+						-v_vec.extend(0.0),
 						Vec4f::new(0.0, 0.0, 0.0, 1.0),
 					)
 					.transpose();
