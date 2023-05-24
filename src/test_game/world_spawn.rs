@@ -317,7 +317,8 @@ fn spawn_regular_entity(
 				add_entity_common_components(ecs, map, map_entity, entity);
 			}
 		},
-		Some("info_camera_portal_target") =>
+		// Name portal cameras like in Quake III.
+		Some("misc_portal_camera") =>
 		{
 			if let Some(origin) = get_entity_origin(map_entity, map)
 			{
