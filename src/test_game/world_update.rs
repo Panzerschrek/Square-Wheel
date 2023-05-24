@@ -843,9 +843,9 @@ pub fn update_dynamic_lights_locations(ecs: &mut hecs::World)
 	}
 }
 
-pub fn update_camera_portals_locations(ecs: &mut hecs::World)
+pub fn update_portals_locations(ecs: &mut hecs::World)
 {
-	// Update location of camera portals, using location of target.
+	// Update locations of portals, using location of target.
 	for (_id, (view_portal, _camera_portal_target_location_link_component, target_name_component)) in ecs
 		.query::<(
 			&mut ViewPortal,
@@ -854,15 +854,50 @@ pub fn update_camera_portals_locations(ecs: &mut hecs::World)
 		)>()
 		.iter()
 	{
-		if let PortalView::CameraAtPosition { position, rotation, .. } = &mut view_portal.view
+		for (_target_id, (named_target_component, location_component)) in
+			ecs.query::<(&NamedTargetComponent, &LocationComponent)>().iter()
 		{
-			for (_target_id, (named_target_component, location_component)) in
-				ecs.query::<(&NamedTargetComponent, &LocationComponent)>().iter()
+			if named_target_component.name == target_name_component.name
 			{
-				if named_target_component.name == target_name_component.name
+				if let PortalView::CameraAtPosition { position, rotation, .. } = &mut view_portal.view
 				{
+					// Simple camera portal - just use position and location of target.
 					*position = location_component.position;
 					*rotation = location_component.rotation;
+				}
+				if let PortalView::ParallaxPortal { transform_matrix } = &mut view_portal.view
+				{
+					// Parallax portal - calculate transformation matrix.
+					// Use portal polygon center and texture axis for this.
+
+					// TODO - implement also transformation with scale.
+
+					// Make sure u/v vecs are in polygon plane and are normalized and perpendicular.
+					let normal = view_portal.plane.vec.normalize();
+					let u_vec = (view_portal.tex_coord_equation[0].vec -
+						view_portal.tex_coord_equation[0].vec.dot(normal) * normal)
+						.normalize();
+					let v_vec = u_vec.cross(normal);
+
+					let portal_rotation_matrix = Mat4f::from_cols(
+						-normal.extend(0.0),
+						-u_vec.extend(0.0),
+						-v_vec.extend(0.0),
+						Vec4f::new(0.0, 0.0, 0.0, 1.0),
+					)
+					.transpose();
+
+					// TODO - perform calculation of center of mass instead.
+					let mut portal_center = Vec3f::new(0.0, 0.0, 0.0);
+					for v in &view_portal.vertices
+					{
+						portal_center += *v;
+					}
+					portal_center /= view_portal.vertices.len() as f32;
+
+					*transform_matrix = Mat4f::from_translation(location_component.position) *
+						Mat4f::from(location_component.rotation) *
+						portal_rotation_matrix * Mat4f::from_translation(-portal_center);
 				}
 			}
 		}

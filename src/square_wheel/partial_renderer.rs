@@ -134,6 +134,7 @@ impl PartialRenderer
 				portals_info: Vec::new(),
 				textures_pixels: Vec::new(),
 				num_textures_pixels: 0,
+				transformed_portal_leafs: Vec::new(),
 			},
 		}
 	}
@@ -2086,6 +2087,70 @@ impl PartialRenderer
 						},
 						// Start visible leafs search with leafs, where this mirror is located.
 						Some(renderers_common_data.portals_index.get_object_leafs(portal_index)),
+					)
+				},
+				PortalView::ParallaxPortal { transform_matrix } =>
+				{
+					{
+						// Transform portal vertices and determine BSP leafs, where it is located.
+						// Use this list as start point for visibility calculation algorithm.
+						let mut portal_vertices_transofrmed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
+						for (out_vertex, in_vertex) in
+							portal_vertices_transofrmed.iter_mut().zip(portal.vertices.iter())
+						{
+							*out_vertex = (transform_matrix * in_vertex.extend(1.0)).truncate();
+						}
+
+						self.portals_rendering_data.transformed_portal_leafs.clear();
+						bsp_map_compact::get_convex_hull_bsp_leafs(
+							&self.map,
+							&portal_vertices_transofrmed[.. std::cmp::min(portal.vertices.len(), MAX_VERTICES)],
+							&mut self.portals_rendering_data.transformed_portal_leafs,
+						);
+					}
+
+					let normal_len = portal.plane.vec.magnitude();
+					let dist_normalized =
+						(portal.plane.dist - portal.plane.vec.dot(camera_matrices.position)) / normal_len;
+
+					let mip_scale = 1.0 / ((1 << portal_info.mip) as f32);
+
+					let tex_coord_basis = Mat4f::from_cols(
+						portal.tex_coord_equation[0]
+							.vec
+							.extend(portal.tex_coord_equation[0].dist) *
+							mip_scale,
+						portal.tex_coord_equation[1]
+							.vec
+							.extend(portal.tex_coord_equation[1].dist) *
+							mip_scale,
+						portal.plane.vec.extend(-portal.plane.dist) * (mip_scale / normal_len),
+						Vec4f::new(0.0, 0.0, 0.0, 1.0),
+					)
+					.transpose();
+
+					let camera_position_tex_coord_space =
+						(tex_coord_basis * camera_matrices.position.extend(1.0)).truncate();
+
+					let translate = Mat4f::from_translation(-camera_position_tex_coord_space);
+
+					let mut shift_to_viewport = Mat4f::identity();
+					shift_to_viewport.z.x = camera_position_tex_coord_space.x - portal_info.tc_min[0] as f32;
+					shift_to_viewport.z.y = camera_position_tex_coord_space.y - portal_info.tc_min[1] as f32;
+
+					// Make sure portal plane is Z_NEAR.
+					// Doing so we clip all geometry behind the portal.
+					let z_scale = Mat4f::from_nonuniform_scale(Z_NEAR, Z_NEAR, Z_NEAR / (dist_normalized * mip_scale));
+
+					let portal_matrix =
+						shift_to_viewport * z_scale * translate * tex_coord_basis * transform_matrix.invert().unwrap();
+					(
+						CameraMatrices {
+							position: (transform_matrix * camera_matrices.position.extend(1.0)).truncate(),
+							view_matrix: portal_matrix,
+							planes_matrix: portal_matrix.transpose().invert().unwrap(),
+						},
+						Some(&self.portals_rendering_data.transformed_portal_leafs as &[u32]),
 					)
 				},
 			};

@@ -318,6 +318,9 @@ pub struct PortalsRenderingData
 	// TODO - make sure alignment is correct.
 	pub textures_pixels: Vec<u8>,
 	pub num_textures_pixels: usize,
+
+	// Reuse memory for parallax portals leafs list.
+	pub transformed_portal_leafs: Vec<u32>,
 }
 
 #[derive(Copy, Clone, Default)]

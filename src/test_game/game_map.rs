@@ -779,13 +779,13 @@ impl GameMap
 		world_update::update_other_entity_locations(&mut self.ecs);
 		world_update::update_player_controller_camera_locations(&mut self.ecs, &self.physics);
 
-		// Update locations of visible models.
+		// Update locations of dynamic objects.
 		world_update::update_models_locations(&mut self.ecs);
 		world_update::update_submodels_locations(&mut self.ecs);
 		world_update::update_decals_locations(&mut self.ecs);
 		world_update::update_sprites_locations(&mut self.ecs);
 		world_update::update_dynamic_lights_locations(&mut self.ecs);
-		world_update::update_camera_portals_locations(&mut self.ecs);
+		world_update::update_portals_locations(&mut self.ecs);
 	}
 
 	pub fn grab_mouse_input(&self) -> bool
