@@ -310,6 +310,7 @@ fn spawn_regular_entity(
 						tex_coord_equation: polygon.tex_coord_equation,
 						vertices: Vec::from(bsp_map_compact::get_polygon_vertices(map, polygon)),
 						blending_mode: get_entity_blending_mode(map_entity, map),
+						texture: None,
 					},
 					ViewPortalTargetLocationLinkComponent {},
 				));
@@ -353,6 +354,7 @@ fn spawn_regular_entity(
 					tex_coord_equation: tex_coord_equation,
 					vertices: Vec::from(bsp_map_compact::get_polygon_vertices(map, polygon)),
 					blending_mode: get_entity_blending_mode(map_entity, map),
+					texture: None,
 				},));
 
 				add_entity_common_components(ecs, map, map_entity, entity);
@@ -385,6 +387,7 @@ fn spawn_regular_entity(
 						tex_coord_equation: tex_coord_equation,
 						vertices: Vec::from(bsp_map_compact::get_polygon_vertices(map, polygon)),
 						blending_mode: get_entity_blending_mode(map_entity, map),
+						texture: None,
 					},
 					ViewPortalTargetLocationLinkComponent {},
 				));

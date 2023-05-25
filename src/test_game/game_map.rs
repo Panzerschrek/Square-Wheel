@@ -638,6 +638,7 @@ impl GameMap
 					.map(|v| (mat * (scale * v).extend(1.0)).truncate())
 					.collect(),
 				blending_mode: material::BlendingMode::Average,
+				texture: None,
 			},
 			TestMirrorComponent {},
 		));

@@ -1,6 +1,6 @@
 use super::{components::*, frame_info::*, resources_manager, test_game_physics, textures, triangle_model};
 use serde::{Deserialize, Serialize};
-use square_wheel_lib::common::{bbox::*, material, math_types::*};
+use square_wheel_lib::common::{bbox::*, material::BlendingMode, math_types::*, plane::*};
 use std::{
 	collections::HashMap,
 	fs::{File, OpenOptions},
@@ -364,7 +364,6 @@ impl<'a> hecs::serialize::row::SerializeContext for SerializeContext<'a>
 		// Non-special drawable components.
 		self.try_serialize_component::<SubmodelEntityWithIndex, S>(entity, &mut map)?;
 		self.try_serialize_component::<DynamicLight, S>(entity, &mut map)?;
-		self.try_serialize_component::<ViewPortal, S>(entity, &mut map)?;
 
 		// Perform serialization of components with shared resources, using proxy structs with identical content but changed resource fields.
 		// Collect shared resources and serialize them later.
@@ -389,6 +388,12 @@ impl<'a> hecs::serialize::row::SerializeContext for SerializeContext<'a>
 		{
 			let proxy = SpriteProxy::new(&*c, &mut self.shared_resources.lite_textures);
 			map.serialize_entry(get_component_name::<SpriteProxy>(), &proxy)?;
+		}
+
+		if let Some(c) = entity.get::<&ViewPortal>()
+		{
+			let proxy = ViewPortalProxy::new(&*c, &mut self.shared_resources.lite_textures);
+			map.serialize_entry(get_component_name::<ViewPortalProxy>(), &proxy)?;
 		}
 
 		map.end()
@@ -506,6 +511,15 @@ impl<'a> hecs::serialize::row::DeserializeContext for DeserializeContext<'a>
 					entity.add(v);
 				}
 			}
+			if key.as_str() == get_component_name::<ViewPortalProxy>()
+			{
+				if let Some(v) = map
+					.next_value::<ViewPortalProxy>()?
+					.try_to(&self.shared_resources.lite_textures)
+				{
+					entity.add(v);
+				}
+			}
 		}
 
 		Ok(())
@@ -559,7 +573,7 @@ struct ModelEntityProxy
 	animation: AnimationPoint,
 	model: ResourceSerializationKey,
 	texture: ResourceSerializationKey,
-	blending_mode: material::BlendingMode,
+	blending_mode: BlendingMode,
 	lighting: ModelLighting,
 	flags: ModelEntityDrawFlags,
 	ordering_custom_bbox: Option<BBox>,
@@ -613,7 +627,7 @@ struct DecalProxy
 	rotation: QuaternionF,
 	scale: Vec3f,
 	texture: ResourceSerializationKey,
-	blending_mode: material::BlendingMode,
+	blending_mode: BlendingMode,
 	lightmap_light_scale: f32,
 	light_add: [f32; 3],
 }
@@ -654,7 +668,7 @@ struct SpriteProxy
 	angle: f32,
 	radius: f32,
 	texture: ResourceSerializationKey,
-	blending_mode: material::BlendingMode,
+	blending_mode: BlendingMode,
 	orientation: SpriteOrientation,
 	light_scale: f32,
 	light_add: [f32; 3],
@@ -687,6 +701,81 @@ impl SpriteProxy
 			orientation: self.orientation,
 			light_scale: self.light_scale,
 			light_add: self.light_add,
+		})
+	}
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ViewPortalProxy
+{
+	view: PortalView,
+	plane: Plane,
+	tex_coord_equation: [Plane; 2],
+	vertices: Vec<Vec3f>,
+	blending_mode: BlendingMode,
+	texture: Option<ViewPortalTextureProxy>,
+}
+
+impl ViewPortalProxy
+{
+	fn new(view_portal: &ViewPortal, textures: &mut ResourcesMap<textures::TextureLiteWithMips>) -> Self
+	{
+		Self {
+			view: view_portal.view,
+			plane: view_portal.plane,
+			tex_coord_equation: view_portal.tex_coord_equation,
+			vertices: view_portal.vertices.clone(),
+			blending_mode: view_portal.blending_mode,
+			texture: view_portal
+				.texture
+				.as_ref()
+				.map(|t| ViewPortalTextureProxy::new(t, textures)),
+		}
+	}
+
+	fn try_to(&self, textures: &ResourcesMap<textures::TextureLiteWithMips>) -> Option<ViewPortal>
+	{
+		Some(ViewPortal {
+			view: self.view,
+			plane: self.plane,
+			tex_coord_equation: self.tex_coord_equation,
+			vertices: self.vertices.clone(),
+			blending_mode: self.blending_mode,
+			texture: if let Some(t) = &self.texture
+			{
+				t.try_to(textures)
+			}
+			else
+			{
+				None
+			},
+		})
+	}
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ViewPortalTextureProxy
+{
+	blending_mode: BlendingMode,
+	texture: ResourceSerializationKey,
+}
+
+impl ViewPortalTextureProxy
+{
+	fn new(view_portal_texture: &ViewPortalTexture, textures: &mut ResourcesMap<textures::TextureLiteWithMips>)
+		-> Self
+	{
+		Self {
+			blending_mode: view_portal_texture.blending_mode,
+			texture: ResourceSerializationKey::from_resource(&view_portal_texture.texture, textures),
+		}
+	}
+
+	fn try_to(&self, textures: &ResourcesMap<textures::TextureLiteWithMips>) -> Option<ViewPortalTexture>
+	{
+		Some(ViewPortalTexture {
+			blending_mode: self.blending_mode,
+			texture: self.texture.to_resource(textures)?,
 		})
 	}
 }

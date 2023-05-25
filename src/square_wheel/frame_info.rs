@@ -141,7 +141,7 @@ pub enum DynamicLightShadowType
 	},
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone)]
 pub struct ViewPortal
 {
 	pub view: PortalView,
@@ -149,9 +149,10 @@ pub struct ViewPortal
 	pub tex_coord_equation: [Plane; 2],
 	pub vertices: Vec<Vec3f>,
 	pub blending_mode: BlendingMode,
+	pub texture: Option<ViewPortalTexture>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub enum PortalView
 {
 	CameraAtPosition
@@ -166,4 +167,11 @@ pub enum PortalView
 		// Matrix that transforms camera position into camera position of view point of this portal.
 		transform_matrix: Mat4f,
 	},
+}
+
+#[derive(Clone)]
+pub struct ViewPortalTexture
+{
+	pub blending_mode: BlendingMode,
+	pub texture: SharedResourcePtr<TextureLiteWithMips>,
 }
