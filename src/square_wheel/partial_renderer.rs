@@ -2480,10 +2480,10 @@ impl PartialRenderer
 			dist: 0.0,
 		}; MAX_LEAF_CLIP_PLANES];
 
-		let leaf_clip_planes_src = &renderers_common_data.leafs_planes[leaf_index as usize];
+		let leaf_clip_planes_world_space = &renderers_common_data.leafs_planes[leaf_index as usize];
 
 		// Transform leaf clip planes.
-		for (dst_plane, src_plane) in leaf_clip_planes.iter_mut().zip(leaf_clip_planes_src.iter())
+		for (dst_plane, src_plane) in leaf_clip_planes.iter_mut().zip(leaf_clip_planes_world_space.iter())
 		{
 			let plane_transformed_vec4 = camera_matrices.planes_matrix * src_plane.vec.extend(-src_plane.dist);
 			*dst_plane = Plane {
@@ -2492,8 +2492,8 @@ impl PartialRenderer
 			};
 		}
 
-		let num_clip_planes = std::cmp::min(leaf_clip_planes.len(), leaf_clip_planes_src.len());
-		let used_leaf_clip_planes = &mut leaf_clip_planes[.. num_clip_planes];
+		let used_leaf_clip_planes =
+			&mut leaf_clip_planes[.. std::cmp::min(MAX_LEAF_CLIP_PLANES, leaf_clip_planes_world_space.len())];
 
 		if total_objects == 1
 		{
@@ -2506,7 +2506,7 @@ impl PartialRenderer
 					frame_info,
 					&clip_planes,
 					used_leaf_clip_planes,
-					leaf_clip_planes_src,
+					leaf_clip_planes_world_space,
 					leaf_decals,
 					leaf_submodels[0],
 				);
@@ -2696,7 +2696,7 @@ impl PartialRenderer
 					frame_info,
 					&clip_planes,
 					used_leaf_clip_planes,
-					leaf_clip_planes_src,
+					leaf_clip_planes_world_space,
 					leaf_decals,
 					*object_index - SUBMODEL_INDEX_ADD,
 				);
@@ -3128,19 +3128,19 @@ impl PartialRenderer
 		polygon_index: u32,
 	)
 	{
-		let polygon = &self.map.polygons[polygon_index as usize];
 		let polygon_data = &self.polygons_data[polygon_index as usize];
 		if polygon_data.visible_frame != self.current_frame
 		{
 			return;
 		}
 
+		let polygon = &self.map.polygons[polygon_index as usize];
+
 		let mut vertices_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
 		let mut vertex_count = std::cmp::min(polygon.num_vertices as usize, MAX_VERTICES);
 
 		vertices_clipped[.. vertex_count].copy_from_slice(
-			&self.vertices_transformed
-				[(polygon.first_vertex as usize) .. (polygon.first_vertex as usize) + vertex_count],
+			&self.vertices_transformed[polygon.first_vertex as usize .. polygon.first_vertex as usize + vertex_count],
 		);
 
 		let mut vertices_temp = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
