@@ -611,8 +611,8 @@ impl GameMap
 		];
 
 		let tc_basis = [
-			Vec4f::new(2.0, 0.0, 0.0, 0.0),
 			Vec4f::new(0.0, 2.0, 0.0, 0.0),
+			Vec4f::new(-2.0, 0.0, 0.0, 0.0),
 			Vec4f::new(0.0, 0.0, 1.0, 0.0),
 		];
 
