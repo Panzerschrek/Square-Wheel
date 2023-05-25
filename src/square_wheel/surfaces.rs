@@ -855,9 +855,15 @@ pub fn mix_surface_with_texture<ColorT: AbstractColor>(
 	surface_size: [u32; 2],
 	surface_tc_min: [i32; 2],
 	texture: &textures::TextureLite,
+	light: [f32; 3],
 	surface_data: &mut [ColorT],
 )
 {
+	const LIGHT_SHIFT: i32 = 8;
+	let light_scale = (1 << LIGHT_SHIFT) as f32;
+	let light_vec =
+		ColorVecI::from_color_f32x3(&[light[0] * light_scale, light[1] * light_scale, light[1] * light_scale]);
+
 	for dst_v in 0 .. surface_size[1]
 	{
 		let dst_line_start = (dst_v * surface_size[0]) as usize;
@@ -873,7 +879,14 @@ pub fn mix_surface_with_texture<ColorT: AbstractColor>(
 			let texel_value = unsafe { debug_only_checked_fetch(src_line, src_u as usize) };
 
 			// TODO - support other blending modes.
-			*dst_texel = ColorT::average(*dst_texel, ColorVecI::from_color32(texel_value).into());
+			*dst_texel = ColorT::average(
+				*dst_texel,
+				ColorVecI::shift_right::<LIGHT_SHIFT>(&ColorVecI::mul(
+					&ColorVecI::from_color32(texel_value),
+					&light_vec,
+				))
+				.into(),
+			);
 
 			src_u += 1;
 			if src_u == (texture.size[0] as i32)

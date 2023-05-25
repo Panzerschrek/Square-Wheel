@@ -2187,12 +2187,33 @@ impl PartialRenderer
 
 			if let Some(texture) = &portal.texture
 			{
+				// Perform fetch from light grid.
+				// TODO - make this optional.
+				// TODO - make fetch from several points.
+				let basis_vecs =
+					PolygonBasisVecs::form_plane_and_tex_coord_equation(&portal.plane, &portal.tex_coord_equation)
+						.get_basis_vecs_for_mip(portal_info.mip);
+
+				let polygon_center = basis_vecs.start +
+					basis_vecs.u * (portal_info.tc_min[0] as f32 + (portal_info.resolution[0] as f32 * 0.5)) +
+					basis_vecs.v * (portal_info.tc_min[1] as f32 + (portal_info.resolution[1] as f32 * 0.5));
+
+				let grid_light = fetch_light_from_grid(&self.map, &polygon_center);
+
+				let mut total_light = get_light_cube_light(&grid_light.light_cube, &basis_vecs.normal);
+				let light_dir_dot = basis_vecs.normal.dot(grid_light.light_direction_vector_scaled).max(0.0);
+				for i in 0 .. 3
+				{
+					total_light[i] += grid_light.directional_light_color[i] * light_dir_dot;
+				}
+
 				// Mix with texture.
 				// TODO - mix textures for different portals in parallel.
 				mix_surface_with_texture(
 					portal_info.resolution,
 					portal_info.tc_min,
 					&texture.texture[portal_info.mip as usize],
+					total_light,
 					portal_texture_data,
 				);
 			}
