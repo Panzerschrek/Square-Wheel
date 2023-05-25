@@ -2160,6 +2160,10 @@ impl PartialRenderer
 				height: portal_info.resolution[1] as usize,
 				pitch: portal_info.resolution[0] as usize,
 			};
+
+			let portal_texture_data = &mut textures_pixels_casted[portal_info.texture_pixels_offset ..
+				portal_info.texture_pixels_offset + (portal_info.resolution[0] * portal_info.resolution[1]) as usize];
+
 			let is_third_person_view = true;
 
 			renderer.prepare_frame::<ColorT>(
@@ -2173,15 +2177,25 @@ impl PartialRenderer
 			);
 
 			renderer.draw_frame(
-				&mut textures_pixels_casted[portal_info.texture_pixels_offset ..
-					portal_info.texture_pixels_offset +
-						(portal_info.resolution[0] * portal_info.resolution[1]) as usize],
+				portal_texture_data,
 				&surface_info,
 				frame_info,
 				&portal_camera_matrices,
 				renderers_common_data,
 				debug_stats,
 			);
+
+			if let Some(texture) = &portal.texture
+			{
+				// Mix with texture.
+				// TODO - mix textures for different portals in parallel.
+				mix_surface_with_texture(
+					portal_info.resolution,
+					portal_info.tc_min,
+					&texture.texture[portal_info.mip as usize],
+					portal_texture_data,
+				);
+			}
 		}
 	}
 
