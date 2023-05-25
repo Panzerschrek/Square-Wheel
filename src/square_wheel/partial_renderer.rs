@@ -2506,6 +2506,7 @@ impl PartialRenderer
 					frame_info,
 					&clip_planes,
 					used_leaf_clip_planes,
+					leaf_clip_planes_src,
 					leaf_decals,
 					leaf_submodels[0],
 				);
@@ -2695,6 +2696,7 @@ impl PartialRenderer
 					frame_info,
 					&clip_planes,
 					used_leaf_clip_planes,
+					leaf_clip_planes_src,
 					leaf_decals,
 					*object_index - SUBMODEL_INDEX_ADD,
 				);
@@ -3013,6 +3015,7 @@ impl PartialRenderer
 		frame_info: &FrameInfo,
 		clip_planes: &ClippingPolygonPlanes,
 		leaf_clip_planes: &[Plane],
+		leaf_clip_planes_world_space: &[Plane],
 		leaf_decals: &[DynamicObjectId],
 		submodel_index: u32,
 	)
@@ -3027,6 +3030,7 @@ impl PartialRenderer
 				&submodel_matrices.camera_matrices.planes_matrix,
 				clip_planes,
 				leaf_clip_planes,
+				leaf_clip_planes_world_space,
 				leaf_decals,
 				submodel.root_node,
 			);
@@ -3041,6 +3045,7 @@ impl PartialRenderer
 		submodel_planes_matrix: &Mat4f,
 		clip_planes: &ClippingPolygonPlanes,
 		leaf_clip_planes: &[Plane],
+		leaf_clip_planes_world_space: &[Plane],
 		leaf_decals: &[DynamicObjectId],
 		node_index: u32,
 	)
@@ -3067,6 +3072,7 @@ impl PartialRenderer
 				submodel_planes_matrix,
 				clip_planes,
 				leaf_clip_planes,
+				leaf_clip_planes_world_space,
 				leaf_decals,
 				c_b,
 			);
@@ -3079,6 +3085,7 @@ impl PartialRenderer
 				materials_processor,
 				&clip_planes,
 				leaf_clip_planes,
+				leaf_clip_planes_world_space,
 				polygon_index,
 			);
 
@@ -3104,6 +3111,7 @@ impl PartialRenderer
 				submodel_planes_matrix,
 				clip_planes,
 				leaf_clip_planes,
+				leaf_clip_planes_world_space,
 				leaf_decals,
 				c_f,
 			);
@@ -3116,6 +3124,7 @@ impl PartialRenderer
 		materials_processor: &MapMaterialsProcessor,
 		clip_planes: &ClippingPolygonPlanes,
 		leaf_clip_planes: &[Plane],
+		leaf_clip_planes_world_space: &[Plane],
 		polygon_index: u32,
 	)
 	{
@@ -3136,8 +3145,40 @@ impl PartialRenderer
 
 		let mut vertices_temp = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
 
-		for clip_plane in leaf_clip_planes
+		for (clip_plane, clip_plane_world_space) in leaf_clip_planes.iter().zip(leaf_clip_planes_world_space)
 		{
+			// Small workaround for edge cases.
+			// Sometimes polygon lies directly on clipping plane.
+			// In such case ignore clipping code invocation and perform special checks instead,
+			// because clipping works badly.
+			// Perform checks in world space, because clip planes in view space are stretched.
+			let almost_one = 1.0 - 1.0 / 256.0;
+			let dist_eps = 1.0 / 4.0;
+			// Both normals are normalized and dot product is angle cosine.
+			let world_space_normals_dot = polygon_data.basis_vecs.normal.dot(clip_plane_world_space.vec);
+			if world_space_normals_dot >= almost_one
+			{
+				// Clip plane and polygon plane are parallel or equal.
+				if (clip_plane_world_space.vec.dot(polygon_data.basis_vecs.start) - clip_plane_world_space.dist).abs() <=
+					dist_eps
+				{
+					// Ignore clipping by this plane. Just accept this polygon.
+					continue;
+				}
+			}
+			else if world_space_normals_dot <= -almost_one
+			{
+				// Clip plane and polygon plane are antiparallel.
+				if (clip_plane_world_space.vec.dot(polygon_data.basis_vecs.start) - clip_plane_world_space.dist).abs() <=
+					dist_eps
+				{
+					// Ignore polygons on leaf clipping plane, that faces in another direction.
+					// It will be drawn in neighbour leaf instead.
+					return;
+				}
+			}
+
+			// General case - just clip polygon, using view space clipping plane.
 			vertex_count =
 				clip_3d_polygon_by_plane(&vertices_clipped[.. vertex_count], clip_plane, &mut vertices_temp[..]);
 			if vertex_count < 3
