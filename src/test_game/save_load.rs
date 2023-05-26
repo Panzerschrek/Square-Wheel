@@ -758,6 +758,8 @@ pub struct ViewPortalTextureProxy
 {
 	blending_mode: BlendingMode,
 	texture: ResourceSerializationKey,
+	light_scale: f32,
+	light_add: [f32; 3],
 }
 
 impl ViewPortalTextureProxy
@@ -768,6 +770,8 @@ impl ViewPortalTextureProxy
 		Self {
 			blending_mode: view_portal_texture.blending_mode,
 			texture: ResourceSerializationKey::from_resource(&view_portal_texture.texture, textures),
+			light_scale: view_portal_texture.light_scale,
+			light_add: view_portal_texture.light_add,
 		}
 	}
 
@@ -776,6 +780,8 @@ impl ViewPortalTextureProxy
 		Some(ViewPortalTexture {
 			blending_mode: self.blending_mode,
 			texture: self.texture.to_resource(textures)?,
+			light_scale: self.light_scale,
+			light_add: self.light_add,
 		})
 	}
 }

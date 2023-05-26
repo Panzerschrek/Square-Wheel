@@ -174,4 +174,6 @@ pub struct ViewPortalTexture
 {
 	pub blending_mode: BlendingMode,
 	pub texture: SharedResourcePtr<TextureLiteWithMips>,
+	pub light_scale: f32,
+	pub light_add: [f32; 3],
 }

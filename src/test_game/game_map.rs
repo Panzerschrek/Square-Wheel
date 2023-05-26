@@ -593,6 +593,8 @@ impl GameMap
 			Some(ViewPortalTexture {
 				blending_mode: material::BlendingMode::Average,
 				texture: self.resources_manager.lock().unwrap().get_texture_lite(&args[0]),
+				light_scale: 1.0,
+				light_add: [0.0; 3],
 			})
 		}
 		else

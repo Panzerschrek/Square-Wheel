@@ -2207,25 +2207,37 @@ impl PartialRenderer
 				return;
 			};
 
-			// Perform fetch from light grid.
-			// TODO - make this optional.
-			// TODO - make fetch from several points.
-			let basis_vecs =
-				PolygonBasisVecs::form_plane_and_tex_coord_equation(&portal.plane, &portal.tex_coord_equation)
-					.get_basis_vecs_for_mip(portal_info.mip);
-
-			let polygon_center = basis_vecs.start +
-				basis_vecs.u * (portal_info.tc_min[0] as f32 + (portal_info.resolution[0] as f32 * 0.5)) +
-				basis_vecs.v * (portal_info.tc_min[1] as f32 + (portal_info.resolution[1] as f32 * 0.5));
-
-			let grid_light = fetch_light_from_grid(&map, &polygon_center);
-
-			let mut total_light = get_light_cube_light(&grid_light.light_cube, &basis_vecs.normal);
-			let light_dir_dot = basis_vecs.normal.dot(grid_light.light_direction_vector_scaled).max(0.0);
-			for i in 0 .. 3
+			let light = if texture.light_scale > 0.0
 			{
-				total_light[i] += grid_light.directional_light_color[i] * light_dir_dot;
+				// Perform fetch from light grid.
+				// TODO - make fetch from several points.
+				let basis_vecs =
+					PolygonBasisVecs::form_plane_and_tex_coord_equation(&portal.plane, &portal.tex_coord_equation)
+						.get_basis_vecs_for_mip(portal_info.mip);
+
+				let polygon_center = basis_vecs.start +
+					basis_vecs.u * (portal_info.tc_min[0] as f32 + (portal_info.resolution[0] as f32 * 0.5)) +
+					basis_vecs.v * (portal_info.tc_min[1] as f32 + (portal_info.resolution[1] as f32 * 0.5));
+
+				let grid_light = fetch_light_from_grid(&map, &polygon_center);
+				let mut total_light = get_light_cube_light(&grid_light.light_cube, &basis_vecs.normal);
+				let light_dir_dot = basis_vecs.normal.dot(grid_light.light_direction_vector_scaled).max(0.0);
+				for i in 0 .. 3
+				{
+					total_light[i] += grid_light.directional_light_color[i] * light_dir_dot;
+				}
+				for i in 0 .. 3
+				{
+					total_light[i] = total_light[i] * texture.light_scale + texture.light_add[i];
+				}
+
+				total_light
 			}
+			else
+			{
+				// Just use constant light.
+				texture.light_add
+			};
 
 			// Mix with texture.
 			mix_surface_with_texture(
@@ -2233,7 +2245,7 @@ impl PartialRenderer
 				portal_info.tc_min,
 				&texture.texture[portal_info.mip as usize],
 				texture.blending_mode,
-				total_light,
+				light,
 				unsafe {
 					&mut textures_pixels_shared.get()[portal_info.texture_pixels_offset ..
 						portal_info.texture_pixels_offset +
