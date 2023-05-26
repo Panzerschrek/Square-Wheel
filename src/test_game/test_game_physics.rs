@@ -8,6 +8,7 @@ pub struct TestGamePhysics
 {
 	rigid_body_set: r3d::RigidBodySet,
 	collider_set: r3d::ColliderSet,
+	map_collider: r3d::ColliderHandle,
 
 	#[serde(skip)]
 	physics_pipeline: r3d::PhysicsPipeline,
@@ -33,11 +34,12 @@ impl TestGamePhysics
 		let mut collider_set = r3d::ColliderSet::new();
 
 		// Static geometry.
-		collider_set.insert(make_map_collider(&map));
+		let map_collider = collider_set.insert(make_map_collider(&map));
 
 		Self {
 			rigid_body_set,
 			collider_set,
+			map_collider,
 			physics_pipeline: r3d::PhysicsPipeline::new(),
 			query_pipeline: r3d::QueryPipeline::new(),
 			island_manager: r3d::IslandManager::new(),
@@ -248,7 +250,7 @@ impl TestGamePhysics
 			&self.collider_set,
 			&r3d::Isometry::new(shape_center, r3d::Vector::new(0.0, 0.0, 0.0)),
 			&shape,
-			r3d::QueryFilter::default(),
+			r3d::QueryFilter::default().exclude_collider(self.map_collider),
 			|collider_handle| {
 				let collider = &self.collider_set[collider_handle];
 				let dst_entity = entity_from_user_data(collider.user_data);
