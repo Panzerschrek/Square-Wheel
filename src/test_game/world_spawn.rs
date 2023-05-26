@@ -973,32 +973,31 @@ fn get_portal_texture(
 	texture_index: u32,
 ) -> Option<ViewPortalTexture>
 {
-	if (texture_index as usize) < map.textures.len()
+	if let Some(material) = resources_manager
+		.get_materials()
+		.get(bsp_map_compact::get_texture_string(
+			&map.textures[texture_index as usize],
+		))
 	{
-		let map_texture = &map.textures[texture_index as usize];
-		let materials = resources_manager.get_materials();
-		if let Some(material) = materials.get(bsp_map_compact::get_texture_string(map_texture))
+		if let Some(portal_texture) = material.extra.get("portal_texture")
 		{
-			if let Some(portal_texture) = material.extra.get("portal_texture")
+			if let Some(portal_texture_str) = portal_texture.as_str()
 			{
-				if let Some(portal_texture_str) = portal_texture.as_str()
+				let blending_mode = if let Some(portal_blending_mode) = material.extra.get("portal_blending_mode")
 				{
-					let blending_mode = if let Some(portal_blending_mode) = material.extra.get("portal_blending_mode")
-					{
-						serde_json::from_value::<material::BlendingMode>(portal_blending_mode.clone()).ok()
-					}
-					else
-					{
-						None
-					};
-
-					return Some(ViewPortalTexture {
-						texture: resources_manager.get_texture_lite(portal_texture_str),
-						blending_mode: blending_mode.unwrap_or(material::BlendingMode::Average),
-						light_scale: 1.0,
-						light_add: [0.0; 3],
-					});
+					serde_json::from_value(portal_blending_mode.clone()).ok()
 				}
+				else
+				{
+					None
+				};
+
+				return Some(ViewPortalTexture {
+					texture: resources_manager.get_texture_lite(portal_texture_str),
+					blending_mode: blending_mode.unwrap_or(material::BlendingMode::Average),
+					light_scale: 1.0,
+					light_add: [0.0; 3],
+				});
 			}
 		}
 	}

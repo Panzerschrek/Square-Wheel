@@ -2006,14 +2006,15 @@ impl PartialRenderer
 			.zip(self.portals_rendering_data.portals_info.iter())
 			.enumerate()
 		{
-			if portal_info.resolution[0] * portal_info.resolution[1] == 0
+			let portal_area = portal_info.resolution[0] * portal_info.resolution[1];
+			if portal_area == 0
 			{
 				// This portal is not visible.
 				continue;
 			}
 
-			let portal_texture_data = &mut textures_pixels_casted[portal_info.texture_pixels_offset ..
-				portal_info.texture_pixels_offset + (portal_info.resolution[0] * portal_info.resolution[1]) as usize];
+			let portal_texture_data = &mut textures_pixels_casted
+				[portal_info.texture_pixels_offset .. portal_info.texture_pixels_offset + portal_area as usize];
 
 			let renderer = if let Some(r) = &mut self.portals_rendering_data.renderer
 			{
@@ -2194,7 +2195,8 @@ impl PartialRenderer
 		let textures_pixels_shared = SharedMutSlice::new(textures_pixels_casted);
 
 		let process_portal = |(portal, portal_info): (&ViewPortal, &PortalInfo)| {
-			if portal_info.resolution[0] * portal_info.resolution[1] == 0
+			let portal_area = portal_info.resolution[0] * portal_info.resolution[1];
+			if portal_area == 0
 			{
 				// This portal is not visible.
 				return;
@@ -2211,7 +2213,7 @@ impl PartialRenderer
 			let light = if texture.light_scale > 0.0
 			{
 				// Perform fetch from light grid.
-				// TODO - make fetch from several points.
+				// TODO - make fetch from several points?
 				let basis_vecs =
 					PolygonBasisVecs::form_plane_and_tex_coord_equation(&portal.plane, &portal.tex_coord_equation)
 						.get_basis_vecs_for_mip(portal_info.mip);
@@ -2248,9 +2250,8 @@ impl PartialRenderer
 				texture.blending_mode,
 				light,
 				unsafe {
-					&mut textures_pixels_shared.get()[portal_info.texture_pixels_offset ..
-						portal_info.texture_pixels_offset +
-							(portal_info.resolution[0] * portal_info.resolution[1]) as usize]
+					&mut textures_pixels_shared.get()
+						[portal_info.texture_pixels_offset .. portal_info.texture_pixels_offset + portal_area as usize]
 				},
 			);
 		};
