@@ -1,5 +1,5 @@
 use super::{abstract_color::*, equations::*, fast_math::*};
-use crate::common::{fixed_math::*, system_window};
+use crate::common::{fixed_math::*, material::*, system_window};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum TetureCoordinatesInterpolationMode
@@ -12,14 +12,6 @@ pub enum TetureCoordinatesInterpolationMode
 const TEXTURE_COORDINATES_INTERPOLATION_MODE_FULL_PERSPECTIVE: usize = 0;
 const TEXTURE_COORDINATES_INTERPOLATION_MODE_LINE_Z_CORRECTION: usize = 1;
 const TEXTURE_COORDINATES_INTERPOLATION_MODE_FULL_AFFINE: usize = 2;
-
-pub use crate::common::material::BlendingMode;
-
-const BLENDING_MODE_NONE: usize = 0;
-const BLENDING_MODE_AVERAGE: usize = 1;
-const BLENDING_MODE_ADDITIVE: usize = 2;
-const BLENDING_MODE_ALPHA_TEST: usize = 3;
-const BLENDING_MODE_ALPHA_BLEND: usize = 4;
 
 pub struct Rasterizer<'a, ColorT: AbstractColor>
 {

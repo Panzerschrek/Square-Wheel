@@ -1,5 +1,5 @@
 use super::{abstract_color::*, fast_math::*, light::*, textures};
-use crate::common::{bsp_map_compact, lightmap, math_types::*, plane::*};
+use crate::common::{bsp_map_compact, lightmap, material::*, math_types::*, plane::*};
 
 // Basis vecs, that are used to reconstruct world position of surface texel.
 // This also includes normalized normal, that is used for dynamic lighting.
@@ -855,6 +855,62 @@ pub fn mix_surface_with_texture<ColorT: AbstractColor>(
 	surface_size: [u32; 2],
 	surface_tc_min: [i32; 2],
 	texture: &textures::TextureLite,
+	blending_mode: BlendingMode,
+	light: [f32; 3],
+	surface_data: &mut [ColorT],
+)
+{
+	match blending_mode
+	{
+		BlendingMode::None =>
+		{},
+		BlendingMode::Average =>
+		{
+			mix_surface_with_texture_impl::<ColorT, BLENDING_MODE_AVERAGE>(
+				surface_size,
+				surface_tc_min,
+				texture,
+				light,
+				surface_data,
+			);
+		},
+		BlendingMode::Additive =>
+		{
+			mix_surface_with_texture_impl::<ColorT, BLENDING_MODE_ADDITIVE>(
+				surface_size,
+				surface_tc_min,
+				texture,
+				light,
+				surface_data,
+			);
+		},
+		BlendingMode::AlphaTest =>
+		{
+			mix_surface_with_texture_impl::<ColorT, BLENDING_MODE_ALPHA_TEST>(
+				surface_size,
+				surface_tc_min,
+				texture,
+				light,
+				surface_data,
+			);
+		},
+		BlendingMode::AlphaBlend =>
+		{
+			mix_surface_with_texture_impl::<ColorT, BLENDING_MODE_ALPHA_BLEND>(
+				surface_size,
+				surface_tc_min,
+				texture,
+				light,
+				surface_data,
+			);
+		},
+	}
+}
+
+fn mix_surface_with_texture_impl<ColorT: AbstractColor, const BLENDING_MODE: usize>(
+	surface_size: [u32; 2],
+	surface_tc_min: [i32; 2],
+	texture: &textures::TextureLite,
 	light: [f32; 3],
 	surface_data: &mut [ColorT],
 )
@@ -877,16 +933,36 @@ pub fn mix_surface_with_texture<ColorT: AbstractColor>(
 		for dst_texel in dst_line.iter_mut()
 		{
 			let texel_value = unsafe { debug_only_checked_fetch(src_line, src_u as usize) };
+			let texel_value_modulated = ColorVecI::shift_right::<LIGHT_SHIFT>(&ColorVecI::mul(
+				&ColorVecI::from_color32(texel_value),
+				&light_vec,
+			));
 
-			// TODO - support other blending modes.
-			*dst_texel = ColorT::average(
-				*dst_texel,
-				ColorVecI::shift_right::<LIGHT_SHIFT>(&ColorVecI::mul(
-					&ColorVecI::from_color32(texel_value),
-					&light_vec,
+			if BLENDING_MODE == BLENDING_MODE_AVERAGE
+			{
+				*dst_texel =
+					ColorVecI::shift_right::<1>(&ColorVecI::add(&texel_value_modulated, &(*dst_texel).into())).into();
+			}
+			else if BLENDING_MODE == BLENDING_MODE_ADDITIVE
+			{
+				*dst_texel = ColorVecI::add(&texel_value_modulated, &(*dst_texel).into()).into();
+			}
+			else if BLENDING_MODE == BLENDING_MODE_ALPHA_TEST
+			{
+				if texel_value.test_alpha()
+				{
+					*dst_texel = texel_value_modulated.into();
+				}
+			}
+			else if BLENDING_MODE == BLENDING_MODE_ALPHA_BLEND
+			{
+				let alpha = texel_value.get_alpha();
+				*dst_texel = ColorVecI::shift_right::<8>(&ColorVecI::add(
+					&ColorVecI::mul_scalar(&texel_value_modulated, alpha),
+					&ColorVecI::mul_scalar(&(*dst_texel).into(), 255 - alpha),
 				))
-				.into(),
-			);
+				.into();
+			}
 
 			src_u += 1;
 			if src_u == (texture.size[0] as i32)

@@ -2213,6 +2213,7 @@ impl PartialRenderer
 					portal_info.resolution,
 					portal_info.tc_min,
 					&texture.texture[portal_info.mip as usize],
+					texture.blending_mode,
 					total_light,
 					portal_texture_data,
 				);
