@@ -12,15 +12,19 @@ Engine:
 * Animation files as separate resources (share animations between different models).
 * Basic sound support - with game-driven sound playback and sound resources
 * Avoid memory allocations in same places.
+* Store resources (maps, textures, models, etc.) in archive file(s)
 
 Renderer:
 * Fix bug with missing visibility when camera lies on portal plane inside portal polygon
 * Fix buggy visibility calculationg with portals clipped by "z_near" plane
+* Multiplicative blending
 * Animated textures (with N frames)
 * Models rendering improvements - avoid splitting models into pieces for each BSP tree leaf in some cases
 * Shadows from triangle models
 * Multithreaded shadowmaps building
 * Emissive textures (lamps, screens)
+* Increase max number of dynamic objects drawn in one leaf
+* Support portals and mirrors with mixed texture, prepared as regular surface (with lightmaps, normal-mapping, dynamic lights, etc.)
 
 Lightmapper:
 * Colored shadows
