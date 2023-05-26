@@ -2480,10 +2480,10 @@ impl PartialRenderer
 			dist: 0.0,
 		}; MAX_LEAF_CLIP_PLANES];
 
-		let leaf_clip_planes_src = &renderers_common_data.leafs_planes[leaf_index as usize];
+		let leaf_clip_planes_world_space = &renderers_common_data.leafs_planes[leaf_index as usize];
 
 		// Transform leaf clip planes.
-		for (dst_plane, src_plane) in leaf_clip_planes.iter_mut().zip(leaf_clip_planes_src.iter())
+		for (dst_plane, src_plane) in leaf_clip_planes.iter_mut().zip(leaf_clip_planes_world_space.iter())
 		{
 			let plane_transformed_vec4 = camera_matrices.planes_matrix * src_plane.vec.extend(-src_plane.dist);
 			*dst_plane = Plane {
@@ -2492,8 +2492,8 @@ impl PartialRenderer
 			};
 		}
 
-		let num_clip_planes = std::cmp::min(leaf_clip_planes.len(), leaf_clip_planes_src.len());
-		let used_leaf_clip_planes = &mut leaf_clip_planes[.. num_clip_planes];
+		let used_leaf_clip_planes =
+			&mut leaf_clip_planes[.. std::cmp::min(MAX_LEAF_CLIP_PLANES, leaf_clip_planes_world_space.len())];
 
 		if total_objects == 1
 		{
@@ -2506,6 +2506,7 @@ impl PartialRenderer
 					frame_info,
 					&clip_planes,
 					used_leaf_clip_planes,
+					leaf_clip_planes_world_space,
 					leaf_decals,
 					leaf_submodels[0],
 				);
@@ -2695,6 +2696,7 @@ impl PartialRenderer
 					frame_info,
 					&clip_planes,
 					used_leaf_clip_planes,
+					leaf_clip_planes_world_space,
 					leaf_decals,
 					*object_index - SUBMODEL_INDEX_ADD,
 				);
@@ -3013,6 +3015,7 @@ impl PartialRenderer
 		frame_info: &FrameInfo,
 		clip_planes: &ClippingPolygonPlanes,
 		leaf_clip_planes: &[Plane],
+		leaf_clip_planes_world_space: &[Plane],
 		leaf_decals: &[DynamicObjectId],
 		submodel_index: u32,
 	)
@@ -3027,6 +3030,7 @@ impl PartialRenderer
 				&submodel_matrices.camera_matrices.planes_matrix,
 				clip_planes,
 				leaf_clip_planes,
+				leaf_clip_planes_world_space,
 				leaf_decals,
 				submodel.root_node,
 			);
@@ -3041,6 +3045,7 @@ impl PartialRenderer
 		submodel_planes_matrix: &Mat4f,
 		clip_planes: &ClippingPolygonPlanes,
 		leaf_clip_planes: &[Plane],
+		leaf_clip_planes_world_space: &[Plane],
 		leaf_decals: &[DynamicObjectId],
 		node_index: u32,
 	)
@@ -3067,6 +3072,7 @@ impl PartialRenderer
 				submodel_planes_matrix,
 				clip_planes,
 				leaf_clip_planes,
+				leaf_clip_planes_world_space,
 				leaf_decals,
 				c_b,
 			);
@@ -3079,6 +3085,7 @@ impl PartialRenderer
 				materials_processor,
 				&clip_planes,
 				leaf_clip_planes,
+				leaf_clip_planes_world_space,
 				polygon_index,
 			);
 
@@ -3104,6 +3111,7 @@ impl PartialRenderer
 				submodel_planes_matrix,
 				clip_planes,
 				leaf_clip_planes,
+				leaf_clip_planes_world_space,
 				leaf_decals,
 				c_f,
 			);
@@ -3116,36 +3124,61 @@ impl PartialRenderer
 		materials_processor: &MapMaterialsProcessor,
 		clip_planes: &ClippingPolygonPlanes,
 		leaf_clip_planes: &[Plane],
+		leaf_clip_planes_world_space: &[Plane],
 		polygon_index: u32,
 	)
 	{
-		let polygon = &self.map.polygons[polygon_index as usize];
 		let polygon_data = &self.polygons_data[polygon_index as usize];
 		if polygon_data.visible_frame != self.current_frame
 		{
 			return;
 		}
 
-		// HACK! Shift polygon vertices a bit away from camera to fix buggy polygon clipping,
-		// when polygon lies exactly on clip plane.
-		// Such hack doesn't solve problems completely, but it resolves most actual cases.
-		let vertex_pos_shift_eps = 1.0 / 4.0;
+		let polygon = &self.map.polygons[polygon_index as usize];
 
 		let mut vertices_clipped = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
 		let mut vertex_count = std::cmp::min(polygon.num_vertices as usize, MAX_VERTICES);
 
-		for (in_vertex, out_vertex) in self.vertices_transformed
-			[(polygon.first_vertex as usize) .. (polygon.first_vertex as usize) + vertex_count]
-			.iter()
-			.zip(vertices_clipped[.. vertex_count].iter_mut())
-		{
-			*out_vertex = Vec3f::new(in_vertex.x, in_vertex.y, in_vertex.z + vertex_pos_shift_eps);
-		}
+		vertices_clipped[.. vertex_count].copy_from_slice(
+			&self.vertices_transformed[polygon.first_vertex as usize .. polygon.first_vertex as usize + vertex_count],
+		);
 
 		let mut vertices_temp = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory.
 
-		for clip_plane in leaf_clip_planes
+		for (clip_plane, clip_plane_world_space) in leaf_clip_planes.iter().zip(leaf_clip_planes_world_space)
 		{
+			// Small workaround for edge cases.
+			// Sometimes polygon lies directly on clipping plane.
+			// In such case ignore clipping code invocation and perform special checks instead,
+			// because clipping works badly.
+			// Perform checks in world space, because clip planes in view space are stretched.
+			let almost_one = 1.0 - 1.0 / 256.0;
+			let dist_eps = 1.0 / 4.0;
+			// Both normals are normalized and dot product is angle cosine.
+			let world_space_normals_dot = polygon_data.basis_vecs.normal.dot(clip_plane_world_space.vec);
+			if world_space_normals_dot >= almost_one
+			{
+				// Clip plane and polygon plane are parallel or equal.
+				if (clip_plane_world_space.vec.dot(polygon_data.basis_vecs.start) - clip_plane_world_space.dist).abs() <=
+					dist_eps
+				{
+					// Ignore clipping by this plane. Just accept this polygon.
+					continue;
+				}
+			}
+			else if world_space_normals_dot <= -almost_one
+			{
+				// Clip plane and polygon plane are antiparallel.
+				if (clip_plane_world_space.vec.dot(polygon_data.basis_vecs.start) - clip_plane_world_space.dist).abs() <=
+					dist_eps
+				{
+					// Ignore polygons on leaf clipping plane, that faces in another direction.
+					// It will be drawn in neighbour leaf instead.
+					return;
+				}
+			}
+
+			// General case - just clip polygon, using view space clipping plane.
 			vertex_count =
 				clip_3d_polygon_by_plane(&vertices_clipped[.. vertex_count], clip_plane, &mut vertices_temp[..]);
 			if vertex_count < 3
@@ -3153,12 +3186,6 @@ impl PartialRenderer
 				return;
 			}
 			vertices_clipped[.. vertex_count].copy_from_slice(&vertices_temp[.. vertex_count]);
-		}
-
-		// Shift clipped vertices back.
-		for v in &mut vertices_clipped[.. vertex_count]
-		{
-			v.z -= vertex_pos_shift_eps;
 		}
 
 		draw_polygon(

@@ -70,6 +70,7 @@ pub struct RenderersCommonData
 	pub leafs_planes: Vec<LeafClipPlanes>,
 }
 
+// Plane vector is normalized.
 pub type LeafClipPlanes = Vec<Plane>;
 
 // Mutable data associated with map polygon.
