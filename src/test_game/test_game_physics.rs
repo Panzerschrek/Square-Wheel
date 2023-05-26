@@ -292,10 +292,11 @@ impl TestGamePhysics
 				&self.hooks,
 				&self.event_handler,
 			);
-
-			self.query_pipeline
-				.update(&self.island_manager, &self.rigid_body_set, &self.collider_set);
 		}
+
+		// No need to update query pipeline multiple times. Update it only after performing physics steps.
+		self.query_pipeline
+			.update(&self.island_manager, &self.rigid_body_set, &self.collider_set);
 	}
 }
 
