@@ -2012,6 +2012,9 @@ impl PartialRenderer
 				continue;
 			}
 
+			let portal_texture_data = &mut textures_pixels_casted[portal_info.texture_pixels_offset ..
+				portal_info.texture_pixels_offset + (portal_info.resolution[0] * portal_info.resolution[1]) as usize];
+
 			let renderer = if let Some(r) = &mut self.portals_rendering_data.renderer
 			{
 				r
@@ -2020,6 +2023,7 @@ impl PartialRenderer
 			{
 				// Portal/mirror depth limit reached.
 				// This is not a problem - just skip building buffers for portals and draw portals polygon with completely black texture.
+				portal_texture_data.fill(ColorVec::from_color_f32x3(&[0.0; 3]).into());
 				continue;
 			};
 
@@ -2160,9 +2164,6 @@ impl PartialRenderer
 				height: portal_info.resolution[1] as usize,
 				pitch: portal_info.resolution[0] as usize,
 			};
-
-			let portal_texture_data = &mut textures_pixels_casted[portal_info.texture_pixels_offset ..
-				portal_info.texture_pixels_offset + (portal_info.resolution[0] * portal_info.resolution[1]) as usize];
 
 			let is_third_person_view = true;
 
