@@ -90,6 +90,13 @@ pub enum BlendingMode
 	AlphaBlend,
 }
 
+// Same constants, as above, but these constants may used in template params.
+pub const BLENDING_MODE_NONE: usize = 0;
+pub const BLENDING_MODE_AVERAGE: usize = 1;
+pub const BLENDING_MODE_ADDITIVE: usize = 2;
+pub const BLENDING_MODE_ALPHA_TEST: usize = 3;
+pub const BLENDING_MODE_ALPHA_BLEND: usize = 4;
+
 impl Default for BlendingMode
 {
 	fn default() -> Self

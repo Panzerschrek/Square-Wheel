@@ -310,6 +310,7 @@ fn spawn_regular_entity(
 						tex_coord_equation: polygon.tex_coord_equation,
 						vertices: Vec::from(bsp_map_compact::get_polygon_vertices(map, polygon)),
 						blending_mode: get_entity_blending_mode(map_entity, map),
+						texture: get_portal_texture(resources_manager, map, polygon.texture),
 					},
 					ViewPortalTargetLocationLinkComponent {},
 				));
@@ -353,6 +354,7 @@ fn spawn_regular_entity(
 					tex_coord_equation: tex_coord_equation,
 					vertices: Vec::from(bsp_map_compact::get_polygon_vertices(map, polygon)),
 					blending_mode: get_entity_blending_mode(map_entity, map),
+					texture: get_portal_texture(resources_manager, map, polygon.texture),
 				},));
 
 				add_entity_common_components(ecs, map, map_entity, entity);
@@ -385,6 +387,7 @@ fn spawn_regular_entity(
 						tex_coord_equation: tex_coord_equation,
 						vertices: Vec::from(bsp_map_compact::get_polygon_vertices(map, polygon)),
 						blending_mode: get_entity_blending_mode(map_entity, map),
+						texture: get_portal_texture(resources_manager, map, polygon.texture),
 					},
 					ViewPortalTargetLocationLinkComponent {},
 				));
@@ -958,6 +961,44 @@ fn get_entity_key_value<'a>(
 		if actual_key == key
 		{
 			return Some(bsp_map_compact::get_map_string(key_value.value, map));
+		}
+	}
+
+	None
+}
+
+fn get_portal_texture(
+	resources_manager: &mut ResourcesManager,
+	map: &bsp_map_compact::BSPMap,
+	texture_index: u32,
+) -> Option<ViewPortalTexture>
+{
+	if let Some(material) = resources_manager
+		.get_materials()
+		.get(bsp_map_compact::get_texture_string(
+			&map.textures[texture_index as usize],
+		))
+	{
+		if let Some(portal_texture) = material.extra.get("portal_texture")
+		{
+			if let Some(portal_texture_str) = portal_texture.as_str()
+			{
+				let blending_mode = if let Some(portal_blending_mode) = material.extra.get("portal_blending_mode")
+				{
+					serde_json::from_value(portal_blending_mode.clone()).ok()
+				}
+				else
+				{
+					None
+				};
+
+				return Some(ViewPortalTexture {
+					texture: resources_manager.get_texture_lite(portal_texture_str),
+					blending_mode: blending_mode.unwrap_or(material::BlendingMode::Average),
+					light_scale: 1.0,
+					light_add: [0.0; 3],
+				});
+			}
 		}
 	}
 

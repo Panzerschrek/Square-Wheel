@@ -2,7 +2,7 @@ use super::{
 	equations::*, inline_models_index::*, map_visibility_calculator::*, rasterizer::*, renderer_utils::*,
 	resources_manager::*,
 };
-use crate::common::{bsp_map_compact, clipping_polygon::*, fixed_math::*, math_types::*, matrix::*};
+use crate::common::{bsp_map_compact, clipping_polygon::*, fixed_math::*, material::*, math_types::*, matrix::*};
 use std::sync::Arc;
 
 pub struct DepthRenderer

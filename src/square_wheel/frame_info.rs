@@ -1,5 +1,5 @@
 use super::{resources_manager::*, textures::*, triangle_model::*};
-use crate::common::{bbox::*, material, math_types::*, matrix::*, plane::*};
+use crate::common::{bbox::*, material::BlendingMode, math_types::*, matrix::*, plane::*};
 use serde::{Deserialize, Serialize};
 
 pub struct FrameInfo
@@ -35,7 +35,7 @@ pub struct ModelEntity
 	pub animation: AnimationPoint,
 	pub model: SharedResourcePtr<TriangleModel>,
 	pub texture: SharedResourcePtr<TextureLiteWithMips>,
-	pub blending_mode: material::BlendingMode,
+	pub blending_mode: BlendingMode,
 	pub lighting: ModelLighting,
 	pub flags: ModelEntityDrawFlags,
 
@@ -93,7 +93,7 @@ pub struct Decal
 	pub rotation: QuaternionF,
 	pub scale: Vec3f,
 	pub texture: SharedResourcePtr<TextureLiteWithMips>,
-	pub blending_mode: material::BlendingMode,
+	pub blending_mode: BlendingMode,
 	pub lightmap_light_scale: f32,
 	pub light_add: [f32; 3],
 }
@@ -105,7 +105,7 @@ pub struct Sprite
 	pub angle: f32, // Rotation around axis, perpendicular to sprite plane.
 	pub radius: f32,
 	pub texture: SharedResourcePtr<TextureLiteWithMips>,
-	pub blending_mode: material::BlendingMode,
+	pub blending_mode: BlendingMode,
 	pub orientation: SpriteOrientation,
 	pub light_scale: f32,
 	pub light_add: [f32; 3],
@@ -141,17 +141,18 @@ pub enum DynamicLightShadowType
 	},
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone)]
 pub struct ViewPortal
 {
 	pub view: PortalView,
 	pub plane: Plane,
 	pub tex_coord_equation: [Plane; 2],
 	pub vertices: Vec<Vec3f>,
-	pub blending_mode: material::BlendingMode,
+	pub blending_mode: BlendingMode,
+	pub texture: Option<ViewPortalTexture>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub enum PortalView
 {
 	CameraAtPosition
@@ -166,4 +167,13 @@ pub enum PortalView
 		// Matrix that transforms camera position into camera position of view point of this portal.
 		transform_matrix: Mat4f,
 	},
+}
+
+#[derive(Clone)]
+pub struct ViewPortalTexture
+{
+	pub blending_mode: BlendingMode,
+	pub texture: SharedResourcePtr<TextureLiteWithMips>,
+	pub light_scale: f32,
+	pub light_add: [f32; 3],
 }

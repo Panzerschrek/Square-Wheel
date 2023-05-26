@@ -2006,11 +2006,15 @@ impl PartialRenderer
 			.zip(self.portals_rendering_data.portals_info.iter())
 			.enumerate()
 		{
-			if portal_info.resolution[0] * portal_info.resolution[1] == 0
+			let portal_area = portal_info.resolution[0] * portal_info.resolution[1];
+			if portal_area == 0
 			{
 				// This portal is not visible.
 				continue;
 			}
+
+			let portal_texture_data = &mut textures_pixels_casted
+				[portal_info.texture_pixels_offset .. portal_info.texture_pixels_offset + portal_area as usize];
 
 			let renderer = if let Some(r) = &mut self.portals_rendering_data.renderer
 			{
@@ -2020,6 +2024,7 @@ impl PartialRenderer
 			{
 				// Portal/mirror depth limit reached.
 				// This is not a problem - just skip building buffers for portals and draw portals polygon with completely black texture.
+				portal_texture_data.fill(ColorVec::from_color_f32x3(&[0.0; 3]).into());
 				continue;
 			};
 
@@ -2160,6 +2165,7 @@ impl PartialRenderer
 				height: portal_info.resolution[1] as usize,
 				pitch: portal_info.resolution[0] as usize,
 			};
+
 			let is_third_person_view = true;
 
 			renderer.prepare_frame::<ColorT>(
@@ -2173,15 +2179,90 @@ impl PartialRenderer
 			);
 
 			renderer.draw_frame(
-				&mut textures_pixels_casted[portal_info.texture_pixels_offset ..
-					portal_info.texture_pixels_offset +
-						(portal_info.resolution[0] * portal_info.resolution[1]) as usize],
+				portal_texture_data,
 				&surface_info,
 				frame_info,
 				&portal_camera_matrices,
 				renderers_common_data,
 				debug_stats,
 			);
+		}
+
+		// Mix portals with textures. Do this in parallel.
+
+		let map = &self.map;
+		let portals_info = &self.portals_rendering_data.portals_info;
+		let textures_pixels_shared = SharedMutSlice::new(textures_pixels_casted);
+
+		let process_portal = |(portal, portal_info): (&ViewPortal, &PortalInfo)| {
+			let portal_area = portal_info.resolution[0] * portal_info.resolution[1];
+			if portal_area == 0
+			{
+				// This portal is not visible.
+				return;
+			}
+			let texture = if let Some(t) = &portal.texture
+			{
+				t
+			}
+			else
+			{
+				return;
+			};
+
+			let light = if texture.light_scale > 0.0
+			{
+				// Perform fetch from light grid.
+				// TODO - make fetch from several points?
+				let basis_vecs =
+					PolygonBasisVecs::form_plane_and_tex_coord_equation(&portal.plane, &portal.tex_coord_equation)
+						.get_basis_vecs_for_mip(portal_info.mip);
+
+				let polygon_center = basis_vecs.start +
+					basis_vecs.u * (portal_info.tc_min[0] as f32 + (portal_info.resolution[0] as f32 * 0.5)) +
+					basis_vecs.v * (portal_info.tc_min[1] as f32 + (portal_info.resolution[1] as f32 * 0.5));
+
+				let grid_light = fetch_light_from_grid(&map, &polygon_center);
+				let mut total_light = get_light_cube_light(&grid_light.light_cube, &basis_vecs.normal);
+				let light_dir_dot = basis_vecs.normal.dot(grid_light.light_direction_vector_scaled).max(0.0);
+				for i in 0 .. 3
+				{
+					total_light[i] += grid_light.directional_light_color[i] * light_dir_dot;
+				}
+				for i in 0 .. 3
+				{
+					total_light[i] = total_light[i] * texture.light_scale + texture.light_add[i];
+				}
+
+				total_light
+			}
+			else
+			{
+				// Just use constant light.
+				texture.light_add
+			};
+
+			// Mix with texture.
+			mix_surface_with_texture(
+				portal_info.resolution,
+				portal_info.tc_min,
+				&texture.texture[portal_info.mip as usize],
+				texture.blending_mode,
+				light,
+				unsafe {
+					&mut textures_pixels_shared.get()
+						[portal_info.texture_pixels_offset .. portal_info.texture_pixels_offset + portal_area as usize]
+				},
+			);
+		};
+
+		if rayon::current_num_threads() == 1
+		{
+			frame_info.portals.iter().zip(portals_info).for_each(process_portal);
+		}
+		else
+		{
+			frame_info.portals.par_iter().zip(portals_info).for_each(process_portal);
 		}
 	}
 

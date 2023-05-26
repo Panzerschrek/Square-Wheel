@@ -586,8 +586,22 @@ impl GameMap
 		}
 	}
 
-	fn command_add_test_mirror(&mut self, _args: commands_queue::CommandArgs)
+	fn command_add_test_mirror(&mut self, args: commands_queue::CommandArgs)
 	{
+		let texture = if args.len() >= 1
+		{
+			Some(ViewPortalTexture {
+				blending_mode: material::BlendingMode::Average,
+				texture: self.resources_manager.lock().unwrap().get_texture_lite(&args[0]),
+				light_scale: 1.0,
+				light_add: [0.0; 3],
+			})
+		}
+		else
+		{
+			None
+		};
+
 		let (position, rotation) = self.get_camera_location();
 
 		let scale = 64.0;
@@ -599,8 +613,8 @@ impl GameMap
 		];
 
 		let tc_basis = [
-			Vec4f::new(2.0, 0.0, 0.0, 0.0),
 			Vec4f::new(0.0, 2.0, 0.0, 0.0),
+			Vec4f::new(-2.0, 0.0, 0.0, 0.0),
 			Vec4f::new(0.0, 0.0, 1.0, 0.0),
 		];
 
@@ -637,7 +651,8 @@ impl GameMap
 					.iter()
 					.map(|v| (mat * (scale * v).extend(1.0)).truncate())
 					.collect(),
-				blending_mode: material::BlendingMode::Average,
+				blending_mode: material::BlendingMode::None,
+				texture,
 			},
 			TestMirrorComponent {},
 		));
