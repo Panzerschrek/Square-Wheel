@@ -26,6 +26,7 @@ pub struct Host
 	prev_frame_end_time: std::time::Instant,
 	fps_counter: TicksCounter,
 	frame_duration_counter: PerformanceCounter,
+	game_perfromance_counter: PerformanceCounter,
 	quit_requested: bool,
 	screenshot_requested: bool,
 }
@@ -117,6 +118,7 @@ impl Host
 			prev_frame_end_time: cur_time,
 			fps_counter: TicksCounter::new(),
 			frame_duration_counter: PerformanceCounter::new(200),
+			game_perfromance_counter: PerformanceCounter::new(200),
 			quit_requested: false,
 			screenshot_requested: false,
 		};
@@ -293,6 +295,7 @@ impl Host
 		let frame_resize_interpolate = self.config.frame_resize_interpolate;
 		let frame_duration_counter = &self.frame_duration_counter;
 		let prev_frame_end_time = &mut self.prev_frame_end_time;
+		let game_perfromance_counter = &mut self.game_perfromance_counter;
 		let screenshot_requested = &mut self.screenshot_requested;
 		let show_fps = self.config.show_fps;
 
@@ -302,7 +305,18 @@ impl Host
 		let surface_info_initial = window.get_window_surface_info();
 		let mut prepare_frame_func = || {
 			// Process game logic.
-			game.update(&keyboard_state, &events, time_delta_s);
+			game_perfromance_counter.run_with_measure(|| game.update(&keyboard_state, &events, time_delta_s));
+			if let Some(active_map) = active_map
+			{
+				if active_map.debug_stats_printer.show_debug_stats()
+				{
+					active_map.debug_stats_printer.add_line(format!(
+						"game update: {:04.2}ms",
+						game_perfromance_counter.get_average_value() * 1000.0
+					));
+				}
+			}
+
 			// Perform rendering frame preparation.
 			if frame_scale > 1
 			{
