@@ -680,10 +680,7 @@ pub fn update_touch_trigger_teleports(ecs: &mut hecs::World, physics: &TestGameP
 						if named_target_component.name == target_name_component.name
 						{
 							// Activate teleportation component.
-							teleportable_component.destination = Some((
-								target_location_component.position,
-								touch_trigger_teleport_component.out_angle_z,
-							));
+							teleportable_component.destination = Some(*target_location_component);
 						}
 					}
 				}
@@ -708,28 +705,27 @@ pub fn update_teleported_entities(ecs: &mut hecs::World, physics: &mut TestGameP
 			{
 				// Teleport player - set camera angles and position.
 				player_controller_component.rotation_controller.set_angles(
-					destination.1 .0 - 0.5 * std::f32::consts::PI,
+					EulerAnglesF::from(destination.rotation).z.0 - 0.5 * std::f32::consts::PI,
 					0.0,
 					0.0,
 				);
 
 				match &mut player_controller_component.position_source
 				{
-					PlayerPositionSource::Noclip(vec) => *vec = destination.0,
-					PlayerPositionSource::Phys(handle) => physics.teleport_object(*handle, &destination.0),
+					PlayerPositionSource::Noclip(vec) => *vec = destination.position,
+					PlayerPositionSource::Phys(handle) => physics.teleport_object(*handle, &destination.position),
 				}
 			}
 			else if let Some(phys_handle) = phys_handle
 			{
 				// Physics object - teleport body.
 				// TODO - set also angle here.
-				physics.teleport_object(*phys_handle, &destination.0)
+				physics.teleport_object(*phys_handle, &destination.position)
 			}
 			else if let Some(location_component) = location_component
 			{
 				// Just location component - update location.
-				location_component.position = destination.0;
-				location_component.rotation = QuaternionF::from_angle_z(destination.1);
+				*location_component = destination;
 			}
 
 			// Reset destination after teleportation.

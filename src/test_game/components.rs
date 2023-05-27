@@ -36,7 +36,7 @@ pub struct SubmodelEntityWithIndex
 }
 
 // Component for entities that have some location.
-#[derive(Serialize, Deserialize)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct LocationComponent
 {
 	pub position: Vec3f,
@@ -139,7 +139,7 @@ pub enum PlayerPositionSource
 #[derive(Serialize, Deserialize)]
 pub struct TeleportableComponent
 {
-	pub destination: Option<(Vec3f, RadiansF)>,
+	pub destination: Option<LocationComponent>,
 }
 
 // Trigger than can be activated by touching.
@@ -153,7 +153,6 @@ pub struct TouchTriggerComponent
 pub struct TouchTriggerTeleportComponent
 {
 	pub bbox: BBox,
-	pub out_angle_z: RadiansF,
 }
 
 // Component of trigger entity to trigger single target.
