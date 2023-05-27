@@ -257,6 +257,11 @@ pub fn get_polygon_vertices<'a>(map: &'a BSPMap, polygon: &Polygon) -> &'a [Vec3
 	&map.vertices[polygon.first_vertex as usize .. (polygon.first_vertex + polygon.num_vertices) as usize]
 }
 
+pub fn get_submodel_polygons<'a>(map: &'a BSPMap, submodel: &Submodel) -> &'a [Polygon]
+{
+	&map.polygons[submodel.first_polygon as usize .. (submodel.first_polygon + submodel.num_polygons) as usize]
+}
+
 pub fn get_leaf_for_point(map: &BSPMap, point: &Vec3f) -> u32
 {
 	let mut index = get_root_node_index(map);

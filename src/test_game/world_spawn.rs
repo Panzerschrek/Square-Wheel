@@ -295,27 +295,28 @@ fn spawn_regular_entity(
 		Some("func_camera_portal") =>
 		{
 			let index = map_entity.submodel_index as usize;
-			if index < map.submodels.len() && map.submodels[index].num_polygons > 0
+			if index < map.submodels.len()
 			{
-				let polygon = &map.polygons[map.submodels[index].first_polygon as usize];
-
-				let entity = ecs.spawn((
-					ViewPortal {
-						view: PortalView::CameraAtPosition {
-							position: Vec3f::zero(),
-							rotation: QuaternionF::one(),
-							fov: Rad(get_entity_f32(map_entity, map, "fov").unwrap_or(90.0) * TO_RAD),
+				for polygon in bsp_map_compact::get_submodel_polygons(map, &map.submodels[index])
+				{
+					let entity = ecs.spawn((
+						ViewPortal {
+							view: PortalView::CameraAtPosition {
+								position: Vec3f::zero(),
+								rotation: QuaternionF::one(),
+								fov: Rad(get_entity_f32(map_entity, map, "fov").unwrap_or(90.0) * TO_RAD),
+							},
+							plane: polygon.plane,
+							tex_coord_equation: polygon.tex_coord_equation,
+							vertices: Vec::from(bsp_map_compact::get_polygon_vertices(map, polygon)),
+							blending_mode: get_entity_blending_mode(map_entity, map),
+							texture: get_portal_texture(resources_manager, map, polygon.texture),
 						},
-						plane: polygon.plane,
-						tex_coord_equation: polygon.tex_coord_equation,
-						vertices: Vec::from(bsp_map_compact::get_polygon_vertices(map, polygon)),
-						blending_mode: get_entity_blending_mode(map_entity, map),
-						texture: get_portal_texture(resources_manager, map, polygon.texture),
-					},
-					ViewPortalTargetLocationLinkComponent {},
-				));
+						ViewPortalTargetLocationLinkComponent {},
+					));
 
-				add_entity_common_components(ecs, map, map_entity, entity);
+					add_entity_common_components(ecs, map, map_entity, entity);
+				}
 			}
 		},
 		// Name portal cameras like in Quake III.
@@ -333,66 +334,66 @@ fn spawn_regular_entity(
 		Some("func_mirror") =>
 		{
 			let index = map_entity.submodel_index as usize;
-			if index < map.submodels.len() && map.submodels[index].num_polygons > 0
+			if index < map.submodels.len()
 			{
-				let polygon = &map.polygons[map.submodels[index].first_polygon as usize];
-
-				let mut tex_coord_equation = polygon.tex_coord_equation;
-				if tex_coord_equation[0]
-					.vec
-					.cross(tex_coord_equation[1].vec)
-					.dot(polygon.plane.vec) <
-					0.0
+				for polygon in bsp_map_compact::get_submodel_polygons(map, &map.submodels[index])
 				{
-					// Make sure mirror basis has proper orientation.
-					tex_coord_equation[0] = tex_coord_equation[0].get_inverted();
-				}
+					let mut tex_coord_equation = polygon.tex_coord_equation;
+					if tex_coord_equation[0]
+						.vec
+						.cross(tex_coord_equation[1].vec)
+						.dot(polygon.plane.vec) < 0.0
+					{
+						// Make sure mirror basis has proper orientation.
+						tex_coord_equation[0] = tex_coord_equation[0].get_inverted();
+					}
 
-				let entity = ecs.spawn((ViewPortal {
-					view: PortalView::Mirror {},
-					plane: polygon.plane,
-					tex_coord_equation: tex_coord_equation,
-					vertices: Vec::from(bsp_map_compact::get_polygon_vertices(map, polygon)),
-					blending_mode: get_entity_blending_mode(map_entity, map),
-					texture: get_portal_texture(resources_manager, map, polygon.texture),
-				},));
-
-				add_entity_common_components(ecs, map, map_entity, entity);
-			}
-		},
-		Some("func_parallax_portal") =>
-		{
-			let index = map_entity.submodel_index as usize;
-			if index < map.submodels.len() && map.submodels[index].num_polygons > 0
-			{
-				let polygon = &map.polygons[map.submodels[index].first_polygon as usize];
-
-				let mut tex_coord_equation = polygon.tex_coord_equation;
-				if tex_coord_equation[0]
-					.vec
-					.cross(tex_coord_equation[1].vec)
-					.dot(polygon.plane.vec) >
-					0.0
-				{
-					// Make sure portal basis has proper orientation.
-					tex_coord_equation[0] = tex_coord_equation[0].get_inverted();
-				}
-
-				let entity = ecs.spawn((
-					ViewPortal {
-						view: PortalView::ParallaxPortal {
-							transform_matrix: Mat4f::identity(),
-						},
+					let entity = ecs.spawn((ViewPortal {
+						view: PortalView::Mirror {},
 						plane: polygon.plane,
 						tex_coord_equation: tex_coord_equation,
 						vertices: Vec::from(bsp_map_compact::get_polygon_vertices(map, polygon)),
 						blending_mode: get_entity_blending_mode(map_entity, map),
 						texture: get_portal_texture(resources_manager, map, polygon.texture),
-					},
-					ViewPortalTargetLocationLinkComponent {},
-				));
+					},));
 
-				add_entity_common_components(ecs, map, map_entity, entity);
+					add_entity_common_components(ecs, map, map_entity, entity);
+				}
+			}
+		},
+		Some("func_parallax_portal") =>
+		{
+			let index = map_entity.submodel_index as usize;
+			if index < map.submodels.len()
+			{
+				for polygon in bsp_map_compact::get_submodel_polygons(map, &map.submodels[index])
+				{
+					let mut tex_coord_equation = polygon.tex_coord_equation;
+					if tex_coord_equation[0]
+						.vec
+						.cross(tex_coord_equation[1].vec)
+						.dot(polygon.plane.vec) > 0.0
+					{
+						// Make sure portal basis has proper orientation.
+						tex_coord_equation[0] = tex_coord_equation[0].get_inverted();
+					}
+
+					let entity = ecs.spawn((
+						ViewPortal {
+							view: PortalView::ParallaxPortal {
+								transform_matrix: Mat4f::identity(),
+							},
+							plane: polygon.plane,
+							tex_coord_equation: tex_coord_equation,
+							vertices: Vec::from(bsp_map_compact::get_polygon_vertices(map, polygon)),
+							blending_mode: get_entity_blending_mode(map_entity, map),
+							texture: get_portal_texture(resources_manager, map, polygon.texture),
+						},
+						ViewPortalTargetLocationLinkComponent {},
+					));
+
+					add_entity_common_components(ecs, map, map_entity, entity);
+				}
 			}
 		},
 		Some("misc_model") =>
