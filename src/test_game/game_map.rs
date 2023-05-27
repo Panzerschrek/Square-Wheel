@@ -782,6 +782,8 @@ impl GameMap
 		// Update models after physics update in order to setup position properly.
 
 		world_update::update_touch_triggers(&mut self.ecs, &self.physics);
+		world_update::update_touch_trigger_teleports(&mut self.ecs, &self.physics);
+		world_update::update_teleported_players(&mut self.ecs, &mut self.physics);
 		world_update::update_named_activations(&mut self.ecs);
 
 		world_update::update_animations(&mut self.ecs, self.game_time);

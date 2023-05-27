@@ -662,6 +662,65 @@ pub fn update_touch_triggers(ecs: &mut hecs::World, physics: &TestGamePhysics)
 	}
 }
 
+pub fn update_touch_trigger_teleports(ecs: &mut hecs::World, physics: &TestGamePhysics)
+{
+	for (_id, (touch_trigger_teleport_component, target_name_component)) in ecs
+		.query::<(&TouchTriggerTeleportComponent, &TargetNameComponent)>()
+		.iter()
+	{
+		physics.get_box_touching_entities(&touch_trigger_teleport_component.bbox, |entity| {
+			// Only player can activate triggers.
+			if let Ok(mut q) = ecs.query_one::<&mut PlayerTeleportComponent>(entity)
+			{
+				if let Some(player_teleport_component) = q.get()
+				{
+					// Query target position.
+					for (_target_id, (named_target_component, target_location_component)) in
+						ecs.query::<(&NamedTargetComponent, &LocationComponent)>().iter()
+					{
+						if named_target_component.name == target_name_component.name
+						{
+							// Activate player teleportation component.
+							player_teleport_component.destination = Some((
+								target_location_component.position,
+								touch_trigger_teleport_component.out_angle_z,
+							));
+						}
+					}
+				}
+			}
+		});
+	}
+}
+
+pub fn update_teleported_players(ecs: &mut hecs::World, physics: &mut TestGamePhysics)
+{
+	for (_id, (player_controller_component, player_teleport_component)) in
+		ecs.query_mut::<(&mut PlayerControllerComponent, &mut PlayerTeleportComponent)>()
+	{
+		if let Some(destination) = player_teleport_component.destination
+		{
+			player_controller_component.rotation_controller.set_angles(
+				destination.1 .0 - 0.5 * std::f32::consts::PI,
+				0.0,
+				0.0,
+			);
+
+			match &mut player_controller_component.position_source
+			{
+				PlayerPositionSource::Noclip(vec) =>
+				{
+					*vec = destination.0;
+				},
+				PlayerPositionSource::Phys(handle) => physics.teleport_object(*handle, &destination.0),
+			}
+
+			// Reset destination after teleportation.
+			player_teleport_component.destination = None;
+		}
+	}
+}
+
 pub fn update_named_activations(ecs: &mut hecs::World)
 {
 	for (id, (target_name_component,)) in ecs.query::<(&TargetNameComponent,)>().iter()

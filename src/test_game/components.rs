@@ -111,7 +111,7 @@ pub struct ViewPortalTargetLocationLinkComponent {}
 #[derive(Serialize, Deserialize)]
 pub struct SimpleAnimationComponent {}
 
-// General pplayer component.
+// General player component.
 #[derive(Serialize, Deserialize)]
 pub struct PlayerComponent
 {
@@ -135,11 +135,25 @@ pub enum PlayerPositionSource
 	Phys(test_game_physics::ObjectHandle),
 }
 
+// Component for deferred player teleportation.
+#[derive(Serialize, Deserialize)]
+pub struct PlayerTeleportComponent
+{
+	pub destination: Option<(Vec3f, RadiansF)>,
+}
+
 // Trigger than can be activated by touching.
 #[derive(Serialize, Deserialize)]
 pub struct TouchTriggerComponent
 {
 	pub bbox: BBox,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct TouchTriggerTeleportComponent
+{
+	pub bbox: BBox,
+	pub out_angle_z: RadiansF,
 }
 
 // Component of trigger entity to trigger single target.

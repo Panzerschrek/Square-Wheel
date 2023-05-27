@@ -40,6 +40,32 @@ fn spawn_regular_entity(
 				add_entity_common_components(ecs, map, map_entity, entity);
 			}
 		},
+		Some("trigger_teleport") =>
+		{
+			// Use Quake teleports logic.
+			// In Quake destination angle is stored in trigger entity, not in destination entity.
+			let index = map_entity.submodel_index as usize;
+			if index < map.submodels.len()
+			{
+				let entity = ecs.spawn((TouchTriggerTeleportComponent {
+					bbox: bsp_map_compact::get_submodel_bbox(map, &map.submodels[index]),
+					out_angle_z: Rad(get_entity_angle_rad(map_entity, map)),
+				},));
+				add_entity_common_components(ecs, map, map_entity, entity);
+			}
+		},
+		Some("info_teleport_destination") =>
+		{
+			if let Some(origin) = get_entity_origin(map_entity, map)
+			{
+				let entity = ecs.spawn((LocationComponent {
+					position: origin,
+					// Rotation of info_teleport_destination is irrelevant.
+					rotation: QuaternionF::one(),
+				},));
+				add_entity_common_components(ecs, map, map_entity, entity);
+			}
+		},
 		Some("path_corner") =>
 		{
 			if let Some(origin) = get_entity_origin(map_entity, map)
@@ -673,6 +699,7 @@ pub fn spawn_player(
 			rotation: QuaternionF::one(),
 		},
 		PlayerControllerLocationComponent {},
+		PlayerTeleportComponent { destination: None },
 	));
 
 	let mut rotation_controller = CameraRotationController::new();
