@@ -699,7 +699,7 @@ pub fn spawn_player(
 			rotation: QuaternionF::one(),
 		},
 		PlayerControllerLocationComponent {},
-		PlayerTeleportComponent { destination: None },
+		TeleportableComponent { destination: None },
 	));
 
 	let mut rotation_controller = CameraRotationController::new();

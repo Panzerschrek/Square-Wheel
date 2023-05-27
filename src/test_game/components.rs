@@ -135,9 +135,9 @@ pub enum PlayerPositionSource
 	Phys(test_game_physics::ObjectHandle),
 }
 
-// Component for deferred player teleportation.
+// Component for entity, that can be teleported.
 #[derive(Serialize, Deserialize)]
-pub struct PlayerTeleportComponent
+pub struct TeleportableComponent
 {
 	pub destination: Option<(Vec3f, RadiansF)>,
 }
