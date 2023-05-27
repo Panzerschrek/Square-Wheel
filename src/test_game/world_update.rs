@@ -703,9 +703,11 @@ pub fn update_teleported_entities(ecs: &mut hecs::World, physics: &mut TestGameP
 		{
 			if let Some(player_controller_component) = player_controller_component
 			{
+				let angle_z = EulerAnglesF::from(destination.rotation).z;
+
 				// Teleport player - set camera angles and position.
 				player_controller_component.rotation_controller.set_angles(
-					EulerAnglesF::from(destination.rotation).z.0 - 0.5 * std::f32::consts::PI,
+					angle_z.0 - 0.5 * std::f32::consts::PI,
 					0.0,
 					0.0,
 				);
@@ -713,14 +715,19 @@ pub fn update_teleported_entities(ecs: &mut hecs::World, physics: &mut TestGameP
 				match &mut player_controller_component.position_source
 				{
 					PlayerPositionSource::Noclip(vec) => *vec = destination.position,
-					PlayerPositionSource::Phys(handle) => physics.teleport_object(*handle, &destination.position),
+					PlayerPositionSource::Phys(handle) => physics.teleport_object(
+						*handle,
+						&destination.position,
+						// Add some initial velocity for player teleportation.
+						&(QuaternionF::from_angle_z(angle_z) * Vec3f::new(300.0, 0.0, 0.0)),
+					),
 				}
 			}
 			else if let Some(phys_handle) = phys_handle
 			{
 				// Physics object - teleport body.
 				// TODO - set also angle here.
-				physics.teleport_object(*phys_handle, &destination.position)
+				physics.teleport_object(*phys_handle, &destination.position, &Vec3f::zero())
 			}
 			else if let Some(location_component) = location_component
 			{

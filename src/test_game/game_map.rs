@@ -172,7 +172,7 @@ impl GameMap
 				},
 				PlayerPositionSource::Phys(phys_handle) =>
 				{
-					self.physics.teleport_object(*phys_handle, &pos);
+					self.physics.teleport_object(*phys_handle, &pos, &Vec3f::zero());
 				},
 			}
 		}
