@@ -58,7 +58,8 @@ fn spawn_regular_entity(
 			if let Some(origin) = get_entity_origin(map_entity, map)
 			{
 				let entity = ecs.spawn((LocationComponent {
-					position: origin,
+					// Shift position a bit up - as Quake does.
+					position: origin + Vec3f::new(0.0, 0.0, 27.0),
 					rotation: get_entity_rotation(map_entity, map),
 				},));
 				add_entity_common_components(ecs, map, map_entity, entity);
