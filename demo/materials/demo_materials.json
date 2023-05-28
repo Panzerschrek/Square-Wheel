@@ -134,6 +134,14 @@
 		"roughness": 0.0,
 		"blocks_view": false
 	},
+	"trigger":
+	{
+		"diffuse": "trigger.png",
+		"bsp" : true,
+		"light" : false,
+		"draw" : false,
+		"comment" : "Leave triggers in BSP in order to avoid deleting trigger brushes"
+	},
 	"water":
 	{
 		"diffuse": "water.png",
