@@ -110,12 +110,14 @@
 	"mirror":
 	{
 		"diffuse": "mirror.png",
-		"light" : false
+		"light" : false,
+		"comment" : "Disable lightmaps in order to avoid splitting mirrors polygons"
 	},
 	"portal":
 	{
 		"diffuse": "portal.png",
-		"portal" : false
+		"light" : false,
+		"comment" : "Disable lightmaps in order to avoid splitting portals polygons"
 	},
 	"roof_tiles":
 	{
