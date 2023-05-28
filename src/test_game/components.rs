@@ -36,7 +36,7 @@ pub struct SubmodelEntityWithIndex
 }
 
 // Component for entities that have some location.
-#[derive(Serialize, Deserialize)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct LocationComponent
 {
 	pub position: Vec3f,
@@ -111,7 +111,7 @@ pub struct ViewPortalTargetLocationLinkComponent {}
 #[derive(Serialize, Deserialize)]
 pub struct SimpleAnimationComponent {}
 
-// General pplayer component.
+// General player component.
 #[derive(Serialize, Deserialize)]
 pub struct PlayerComponent
 {
@@ -135,9 +135,22 @@ pub enum PlayerPositionSource
 	Phys(test_game_physics::ObjectHandle),
 }
 
+// Component for entity, that can be teleported.
+#[derive(Serialize, Deserialize)]
+pub struct TeleportableComponent
+{
+	pub destination: Option<LocationComponent>,
+}
+
 // Trigger than can be activated by touching.
 #[derive(Serialize, Deserialize)]
 pub struct TouchTriggerComponent
+{
+	pub bbox: BBox,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct TouchTriggerTeleportComponent
 {
 	pub bbox: BBox,
 }

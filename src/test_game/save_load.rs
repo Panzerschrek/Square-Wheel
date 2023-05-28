@@ -348,8 +348,10 @@ impl<'a> hecs::serialize::row::SerializeContext for SerializeContext<'a>
 
 		self.try_serialize_component::<PlayerComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<PlayerControllerComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<TeleportableComponent, S>(entity, &mut map)?;
 
 		self.try_serialize_component::<TouchTriggerComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<TouchTriggerTeleportComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<TriggerSingleTargetComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<TargetNameComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<NamedTargetComponent, S>(entity, &mut map)?;
@@ -466,8 +468,10 @@ impl<'a> hecs::serialize::row::DeserializeContext for DeserializeContext<'a>
 
 			self.try_deserialize_component::<PlayerComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<PlayerControllerComponent, M>(&key, &mut map, entity)?;
+			self.try_deserialize_component::<TeleportableComponent, M>(&key, &mut map, entity)?;
 
 			self.try_deserialize_component::<TouchTriggerComponent, M>(&key, &mut map, entity)?;
+			self.try_deserialize_component::<TouchTriggerTeleportComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<TriggerSingleTargetComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<TargetNameComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<NamedTargetComponent, M>(&key, &mut map, entity)?;

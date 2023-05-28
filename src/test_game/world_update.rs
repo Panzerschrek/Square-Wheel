@@ -662,6 +662,85 @@ pub fn update_touch_triggers(ecs: &mut hecs::World, physics: &TestGamePhysics)
 	}
 }
 
+pub fn update_touch_trigger_teleports(ecs: &mut hecs::World, physics: &TestGamePhysics)
+{
+	for (_id, (touch_trigger_teleport_component, target_name_component)) in ecs
+		.query::<(&TouchTriggerTeleportComponent, &TargetNameComponent)>()
+		.iter()
+	{
+		physics.get_box_touching_entities(&touch_trigger_teleport_component.bbox, |entity| {
+			if let Ok(mut q) = ecs.query_one::<&mut TeleportableComponent>(entity)
+			{
+				if let Some(teleportable_component) = q.get()
+				{
+					// Query target position.
+					for (_target_id, (named_target_component, target_location_component)) in
+						ecs.query::<(&NamedTargetComponent, &LocationComponent)>().iter()
+					{
+						if named_target_component.name == target_name_component.name
+						{
+							// Activate teleportation component.
+							teleportable_component.destination = Some(*target_location_component);
+						}
+					}
+				}
+			}
+		});
+	}
+}
+
+pub fn update_teleported_entities(ecs: &mut hecs::World, physics: &mut TestGamePhysics)
+{
+	for (_id, (player_controller_component, phys_handle, location_component, teleportable_component)) in ecs
+		.query_mut::<(
+			Option<&mut PlayerControllerComponent>,
+			Option<&PhysicsLocationComponent>,
+			Option<&mut LocationComponent>,
+			&mut TeleportableComponent,
+		)>()
+	{
+		if let Some(destination) = teleportable_component.destination
+		{
+			if let Some(player_controller_component) = player_controller_component
+			{
+				let angle_z = EulerAnglesF::from(destination.rotation).z;
+
+				// Teleport player - set camera angles and position.
+				player_controller_component.rotation_controller.set_angles(
+					angle_z.0 - 0.5 * std::f32::consts::PI,
+					0.0,
+					0.0,
+				);
+
+				match &mut player_controller_component.position_source
+				{
+					PlayerPositionSource::Noclip(vec) => *vec = destination.position,
+					PlayerPositionSource::Phys(handle) => physics.teleport_object(
+						*handle,
+						&destination.position,
+						// Add some initial velocity for player teleportation.
+						&(QuaternionF::from_angle_z(angle_z) * Vec3f::new(300.0, 0.0, 0.0)),
+					),
+				}
+			}
+			else if let Some(phys_handle) = phys_handle
+			{
+				// Physics object - teleport body.
+				// TODO - set also angle here.
+				physics.teleport_object(*phys_handle, &destination.position, &Vec3f::zero())
+			}
+			else if let Some(location_component) = location_component
+			{
+				// Just location component - update location.
+				*location_component = destination;
+			}
+
+			// Reset destination after teleportation.
+			teleportable_component.destination = None;
+		}
+	}
+}
+
 pub fn update_named_activations(ecs: &mut hecs::World)
 {
 	for (id, (target_name_component,)) in ecs.query::<(&TargetNameComponent,)>().iter()

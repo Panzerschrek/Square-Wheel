@@ -27,7 +27,8 @@ fn spawn_regular_entity(
 	map_entity: &bsp_map_compact::Entity,
 )
 {
-	match get_entity_classname(map_entity, map)
+	let class_name = get_entity_classname(map_entity, map);
+	match class_name
 	{
 		Some("trigger_multiple") =>
 		{
@@ -37,6 +38,30 @@ fn spawn_regular_entity(
 				let bbox = bsp_map_compact::get_submodel_bbox(map, &map.submodels[index]);
 
 				let entity = ecs.spawn((TouchTriggerComponent { bbox },));
+				add_entity_common_components(ecs, map, map_entity, entity);
+			}
+		},
+		Some("trigger_teleport") =>
+		{
+			// Use Quake teleports logic.
+			let index = map_entity.submodel_index as usize;
+			if index < map.submodels.len()
+			{
+				let entity = ecs.spawn((TouchTriggerTeleportComponent {
+					bbox: bsp_map_compact::get_submodel_bbox(map, &map.submodels[index]),
+				},));
+				add_entity_common_components(ecs, map, map_entity, entity);
+			}
+		},
+		Some("info_teleport_destination") =>
+		{
+			if let Some(origin) = get_entity_origin(map_entity, map)
+			{
+				let entity = ecs.spawn((LocationComponent {
+					// Shift position a bit up - as Quake does.
+					position: origin + Vec3f::new(0.0, 0.0, 27.0),
+					rotation: get_entity_rotation(map_entity, map),
+				},));
 				add_entity_common_components(ecs, map, map_entity, entity);
 			}
 		},
@@ -614,12 +639,12 @@ fn spawn_regular_entity(
 				},));
 			}
 		},
-		// Process unknown entities with submodels as "func_detal".
+		// Process unknown entities with submodels as "func_detal", but ignore triggers.
 		Some("func_detail") | _ =>
 		{
 			// Spawn non-moving static entity.
 			let index = map_entity.submodel_index as usize;
-			if index < map.submodels.len()
+			if index < map.submodels.len() && !class_name.unwrap_or("").starts_with("trigger")
 			{
 				let bbox = bsp_map_compact::get_submodel_bbox(map, &map.submodels[index]);
 
@@ -674,6 +699,7 @@ pub fn spawn_player(
 			rotation: QuaternionF::one(),
 		},
 		PlayerControllerLocationComponent {},
+		TeleportableComponent { destination: None },
 	));
 
 	let mut rotation_controller = CameraRotationController::new();

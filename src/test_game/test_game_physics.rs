@@ -163,10 +163,12 @@ impl TestGamePhysics
 		body.apply_impulse(r3d::Vector::new(impulse.x, impulse.y, impulse.z), true);
 	}
 
-	pub fn teleport_object(&mut self, handle: ObjectHandle, position: &Vec3f)
+	pub fn teleport_object(&mut self, handle: ObjectHandle, position: &Vec3f, velocity: &Vec3f)
 	{
 		let body = &mut self.rigid_body_set[handle];
-		body.set_translation(r3d::Vector::new(position.x, position.y, position.z), true)
+		body.set_translation(r3d::Vector::new(position.x, position.y, position.z), true);
+		body.set_linvel(r3d::Vector::new(velocity.x, velocity.y, velocity.z), true);
+		body.set_angvel(r3d::Vector::new(0.0, 0.0, 0.0), true);
 	}
 
 	pub fn set_kinematic_object_position(&mut self, handle: ObjectHandle, position: &Vec3f)
