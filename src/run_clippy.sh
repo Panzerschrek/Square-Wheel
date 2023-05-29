@@ -18,7 +18,6 @@ cargo +nightly clippy -- \
 -A clippy::from_over_into \
 -A clippy::absurd_extreme_comparisons \
 -A clippy::unnecessary_cast \
--A clippy::let_and_return \
 -A clippy::redundant_closure \
 -A clippy::erasing_op -A clippy::explicit_counter_loop \
 -A clippy::needless_bool \

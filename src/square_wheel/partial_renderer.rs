@@ -882,8 +882,8 @@ impl PartialRenderer
 						Vec2f::new(texture_mip0.size[0] as f32, texture_mip0.size[1] as f32).magnitude2();
 					let d_tc_2 = tc_diagonal_square_diff / shortest_diagonal_square_len;
 					let mip_f = d_tc_2.log2() * 0.5 + self.mip_bias; // log(sqrt(x)) = log(x) * 0.5
-					let mip = (mip_f.round().max(0.0) as u32).min(MAX_MIP as u32);
-					mip
+
+					(mip_f.round().max(0.0) as u32).min(MAX_MIP as u32)
 				}
 			}
 			else
