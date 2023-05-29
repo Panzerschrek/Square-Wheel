@@ -30,6 +30,5 @@ cargo +nightly clippy -- \
 -A clippy::manual_flatten \
 -A clippy::manual_map \
 -A clippy::field_reassign_with_default \
--A clippy::question_mark \
 -A clippy::assign_op_pattern \
 -A clippy::len_zero \

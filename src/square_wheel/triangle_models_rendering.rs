@@ -229,14 +229,7 @@ pub fn calculate_triangle_model_screen_polygon(model_bbox_vertices_transformed: 
 		return clipping_polyogn;
 	}
 
-	let mut clipping_polyogn = if let Some(p) = clipping_polyogn
-	{
-		p
-	}
-	else
-	{
-		return None;
-	};
+	let mut clipping_polyogn = clipping_polyogn?;
 
 	// Perform z_near clipping of all possible edges between bbox vertices.
 	const Z_NEAR: f32 = 1.0 / 4096.0;
