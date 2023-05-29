@@ -2175,5 +2175,5 @@ fn correct_sample_position(
 	}
 
 	// In worst case just return polygon center.
-	return *polygon_center;
+	*polygon_center
 }

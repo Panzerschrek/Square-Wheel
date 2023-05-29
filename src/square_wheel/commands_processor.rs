@@ -217,7 +217,8 @@ impl CommandsProcessor
 		{
 			return format!("Can't set value of this type");
 		}
-		return String::new();
+
+		String::new()
 	}
 }
 

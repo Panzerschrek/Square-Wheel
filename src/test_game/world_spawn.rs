@@ -890,7 +890,7 @@ fn get_entity_move_direction(entity: &bsp_map_compact::Entity, map: &bsp_map_com
 	// TODO - support "angles".
 
 	// Return something.
-	return Vec3f::unit_x();
+	Vec3f::unit_x()
 }
 
 fn find_first_entity_of_given_class<'a>(

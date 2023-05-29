@@ -9,7 +9,6 @@ cargo +nightly clippy -- \
 -A clippy::char_lit_as_u8 \
 -A clippy::new_without_default \
 -A clippy::missing_safety_doc \
--A clippy::needless_return \
 -A clippy::too_many_arguments \
 -A clippy::clone_double_ref \
 -A clippy::excessive_precision \

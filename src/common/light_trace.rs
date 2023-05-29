@@ -107,7 +107,8 @@ fn get_shadow_factor_r(
 				shadow_factor_accumulated *= opacity;
 			}
 		}
-		return shadow_factor_accumulated;
+
+		shadow_factor_accumulated
 	}
 	else
 	{
@@ -158,8 +159,8 @@ fn get_shadow_factor_r(
 			return 0.0;
 		}
 
-		// Absorb light by bots sub-paths - front and back.
-		return shadow_factor_front * shadow_factor_back;
+		// Absorb light by both sub-paths - front and back.
+		shadow_factor_front * shadow_factor_back
 	}
 }
 
@@ -229,7 +230,8 @@ fn get_nearest_sky_point_r(
 				}
 			}
 		}
-		return result;
+
+		result
 	}
 	else
 	{
@@ -280,7 +282,7 @@ fn get_nearest_sky_point_r(
 			return result_from;
 		}
 
-		return get_nearest_sky_point_r(&intersection_pos_from, to, node.children[child_to], map, sky_flag_table);
+		get_nearest_sky_point_r(&intersection_pos_from, to, node.children[child_to], map, sky_flag_table)
 	}
 }
 
