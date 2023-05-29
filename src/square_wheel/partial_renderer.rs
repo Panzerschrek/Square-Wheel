@@ -1966,7 +1966,7 @@ impl PartialRenderer
 					(tex_coord_max[1] - tex_coord_min[1]) as u32,
 				],
 				texture_pixels_offset: self.portals_rendering_data.num_textures_pixels,
-				depth_equation: depth_equation,
+				depth_equation,
 				tex_coord_equation: tc_equation,
 				tc_min: tex_coord_min,
 				mip,

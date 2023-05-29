@@ -75,7 +75,7 @@ impl GameMap
 			resources_manager,
 			commands_queue,
 			commands_queue_dyn,
-			map: map,
+			map,
 			physics,
 			game_time: 0.0,
 			ecs,
