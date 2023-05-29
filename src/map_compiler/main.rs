@@ -273,12 +273,9 @@ struct SubmodelBSPStats
 fn calculate_submodel_bsp_tree_stats_r(node: &bsp_builder::SubmodelBSPNode, depth: usize, stats: &mut SubmodelBSPStats)
 {
 	stats.num_nodes += 1;
-	for child in &node.children
+	for child in node.children.iter().flatten()
 	{
-		if let Some(c) = child
-		{
-			calculate_submodel_bsp_tree_stats_r(c, depth + 1, stats);
-		}
+		calculate_submodel_bsp_tree_stats_r(child, depth + 1, stats);
 	}
 
 	if stats.min_depth == 0
