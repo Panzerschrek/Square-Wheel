@@ -17,7 +17,6 @@ cargo +nightly clippy -- \
 -A clippy::mut_from_ref \
 -A clippy::useless_format \
 -A clippy::if_same_then_else \
--A clippy::approx_constant \
 -A clippy::from_over_into \
 -A clippy::absurd_extreme_comparisons \
 -A clippy::needless_late_init \

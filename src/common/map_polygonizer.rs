@@ -389,7 +389,7 @@ fn get_polygon_texture_info(brush_plane: &map_file_q1::BrushPlane, polygon_norma
 {
 	let basis = get_texture_basis(polygon_normal);
 
-	let angle_rad = brush_plane.tc_angle * (3.1415926535 / 180.0);
+	let angle_rad = brush_plane.tc_angle * (std::f32::consts::PI / 180.0);
 	let angle_cos = angle_rad.cos();
 	let angle_sin = angle_rad.sin();
 	let basis_rotated = [
