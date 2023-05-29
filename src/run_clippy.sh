@@ -25,7 +25,6 @@ cargo +nightly clippy -- \
 -A clippy::manual_range_contains \
 -A clippy::wildcard_in_or_patterns \
 -A clippy::manual_flatten \
--A clippy::manual_map \
 -A clippy::field_reassign_with_default \
 -A clippy::assign_op_pattern \
 -A clippy::len_zero \

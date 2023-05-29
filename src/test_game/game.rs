@@ -93,14 +93,7 @@ impl GameInterface for Game
 
 	fn get_frame_info(&self, surface_info: &system_window::SurfaceInfo) -> Option<FrameInfo>
 	{
-		if let Some(game_map) = &self.game_map
-		{
-			Some(game_map.get_frame_info(surface_info))
-		}
-		else
-		{
-			None
-		}
+		self.game_map.as_ref().map(|m| m.get_frame_info(surface_info))
 	}
 
 	fn draw_frame_overlay(&self, pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo)
