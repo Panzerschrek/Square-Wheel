@@ -3960,6 +3960,7 @@ fn polygon_is_affected_by_light(
 		let u_radius = radius_at_polygon_plane * inv_sqrt_fast(basis_vecs.u.magnitude2());
 		let v_radius = radius_at_polygon_plane * inv_sqrt_fast(basis_vecs.v.magnitude2());
 
+		#[allow(clippy::needless_bool)]
 		if tc_at_projected_light_position[0] + u_radius < (polygon.tex_coord_min[0] as f32) ||
 			tc_at_projected_light_position[1] + v_radius < (polygon.tex_coord_min[1] as f32) ||
 			tc_at_projected_light_position[0] - u_radius > (polygon.tex_coord_max[0] as f32) ||

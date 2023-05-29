@@ -20,7 +20,6 @@ cargo +nightly clippy -- \
 -A clippy::unnecessary_cast \
 -A clippy::redundant_closure \
 -A clippy::erasing_op -A clippy::explicit_counter_loop \
--A clippy::needless_bool \
 -A clippy::identity_op \
 -A clippy::manual_range_contains \
 -A clippy::wildcard_in_or_patterns \

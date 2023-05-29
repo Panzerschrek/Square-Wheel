@@ -27,21 +27,8 @@ impl DepthRenderer
 				let material_name_string = bsp_map_compact::get_texture_string(texture_name);
 				if let Some(material) = all_materials.get(material_name_string)
 				{
-					if !material.shadow
-					{
-						// Shadow is explicitely disabled.
-						false
-					}
-					else if material.blending_mode != BlendingMode::None
-					{
-						// Some blending is enabled. Disable shadows.
-						false
-					}
-					else
-					{
-						// Normal material - cast shadow.
-						true
-					}
+					// Disable shadows if shadows are explicitely enabled in material settings or if some blending is enabled.
+					material.shadow && material.blending_mode == BlendingMode::None
 				}
 				else
 				{
