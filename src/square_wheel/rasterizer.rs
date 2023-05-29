@@ -771,7 +771,6 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 	{
 		// Sort triangle vertices.
 		let upper_index;
-		let middle_index;
 		let lower_index;
 		if vertices[0].y >= vertices[1].y && vertices[0].y >= vertices[2].y
 		{
@@ -788,7 +787,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			upper_index = 2;
 			lower_index = if vertices[0].y < vertices[1].y { 0 } else { 1 };
 		}
-		middle_index = 3 - upper_index - lower_index;
+		let middle_index = 3 - upper_index - lower_index;
 
 		let upper_vertex = &vertices[upper_index];
 		let lower_vertex = &vertices[lower_index];

@@ -152,14 +152,13 @@ impl MapVisibilityCalculator
 					let portal_plane_pos =
 						(camera_matrices.planes_matrix * portal_value.plane.vec.extend(-portal_value.plane.dist)).w;
 
-					let next_leaf;
-					if portal_value.leafs[0] == leaf
+					let next_leaf = if portal_value.leafs[0] == leaf
 					{
 						if portal_plane_pos <= 0.0
 						{
 							continue;
 						}
-						next_leaf = portal_value.leafs[1];
+						portal_value.leafs[1]
 					}
 					else
 					{
@@ -167,8 +166,8 @@ impl MapVisibilityCalculator
 						{
 							continue;
 						}
-						next_leaf = portal_value.leafs[0];
-					}
+						portal_value.leafs[0]
+					};
 
 					// Same portal may be visited multiple times.
 					// So, cache calculation of portal bounds.
