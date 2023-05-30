@@ -31,9 +31,9 @@ jobs:
       working-directory: src
       run: ./build_release.sh
     # Clippy
-    - name: BuildRelease
+    - name: Clippy
       working-directory: src
-      run: ./run_clippy.sh
+      run: ./clippy.sh
     # Check formatting in parallel, using nightly toolchain.
   check_fmt:
       runs-on: ubuntu-20.04
