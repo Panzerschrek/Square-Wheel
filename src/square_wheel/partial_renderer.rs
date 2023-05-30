@@ -471,7 +471,7 @@ impl PartialRenderer
 
 					let light_matrix = get_object_matrix(light.position, rotation);
 
-					let mut closest_square_dist = 1.0e24 as f32;
+					let mut closest_square_dist = 1.0e24_f32;
 					for v in [
 						Vec3f::new(light.radius, 0.0, 0.0),
 						Vec3f::new(

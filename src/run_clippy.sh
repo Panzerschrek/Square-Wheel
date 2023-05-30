@@ -9,7 +9,6 @@ cargo +nightly clippy -- \
 -A clippy::mut_from_ref \
 -A clippy::useless_format \
 -A clippy::from_over_into \
--A clippy::unnecessary_cast \
 -A clippy::erasing_op \
 -A clippy::explicit_counter_loop \
 -A clippy::identity_op \
