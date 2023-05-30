@@ -43,17 +43,12 @@ impl GameInterface for Game
 	{
 		for event in events
 		{
-			match event
+			if let sdl2::event::Event::KeyDown {
+				keycode: Some(sdl2::keyboard::Keycode::Escape),
+				..
+			} = event
 			{
-				sdl2::event::Event::KeyDown { keycode, .. } =>
-				{
-					if *keycode == Some(sdl2::keyboard::Keycode::Escape)
-					{
-						self.commands_processor.lock().unwrap().process_command("quit");
-					}
-				},
-				_ =>
-				{},
+				self.commands_processor.lock().unwrap().process_command("quit");
 			}
 		}
 
