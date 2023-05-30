@@ -6,7 +6,6 @@ cargo +nightly clippy -- \
 -A clippy::map_entry \
 -A clippy::single_match \
 -A clippy::needless_range_loop \
--A clippy::char_lit_as_u8 \
 -A clippy::new_without_default \
 -A clippy::missing_safety_doc \
 -A clippy::too_many_arguments \

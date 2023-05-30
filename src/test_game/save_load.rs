@@ -137,7 +137,7 @@ struct SaveHeader
 	physics_data_offset: u32,
 }
 
-const SAVE_ID: [u8; 4] = ['S' as u8, 'q' as u8, 'w' as u8, 'S' as u8];
+const SAVE_ID: [u8; 4] = *b"SqwS";
 const SAVE_VERSION: u32 = 1; // Change each time when format is changed!
 
 fn save_common_data(game_time: f32, player_entity: hecs::Entity, file: &mut File) -> Option<()>
