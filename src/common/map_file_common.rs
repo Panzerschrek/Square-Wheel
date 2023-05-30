@@ -106,6 +106,11 @@ pub fn parse_vec3(s: Iterator) -> ParseResult<Vec3f>
 	))
 }
 
+pub fn parse_key_value_number(it: Iterator) -> ParseResult<f32>
+{
+	parse_number(&mut <&str>::clone(&it))
+}
+
 pub fn parse_number(it: &mut Iterator) -> ParseResult<f32>
 {
 	let mut s = String::new();

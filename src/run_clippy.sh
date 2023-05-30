@@ -5,7 +5,6 @@ cargo +nightly clippy -- \
 -A clippy::new_without_default \
 -A clippy::missing_safety_doc \
 -A clippy::too_many_arguments \
--A clippy::clone_double_ref \
 -A clippy::excessive_precision \
 -A clippy::mut_from_ref \
 -A clippy::useless_format \
