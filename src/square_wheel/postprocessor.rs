@@ -169,7 +169,7 @@ impl Postprocessor
 						let pixels = unsafe { pixels_shared.get() };
 						self.perform_tonemapping(pixels, surface_info, range[0], range[1], tonemapping_function)
 					})
-					.reduce(|| ColorVec::zero(), |a, b| ColorVec::add(&a, &b))
+					.reduce(ColorVec::zero, |a, b| ColorVec::add(&a, &b))
 			};
 
 			average_color = ColorVec::scalar_mul(

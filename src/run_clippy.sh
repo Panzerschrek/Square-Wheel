@@ -14,7 +14,6 @@ cargo +nightly clippy -- \
 -A clippy::useless_format \
 -A clippy::from_over_into \
 -A clippy::unnecessary_cast \
--A clippy::redundant_closure \
 -A clippy::erasing_op \
 -A clippy::explicit_counter_loop \
 -A clippy::identity_op \
