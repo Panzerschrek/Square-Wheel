@@ -19,10 +19,10 @@ cargo +nightly clippy -- \
 -A clippy::absurd_extreme_comparisons \
 -A clippy::unnecessary_cast \
 -A clippy::redundant_closure \
--A clippy::erasing_op -A clippy::explicit_counter_loop \
+-A clippy::erasing_op \
+-A clippy::explicit_counter_loop \
 -A clippy::identity_op \
 -A clippy::manual_range_contains \
 -A clippy::wildcard_in_or_patterns \
 -A clippy::field_reassign_with_default \
--A clippy::assign_op_pattern \
 -A clippy::len_zero \
