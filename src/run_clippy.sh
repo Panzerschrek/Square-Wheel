@@ -19,5 +19,4 @@ cargo +nightly clippy -- \
 -A clippy::identity_op \
 -A clippy::manual_range_contains \
 -A clippy::wildcard_in_or_patterns \
--A clippy::field_reassign_with_default \
 -A clippy::len_zero \

@@ -277,8 +277,10 @@ impl TestGamePhysics
 			let cur_dt = (time_delta_s - cur_step_time).min(max_dt);
 			cur_step_time += max_dt;
 
-			let mut integration_parameters = r3d::IntegrationParameters::default();
-			integration_parameters.dt = cur_dt;
+			let integration_parameters = r3d::IntegrationParameters {
+				dt: cur_dt,
+				..Default::default()
+			};
 
 			self.physics_pipeline.step(
 				&gravity,
