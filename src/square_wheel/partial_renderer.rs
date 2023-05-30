@@ -2637,7 +2637,7 @@ impl PartialRenderer
 		const MAX_OBJECTS_IN_LEAF: usize = 12;
 		let mut objects_for_sorting = [draw_ordering::BBoxForDrawOrdering::default(); MAX_OBJECTS_IN_LEAF];
 
-		const SUBMODEL_INDEX_ADD: u32 = 0;
+		const SUBMODEL_INDEX_ADD: u32 = 65536;
 		const DYNAMIC_MESH_INDEX_ADD: u32 = SUBMODEL_INDEX_ADD + 65536;
 		const SPRITE_INDEX_ADD: u32 = DYNAMIC_MESH_INDEX_ADD + 65536;
 		const PORTAL_INDEX_ADD: u32 = SPRITE_INDEX_ADD + 65536;

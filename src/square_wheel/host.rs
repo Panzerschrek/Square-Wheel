@@ -61,7 +61,7 @@ impl Host
 		// Initialize global thread pool.
 		{
 			let mut num_threads = host_config.num_threads as usize;
-			if num_threads <= 0
+			if num_threads == 0
 			{
 				num_threads = num_cpus::get();
 				println!("Use number of threads equal to number of CPU cores");

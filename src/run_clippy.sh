@@ -12,9 +12,7 @@ cargo +nightly clippy -- \
 -A clippy::excessive_precision \
 -A clippy::mut_from_ref \
 -A clippy::useless_format \
--A clippy::if_same_then_else \
 -A clippy::from_over_into \
--A clippy::absurd_extreme_comparisons \
 -A clippy::unnecessary_cast \
 -A clippy::redundant_closure \
 -A clippy::erasing_op \
