@@ -21,6 +21,14 @@
 		"blending_mode": "AlphaTest",
 		"blocks_view": false
 	},
+	"alpha_grid_mirror":
+	{
+		"diffuse": "alpha_grid_mirror.png",
+		"blocks_view": false,
+		"light": false,
+		"portal_texture" : "alpha_grid_mirror.png",
+		"portal_blending_mode" : "AlphaTest"
+	},
 	"bricks":
 	{
 		"diffuse": "bricks.png",
@@ -128,6 +136,14 @@
 	{
 		"diffuse": "rope.png",
 		"normal_map": "rope_normal.png"
+	},
+	"rusted_mirror":
+	{
+		"diffuse": "rusted_mirror.png",
+		"blocks_view": false,
+		"light": false,
+		"portal_texture" : "rusted_mirror.png",
+		"portal_blending_mode" : "AlphaBlend"
 	},
 	"stained_glass":
 	{
