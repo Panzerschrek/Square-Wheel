@@ -556,10 +556,8 @@ impl ResourceSerializationKey
 	{
 		let key = Self(Arc::as_ptr(resource) as usize as u64);
 
-		if !resources.contains_key(&key)
-		{
-			resources.insert(key, resource.clone());
-		}
+		resources.entry(key).or_insert_with(|| resource.clone());
+
 		key
 	}
 

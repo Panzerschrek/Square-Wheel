@@ -1,7 +1,6 @@
 cargo +nightly clippy -- \
 -A clippy::collapsible_if \
 -A clippy::collapsible_else_if \
--A clippy::map_entry \
 -A clippy::single_match \
 -A clippy::needless_range_loop \
 -A clippy::new_without_default \

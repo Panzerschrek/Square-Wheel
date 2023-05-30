@@ -903,11 +903,17 @@ fn build_leaf_portals(
 		};
 
 		let ptr = (&*splitter_node.node.borrow()) as *const BSPNode;
-		if !leaf_portals_by_node.contains_key(&ptr)
+		match leaf_portals_by_node.entry(ptr)
 		{
-			leaf_portals_by_node.insert(ptr, Vec::new());
+			std::collections::hash_map::Entry::Vacant(e) =>
+			{
+				e.insert(vec![portal]);
+			},
+			std::collections::hash_map::Entry::Occupied(mut e) =>
+			{
+				e.get_mut().push(portal);
+			},
 		}
-		leaf_portals_by_node.get_mut(&ptr).unwrap().push(portal);
 	} // for portal planes
 }
 

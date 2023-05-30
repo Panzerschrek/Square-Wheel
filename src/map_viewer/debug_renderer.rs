@@ -769,18 +769,22 @@ fn find_reachable_sectors_r(
 
 	let sector = sector_ptr.borrow();
 	let sector_raw_ptr = (&*sector) as *const bsp_builder::BSPLeaf;
-	if reachable_sectors.contains_key(&sector_raw_ptr)
+
+	match reachable_sectors.entry(sector_raw_ptr)
 	{
-		let prev_depth = &mut reachable_sectors.get_mut(&sector_raw_ptr).unwrap().1;
-		if *prev_depth <= depth
+		std::collections::hash_map::Entry::Vacant(e) =>
 		{
-			return;
-		}
-		*prev_depth = depth;
-	}
-	else
-	{
-		reachable_sectors.insert(sector_raw_ptr, (sector_ptr.clone(), depth));
+			e.insert((sector_ptr.clone(), depth));
+		},
+		std::collections::hash_map::Entry::Occupied(mut e) =>
+		{
+			let prev_depth = &mut e.get_mut().1;
+			if *prev_depth <= depth
+			{
+				return;
+			}
+			*prev_depth = depth;
+		},
 	}
 
 	for portal_ptr_weak in &sector.portals
