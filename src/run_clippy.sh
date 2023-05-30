@@ -7,9 +7,8 @@ cargo +nightly clippy -- \
 -A clippy::too_many_arguments \
 -A clippy::excessive_precision \
 -A clippy::mut_from_ref \
--A clippy::useless_format \
--A clippy::erasing_op \
 -A clippy::explicit_counter_loop \
+-A clippy::erasing_op \
 -A clippy::identity_op \
 -A clippy::manual_range_contains \
 -A clippy::wildcard_in_or_patterns \

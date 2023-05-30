@@ -173,7 +173,7 @@ impl CommandsProcessor
 			}
 			else
 			{
-				return format!("Failed to parse u64");
+				return "Failed to parse u64".to_string();
 			}
 		}
 		else if cur_value.is_i64()
@@ -184,7 +184,7 @@ impl CommandsProcessor
 			}
 			else
 			{
-				return format!("Failed to parse i64");
+				return "Failed to parse i64".to_string();
 			}
 		}
 		else if cur_value.is_f64()
@@ -195,7 +195,7 @@ impl CommandsProcessor
 			}
 			else
 			{
-				return format!("Failed to parse f64");
+				return "Failed to parse f64".to_string();
 			}
 		}
 		else if cur_value.is_boolean()
@@ -210,12 +210,12 @@ impl CommandsProcessor
 			}
 			else
 			{
-				return format!("Failed to parse bool");
+				return "Failed to parse bool".to_string();
 			}
 		}
 		else
 		{
-			return format!("Can't set value of this type");
+			return "Can't set value of this type".to_string();
 		}
 
 		String::new()
