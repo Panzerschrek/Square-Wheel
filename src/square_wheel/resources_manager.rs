@@ -185,7 +185,7 @@ impl ResourcesManager
 			return p.clone();
 		}
 
-		let ptr = if let Some(image) = load_image(&key, &self.config.textures_path)
+		let ptr = if let Some(image) = load_image(key, &self.config.textures_path)
 		{
 			SharedResourcePtr::new(image)
 		}
@@ -286,7 +286,7 @@ impl ResourcesManager
 			return p.clone();
 		}
 
-		let mip0 = load_image(&key, &self.config.textures_path).unwrap_or_else(|| (*self.stub_image).clone());
+		let mip0 = load_image(key, &self.config.textures_path).unwrap_or_else(|| (*self.stub_image).clone());
 		let ptr = SharedResourcePtr::new(make_texture_lite_mips(mip0));
 
 		self.lite_textures.insert(key.to_string(), ptr.clone());
@@ -322,7 +322,7 @@ impl ResourcesManager
 		let mut skybox_texture = SkyboxTextures::default();
 		for (side_image, out_side) in skybox.side_images.iter().zip(skybox_texture.iter_mut())
 		{
-			*out_side = load_skybox_texture_side(&self.config.textures_path, &side_image, skybox.brightness);
+			*out_side = load_skybox_texture_side(&self.config.textures_path, side_image, skybox.brightness);
 		}
 
 		let ptr = SharedResourcePtr::new(skybox_texture);
@@ -354,7 +354,7 @@ impl ResourcesManager
 		let mut skybox_texture = SkyboxTextures::default();
 		for (side_image, out_side) in skybox.side_images.iter().zip(skybox_texture.iter_mut())
 		{
-			*out_side = load_skybox_texture_side64(&self.config.textures_path, &side_image, skybox.brightness);
+			*out_side = load_skybox_texture_side64(&self.config.textures_path, side_image, skybox.brightness);
 		}
 
 		let ptr = SharedResourcePtr::new(skybox_texture);

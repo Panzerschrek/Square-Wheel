@@ -231,7 +231,7 @@ impl DepthRenderer
 
 		draw_depth_polygon::<DEPTH_TEST>(
 			rasterizer,
-			&clip_planes,
+			clip_planes,
 			&vertices_transformed[.. vertex_count],
 			&depth_equation,
 		);
@@ -267,5 +267,5 @@ fn draw_depth_polygon<const DEPTH_TEST: bool>(
 		};
 	}
 
-	rasterizer.fill_polygon::<DEPTH_TEST>(&vertices_for_rasterizer[0 .. vertex_count], &depth_equation);
+	rasterizer.fill_polygon::<DEPTH_TEST>(&vertices_for_rasterizer[0 .. vertex_count], depth_equation);
 }

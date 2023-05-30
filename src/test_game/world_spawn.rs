@@ -763,7 +763,7 @@ pub fn create_player_phys_object(
 ) -> ObjectHandle
 {
 	// Use same dimensions of player as in Quake.
-	physics.add_character_object(player_entity, &position, 31.0, 56.0)
+	physics.add_character_object(player_entity, position, 31.0, 56.0)
 }
 
 fn add_entity_common_components(

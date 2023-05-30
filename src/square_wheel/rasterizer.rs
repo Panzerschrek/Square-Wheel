@@ -332,7 +332,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			{
 				let line_buffer_offset = y_int * self.row_size;
 				let line_dst = unchecked_slice_range_mut(
-					&mut self.color_buffer,
+					self.color_buffer,
 					(x_start_int + line_buffer_offset) as usize,
 					(x_end_int + line_buffer_offset) as usize,
 				);
@@ -516,7 +516,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			{
 				let line_buffer_offset = y_int * self.row_size;
 				let line_dst = unchecked_slice_range_mut(
-					&mut self.color_buffer,
+					self.color_buffer,
 					(x_start_int + line_buffer_offset) as usize,
 					(x_end_int + line_buffer_offset) as usize,
 				);
@@ -689,7 +689,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			{
 				let line_buffer_offset = y_int * self.row_size;
 				let line_dst = unchecked_slice_range_mut(
-					&mut self.color_buffer,
+					self.color_buffer,
 					(x_start_int + line_buffer_offset) as usize,
 					(x_end_int + line_buffer_offset) as usize,
 				);
@@ -1215,7 +1215,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 
 				let line_buffer_offset = y_int * self.row_size;
 				let line_dst = unchecked_slice_range_mut(
-					&mut self.color_buffer,
+					self.color_buffer,
 					(x_start_int + line_buffer_offset) as usize,
 					(x_end_int + line_buffer_offset) as usize,
 				);

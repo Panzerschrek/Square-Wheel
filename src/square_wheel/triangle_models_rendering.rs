@@ -320,7 +320,7 @@ pub fn reject_triangle_model_back_faces(
 	for triangle in triangles
 	{
 		// TODO - maybe also reject triangles outside screen borders?
-		if get_triangle_plane(&transformed_vertices, triangle).dist > 0.0
+		if get_triangle_plane(transformed_vertices, triangle).dist > 0.0
 		{
 			out_triangles[num_visible_triangles] = *triangle;
 			num_visible_triangles += 1;

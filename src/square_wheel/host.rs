@@ -131,7 +131,7 @@ impl Host
 				.lock()
 				.unwrap()
 				.add_text(format!("Executing \"{}\"", command_line));
-			host.commands_processor.lock().unwrap().process_command(&command_line);
+			host.commands_processor.lock().unwrap().process_command(command_line);
 			host.process_commands();
 		}
 
@@ -181,7 +181,7 @@ impl Host
 				{
 					if console.is_active() && !has_backquote
 					{
-						console.process_text_input(&text);
+						console.process_text_input(text);
 					}
 				},
 				_ =>

@@ -171,7 +171,7 @@ fn convert_leaf_to_compact_format(
 	let first_polygon = out_map.polygons.len() as u32;
 	for polygon in &polygons_splitted
 	{
-		let polygon_converted = convert_polygon_to_compact_format(&polygon, out_map, texture_name_to_index_map);
+		let polygon_converted = convert_polygon_to_compact_format(polygon, out_map, texture_name_to_index_map);
 		out_map.polygons.push(polygon_converted);
 	}
 
@@ -384,7 +384,7 @@ fn convert_submodel_bsp_tree_node_to_compact_format_r(
 	let polygons_splitted = bsp_builder::split_long_polygons(&node.polygons, materials);
 	for polygon in &polygons_splitted
 	{
-		let polygon_converted = convert_polygon_to_compact_format(&polygon, out_map, texture_name_to_index_map);
+		let polygon_converted = convert_polygon_to_compact_format(polygon, out_map, texture_name_to_index_map);
 		out_map.polygons.push(polygon_converted);
 	}
 

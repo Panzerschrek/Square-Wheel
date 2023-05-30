@@ -247,7 +247,7 @@ fn cube_shadow_map_side_fetch(cube_shadow_map: &CubeShadowMap, vec: &Vec3f, side
 	debug_assert!(u < cube_shadow_map.size);
 	debug_assert!(v < cube_shadow_map.size);
 	let texel_address = (u + v * cube_shadow_map.size) as usize;
-	let value = unsafe { debug_only_checked_fetch(&cube_shadow_map.sides[side as usize], texel_address) };
+	let value = unsafe { debug_only_checked_fetch(cube_shadow_map.sides[side as usize], texel_address) };
 	if depth >= value
 	{
 		1.0

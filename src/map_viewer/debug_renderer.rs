@@ -143,7 +143,7 @@ fn draw_map(
 				camera_matrices,
 				draw_options.draw_polygon_normals,
 				bsp_map_compact_non_opt.nodes.last().unwrap(),
-				&bsp_map_compact_non_opt,
+				bsp_map_compact_non_opt,
 			);
 		}
 		if draw_options.draw_map_sectors_graph_compact
@@ -990,7 +990,7 @@ fn draw_basis(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f)
 
 	for line in &basis_lines
 	{
-		draw_line(rasterizer, &transform_matrix, line);
+		draw_line(rasterizer, transform_matrix, line);
 	}
 }
 

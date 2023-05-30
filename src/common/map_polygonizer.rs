@@ -262,7 +262,7 @@ fn polygonize_brush_q4(brush: &[map_file_q4::BrushPlane]) -> Vec<Polygon>
 			continue;
 		}
 
-		let vertices_sorted = sort_convex_polygon_vertices(vertices, &plane_i);
+		let vertices_sorted = sort_convex_polygon_vertices(vertices, plane_i);
 		if vertices_sorted.len() < 3
 		{
 			println!("Wrong polygon with only {} vertices_sorted", vertices_sorted.len());

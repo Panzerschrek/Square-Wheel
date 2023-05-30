@@ -60,7 +60,7 @@ pub struct SubmodelBSPNode
 pub fn build_leaf_bsp_tree(map_entities: &[map_polygonizer::Entity], materials: &material::MaterialsMap) -> BSPTree
 {
 	let world_entity = &map_entities[0];
-	let bbox = build_bounding_box(&world_entity);
+	let bbox = build_bounding_box(world_entity);
 
 	// Build BSP tree for world entity.
 	let mut tree_root = build_leaf_bsp_tree_r(filter_out_invisible_polygons(&world_entity.polygons, materials));
@@ -486,10 +486,10 @@ fn split_polygon(in_polygon: &Polygon, plane: &Plane) -> (Polygon, Polygon)
 	};
 
 	let mut prev_vert = in_polygon.vertices.last().unwrap();
-	let mut prev_vert_pos = get_point_position_relative_plane(&prev_vert, plane);
+	let mut prev_vert_pos = get_point_position_relative_plane(prev_vert, plane);
 	for vert in &in_polygon.vertices
 	{
-		let vert_pos = get_point_position_relative_plane(&vert, plane);
+		let vert_pos = get_point_position_relative_plane(vert, plane);
 
 		match vert_pos
 		{
@@ -728,7 +728,7 @@ fn build_protals_r(
 		},
 		BSPNodeChild::LeafChild(leaf_ptr) =>
 		{
-			build_leaf_portals(leaf_ptr, &splitter_nodes, map_bbox, materials, leaf_portals_by_node);
+			build_leaf_portals(leaf_ptr, splitter_nodes, map_bbox, materials, leaf_portals_by_node);
 		},
 	}
 }
@@ -1051,7 +1051,7 @@ fn build_portals_intersection(plane: &Plane, vertices0: &[Vec3f], vertices1: &[V
 		return vertices_deduplicated;
 	}
 
-	map_polygonizer::sort_convex_polygon_vertices(vertices_deduplicated, &plane)
+	map_polygonizer::sort_convex_polygon_vertices(vertices_deduplicated, plane)
 }
 
 fn portal_is_fully_covered_by_leaf_polygons(

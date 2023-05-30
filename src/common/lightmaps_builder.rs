@@ -53,7 +53,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 	let mut primary_lightmaps_data = allocate_lightmaps(materials, map);
 	println!("Lightmap texels: {}", primary_lightmaps_data.len());
 
-	let visibility_matrix = pvs::calculate_visibility_matrix(&map);
+	let visibility_matrix = pvs::calculate_visibility_matrix(map);
 
 	let opacity_table = build_materials_opacity_table(map, materials);
 	let sky_flag_table = build_materials_sky_flag_table(map, materials);
@@ -108,7 +108,7 @@ pub fn build_lightmaps<AlbedoImageGetter: FnMut(&str) -> Option<image::Image>>(
 		{
 			let prev_pass_lightmap = passes_lightmaps.last().unwrap();
 			let secondary_light_sources =
-				create_secondary_light_sources(&materials_albedo, map, &opacity_table, &prev_pass_lightmap);
+				create_secondary_light_sources(&materials_albedo, map, &opacity_table, prev_pass_lightmap);
 
 			let mut secondary_lightmaps_data = vec![[0.0, 0.0, 0.0]; prev_pass_lightmap.len()];
 
@@ -1227,7 +1227,7 @@ pub fn get_light_source_lod(point: &Vec3f, light_source: &SecondaryLightSource) 
 	// Calculate light source lod.
 	// Try to achieve target ratio between sample size and distance to closest point of light source (approaximated as circle).
 	let closest_distance_to_light = calculate_dinstance_between_point_and_circle(
-		&point,
+		point,
 		&light_source.center,
 		&light_source.normal,
 		light_source.radius,
@@ -1898,7 +1898,7 @@ fn calculate_light_for_grid_point(
 				}
 			}
 
-			let shadow_factor = get_shadow_factor(&primay_light.pos, &pos, map, opacity_table);
+			let shadow_factor = get_shadow_factor(&primay_light.pos, pos, map, opacity_table);
 			if shadow_factor <= 0.0
 			{
 				// In shadow.
@@ -1937,7 +1937,7 @@ fn calculate_light_for_grid_point(
 				}
 
 				// Compute LOD.
-				let light_source_lod = get_light_source_lod(&pos, light);
+				let light_source_lod = get_light_source_lod(pos, light);
 				let min_dist2 =
 					get_secondary_light_source_sample_min_square_distance(light.sample_size, light_source_lod)
 						.max(min_light_square_dist);
@@ -1956,7 +1956,7 @@ fn calculate_light_for_grid_point(
 						continue;
 					}
 
-					let shadow_factor = get_shadow_factor(&sample.pos, &pos, map, opacity_table);
+					let shadow_factor = get_shadow_factor(&sample.pos, pos, map, opacity_table);
 					if shadow_factor <= 0.0
 					{
 						// In shadow.
@@ -1982,7 +1982,7 @@ fn calculate_light_for_grid_point(
 
 	for sun_light in sun_lights
 	{
-		let shadow_factor = get_sun_shadow_factor(&pos, &sun_light.dir, map, opacity_table, sky_flag_table);
+		let shadow_factor = get_sun_shadow_factor(pos, &sun_light.dir, map, opacity_table, sky_flag_table);
 		if shadow_factor <= 0.0
 		{
 			// In shadow.

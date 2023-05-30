@@ -157,7 +157,7 @@ impl Console
 				break;
 			}
 
-			text_printer::print(pixels, surface_info, &line, 0, y, color);
+			text_printer::print(pixels, surface_info, line, 0, y, color);
 		}
 	}
 

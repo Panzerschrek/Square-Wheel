@@ -183,7 +183,7 @@ fn print_stats(
 	for (index, submodels_bsp_tree) in submodels_bsp_trees.iter().enumerate()
 	{
 		let mut stats = SubmodelBSPStats::default();
-		calculate_submodel_bsp_tree_stats_r(&submodels_bsp_tree, 0, &mut stats);
+		calculate_submodel_bsp_tree_stats_r(submodels_bsp_tree, 0, &mut stats);
 		stats.average_depth /= stats.num_nodes as f32;
 
 		println!(
