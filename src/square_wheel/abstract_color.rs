@@ -62,11 +62,11 @@ impl From<ColorVecI> for Color32
 	}
 }
 
-impl Into<ColorVecI> for Color32
+impl From<Color32> for ColorVecI
 {
-	fn into(self) -> ColorVecI
+	fn from(c: Color32) -> ColorVecI
 	{
-		ColorVecI::from_color32(self)
+		ColorVecI::from_color32(c)
 	}
 }
 
@@ -122,10 +122,10 @@ impl From<ColorVecI> for Color64
 	}
 }
 
-impl Into<ColorVecI> for Color64
+impl From<Color64> for ColorVecI
 {
-	fn into(self) -> ColorVecI
+	fn from(c: Color64) -> ColorVecI
 	{
-		ColorVecI::from_color64(self)
+		ColorVecI::from_color64(c)
 	}
 }

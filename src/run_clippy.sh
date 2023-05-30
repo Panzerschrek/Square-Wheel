@@ -8,7 +8,6 @@ cargo +nightly clippy -- \
 -A clippy::excessive_precision \
 -A clippy::mut_from_ref \
 -A clippy::useless_format \
--A clippy::from_over_into \
 -A clippy::erasing_op \
 -A clippy::explicit_counter_loop \
 -A clippy::identity_op \
