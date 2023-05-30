@@ -379,7 +379,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					let tc_max_start = std::cmp::max(
 						0,
 						std::cmp::min(
-							(span_inv_z_corrected * (texture_info.size[i] as i64) >> tc_max_shift) - 1,
+							((span_inv_z_corrected * (texture_info.size[i] as i64)) >> tc_max_shift) - 1,
 							tc_max_max,
 						),
 					);
@@ -391,8 +391,8 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 						let tc_max_end = std::cmp::max(
 							0,
 							std::cmp::min(
-								((span_inv_z_corrected + ((span_d_inv_z * span_length_minus_one) as i64)) *
-									(texture_info.size[i] as i64) >> tc_max_shift) -
+								(((span_inv_z_corrected + ((span_d_inv_z * span_length_minus_one) as i64)) *
+									(texture_info.size[i] as i64)) >> tc_max_shift) -
 									1,
 								tc_max_max,
 							),
