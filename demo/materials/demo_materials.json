@@ -41,6 +41,14 @@
 		"roughness_map" : "bolted_metal_crate_roughness.png",
 		"is_metal": true
 	},
+	"crt_display":
+	{
+		"diffuse": "crt_display.png",
+		"blocks_view": false,
+		"light": false,
+		"portal_texture" : "crt_display.png",
+		"portal_blending_mode" : "AlphaBlend"
+	},
 	"dark_metal":
 	{
 		"diffuse": "dark_metal.png",
