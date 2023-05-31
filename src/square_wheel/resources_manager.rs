@@ -411,7 +411,7 @@ fn load_texture(material: &Material, textures_path: &str) -> TextureWithMips
 
 	let normals = if let Some(normal_map_texture) = &material.normal_map
 	{
-		load_image(&normal_map_texture.clone(), textures_path)
+		load_image(normal_map_texture, textures_path)
 	}
 	else
 	{
@@ -420,7 +420,7 @@ fn load_texture(material: &Material, textures_path: &str) -> TextureWithMips
 
 	let roughness_map = if let Some(roughness_map_texture) = &material.roughness_map
 	{
-		load_image(&roughness_map_texture.clone(), textures_path)
+		load_image(roughness_map_texture, textures_path)
 	}
 	else
 	{
