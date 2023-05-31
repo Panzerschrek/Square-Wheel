@@ -400,9 +400,9 @@ fn make_stub_model() -> triangle_model::TriangleModel
 
 fn load_texture(material: &Material, textures_path: &str) -> TextureWithMips
 {
-	let diffuse = if let Some(image) = load_image(&material.diffuse.clone().unwrap_or_default(), textures_path)
+	let diffuse = if let Some(diffuse_texture) = &material.diffuse
 	{
-		image
+		load_image(diffuse_texture, textures_path).unwrap_or_else(image::make_stub)
 	}
 	else
 	{
