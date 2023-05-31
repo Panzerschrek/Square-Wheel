@@ -262,7 +262,7 @@ fn polygonize_brush_q4(brush: &[map_file_q4::BrushPlane]) -> Vec<Polygon>
 			continue;
 		}
 
-		let vertices_sorted = sort_convex_polygon_vertices(vertices, &plane_i);
+		let vertices_sorted = sort_convex_polygon_vertices(vertices, plane_i);
 		if vertices_sorted.len() < 3
 		{
 			println!("Wrong polygon with only {} vertices_sorted", vertices_sorted.len());
@@ -389,7 +389,7 @@ fn get_polygon_texture_info(brush_plane: &map_file_q1::BrushPlane, polygon_norma
 {
 	let basis = get_texture_basis(polygon_normal);
 
-	let angle_rad = brush_plane.tc_angle * (3.1415926535 / 180.0);
+	let angle_rad = brush_plane.tc_angle * (std::f32::consts::PI / 180.0);
 	let angle_cos = angle_rad.cos();
 	let angle_sin = angle_rad.sin();
 	let basis_rotated = [

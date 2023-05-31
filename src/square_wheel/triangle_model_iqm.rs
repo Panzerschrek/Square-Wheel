@@ -555,8 +555,5 @@ const IQM_BLENDWEIGHTS: u32 = 5;
 
 const IQM_LOOP: u32 = 1;
 
-const IQM_MAGIC: [u8; 16] = [
-	'I' as u8, 'N' as u8, 'T' as u8, 'E' as u8, 'R' as u8, 'Q' as u8, 'U' as u8, 'A' as u8, 'K' as u8, 'E' as u8,
-	'M' as u8, 'O' as u8, 'D' as u8, 'E' as u8, 'L' as u8, 0,
-];
+const IQM_MAGIC: [u8; 16] = *b"INTERQUAKEMODEL\0";
 const IQM_VERSION: u32 = 2;

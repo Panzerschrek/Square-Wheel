@@ -54,7 +54,7 @@ impl MapVisibilityCalculator
 		self.current_frame.next();
 		let root_node = bsp_map_compact::get_root_node_index(&self.map);
 		let current_leaf = self.find_current_leaf(root_node, &camera_matrices.planes_matrix);
-		self.mark_reachable_leafs_iterative(&[current_leaf], camera_matrices, &frame_bounds);
+		self.mark_reachable_leafs_iterative(&[current_leaf], camera_matrices, frame_bounds);
 
 		self.is_inside_leaf_volume = self.is_inside_leaf_volume(camera_matrices, current_leaf);
 	}
@@ -69,7 +69,7 @@ impl MapVisibilityCalculator
 	)
 	{
 		self.current_frame.next();
-		self.mark_reachable_leafs_iterative(start_leafs, camera_matrices, &frame_bounds);
+		self.mark_reachable_leafs_iterative(start_leafs, camera_matrices, frame_bounds);
 
 		// Can't properly determine this.
 		self.is_inside_leaf_volume = true;
@@ -152,14 +152,13 @@ impl MapVisibilityCalculator
 					let portal_plane_pos =
 						(camera_matrices.planes_matrix * portal_value.plane.vec.extend(-portal_value.plane.dist)).w;
 
-					let next_leaf;
-					if portal_value.leafs[0] == leaf
+					let next_leaf = if portal_value.leafs[0] == leaf
 					{
 						if portal_plane_pos <= 0.0
 						{
 							continue;
 						}
-						next_leaf = portal_value.leafs[1];
+						portal_value.leafs[1]
 					}
 					else
 					{
@@ -167,8 +166,8 @@ impl MapVisibilityCalculator
 						{
 							continue;
 						}
-						next_leaf = portal_value.leafs[0];
-					}
+						portal_value.leafs[0]
+					};
 
 					// Same portal may be visited multiple times.
 					// So, cache calculation of portal bounds.

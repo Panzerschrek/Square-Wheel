@@ -332,7 +332,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			{
 				let line_buffer_offset = y_int * self.row_size;
 				let line_dst = unchecked_slice_range_mut(
-					&mut self.color_buffer,
+					self.color_buffer,
 					(x_start_int + line_buffer_offset) as usize,
 					(x_end_int + line_buffer_offset) as usize,
 				);
@@ -379,7 +379,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 					let tc_max_start = std::cmp::max(
 						0,
 						std::cmp::min(
-							(span_inv_z_corrected * (texture_info.size[i] as i64) >> tc_max_shift) - 1,
+							((span_inv_z_corrected * (texture_info.size[i] as i64)) >> tc_max_shift) - 1,
 							tc_max_max,
 						),
 					);
@@ -391,8 +391,8 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 						let tc_max_end = std::cmp::max(
 							0,
 							std::cmp::min(
-								((span_inv_z_corrected + ((span_d_inv_z * span_length_minus_one) as i64)) *
-									(texture_info.size[i] as i64) >> tc_max_shift) -
+								(((span_inv_z_corrected + ((span_d_inv_z * span_length_minus_one) as i64)) *
+									(texture_info.size[i] as i64)) >> tc_max_shift) -
 									1,
 								tc_max_max,
 							),
@@ -516,7 +516,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			{
 				let line_buffer_offset = y_int * self.row_size;
 				let line_dst = unchecked_slice_range_mut(
-					&mut self.color_buffer,
+					self.color_buffer,
 					(x_start_int + line_buffer_offset) as usize,
 					(x_end_int + line_buffer_offset) as usize,
 				);
@@ -689,7 +689,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			{
 				let line_buffer_offset = y_int * self.row_size;
 				let line_dst = unchecked_slice_range_mut(
-					&mut self.color_buffer,
+					self.color_buffer,
 					(x_start_int + line_buffer_offset) as usize,
 					(x_end_int + line_buffer_offset) as usize,
 				);
@@ -771,7 +771,6 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 	{
 		// Sort triangle vertices.
 		let upper_index;
-		let middle_index;
 		let lower_index;
 		if vertices[0].y >= vertices[1].y && vertices[0].y >= vertices[2].y
 		{
@@ -788,7 +787,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 			upper_index = 2;
 			lower_index = if vertices[0].y < vertices[1].y { 0 } else { 1 };
 		}
-		middle_index = 3 - upper_index - lower_index;
+		let middle_index = 3 - upper_index - lower_index;
 
 		let upper_vertex = &vertices[upper_index];
 		let lower_vertex = &vertices[lower_index];
@@ -1216,7 +1215,7 @@ impl<'a, ColorT: AbstractColor> Rasterizer<'a, ColorT>
 
 				let line_buffer_offset = y_int * self.row_size;
 				let line_dst = unchecked_slice_range_mut(
-					&mut self.color_buffer,
+					self.color_buffer,
 					(x_start_int + line_buffer_offset) as usize,
 					(x_end_int + line_buffer_offset) as usize,
 				);

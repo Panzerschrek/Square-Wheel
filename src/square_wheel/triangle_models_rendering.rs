@@ -229,14 +229,7 @@ pub fn calculate_triangle_model_screen_polygon(model_bbox_vertices_transformed: 
 		return clipping_polyogn;
 	}
 
-	let mut clipping_polyogn = if let Some(p) = clipping_polyogn
-	{
-		p
-	}
-	else
-	{
-		return None;
-	};
+	let mut clipping_polyogn = clipping_polyogn?;
 
 	// Perform z_near clipping of all possible edges between bbox vertices.
 	const Z_NEAR: f32 = 1.0 / 4096.0;
@@ -327,7 +320,7 @@ pub fn reject_triangle_model_back_faces(
 	for triangle in triangles
 	{
 		// TODO - maybe also reject triangles outside screen borders?
-		if get_triangle_plane(&transformed_vertices, triangle).dist > 0.0
+		if get_triangle_plane(transformed_vertices, triangle).dist > 0.0
 		{
 			out_triangles[num_visible_triangles] = *triangle;
 			num_visible_triangles += 1;

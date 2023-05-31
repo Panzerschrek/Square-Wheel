@@ -42,20 +42,12 @@ pub fn project_and_clip_polygon(
 	// Perform clipping in pairs - use pair of buffers.
 	for i in 0 .. clip_planes.len() / 2
 	{
-		vertex_count = clip_2d_polygon(
-			&out_vertices[.. vertex_count],
-			&clip_planes[i * 2],
-			&mut vertices_temp[..],
-		);
+		vertex_count = clip_2d_polygon(&out_vertices[.. vertex_count], &clip_planes[i * 2], &mut vertices_temp);
 		if vertex_count < 3
 		{
 			return vertex_count;
 		}
-		vertex_count = clip_2d_polygon(
-			&vertices_temp[.. vertex_count],
-			&clip_planes[i * 2 + 1],
-			&mut out_vertices[..],
-		);
+		vertex_count = clip_2d_polygon(&vertices_temp[.. vertex_count], &clip_planes[i * 2 + 1], out_vertices);
 		if vertex_count < 3
 		{
 			return vertex_count;

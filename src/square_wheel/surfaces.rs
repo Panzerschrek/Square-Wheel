@@ -458,8 +458,8 @@ fn build_surface_impl_6_static_params<
 
 	// Use texture basis vectors as basis for normal transformation.
 	// This may be inaccurate if texture is non-uniformly stretched or shifted, but it is still fine for most cases.
-	let u_vec_normalized = u_vec * inv_sqrt_fast(vec3_len2(&u_vec).max(MIN_POSITIVE_VALUE));
-	let v_vec_normalized = v_vec * inv_sqrt_fast(vec3_len2(&v_vec).max(MIN_POSITIVE_VALUE));
+	let u_vec_normalized = u_vec * inv_sqrt_fast(vec3_len2(u_vec).max(MIN_POSITIVE_VALUE));
+	let v_vec_normalized = v_vec * inv_sqrt_fast(vec3_len2(v_vec).max(MIN_POSITIVE_VALUE));
 
 	// TODO - use uninitialized memory instead.
 	let mut line_lightmap = unsafe {
@@ -497,7 +497,7 @@ fn build_surface_impl_6_static_params<
 						(base_lightmap_address + 2 * lightmap_size[0]) as usize],
 				)
 			{
-				*dst = LightmapElementOpsT::mix(&l1, &l0, k);
+				*dst = LightmapElementOpsT::mix(l1, l0, k);
 			}
 		}
 
@@ -509,10 +509,10 @@ fn build_surface_impl_6_static_params<
 		let src_line = &texture.pixels[src_line_start .. src_line_start + (texture.size[0] as usize)];
 		let mut src_u = surface_tc_min[0].rem_euclid(texture.size[0] as i32);
 		let mut dst_u = 0;
-		let start_pos_v = vec3_scalar_mul_add(&v_vec, dst_v as f32, &start_pos);
+		let start_pos_v = vec3_scalar_mul_add(v_vec, dst_v as f32, &start_pos);
 		for dst_texel in dst_line.iter_mut()
 		{
-			let pos = vec3_scalar_mul_add(&u_vec, dst_u as f32, &start_pos_v);
+			let pos = vec3_scalar_mul_add(u_vec, dst_u as f32, &start_pos_v);
 
 			let texel_value = unsafe { debug_only_checked_fetch(src_line, src_u as usize) };
 			let (texel_normal, texel_roughness) = if USE_NORMAL_MAP

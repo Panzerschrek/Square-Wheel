@@ -52,7 +52,7 @@ pub fn update_player_entity(
 	let move_vector_length = move_vector.magnitude();
 	if move_vector_length > 0.0
 	{
-		move_vector = move_vector / move_vector_length;
+		move_vector /= move_vector_length;
 	}
 
 	match &mut player_controller.position_source

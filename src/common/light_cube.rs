@@ -153,7 +153,7 @@ impl LightCube
 
 		bsp_map_compact::LightGridElement {
 			light_cube: light_cube_corrected,
-			light_direction_vector_scaled: light_direction_vector_scaled,
+			light_direction_vector_scaled,
 			directional_light_color: light_color,
 		}
 	}

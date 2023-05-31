@@ -43,17 +43,12 @@ impl GameInterface for Game
 	{
 		for event in events
 		{
-			match event
+			if let sdl2::event::Event::KeyDown {
+				keycode: Some(sdl2::keyboard::Keycode::Escape),
+				..
+			} = event
 			{
-				sdl2::event::Event::KeyDown { keycode, .. } =>
-				{
-					if *keycode == Some(sdl2::keyboard::Keycode::Escape)
-					{
-						self.commands_processor.lock().unwrap().process_command("quit");
-					}
-				},
-				_ =>
-				{},
+				self.commands_processor.lock().unwrap().process_command("quit");
 			}
 		}
 
@@ -93,14 +88,7 @@ impl GameInterface for Game
 
 	fn get_frame_info(&self, surface_info: &system_window::SurfaceInfo) -> Option<FrameInfo>
 	{
-		if let Some(game_map) = &self.game_map
-		{
-			Some(game_map.get_frame_info(surface_info))
-		}
-		else
-		{
-			None
-		}
+		self.game_map.as_ref().map(|m| m.get_frame_info(surface_info))
 	}
 
 	fn draw_frame_overlay(&self, pixels: &mut [Color32], surface_info: &system_window::SurfaceInfo)

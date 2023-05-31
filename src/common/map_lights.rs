@@ -87,7 +87,7 @@ pub fn extract_map_lights(map: &bsp_map_compact::BSPMap) -> Vec<PointLight>
 			}
 			if key.starts_with("light") || key == "_light"
 			{
-				if let Ok(i) = map_file_common::parse_number(&mut value.clone())
+				if let Ok(i) = map_file_common::parse_key_value_number(value)
 				{
 					intensity = Some(i);
 				}
@@ -105,7 +105,7 @@ pub fn extract_map_lights(map: &bsp_map_compact::BSPMap) -> Vec<PointLight>
 			}
 			if key == "angle"
 			{
-				if let Ok(a) = map_file_common::parse_number(&mut value.clone())
+				if let Ok(a) = map_file_common::parse_key_value_number(value)
 				{
 					angle = Some(a);
 				}
@@ -184,7 +184,7 @@ pub fn extract_sun_lights(map: &bsp_map_compact::BSPMap, map_bbox: &BBox) -> Vec
 		}
 		if key == "_sunlight"
 		{
-			if let Ok(i) = map_file_common::parse_number(&mut value.clone())
+			if let Ok(i) = map_file_common::parse_key_value_number(value)
 			{
 				intensity = Some(i);
 			}

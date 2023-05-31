@@ -295,6 +295,6 @@ type Md3Triangle = [u32; 3];
 type Md3TexCoord = [f32; 2];
 
 const MAX_QPATH: usize = 64;
-const MD3_ID: [u8; 4] = ['I' as u8, 'D' as u8, 'P' as u8, '3' as u8];
+const MD3_ID: [u8; 4] = *b"IDP3";
 const MD3_VERSION: u32 = 15;
 const MD3_COORD_SCALE: f32 = 1.0 / 64.0;

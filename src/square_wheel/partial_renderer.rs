@@ -471,7 +471,7 @@ impl PartialRenderer
 
 					let light_matrix = get_object_matrix(light.position, rotation);
 
-					let mut closest_square_dist = 1.0e24 as f32;
+					let mut closest_square_dist = 1.0e24_f32;
 					for v in [
 						Vec3f::new(light.radius, 0.0, 0.0),
 						Vec3f::new(
@@ -882,8 +882,8 @@ impl PartialRenderer
 						Vec2f::new(texture_mip0.size[0] as f32, texture_mip0.size[1] as f32).magnitude2();
 					let d_tc_2 = tc_diagonal_square_diff / shortest_diagonal_square_len;
 					let mip_f = d_tc_2.log2() * 0.5 + self.mip_bias; // log(sqrt(x)) = log(x) * 0.5
-					let mip = (mip_f.round().max(0.0) as u32).min(MAX_MIP as u32);
-					mip
+
+					(mip_f.round().max(0.0) as u32).min(MAX_MIP as u32)
 				}
 			}
 			else
@@ -1173,10 +1173,10 @@ impl PartialRenderer
 			// Copy, filter and sort triangles.
 			let dst_triangles = unsafe { &mut dst_triangles_shared.get()[visible_dynamic_mesh.triangles_offset ..] };
 			visible_dynamic_mesh.num_visible_triangles =
-				reject_triangle_model_back_faces(&dst_mesh_vertices, &mesh.triangles, dst_triangles);
+				reject_triangle_model_back_faces(dst_mesh_vertices, &mesh.triangles, dst_triangles);
 
 			sort_model_triangles(
-				&dst_mesh_vertices,
+				dst_mesh_vertices,
 				&mut dst_triangles[.. visible_dynamic_mesh.num_visible_triangles],
 			);
 		};
@@ -1211,7 +1211,7 @@ impl PartialRenderer
 		{
 			let mut rasterizer = Rasterizer::new(
 				pixels,
-				&surface_info,
+				surface_info,
 				ClipRect {
 					min_x: 0,
 					min_y: 0,
@@ -1252,7 +1252,7 @@ impl PartialRenderer
 				// TODO - change this. Just create rasterizer with shifted raster and shift vertex coordinates instead.
 				let mut rasterizer = Rasterizer::new(
 					pixels_cur,
-					&surface_info,
+					surface_info,
 					ClipRect {
 						min_x: rect.min.x as i32,
 						min_y: rect.min.y as i32,
@@ -1301,7 +1301,7 @@ impl PartialRenderer
 				camera_matrices,
 				&renderers_common_data.materials_processor,
 				&frame_info.skybox_rotation,
-				&viewport_clipping_polygon,
+				viewport_clipping_polygon,
 			);
 		}
 
@@ -1311,7 +1311,7 @@ impl PartialRenderer
 			frame_info,
 			camera_matrices,
 			renderers_common_data,
-			&viewport_clipping_polygon,
+			viewport_clipping_polygon,
 			root_node,
 		);
 
@@ -1322,11 +1322,11 @@ impl PartialRenderer
 				camera_matrices,
 				&renderers_common_data.materials_processor,
 				&frame_info.skybox_rotation,
-				&viewport_clipping_polygon,
+				viewport_clipping_polygon,
 			);
 		}
 
-		self.draw_view_models(rasterizer, &viewport_clipping_polygon, &frame_info.model_entities);
+		self.draw_view_models(rasterizer, viewport_clipping_polygon, &frame_info.model_entities);
 	}
 
 	fn prepare_polygons_surfaces(
@@ -1966,7 +1966,7 @@ impl PartialRenderer
 					(tex_coord_max[1] - tex_coord_min[1]) as u32,
 				],
 				texture_pixels_offset: self.portals_rendering_data.num_textures_pixels,
-				depth_equation: depth_equation,
+				depth_equation,
 				tex_coord_equation: tc_equation,
 				tc_min: tex_coord_min,
 				mip,
@@ -2222,7 +2222,7 @@ impl PartialRenderer
 					basis_vecs.u * (portal_info.tc_min[0] as f32 + (portal_info.resolution[0] as f32 * 0.5)) +
 					basis_vecs.v * (portal_info.tc_min[1] as f32 + (portal_info.resolution[1] as f32 * 0.5));
 
-				let grid_light = fetch_light_from_grid(&map, &polygon_center);
+				let grid_light = fetch_light_from_grid(map, &polygon_center);
 				let mut total_light = get_light_cube_light(&grid_light.light_cube, &basis_vecs.normal);
 				let light_dir_dot = basis_vecs.normal.dot(grid_light.light_direction_vector_scaled).max(0.0);
 				for i in 0 .. 3
@@ -2284,7 +2284,7 @@ impl PartialRenderer
 			{
 				self.draw_mesh(
 					rasterizer,
-					&viewport_clipping_polygon,
+					viewport_clipping_polygon,
 					&[], // No 3d clip planes.
 					models,
 					&self.visible_dynamic_meshes_list[visible_mesh_index as usize],
@@ -2600,7 +2600,7 @@ impl PartialRenderer
 				{
 					self.draw_mesh(
 						rasterizer,
-						&bounds,
+						bounds,
 						used_leaf_clip_planes,
 						&frame_info.model_entities,
 						&self.visible_dynamic_meshes_list[visible_mesh_index as usize],
@@ -2637,7 +2637,7 @@ impl PartialRenderer
 		const MAX_OBJECTS_IN_LEAF: usize = 12;
 		let mut objects_for_sorting = [draw_ordering::BBoxForDrawOrdering::default(); MAX_OBJECTS_IN_LEAF];
 
-		const SUBMODEL_INDEX_ADD: u32 = 0;
+		const SUBMODEL_INDEX_ADD: u32 = 65536;
 		const DYNAMIC_MESH_INDEX_ADD: u32 = SUBMODEL_INDEX_ADD + 65536;
 		const SPRITE_INDEX_ADD: u32 = DYNAMIC_MESH_INDEX_ADD + 65536;
 		const PORTAL_INDEX_ADD: u32 = SPRITE_INDEX_ADD + 65536;
@@ -2897,7 +2897,7 @@ impl PartialRenderer
 
 			let mip = calculate_mip(
 				&vertices_projected[.. num_vertices],
-				&depth_equation,
+				depth_equation,
 				&tc_equation,
 				self.mip_bias,
 			);
@@ -3077,9 +3077,9 @@ impl PartialRenderer
 					decal,
 					polygon,
 					depth_equation,
-					&tc_equation,
-					&polygon_lightmap_eqution,
-					&polygon_lightmap_coord_shift,
+					tc_equation,
+					polygon_lightmap_eqution,
+					polygon_lightmap_coord_shift,
 					triangle,
 					texture,
 					dynamic_light,
@@ -3164,7 +3164,7 @@ impl PartialRenderer
 			self.draw_submodel_polygon(
 				rasterizer,
 				materials_processor,
-				&clip_planes,
+				clip_planes,
 				leaf_clip_planes,
 				leaf_clip_planes_world_space,
 				polygon_index,
@@ -3271,7 +3271,7 @@ impl PartialRenderer
 
 		draw_polygon(
 			rasterizer,
-			&clip_planes,
+			clip_planes,
 			&vertices_clipped[.. vertex_count],
 			&polygon_data.depth_equation,
 			&polygon_data.tex_coord_equation,
@@ -3759,7 +3759,7 @@ impl PartialRenderer
 
 		draw_polygon(
 			rasterizer,
-			&clip_planes,
+			clip_planes,
 			&vertices_clipped[.. vertex_count],
 			&portal_info.depth_equation,
 			&portal_info.tex_coord_equation,
@@ -3960,6 +3960,7 @@ fn polygon_is_affected_by_light(
 		let u_radius = radius_at_polygon_plane * inv_sqrt_fast(basis_vecs.u.magnitude2());
 		let v_radius = radius_at_polygon_plane * inv_sqrt_fast(basis_vecs.v.magnitude2());
 
+		#[allow(clippy::needless_bool)]
 		if tc_at_projected_light_position[0] + u_radius < (polygon.tex_coord_min[0] as f32) ||
 			tc_at_projected_light_position[1] + v_radius < (polygon.tex_coord_min[1] as f32) ||
 			tc_at_projected_light_position[0] - u_radius > (polygon.tex_coord_max[0] as f32) ||
@@ -4083,8 +4084,8 @@ fn draw_polygon<'a, ColorT: AbstractColor>(
 	{
 		rasterizer.fill_polygon(
 			&vertices_for_rasterizer[0 .. vertex_count],
-			&depth_equation,
-			&tex_coord_equation,
+			depth_equation,
+			tex_coord_equation,
 			&texture_info,
 			texture_data,
 			TetureCoordinatesInterpolationMode::Affine,

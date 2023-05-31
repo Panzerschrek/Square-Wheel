@@ -96,15 +96,10 @@ impl CameraRotationController
 
 		for event in events
 		{
-			match event
+			if let sdl2::event::Event::MouseMotion { xrel, yrel, .. } = event
 			{
-				sdl2::event::Event::MouseMotion { xrel, yrel, .. } =>
-				{
-					self.azimuth -= MOUSE_SENSITIVITY * (*xrel as f32);
-					self.elevation -= MOUSE_SENSITIVITY * (*yrel as f32);
-				},
-				_ =>
-				{},
+				self.azimuth -= MOUSE_SENSITIVITY * (*xrel as f32);
+				self.elevation -= MOUSE_SENSITIVITY * (*yrel as f32);
 			}
 		}
 

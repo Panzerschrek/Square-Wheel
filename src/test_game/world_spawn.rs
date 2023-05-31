@@ -376,7 +376,7 @@ fn spawn_regular_entity(
 					let entity = ecs.spawn((ViewPortal {
 						view: PortalView::Mirror {},
 						plane: polygon.plane,
-						tex_coord_equation: tex_coord_equation,
+						tex_coord_equation,
 						vertices: Vec::from(bsp_map_compact::get_polygon_vertices(map, polygon)),
 						blending_mode: get_entity_blending_mode(map_entity, map),
 						texture: get_portal_texture(resources_manager, map, polygon.texture),
@@ -409,7 +409,7 @@ fn spawn_regular_entity(
 								transform_matrix: Mat4f::identity(),
 							},
 							plane: polygon.plane,
-							tex_coord_equation: tex_coord_equation,
+							tex_coord_equation,
 							vertices: Vec::from(bsp_map_compact::get_polygon_vertices(map, polygon)),
 							blending_mode: get_entity_blending_mode(map_entity, map),
 							texture: get_portal_texture(resources_manager, map, polygon.texture),
@@ -763,7 +763,7 @@ pub fn create_player_phys_object(
 ) -> ObjectHandle
 {
 	// Use same dimensions of player as in Quake.
-	physics.add_character_object(player_entity, &position, 31.0, 56.0)
+	physics.add_character_object(player_entity, position, 31.0, 56.0)
 }
 
 fn add_entity_common_components(
@@ -890,7 +890,7 @@ fn get_entity_move_direction(entity: &bsp_map_compact::Entity, map: &bsp_map_com
 	// TODO - support "angles".
 
 	// Return something.
-	return Vec3f::unit_x();
+	Vec3f::unit_x()
 }
 
 fn find_first_entity_of_given_class<'a>(

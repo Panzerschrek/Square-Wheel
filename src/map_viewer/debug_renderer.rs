@@ -143,7 +143,7 @@ fn draw_map(
 				camera_matrices,
 				draw_options.draw_polygon_normals,
 				bsp_map_compact_non_opt.nodes.last().unwrap(),
-				&bsp_map_compact_non_opt,
+				bsp_map_compact_non_opt,
 			);
 		}
 		if draw_options.draw_map_sectors_graph_compact
@@ -769,18 +769,22 @@ fn find_reachable_sectors_r(
 
 	let sector = sector_ptr.borrow();
 	let sector_raw_ptr = (&*sector) as *const bsp_builder::BSPLeaf;
-	if reachable_sectors.contains_key(&sector_raw_ptr)
+
+	match reachable_sectors.entry(sector_raw_ptr)
 	{
-		let prev_depth = &mut reachable_sectors.get_mut(&sector_raw_ptr).unwrap().1;
-		if *prev_depth <= depth
+		std::collections::hash_map::Entry::Vacant(e) =>
 		{
-			return;
-		}
-		*prev_depth = depth;
-	}
-	else
-	{
-		reachable_sectors.insert(sector_raw_ptr, (sector_ptr.clone(), depth));
+			e.insert((sector_ptr.clone(), depth));
+		},
+		std::collections::hash_map::Entry::Occupied(mut e) =>
+		{
+			let prev_depth = &mut e.get_mut().1;
+			if *prev_depth <= depth
+			{
+				return;
+			}
+			*prev_depth = depth;
+		},
 	}
 
 	for portal_ptr_weak in &sector.portals
@@ -990,7 +994,7 @@ fn draw_basis(rasterizer: &mut DebugRasterizer, transform_matrix: &Mat4f)
 
 	for line in &basis_lines
 	{
-		draw_line(rasterizer, &transform_matrix, line);
+		draw_line(rasterizer, transform_matrix, line);
 	}
 }
 

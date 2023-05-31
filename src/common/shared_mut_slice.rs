@@ -21,6 +21,7 @@ impl<T> SharedMutSlice<T>
 		}
 	}
 
+	#[allow(clippy::mut_from_ref)]
 	pub unsafe fn get(&self) -> &mut [T]
 	{
 		std::slice::from_raw_parts_mut(self.ptr, self.len)

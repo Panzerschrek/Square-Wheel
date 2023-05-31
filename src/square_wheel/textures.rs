@@ -110,7 +110,7 @@ pub fn make_texture(
 	{
 		if n.size != diffuse.size
 		{
-			let n_resized = resize_image(&n, diffuse.size);
+			let n_resized = resize_image(n, diffuse.size);
 			*n = n_resized;
 		}
 	}
@@ -118,7 +118,7 @@ pub fn make_texture(
 	{
 		if r.size != diffuse.size
 		{
-			let r_resized = resize_image(&r, diffuse.size);
+			let r_resized = resize_image(r, diffuse.size);
 			*r = r_resized;
 		}
 	}

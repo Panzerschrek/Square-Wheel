@@ -27,21 +27,8 @@ impl DepthRenderer
 				let material_name_string = bsp_map_compact::get_texture_string(texture_name);
 				if let Some(material) = all_materials.get(material_name_string)
 				{
-					if !material.shadow
-					{
-						// Shadow is explicitely disabled.
-						false
-					}
-					else if material.blending_mode != BlendingMode::None
-					{
-						// Some blending is enabled. Disable shadows.
-						false
-					}
-					else
-					{
-						// Normal material - cast shadow.
-						true
-					}
+					// Disable shadows if shadows are explicitely enabled in material settings or if some blending is enabled.
+					material.shadow && material.blending_mode == BlendingMode::None
 				}
 				else
 				{
@@ -244,7 +231,7 @@ impl DepthRenderer
 
 		draw_depth_polygon::<DEPTH_TEST>(
 			rasterizer,
-			&clip_planes,
+			clip_planes,
 			&vertices_transformed[.. vertex_count],
 			&depth_equation,
 		);
@@ -280,5 +267,5 @@ fn draw_depth_polygon<const DEPTH_TEST: bool>(
 		};
 	}
 
-	rasterizer.fill_polygon::<DEPTH_TEST>(&vertices_for_rasterizer[0 .. vertex_count], &depth_equation);
+	rasterizer.fill_polygon::<DEPTH_TEST>(&vertices_for_rasterizer[0 .. vertex_count], depth_equation);
 }

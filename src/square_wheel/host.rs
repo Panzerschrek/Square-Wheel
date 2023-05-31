@@ -61,7 +61,7 @@ impl Host
 		// Initialize global thread pool.
 		{
 			let mut num_threads = host_config.num_threads as usize;
-			if num_threads <= 0
+			if num_threads == 0
 			{
 				num_threads = num_cpus::get();
 				println!("Use number of threads equal to number of CPU cores");
@@ -131,7 +131,7 @@ impl Host
 				.lock()
 				.unwrap()
 				.add_text(format!("Executing \"{}\"", command_line));
-			host.commands_processor.lock().unwrap().process_command(&command_line);
+			host.commands_processor.lock().unwrap().process_command(command_line);
 			host.process_commands();
 		}
 
@@ -181,7 +181,7 @@ impl Host
 				{
 					if console.is_active() && !has_backquote
 					{
-						console.process_text_input(&text);
+						console.process_text_input(text);
 					}
 				},
 				_ =>
