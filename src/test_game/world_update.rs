@@ -331,7 +331,7 @@ pub fn update_doors(ecs: &mut hecs::World, game_time: f32, time_delta_s: f32)
 
 		// Request activation component each loop iteration, in order to avoid locking all cativation componens and causing mutable access to this component (see code below).
 		let activated = ecs
-			.query_one::<&mut EntityActivationComponent>(id)
+			.query_one::<&EntityActivationComponent>(id)
 			.unwrap() // Accessing existing entity - unwrap is ok.
 			.get()
 			.map(|c| c.activated)
