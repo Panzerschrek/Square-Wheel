@@ -13,6 +13,12 @@ Tak delalosj, naprimer, s vodoju v "Quake".
 Realizovan effekt cerez zapisj modifiçirovannoj tekstury v otdeljnyj bufer.
 
 
+### Izlucajuscij sloj (realizovano)
+
+Dlä nekotoryh effektov možno ukazatj teksturu izlucajuscego sloja.
+Eta tekstura prosto primenäjetsä k poverhnosti posle jejo postrojenija i umnožajetsä na zadannyj v svojstvah materiala svet.
+
+
 ### Pokadrovaja animaçija
 
 Tekstura çikliceski menäjetsä vo vremeni s ispoljzovanijem räda izobraženij.
@@ -46,6 +52,8 @@ Bystrymi mogut bytj toljko effekty so sdvigom teksturnyh koordinat na çeluju ve
 Ne vpolne ponätno, cto delatj s kartami normalej i šerohovatosti.
 Ih transformaçii mogut potrebovatj renormalizaçii.
 Vozmožno, stoit ih transformaçii vklücatj toljko jesli eto neobhodimo (javno zadavatj v svojstvah materiala).
+
+Krome sobstvenno osnovnoj tekstury stoit predusmotretj vozmožnostj realizovatj mnogoslojnyj effekt dlä izlucajuscego sloja.
 
 
 ### O proizvoditeljnosti
