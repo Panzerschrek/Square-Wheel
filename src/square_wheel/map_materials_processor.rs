@@ -20,12 +20,12 @@ impl MapMaterialsProcessor
 		let mut r = resources_manager.lock().unwrap();
 		let all_materials = r.get_materials();
 
-		let mut map_textures_loaded = r.get_map_material_textures(map);
 		let mut skybox_textures_32 = HashMap::new();
 		let mut skybox_textures_64 = HashMap::new();
 
 		let mut textures = Vec::with_capacity(map.textures.len());
-		for (texture_index, (texture, material_name)) in map_textures_loaded
+		for (texture_index, (texture, material_name)) in r
+			.get_map_material_textures(map)
 			.drain(..)
 			.zip(map.textures.iter().map(bsp_map_compact::get_texture_string))
 			.enumerate()
@@ -40,6 +40,7 @@ impl MapMaterialsProcessor
 				Material::default()
 			};
 
+			// TODO - load emissive textures in parallel.
 			let emissive_texture = material.emissive_layer.as_ref().map(|l| r.get_texture_lite(&l.image));
 
 			// TODO - load skyboxes lazily.
@@ -162,6 +163,7 @@ impl MapMaterialsProcessor
 		self.textures[material_index as usize].shift
 	}
 
+	// If material has emissive texture - return it together with specified light.
 	pub fn get_emissive_texture(&self, material_index: u32) -> Option<(&TextureLiteWithMips, [f32; 3])>
 	{
 		let texture_data = &self.textures[material_index as usize];

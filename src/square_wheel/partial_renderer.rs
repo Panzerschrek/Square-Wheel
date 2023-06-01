@@ -1803,14 +1803,15 @@ impl PartialRenderer
 				);
 			}
 
-			if let Some(emissive_layer) = materials_processor.get_emissive_texture(polygon.texture)
+			if let Some(emissive_texture) = materials_processor.get_emissive_texture(polygon.texture)
 			{
+				// Add emissive texture, multiplied by specified color, to the surface.
 				mix_surface_with_texture(
 					surface_size,
 					tc_start,
-					&emissive_layer.0[polygon_data.mip as usize],
+					&emissive_texture.0[polygon_data.mip as usize],
 					material::BlendingMode::Additive,
-					emissive_layer.1,
+					emissive_texture.1,
 					surface_data,
 				);
 			}

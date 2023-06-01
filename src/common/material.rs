@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 pub type MaterialsMap = HashMap<String, Material>;
 
-// TODO - put rarely used fileds into box.
+// TODO - put rarely used fields into box.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Material
 {
@@ -113,8 +113,9 @@ impl Default for BlendingMode
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EmissiveLayer
 {
+	/// Path to emissive image.
 	pub image: String,
-	// Value, by which texture value is multiplied on order to build surface.
+	/// Value, by which texture value is multiplied in order to build surface.
 	pub light: [f32; 3],
 }
 
