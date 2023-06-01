@@ -8,6 +8,7 @@ pub struct MapMaterialsProcessor
 	skybox_textures_32: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color32>>>,
 	skybox_textures_64: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color64>>>,
 	temp_buffer: Vec<TextureElement>,
+	temp_color_buffer: Vec<Color32>,
 }
 
 pub type TextureShift = [i32; 2];
@@ -54,6 +55,7 @@ impl MapMaterialsProcessor
 				texture,
 				texture_modified: TextureWithMips::default(),
 				emissive_texture,
+				emissive_texture_modified: TextureLiteWithMips::default(),
 				shift: [0, 0],
 			});
 		}
@@ -63,6 +65,7 @@ impl MapMaterialsProcessor
 			skybox_textures_32,
 			skybox_textures_64,
 			temp_buffer: Vec::new(),
+			temp_color_buffer: Vec::new(),
 		}
 	}
 
@@ -97,7 +100,38 @@ impl MapMaterialsProcessor
 						*dst_mip = src_mip.clone();
 					}
 
-					make_turb_distortion(turb, current_time_s, src_mip, dst_mip, mip_index, &mut self.temp_buffer);
+					make_turb_distortion(
+						turb,
+						current_time_s,
+						[src_mip.size[0] as i32, src_mip.size[1] as i32],
+						mip_index,
+						&src_mip.pixels,
+						&mut dst_mip.pixels,
+						&mut self.temp_buffer,
+					);
+				}
+
+				if let Some(emissive_texture) = &mut texture_data.emissive_texture
+				{
+					for mip_index in 0 .. NUM_MIPS
+					{
+						let src_mip = &emissive_texture[mip_index];
+						let dst_mip = &mut texture_data.emissive_texture_modified[mip_index];
+						if dst_mip.pixels.is_empty()
+						{
+							*dst_mip = src_mip.clone();
+						}
+
+						make_turb_distortion(
+							turb,
+							current_time_s,
+							[src_mip.size[0] as i32, src_mip.size[1] as i32],
+							mip_index,
+							&src_mip.pixels,
+							&mut dst_mip.pixels,
+							&mut self.temp_color_buffer,
+						);
+					}
 				}
 			}
 		}
@@ -134,7 +168,16 @@ impl MapMaterialsProcessor
 		if let (Some(emissive_layer), Some(emissive_texture)) =
 			(&texture_data.material.emissive_layer, &texture_data.emissive_texture)
 		{
-			Some((emissive_texture, emissive_layer.light))
+			if !texture_data.emissive_texture_modified[0].pixels.is_empty()
+			{
+				// Return emissive texture animated for current frame.
+				Some((&texture_data.emissive_texture_modified, emissive_layer.light))
+			}
+			else
+			{
+				// Return source emissive texture.
+				Some((emissive_texture, emissive_layer.light))
+			}
 		}
 		else
 		{
@@ -181,16 +224,19 @@ struct MapTextureData
 	texture_modified: TextureWithMips,
 	// Non-empty if emissive texture exists.
 	emissive_texture: Option<SharedResourcePtr<TextureLiteWithMips>>,
+	// Exists only for emissive texturex with mips.
+	emissive_texture_modified: TextureLiteWithMips,
 	shift: TextureShift,
 }
 
-fn make_turb_distortion(
+fn make_turb_distortion<T: Copy + Default>(
 	turb: &TurbParams,
 	current_time_s: f32,
-	src: &Texture,
-	dst: &mut Texture,
+	size: [i32; 2],
 	mip: usize,
-	temp_buffer: &mut Vec<TextureElement>,
+	src_pixels: &[T],
+	dst_pixels: &mut [T],
+	temp_buffer: &mut Vec<T>,
 )
 {
 	// TODO - speed-up this. Use unsafe f32 -> i32 conversion, use indexing without bounds check.
@@ -200,8 +246,6 @@ fn make_turb_distortion(
 	let frequency_scaled = std::f32::consts::TAU / (turb.wave_length * mip_scale);
 	let time_based_shift = current_time_s * turb.frequency * std::f32::consts::TAU;
 
-	let size = [src.size[0] as i32, src.size[1] as i32];
-
 	// Shift rows.
 	for y in 0 .. size[1]
 	{
@@ -210,8 +254,8 @@ fn make_turb_distortion(
 
 		let start_offset = (y * size[0]) as usize;
 		let end_offset = ((y + 1) * size[0]) as usize;
-		let src_line = &src.pixels[start_offset .. end_offset];
-		let dst_line = &mut dst.pixels[start_offset .. end_offset];
+		let src_line = &src_pixels[start_offset .. end_offset];
+		let dst_line = &mut dst_pixels[start_offset .. end_offset];
 
 		let mut src_x = shift.rem_euclid(size[0]);
 		for dst in dst_line
@@ -225,14 +269,15 @@ fn make_turb_distortion(
 		}
 	}
 
+	// TODO - use stack buffer instead
 	// Shift columns.
-	temp_buffer.resize(size[1] as usize, TextureElement::default());
+	temp_buffer.resize(size[1] as usize, T::default());
 
 	for x in 0 .. size[0]
 	{
 		for (temp_dst, y) in temp_buffer.iter_mut().zip(0 .. size[1])
 		{
-			*temp_dst = dst.pixels[(x + y * size[0]) as usize];
+			*temp_dst = dst_pixels[(x + y * size[0]) as usize];
 		}
 
 		let shift =
@@ -241,7 +286,7 @@ fn make_turb_distortion(
 		let mut src_y = shift.rem_euclid(size[1]);
 		for y in 0 .. size[1]
 		{
-			dst.pixels[(x + y * size[0]) as usize] = temp_buffer[src_y as usize];
+			dst_pixels[(x + y * size[0]) as usize] = temp_buffer[src_y as usize];
 			src_y += 1;
 			if src_y == size[1]
 			{
