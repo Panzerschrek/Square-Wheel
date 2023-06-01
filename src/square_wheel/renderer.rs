@@ -15,6 +15,7 @@ pub struct Renderer
 	map: Arc<bsp_map_compact::BSPMap>,
 	root_renderer: PartialRenderer,
 	materials_update_performance_counter: PerformanceCounter,
+	object_index_build_performance_counter: PerformanceCounter,
 	debug_stats: RendererDebugStats,
 }
 
@@ -52,6 +53,7 @@ impl Renderer
 			map: map.clone(),
 			root_renderer: PartialRenderer::new(resources_manager, config_parsed, map, config_parsed.portals_depth),
 			materials_update_performance_counter: PerformanceCounter::new(100),
+			object_index_build_performance_counter: PerformanceCounter::new(100),
 			debug_stats: RendererDebugStats::default(),
 		}
 	}
@@ -66,22 +68,27 @@ impl Renderer
 
 		self.debug_stats = RendererDebugStats::default();
 
-		let materials_processor = &mut self.common_data.materials_processor;
+		let common_data = &mut self.common_data;
 		let materials_update_performance_counter = &mut self.materials_update_performance_counter;
-		materials_update_performance_counter.run_with_measure(|| materials_processor.update(frame_info.game_time_s));
+		let object_index_build_performance_counter = &mut self.object_index_build_performance_counter;
 
-		self.common_data
-			.inline_models_index
-			.position_models(&frame_info.submodel_entities);
-		self.common_data
-			.dynamic_models_index
-			.position_models(&frame_info.model_entities);
-		self.common_data.decals_index.position_decals(&frame_info.decals);
-		self.common_data.sprites_index.position_sprites(&frame_info.sprites);
-		self.common_data
-			.dynamic_lights_index
-			.position_dynamic_lights(&frame_info.lights);
-		self.common_data.portals_index.position_portals(&frame_info.portals);
+		materials_update_performance_counter
+			.run_with_measure(|| common_data.materials_processor.update(frame_info.game_time_s));
+
+		object_index_build_performance_counter.run_with_measure(|| {
+			common_data
+				.inline_models_index
+				.position_models(&frame_info.submodel_entities);
+			common_data
+				.dynamic_models_index
+				.position_models(&frame_info.model_entities);
+			common_data.decals_index.position_decals(&frame_info.decals);
+			common_data.sprites_index.position_sprites(&frame_info.sprites);
+			common_data
+				.dynamic_lights_index
+				.position_dynamic_lights(&frame_info.lights);
+			common_data.portals_index.position_portals(&frame_info.portals);
+		});
 
 		self.root_renderer.prepare_frame::<ColorT>(
 			surface_info,
@@ -122,6 +129,10 @@ impl Renderer
 		debug_stats_printer.add_line(format!(
 			"materials update: {:04.2}ms",
 			self.materials_update_performance_counter.get_average_value() * 1000.0
+		));
+		debug_stats_printer.add_line(format!(
+			"object index build: {:04.2}ms",
+			self.object_index_build_performance_counter.get_average_value() * 1000.0
 		));
 		debug_stats_printer.add_line(format!(
 			"visible leafs search: {:04.2}ms",
