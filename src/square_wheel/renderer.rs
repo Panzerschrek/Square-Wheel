@@ -1,7 +1,7 @@
 use super::{
 	abstract_color::*, config, console::*, debug_stats_printer::*, dynamic_objects_index::*, frame_info::*,
-	inline_models_index::*, map_materials_processor::*, partial_renderer::PartialRenderer, renderer_config::*,
-	renderer_structs::*, resources_manager::*,
+	inline_models_index::*, map_materials_processor::*, partial_renderer::PartialRenderer, performance_counter::*,
+	renderer_config::*, renderer_structs::*, resources_manager::*,
 };
 use crate::common::{bsp_map_compact, system_window};
 use std::sync::Arc;
@@ -14,6 +14,7 @@ pub struct Renderer
 	common_data: RenderersCommonData,
 	map: Arc<bsp_map_compact::BSPMap>,
 	root_renderer: PartialRenderer,
+	materials_update_performance_counter: PerformanceCounter,
 	debug_stats: RendererDebugStats,
 }
 
@@ -50,6 +51,7 @@ impl Renderer
 			},
 			map: map.clone(),
 			root_renderer: PartialRenderer::new(resources_manager, config_parsed, map, config_parsed.portals_depth),
+			materials_update_performance_counter: PerformanceCounter::new(100),
 			debug_stats: RendererDebugStats::default(),
 		}
 	}
@@ -64,7 +66,9 @@ impl Renderer
 
 		self.debug_stats = RendererDebugStats::default();
 
-		self.common_data.materials_processor.update(frame_info.game_time_s);
+		let materials_processor = &mut self.common_data.materials_processor;
+		let materials_update_performance_counter = &mut self.materials_update_performance_counter;
+		materials_update_performance_counter.run_with_measure(|| materials_processor.update(frame_info.game_time_s));
 
 		self.common_data
 			.inline_models_index
@@ -117,7 +121,7 @@ impl Renderer
 
 		debug_stats_printer.add_line(format!(
 			"materials update: {:04.2}ms",
-			performance_counters.materials_update.get_average_value() * 1000.0
+			self.materials_update_performance_counter.get_average_value() * 1000.0
 		));
 		debug_stats_printer.add_line(format!(
 			"visible leafs search: {:04.2}ms",

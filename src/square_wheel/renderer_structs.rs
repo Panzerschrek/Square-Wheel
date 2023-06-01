@@ -6,7 +6,6 @@ use crate::common::{bsp_map_compact, clipping_polygon::*, math_types::*, matrix:
 
 pub struct RendererPerformanceCounters
 {
-	pub materials_update: PerformanceCounter,
 	pub visible_leafs_search: PerformanceCounter,
 	pub triangle_models_preparation: PerformanceCounter,
 	pub surfaces_preparation: PerformanceCounter,
@@ -22,7 +21,6 @@ impl RendererPerformanceCounters
 	{
 		let window_size = 100;
 		Self {
-			materials_update: PerformanceCounter::new(window_size),
 			visible_leafs_search: PerformanceCounter::new(window_size),
 			triangle_models_preparation: PerformanceCounter::new(window_size),
 			surfaces_preparation: PerformanceCounter::new(window_size),
