@@ -18,6 +18,7 @@ pub fn update_player_entity(
 	}
 	else
 	{
+		ecs_warning(&format!("Missing player entity {:?}", player_entity));
 		return;
 	};
 
@@ -218,16 +219,17 @@ pub fn update_player_entity(
 			flashlight_entity = hecs::Entity::DANGLING;
 		}
 
-		let mut q = if let Ok(q) = ecs.query_one::<&mut PlayerComponent>(player_entity)
+		if let Ok(mut q) = ecs.query_one::<&mut PlayerComponent>(player_entity)
 		{
-			q
+			if let Some(player_component) = q.get()
+			{
+				player_component.flashlight_entity = flashlight_entity
+			}
+			else
+			{
+				ecs_warning(&format!("Missing player component for entity {:?}", player_entity));
+			}
 		}
-		else
-		{
-			return;
-		};
-
-		q.get().unwrap().flashlight_entity = flashlight_entity;
 	}
 }
 
@@ -328,9 +330,12 @@ pub fn update_doors(ecs: &mut hecs::World, game_time: f32, time_delta_s: f32)
 		}
 
 		// Request activation component each loop iteration, in order to avoid locking all cativation componens and causing mutable access to this component (see code below).
-		let mut q = ecs.query_one::<&mut EntityActivationComponent>(id).unwrap();
-		let activated = q.get().unwrap().activated;
-		drop(q);
+		let activated = ecs
+			.query_one::<&mut EntityActivationComponent>(id)
+			.unwrap() // Accessing existing entity - unwrap is ok.
+			.get()
+			.map(|c| c.activated)
+			.unwrap_or(false);
 
 		if activated
 		{
@@ -338,7 +343,24 @@ pub fn update_doors(ecs: &mut hecs::World, game_time: f32, time_delta_s: f32)
 			{
 				if let Ok(mut q) = ecs.query_one::<&mut EntityActivationComponent>(*slave_door_id)
 				{
-					q.get().unwrap().activated = true;
+					if let Some(activation_component) = q.get()
+					{
+						activation_component.activated = true;
+					}
+					else
+					{
+						ecs_warning(&format!(
+							"Slave door entity {:?} missing activation component",
+							*slave_door_id
+						));
+					}
+				}
+				else
+				{
+					ecs_warning(&format!(
+						"Entity {:?} missing slave door entity {:?}",
+						id, *slave_door_id
+					));
 				}
 			}
 		}
@@ -467,47 +489,82 @@ pub fn update_trains(ecs: &mut hecs::World, game_time: f32, time_delta_s: f32)
 		.query::<(&mut TrainComponent, &mut EntityActivationComponent)>()
 		.iter()
 	{
-		loop
+		'train_state_loop: loop
 		{
 			match &mut train_component.state
 			{
 				TrainState::SearchForInitialPosition =>
 				{
-					let mut q = ecs.query_one::<&TargetNameComponent>(train_component.target).unwrap();
-					let target_name = &q.get().unwrap().name;
-
-					for (target_id, named_target_component) in ecs.query::<&NamedTargetComponent>().iter()
+					// Just started. Set location to location of first target.
+					if let Some(target_name_component) = ecs
+						.query_one::<&TargetNameComponent>(id)
+						.unwrap() // Accessing existing entity - unwrap is ok.
+						.get()
 					{
-						if named_target_component.name == *target_name
+						// Search first target by name.
+						for (target_id, named_target_component) in ecs.query::<&NamedTargetComponent>().iter()
 						{
-							// Just started. Set location to location of first target.
-							let mut dst_q = ecs.query_one::<&LocationComponent>(target_id).unwrap();
-							let dst_position = dst_q.get().unwrap().position;
-							drop(dst_q);
-
-							let mut q = ecs
-								.query_one::<(&mut LocationComponent, Option<&NamedTargetComponent>)>(id)
-								.unwrap();
-							let (location_component, named_target_component) = q.get().unwrap();
-							location_component.position = dst_position + train_component.target_shift;
-
-							train_component.target = target_id;
-
-							// Wait for activation if this entity has NamedTargetComponent. Else - start moving immediately.
-							train_component.state = if named_target_component.is_some()
+							if named_target_component.name == target_name_component.name
 							{
-								TrainState::WaitForActivation
+								let dst_position = if let Some(location_component) = ecs
+									.query_one::<&LocationComponent>(target_id)
+									.unwrap() // Accessing existing entity - unwrap is ok.
+									.get()
+								{
+									location_component.position
+								}
+								else
+								{
+									ecs_warning(&format!(
+										"Train target entity {:?} missing location component",
+										target_id
+									));
+									break 'train_state_loop;
+								};
+
+								if let Some((location_component, train_named_target_component)) = ecs
+									.query_one::<(&mut LocationComponent, Option<&NamedTargetComponent>)>(id)
+									.unwrap() // Accessing existing entity - unwrap is ok.
+									.get()
+								{
+									train_component.target = target_id;
+									// Set position equal to first target. In next step move to next target will be started.
+									location_component.position = dst_position + train_component.target_shift;
+
+									// Wait for activation if this train has NamedTargetComponent. Else - start moving immediately.
+									if train_named_target_component.is_some()
+									{
+										train_component.state = TrainState::WaitForActivation;
+										break 'train_state_loop;
+									}
+									else
+									{
+										train_component.state = TrainState::Move;
+										continue 'train_state_loop; // Continue in order to process move.
+									}
+								}
+								else
+								{
+									ecs_warning(&format!("Train entity {:?} missing location component", target_id));
+									break 'train_state_loop;
+								}
 							}
-							else
-							{
-								TrainState::Move
-							};
-							break;
 						}
-					}
 
-					// Continue in order to process move.
-					continue;
+						ecs_warning(&format!(
+							"Train {:?} named target {} not found",
+							id, target_name_component.name
+						));
+						break 'train_state_loop;
+					}
+					else
+					{
+						ecs_warning(&format!(
+							"Train entity {:?} missing target name component",
+							train_component.target
+						));
+						break 'train_state_loop;
+					}
 				},
 				TrainState::WaitForActivation =>
 				{
@@ -521,56 +578,109 @@ pub fn update_trains(ecs: &mut hecs::World, game_time: f32, time_delta_s: f32)
 				},
 				TrainState::SearchForNextTarget =>
 				{
-					let mut q = ecs.query_one::<&TargetNameComponent>(train_component.target).unwrap();
-					let target_name = &q.get().unwrap().name;
-
-					for (target_id, named_target_component) in ecs.query::<&NamedTargetComponent>().iter()
+					if let Ok(mut q) = ecs.query_one::<&TargetNameComponent>(train_component.target)
 					{
-						if named_target_component.name == *target_name
+						if let Some(target_name_component) = q.get()
 						{
-							train_component.state = TrainState::Move;
-							train_component.target = target_id;
-							break;
-						}
-					}
+							// Search target by name.
+							for (target_id, named_target_component) in ecs.query::<&NamedTargetComponent>().iter()
+							{
+								if named_target_component.name == target_name_component.name
+								{
+									train_component.state = TrainState::Move;
+									train_component.target = target_id;
+									continue 'train_state_loop; // Continue in order to process move.
+								}
+							}
 
-					// Continue in order to process move.
-					continue;
-				},
-				TrainState::Move =>
-				{
-					let mut dst_q = ecs
-						.query_one::<(&LocationComponent, &WaitComponent)>(train_component.target)
-						.unwrap();
-					let (dst_location_component, dst_wait_component) = dst_q.get().unwrap();
-					let dst_position = dst_location_component.position + train_component.target_shift;
-					let dst_wait = dst_wait_component.wait;
-					drop(dst_q);
-
-					let mut q = ecs.query_one::<&mut LocationComponent>(id).unwrap();
-					let position = &mut q.get().unwrap().position;
-
-					*position = move_towards_target(position, &dst_position, train_component.speed, time_delta_s);
-
-					if *position == dst_position
-					{
-						if dst_wait < 0.0
-						{
-							// Wait forever.
-							train_component.state = TrainState::Wait {
-								continue_time_s: game_time + 1.0e12,
-							};
-						}
-						else if dst_wait > 0.0
-						{
-							train_component.state = TrainState::Wait {
-								continue_time_s: game_time + dst_wait,
-							};
+							ecs_warning(&format!(
+								"Train {:?} named target {} not found",
+								id, target_name_component.name
+							));
+							break 'train_state_loop;
 						}
 						else
 						{
-							train_component.state = TrainState::SearchForNextTarget;
+							ecs_warning(&format!(
+								"Train target entity {:?} missing target name component",
+								train_component.target
+							));
+							break 'train_state_loop;
 						}
+					}
+					else
+					{
+						ecs_warning(&format!(
+							"Train entity {:?} missing target entity {:?}",
+							id, train_component.target
+						));
+						break 'train_state_loop;
+					}
+				},
+				TrainState::Move =>
+				{
+					let (dst_position, dst_wait) = if let Ok(mut dst_q) =
+						ecs.query_one::<(&LocationComponent, &WaitComponent)>(train_component.target)
+					{
+						if let Some((dst_location_component, dst_wait_component)) = dst_q.get()
+						{
+							(
+								dst_location_component.position + train_component.target_shift,
+								dst_wait_component.wait,
+							)
+						}
+						else
+						{
+							ecs_warning(&format!(
+								"Train target entity {:?} missing location and/or wait component(s)",
+								train_component.target
+							));
+							break 'train_state_loop;
+						}
+					}
+					else
+					{
+						ecs_warning(&format!(
+							"Train entity {:?} missing target entity {:?}",
+							id, train_component.target
+						));
+						break 'train_state_loop;
+					};
+
+					if let Some(location_component) = ecs
+						.query_one::<&mut LocationComponent>(id)
+						.unwrap() // Accessing existing entity - unwrap is ok.
+						.get()
+					{
+						let position = &mut location_component.position;
+
+						*position = move_towards_target(position, &dst_position, train_component.speed, time_delta_s);
+
+						if *position == dst_position
+						{
+							if dst_wait < 0.0
+							{
+								// Wait forever.
+								train_component.state = TrainState::Wait {
+									continue_time_s: game_time + 1.0e12,
+								};
+							}
+							else if dst_wait > 0.0
+							{
+								train_component.state = TrainState::Wait {
+									continue_time_s: game_time + dst_wait,
+								};
+							}
+							else
+							{
+								train_component.state = TrainState::SearchForNextTarget;
+							}
+						}
+					}
+					else
+					{
+						ecs_warning(&format!("Train entity {:?} missing location component", id,));
+						break 'train_state_loop;
 					}
 				},
 				TrainState::Wait { continue_time_s } =>
@@ -602,7 +712,7 @@ pub fn update_kinematic_physics_objects(ecs: &mut hecs::World, physics: &mut Tes
 
 pub fn update_touch_triggers(ecs: &mut hecs::World, physics: &TestGamePhysics)
 {
-	for (_id, (touch_trigger_component, trigger_single_target_component, target_name_component)) in ecs
+	for (id, (touch_trigger_component, trigger_single_target_component, target_name_component)) in ecs
 		.query::<(
 			&TouchTriggerComponent,
 			Option<&TriggerSingleTargetComponent>,
@@ -621,10 +731,11 @@ pub fn update_touch_triggers(ecs: &mut hecs::World, physics: &TestGamePhysics)
 			}
 			else
 			{
+				ecs_warning(&format!("Physics query reports about non-existing entity {:?}", entity));
 				return;
 			}
 
-			// Activate target.
+			// Activate specific target.
 			if let Some(t) = trigger_single_target_component
 			{
 				if let Ok(mut q) = ecs.query_one::<&mut EntityActivationComponent>(t.target)
@@ -633,8 +744,17 @@ pub fn update_touch_triggers(ecs: &mut hecs::World, physics: &TestGamePhysics)
 					{
 						entity_activation_component.activated = true;
 					}
+					else
+					{
+						ecs_warning(&format!("Entity {:?} missing activation component", t.target));
+					}
+				}
+				else
+				{
+					ecs_warning(&format!("Trigger entity {:?} missing target entity {:?}", id, t.target));
 				}
 			}
+
 			// Activate named targets.
 			if let Some(TargetNameComponent { name }) = target_name_component
 			{
@@ -643,12 +763,16 @@ pub fn update_touch_triggers(ecs: &mut hecs::World, physics: &TestGamePhysics)
 					if named_target_component.name == *name
 					{
 						// Perform query only in case of name match - in order to avoid multiple mutable access to same entities and cause panics.
-						if let Ok(mut q) = ecs.query_one::<&mut EntityActivationComponent>(target_id)
+						if let Some(activation_component) = ecs
+							.query_one::<&mut EntityActivationComponent>(target_id)
+							.unwrap() // Accessing existing entity - unwrap is ok.
+							.get()
 						{
-							if let Some(actication_component) = q.get()
-							{
-								actication_component.activated = true;
-							}
+							activation_component.activated = true;
+						}
+						else
+						{
+							ecs_warning(&format!("Entity {:?} missing activation component", target_id));
 						}
 					}
 				}
@@ -679,6 +803,10 @@ pub fn update_touch_trigger_teleports(ecs: &mut hecs::World, physics: &TestGameP
 						}
 					}
 				}
+			}
+			else
+			{
+				ecs_warning(&format!("Physics query reports about non-existing entity {:?}", entity));
 			}
 		});
 	}
@@ -740,14 +868,12 @@ pub fn update_named_activations(ecs: &mut hecs::World)
 {
 	for (id, target_name_component) in ecs.query::<&TargetNameComponent>().iter()
 	{
-		let mut activated = false;
-		if let Ok(mut q) = ecs.query_one::<&EntityActivationComponent>(id)
-		{
-			if let Some(actication_component) = q.get()
-			{
-				activated = actication_component.activated;
-			}
-		}
+		let activated = ecs
+			.query_one::<&EntityActivationComponent>(id)
+			.unwrap() // Accessing existing entity - unwrap is ok.
+			.get()
+			.map(|c| c.activated)
+			.unwrap_or(false); // It is ok to not have activation component here.
 
 		if activated
 		{
@@ -756,12 +882,16 @@ pub fn update_named_activations(ecs: &mut hecs::World)
 				if named_target_component.name == target_name_component.name
 				{
 					// Perform query only in case of name match - in order to avoid multiple mutable access to same entities and cause panics.
-					if let Ok(mut q) = ecs.query_one::<&mut EntityActivationComponent>(target_id)
+					if let Some(activation_component) = ecs
+						.query_one::<&mut EntityActivationComponent>(target_id)
+						.unwrap() // Accessing existing entity - unwrap is ok.
+						.get()
 					{
-						if let Some(actication_component) = q.get()
-						{
-							actication_component.activated = true;
-						}
+						activation_component.activated = true;
+					}
+					else
+					{
+						ecs_warning(&format!("Entity {:?} missing activation component", target_id));
 					}
 				}
 			}
@@ -814,48 +944,79 @@ pub fn update_phys_model_locations(ecs: &mut hecs::World, physics: &TestGamePhys
 
 pub fn update_other_entity_locations(ecs: &mut hecs::World)
 {
-	for (_id, (other_entity_location_component, location_component)) in ecs
+	for (id, (other_entity_location_component, location_component)) in ecs
 		.query::<(&OtherEntityLocationComponent, &mut LocationComponent)>()
 		.into_iter()
 	{
 		// TODO - support chains of linked entities.
-		let mut q = ecs
-			.query_one::<&LocationComponent>(other_entity_location_component.entity)
-			.unwrap();
-		let src_location_component = q.get().unwrap();
-
-		location_component.position = src_location_component.position +
-			src_location_component
-				.rotation
-				.rotate_vector(other_entity_location_component.relative_position);
-		location_component.rotation =
-			src_location_component.rotation * other_entity_location_component.relative_rotation;
+		if let Ok(mut q) = ecs.query_one::<&LocationComponent>(other_entity_location_component.entity)
+		{
+			if let Some(src_location_component) = q.get()
+			{
+				location_component.position = src_location_component.position +
+					src_location_component
+						.rotation
+						.rotate_vector(other_entity_location_component.relative_position);
+				location_component.rotation =
+					src_location_component.rotation * other_entity_location_component.relative_rotation;
+			}
+			else
+			{
+				ecs_warning(&format!(
+					"Entity {:?} missing location component",
+					other_entity_location_component.entity
+				));
+			}
+		}
+		else
+		{
+			ecs_warning(&format!(
+				"Entity {:?} missing other entity {:?}",
+				id, other_entity_location_component.entity
+			));
+		}
 	}
 }
 
 pub fn update_player_controller_camera_locations(ecs: &mut hecs::World, physics: &TestGamePhysics)
 {
-	for (_id, (player_controller_camera_location_component, location_component)) in ecs
+	for (id, (player_controller_camera_location_component, location_component)) in ecs
 		.query::<(&PlayerControllerCameraLocationComponent, &mut LocationComponent)>()
 		.into_iter()
 	{
-		let mut q = ecs
-			.query_one::<&PlayerControllerComponent>(player_controller_camera_location_component.entity)
-			.unwrap();
-		let player_controller = q.get().unwrap();
-
-		let camera_position = match player_controller.position_source
+		if let Ok(mut q) =
+			ecs.query_one::<&PlayerControllerComponent>(player_controller_camera_location_component.entity)
 		{
-			PlayerPositionSource::Noclip(p) => p,
-			PlayerPositionSource::Phys(handle) => physics.get_object_location(handle).0,
-		} + player_controller_camera_location_component.camera_view_offset;
+			if let Some(player_controller) = q.get()
+			{
+				let camera_position = match player_controller.position_source
+				{
+					PlayerPositionSource::Noclip(p) => p,
+					PlayerPositionSource::Phys(handle) => physics.get_object_location(handle).0,
+				} + player_controller_camera_location_component.camera_view_offset;
 
-		let camera_rotation = player_controller.rotation_controller.get_rotation();
+				let camera_rotation = player_controller.rotation_controller.get_rotation();
 
-		location_component.position = camera_position +
-			camera_rotation.rotate_vector(player_controller_camera_location_component.relative_position);
-		location_component.rotation = player_controller.rotation_controller.get_rotation() *
-			player_controller_camera_location_component.relative_rotation;
+				location_component.position = camera_position +
+					camera_rotation.rotate_vector(player_controller_camera_location_component.relative_position);
+				location_component.rotation = player_controller.rotation_controller.get_rotation() *
+					player_controller_camera_location_component.relative_rotation;
+			}
+			else
+			{
+				ecs_warning(&format!(
+					"Player entity {:?} missing player controller",
+					player_controller_camera_location_component.entity
+				));
+			}
+		}
+		else
+		{
+			ecs_warning(&format!(
+				"Entity {:?} missing player entity {:?}",
+				id, player_controller_camera_location_component.entity
+			));
+		}
 	}
 }
 
@@ -992,4 +1153,9 @@ fn move_towards_target(position: &Vec3f, target_position: &Vec3f, speed: f32, ti
 	}
 
 	position + vec_to * (step / vec_to_len)
+}
+
+fn ecs_warning(s: &str)
+{
+	println!("ECS warning: {}", s)
 }

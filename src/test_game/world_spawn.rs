@@ -300,7 +300,7 @@ fn spawn_regular_entity(
 						TrainComponent {
 							speed: get_entity_f32(map_entity, map, "speed").unwrap_or(100.0),
 							state: TrainState::SearchForInitialPosition,
-							target: entity,
+							target: hecs::Entity::DANGLING, // Set target later - during initial position search
 							// Shift target positions because in Quake position is regulated for minimum point of bbox.
 							target_shift: bbox.get_size() * 0.5,
 						},
