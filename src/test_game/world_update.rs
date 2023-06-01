@@ -614,13 +614,10 @@ pub fn update_touch_triggers(ecs: &mut hecs::World, physics: &TestGamePhysics)
 		.iter()
 	{
 		physics.get_box_touching_entities(&touch_trigger_component.bbox, |entity| {
-			// Only player can activate triggers.
-			if let Ok(mut q) = ecs.query_one::<(&mut PlayerComponent,)>(entity)
+			// Check if this entity can activate triggers.
+			if let Ok(entity_ref) = ecs.entity(entity)
 			{
-				if let Some((_player_component,)) = q.get()
-				{
-				}
-				else
+				if !entity_ref.has::<TouchTriggerActivatorComponent>()
 				{
 					return;
 				}

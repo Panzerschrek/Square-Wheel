@@ -135,6 +135,10 @@ pub enum PlayerPositionSource
 	Phys(test_game_physics::ObjectHandle),
 }
 
+// Component for entity, that can activate touch triggers.
+#[derive(Serialize, Deserialize)]
+pub struct TouchTriggerActivatorComponent {}
+
 // Component for entity, that can be teleported.
 #[derive(Serialize, Deserialize)]
 pub struct TeleportableComponent

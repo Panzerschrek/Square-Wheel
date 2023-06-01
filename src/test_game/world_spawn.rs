@@ -699,6 +699,7 @@ pub fn spawn_player(
 			rotation: QuaternionF::one(),
 		},
 		PlayerControllerLocationComponent {},
+		TouchTriggerActivatorComponent {},
 		TeleportableComponent { destination: None },
 	));
 
