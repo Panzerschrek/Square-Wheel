@@ -6,6 +6,7 @@ pub struct MapMaterialsProcessor
 {
 	materials: Vec<Material>,
 	textures: Vec<SharedResourcePtr<TextureWithMips>>,
+	emissive_textures: Vec<Option<SharedResourcePtr<TextureLiteWithMips>>>,
 	skybox_textures_32: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color32>>>,
 	skybox_textures_64: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color64>>>,
 	// Store here only animated textures.
@@ -26,6 +27,7 @@ impl MapMaterialsProcessor
 		let num_textures = map.textures.len();
 
 		let mut materials = Vec::with_capacity(num_textures);
+		let mut emissive_textures = Vec::with_capacity(num_textures);
 		let mut skybox_textures_32 = HashMap::new();
 		let mut skybox_textures_64 = HashMap::new();
 		for (texture_index, texture_name) in map.textures.iter().enumerate()
@@ -40,6 +42,8 @@ impl MapMaterialsProcessor
 				println!("Failed to find material \"{}\"", material_name);
 				Material::default()
 			};
+
+			emissive_textures.push(material.emissive_layer.as_ref().map(|l| r.get_texture_lite(&l.image)));
 
 			// TODO - load skyboxes lazily.
 			// TODO - create stub regular texture for skyboxes.
@@ -56,10 +60,12 @@ impl MapMaterialsProcessor
 		let textures_modified = vec![TextureWithMips::default(); textures.len()];
 
 		debug_assert!(textures.len() == materials.len());
+		debug_assert!(emissive_textures.len() == materials.len());
 
 		Self {
 			materials,
 			textures,
+			emissive_textures,
 			textures_modified,
 			skybox_textures_32,
 			skybox_textures_64,
@@ -133,6 +139,20 @@ impl MapMaterialsProcessor
 	pub fn get_texture_shift(&self, material_index: u32) -> TextureShift
 	{
 		self.textures_shift[material_index as usize]
+	}
+
+	pub fn get_emissive_texture(&self, material_index: u32) -> Option<(&TextureLiteWithMips, [f32; 3])>
+	{
+		let index = material_index as usize;
+		if let (Some(emissive_layer), Some(emissive_texture)) =
+			(&self.materials[index].emissive_layer, &self.emissive_textures[index])
+		{
+			Some((emissive_texture, emissive_layer.light))
+		}
+		else
+		{
+			None
+		}
 	}
 
 	pub fn get_skybox_textures<ColorT: AbstractColor>(&self, material_index: u32) -> Option<&SkyboxTextures<ColorT>>

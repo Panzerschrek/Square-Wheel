@@ -1802,6 +1802,18 @@ impl PartialRenderer
 					surface_data,
 				);
 			}
+
+			if let Some(emissive_layer) = materials_processor.get_emissive_texture(polygon.texture)
+			{
+				mix_surface_with_texture(
+					surface_size,
+					tc_start,
+					&emissive_layer.0[polygon_data.mip as usize],
+					material::BlendingMode::Additive,
+					emissive_layer.1,
+					surface_data,
+				);
+			}
 		};
 
 		if rayon::current_num_threads() == 1
