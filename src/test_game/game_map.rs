@@ -87,17 +87,17 @@ impl GameMap
 
 	fn collect_drawable_components<T: hecs::Component + Clone>(&self) -> Vec<T>
 	{
-		self.ecs.query::<(&T,)>().iter().map(|(_id, (c,))| c.clone()).collect()
+		self.ecs.query::<&T>().iter().map(|(_id, c)| c.clone()).collect()
 	}
 
 	fn get_camera_location(&self) -> (Vec3f, QuaternionF)
 	{
-		let mut q = self
+		let player_controller_component = self
 			.ecs
-			.query_one::<(&PlayerControllerComponent,)>(self.player_entity)
+			.entity(self.player_entity)
+			.unwrap()
+			.get::<&PlayerControllerComponent>()
 			.unwrap();
-		let (player_controller_component,) = q.get().unwrap();
-
 		(
 			match player_controller_component.position_source
 			{
@@ -110,26 +110,24 @@ impl GameMap
 
 	fn get_camera_angles(&self) -> (f32, f32, f32)
 	{
-		let mut q = self
-			.ecs
-			.query_one::<(&PlayerControllerComponent,)>(self.player_entity)
-			.unwrap();
-		let (player_controller,) = q.get().unwrap();
-
-		player_controller.rotation_controller.get_angles()
+		self.ecs
+			.entity(self.player_entity)
+			.unwrap()
+			.get::<&PlayerControllerComponent>()
+			.unwrap()
+			.rotation_controller
+			.get_angles()
 	}
 
 	fn set_camera_angles(&mut self, azimuth: f32, elevation: f32, roll: f32)
 	{
-		let mut q = self
-			.ecs
-			.query_one::<(&mut PlayerControllerComponent,)>(self.player_entity)
-			.unwrap();
-		let (player_controller,) = q.get().unwrap();
-
-		player_controller
+		self.ecs
+			.entity(self.player_entity)
+			.unwrap()
+			.get::<&mut PlayerControllerComponent>()
+			.unwrap()
 			.rotation_controller
-			.set_angles(azimuth, elevation, roll)
+			.set_angles(azimuth, elevation, roll);
 	}
 
 	fn process_commands(&mut self)
@@ -158,11 +156,12 @@ impl GameMap
 		if let (Ok(x), Ok(y), Ok(z)) = (args[0].parse::<f32>(), args[1].parse::<f32>(), args[2].parse::<f32>())
 		{
 			let pos = Vec3f::new(x, y, z) - self.camera_view_offset;
-			let mut q = self
+			let mut player_controller = self
 				.ecs
-				.query_one::<(&mut PlayerControllerComponent,)>(self.player_entity)
+				.entity(self.player_entity)
+				.unwrap()
+				.get::<&mut PlayerControllerComponent>()
 				.unwrap();
-			let (player_controller,) = q.get().unwrap();
 
 			match &mut player_controller.position_source
 			{
@@ -310,7 +309,7 @@ impl GameMap
 
 	fn command_reset_test_lights(&mut self, _args: commands_queue::CommandArgs)
 	{
-		for (id, (_test_light_component,)) in self.ecs.query_mut::<(&TestLightComponent,)>()
+		for (id, _test_light_component) in self.ecs.query_mut::<&TestLightComponent>()
 		{
 			self.ecs_command_buffer.despawn(id);
 		}
@@ -415,7 +414,7 @@ impl GameMap
 
 	fn command_reset_test_decals(&mut self, _args: commands_queue::CommandArgs)
 	{
-		for (id, (_test_decal_component,)) in self.ecs.query_mut::<(&TestDecalComponent,)>()
+		for (id, _test_decal_component) in self.ecs.query_mut::<&TestDecalComponent>()
 		{
 			self.ecs_command_buffer.despawn(id)
 		}
@@ -468,7 +467,7 @@ impl GameMap
 
 	fn command_reset_test_sprites(&mut self, _args: commands_queue::CommandArgs)
 	{
-		for (id, (_test_sprite_component,)) in self.ecs.query_mut::<(&TestSpriteComponent,)>()
+		for (id, _test_sprite_component) in self.ecs.query_mut::<&TestSpriteComponent>()
 		{
 			self.ecs_command_buffer.despawn(id)
 		}
@@ -561,27 +560,28 @@ impl GameMap
 			},
 		));
 
-		let mut q = self
-			.ecs
-			.query_one::<(&mut PlayerComponent,)>(self.player_entity)
-			.unwrap();
-		let (player_component,) = q.get().unwrap();
-		player_component.view_model_entity = view_model_entity;
+		self.ecs
+			.entity(self.player_entity)
+			.unwrap()
+			.get::<&mut PlayerComponent>()
+			.unwrap()
+			.view_model_entity = view_model_entity;
 	}
 
 	fn command_reset_view_model(&mut self, _args: commands_queue::CommandArgs)
 	{
-		let mut q = self
+		let mut player_component = self
 			.ecs
-			.query_one::<(&mut PlayerComponent,)>(self.player_entity)
+			.entity(self.player_entity)
+			.unwrap()
+			.get::<&mut PlayerComponent>()
 			.unwrap();
-		let (player_component,) = q.get().unwrap();
 
 		if player_component.view_model_entity != hecs::Entity::DANGLING
 		{
 			let view_model_entity = player_component.view_model_entity;
 			player_component.view_model_entity = hecs::Entity::DANGLING;
-			drop(q);
+			drop(player_component);
 			let _ignore = self.ecs.despawn(view_model_entity);
 		}
 	}
@@ -660,7 +660,7 @@ impl GameMap
 
 	fn command_reset_test_mirrors(&mut self, _args: commands_queue::CommandArgs)
 	{
-		for (id, (_test_mirror_component,)) in self.ecs.query_mut::<(&TestMirrorComponent,)>()
+		for (id, _test_mirror_component) in self.ecs.query_mut::<&TestMirrorComponent>()
 		{
 			self.ecs_command_buffer.despawn(id)
 		}
@@ -669,11 +669,12 @@ impl GameMap
 
 	fn command_noclip(&mut self, _args: commands_queue::CommandArgs)
 	{
-		let mut q = self
+		let mut player_controller = self
 			.ecs
-			.query_one::<(&mut PlayerControllerComponent,)>(self.player_entity)
+			.entity(self.player_entity)
+			.unwrap()
+			.get::<&mut PlayerControllerComponent>()
 			.unwrap();
-		let (player_controller,) = q.get().unwrap();
 
 		let new_position_source = match player_controller.position_source
 		{
@@ -824,7 +825,7 @@ impl GameMap
 		);
 
 		let mut submodel_entities = vec![None; self.map.submodels.len()];
-		for (_id, (submodel_entity_with_index,)) in self.ecs.query::<(&SubmodelEntityWithIndex,)>().iter()
+		for (_id, submodel_entity_with_index) in self.ecs.query::<&SubmodelEntityWithIndex>().iter()
 		{
 			submodel_entities[submodel_entity_with_index.index] = Some(submodel_entity_with_index.submodel_entity);
 		}

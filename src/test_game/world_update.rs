@@ -218,7 +218,7 @@ pub fn update_player_entity(
 			flashlight_entity = hecs::Entity::DANGLING;
 		}
 
-		let mut q = if let Ok(q) = ecs.query_one::<(&mut PlayerComponent,)>(player_entity)
+		let mut q = if let Ok(q) = ecs.query_one::<&mut PlayerComponent>(player_entity)
 		{
 			q
 		}
@@ -227,13 +227,13 @@ pub fn update_player_entity(
 			return;
 		};
 
-		q.get().unwrap().0.flashlight_entity = flashlight_entity;
+		q.get().unwrap().flashlight_entity = flashlight_entity;
 	}
 }
 
 pub fn despawn_timed_entites(ecs: &mut hecs::World, ecs_command_buffer: &mut hecs::CommandBuffer, game_time: f32)
 {
-	for (id, (timed_despawn_component,)) in ecs.query_mut::<(&TimedDespawnComponent,)>()
+	for (id, timed_despawn_component) in ecs.query_mut::<&TimedDespawnComponent>()
 	{
 		if game_time >= timed_despawn_component.despawn_time
 		{
@@ -320,24 +320,25 @@ pub fn update_plates(ecs: &mut hecs::World, game_time: f32, time_delta_s: f32)
 pub fn update_doors(ecs: &mut hecs::World, game_time: f32, time_delta_s: f32)
 {
 	// Make prepass - trigger activation of slave doors if master door is activated.
-	for (id, (door_component,)) in ecs.query::<(&DoorComponent,)>().iter()
+	for (id, door_component) in ecs.query::<&DoorComponent>().iter()
 	{
 		if door_component.slave_doors.is_empty()
 		{
 			continue;
 		}
 
-		let mut q = ecs.query_one::<(&mut EntityActivationComponent,)>(id).unwrap();
-		let activated = q.get().unwrap().0.activated;
+		// Request activation component each loop iteration, in order to avoid locking all cativation componens and causing mutable access to this component (see code below).
+		let mut q = ecs.query_one::<&mut EntityActivationComponent>(id).unwrap();
+		let activated = q.get().unwrap().activated;
 		drop(q);
 
 		if activated
 		{
 			for slave_door_id in &door_component.slave_doors
 			{
-				if let Ok(mut q) = ecs.query_one::<(&mut EntityActivationComponent,)>(*slave_door_id)
+				if let Ok(mut q) = ecs.query_one::<&mut EntityActivationComponent>(*slave_door_id)
 				{
-					q.get().unwrap().0.activated = true;
+					q.get().unwrap().activated = true;
 				}
 			}
 		}
@@ -472,18 +473,16 @@ pub fn update_trains(ecs: &mut hecs::World, game_time: f32, time_delta_s: f32)
 			{
 				TrainState::SearchForInitialPosition =>
 				{
-					let mut q = ecs
-						.query_one::<(&TargetNameComponent,)>(train_component.target)
-						.unwrap();
-					let target_name = &q.get().unwrap().0.name;
+					let mut q = ecs.query_one::<&TargetNameComponent>(train_component.target).unwrap();
+					let target_name = &q.get().unwrap().name;
 
-					for (target_id, (named_target_component,)) in ecs.query::<(&NamedTargetComponent,)>().iter()
+					for (target_id, named_target_component) in ecs.query::<&NamedTargetComponent>().iter()
 					{
 						if named_target_component.name == *target_name
 						{
 							// Just started. Set location to location of first target.
-							let mut dst_q = ecs.query_one::<(&LocationComponent,)>(target_id).unwrap();
-							let dst_position = dst_q.get().unwrap().0.position;
+							let mut dst_q = ecs.query_one::<&LocationComponent>(target_id).unwrap();
+							let dst_position = dst_q.get().unwrap().position;
 							drop(dst_q);
 
 							let mut q = ecs
@@ -522,12 +521,10 @@ pub fn update_trains(ecs: &mut hecs::World, game_time: f32, time_delta_s: f32)
 				},
 				TrainState::SearchForNextTarget =>
 				{
-					let mut q = ecs
-						.query_one::<(&TargetNameComponent,)>(train_component.target)
-						.unwrap();
-					let target_name = &q.get().unwrap().0.name;
+					let mut q = ecs.query_one::<&TargetNameComponent>(train_component.target).unwrap();
+					let target_name = &q.get().unwrap().name;
 
-					for (target_id, (named_target_component,)) in ecs.query::<(&NamedTargetComponent,)>().iter()
+					for (target_id, named_target_component) in ecs.query::<&NamedTargetComponent>().iter()
 					{
 						if named_target_component.name == *target_name
 						{
@@ -550,8 +547,8 @@ pub fn update_trains(ecs: &mut hecs::World, game_time: f32, time_delta_s: f32)
 					let dst_wait = dst_wait_component.wait;
 					drop(dst_q);
 
-					let mut q = ecs.query_one::<(&mut LocationComponent,)>(id).unwrap();
-					let position = &mut q.get().unwrap().0.position;
+					let mut q = ecs.query_one::<&mut LocationComponent>(id).unwrap();
+					let position = &mut q.get().unwrap().position;
 
 					*position = move_towards_target(position, &dst_position, train_component.speed, time_delta_s);
 
@@ -630,9 +627,9 @@ pub fn update_touch_triggers(ecs: &mut hecs::World, physics: &TestGamePhysics)
 			// Activate target.
 			if let Some(t) = trigger_single_target_component
 			{
-				if let Ok(mut q) = ecs.query_one::<(&mut EntityActivationComponent,)>(t.target)
+				if let Ok(mut q) = ecs.query_one::<&mut EntityActivationComponent>(t.target)
 				{
-					if let Some((entity_activation_component,)) = q.get()
+					if let Some(entity_activation_component) = q.get()
 					{
 						entity_activation_component.activated = true;
 					}
@@ -641,13 +638,14 @@ pub fn update_touch_triggers(ecs: &mut hecs::World, physics: &TestGamePhysics)
 			// Activate named targets.
 			if let Some(TargetNameComponent { name }) = target_name_component
 			{
-				for (target_id, (named_target_component,)) in ecs.query::<(&NamedTargetComponent,)>().iter()
+				for (target_id, named_target_component) in ecs.query::<&NamedTargetComponent>().iter()
 				{
 					if named_target_component.name == *name
 					{
-						if let Ok(mut q) = ecs.query_one::<(&mut EntityActivationComponent,)>(target_id)
+						// Perform query only in case of name match - in order to avoid multiple mutable access to same entities and cause panics.
+						if let Ok(mut q) = ecs.query_one::<&mut EntityActivationComponent>(target_id)
 						{
-							if let Some((actication_component,)) = q.get()
+							if let Some(actication_component) = q.get()
 							{
 								actication_component.activated = true;
 							}
@@ -740,12 +738,12 @@ pub fn update_teleported_entities(ecs: &mut hecs::World, physics: &mut TestGameP
 
 pub fn update_named_activations(ecs: &mut hecs::World)
 {
-	for (id, (target_name_component,)) in ecs.query::<(&TargetNameComponent,)>().iter()
+	for (id, target_name_component) in ecs.query::<&TargetNameComponent>().iter()
 	{
 		let mut activated = false;
-		if let Ok(mut q) = ecs.query_one::<(&EntityActivationComponent,)>(id)
+		if let Ok(mut q) = ecs.query_one::<&EntityActivationComponent>(id)
 		{
-			if let Some((actication_component,)) = q.get()
+			if let Some(actication_component) = q.get()
 			{
 				activated = actication_component.activated;
 			}
@@ -753,13 +751,14 @@ pub fn update_named_activations(ecs: &mut hecs::World)
 
 		if activated
 		{
-			for (target_id, (named_target_component,)) in ecs.query::<(&NamedTargetComponent,)>().iter()
+			for (target_id, named_target_component) in ecs.query::<&NamedTargetComponent>().iter()
 			{
 				if named_target_component.name == target_name_component.name
 				{
-					if let Ok(mut q) = ecs.query_one::<(&mut EntityActivationComponent,)>(target_id)
+					// Perform query only in case of name match - in order to avoid multiple mutable access to same entities and cause panics.
+					if let Ok(mut q) = ecs.query_one::<&mut EntityActivationComponent>(target_id)
 					{
-						if let Some((actication_component,)) = q.get()
+						if let Some(actication_component) = q.get()
 						{
 							actication_component.activated = true;
 						}
@@ -821,9 +820,9 @@ pub fn update_other_entity_locations(ecs: &mut hecs::World)
 	{
 		// TODO - support chains of linked entities.
 		let mut q = ecs
-			.query_one::<(&LocationComponent,)>(other_entity_location_component.entity)
+			.query_one::<&LocationComponent>(other_entity_location_component.entity)
 			.unwrap();
-		let (src_location_component,) = q.get().unwrap();
+		let src_location_component = q.get().unwrap();
 
 		location_component.position = src_location_component.position +
 			src_location_component
@@ -841,9 +840,9 @@ pub fn update_player_controller_camera_locations(ecs: &mut hecs::World, physics:
 		.into_iter()
 	{
 		let mut q = ecs
-			.query_one::<(&PlayerControllerComponent,)>(player_controller_camera_location_component.entity)
+			.query_one::<&PlayerControllerComponent>(player_controller_camera_location_component.entity)
 			.unwrap();
-		let (player_controller,) = q.get().unwrap();
+		let player_controller = q.get().unwrap();
 
 		let camera_position = match player_controller.position_source
 		{
