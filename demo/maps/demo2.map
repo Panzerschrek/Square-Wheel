@@ -17674,19 +17674,19 @@
 }
 // brush 1955
 {
-( 3264 2016 -320 ) ( 3264 2016 -48 ) ( 2976 2016 -48 ) limestone_bricks 0 0 0 0.5 0.5
 ( 2976 2016 -48 ) ( 2976 1984 -48 ) ( 2976 1984 -320 ) __TB_empty 0 0 0 0.5 0.5
 ( 2976 1984 -48 ) ( 3264 1984 -48 ) ( 3264 1984 -320 ) __TB_empty 0 0 0 0.5 0.5
 ( 3264 1984 -320 ) ( 3264 2016 -320 ) ( 2976 2016 -320 ) __TB_empty 0 0 0 0.5 0.5
+( 3264 2016 -320 ) ( 3264 2016 -48 ) ( 2976 2016 -48 ) limestone_bricks 0 0 0 0.5 0.5
 ( 3008 2048 -64 ) ( 2976 2048 -48 ) ( 2976 2176 -48 ) __TB_empty 0 0 0 0.5 0.5
 ( 3264 1984 -48 ) ( 3264 2016 -48 ) ( 3264 2016 -320 ) __TB_empty 0 0 0 0.5 0.5
 }
 // brush 1956
 {
-( 3232 2112 -320 ) ( 3232 2112 -48 ) ( 2976 2112 -48 ) __TB_empty 0 0 0 0.5 0.5
 ( 2976 2112 -48 ) ( 2976 2080 -48 ) ( 2976 2080 -320 ) __TB_empty 0 0 0 0.5 0.5
 ( 2976 2080 -48 ) ( 3264 2080 -48 ) ( 3264 2080 -320 ) limestone_bricks 0 0 0 0.5 0.5
 ( 2976 2080 -320 ) ( 3264 2080 -320 ) ( 3232 2112 -320 ) __TB_empty 0 0 0 0.5 0.5
+( 3232 2112 -320 ) ( 3232 2112 -48 ) ( 2976 2112 -48 ) __TB_empty 0 0 0 0.5 0.5
 ( 3008 2048 -64 ) ( 2976 2048 -48 ) ( 2976 2176 -48 ) __TB_empty 0 0 0 0.5 0.5
 ( 3264 2080 -320 ) ( 3264 2080 -48 ) ( 3232 2112 -48 ) __TB_empty 0 0 0 0.5 0.5
 }
@@ -18959,12 +18959,12 @@
 "lip" "2"
 // brush 0
 {
-( 3616 2704 200 ) ( 3616 2640 200 ) ( 3616 2640 192 ) wooden_plate_with_rusty_metal 32 -48 0 0.5 0.5
-( 3616 2640 200 ) ( 3680 2640 200 ) ( 3680 2640 192 ) wooden_plate_with_rusty_metal 0 -48 0 0.5 0.5
+( 3616 2704 200 ) ( 3616 2640 200 ) ( 3616 2640 192 ) glowing_button -32 0 0 0.5 0.5
+( 3616 2640 200 ) ( 3680 2640 200 ) ( 3680 2640 192 ) glowing_button 64 0 0 0.5 0.5
 ( 3680 2640 192 ) ( 3680 2704 192 ) ( 3616 2704 192 ) __TB_empty 0 0 0 0.5 0.5
-( 3616 2704 200 ) ( 3680 2704 200 ) ( 3680 2640 200 ) wooden_plate_with_rusty_metal 64 32 0 0.5 0.5
-( 3680 2704 192 ) ( 3680 2704 200 ) ( 3616 2704 200 ) wooden_plate_with_rusty_metal 0 -48 0 0.5 0.5
-( 3680 2640 200 ) ( 3680 2704 200 ) ( 3680 2704 192 ) wooden_plate_with_rusty_metal 32 -48 0 0.5 0.5
+( 3616 2704 200 ) ( 3680 2704 200 ) ( 3680 2640 200 ) glowing_button 64 32 0 0.5 0.5
+( 3680 2704 192 ) ( 3680 2704 200 ) ( 3616 2704 200 ) glowing_button 64 0 0 0.5 0.5
+( 3680 2640 200 ) ( 3680 2704 200 ) ( 3680 2704 192 ) glowing_button -32 0 0 0.5 0.5
 }
 }
 // entity 118
@@ -19028,12 +19028,12 @@
 "lip" "2"
 // brush 0
 {
-( 3616 2928 200 ) ( 3616 2864 200 ) ( 3616 2864 192 ) wooden_plate_with_rusty_metal 32 -48 0 0.5 0.5
-( 3616 2864 200 ) ( 3680 2864 200 ) ( 3680 2864 192 ) wooden_plate_with_rusty_metal -64 -48 0 0.5 0.5
+( 3616 2928 200 ) ( 3616 2864 200 ) ( 3616 2864 192 ) glowing_button 32 0 0 0.5 0.5
+( 3616 2864 200 ) ( 3680 2864 200 ) ( 3680 2864 192 ) glowing_button -64 0 0 0.5 0.5
 ( 3680 2864 192 ) ( 3680 2928 192 ) ( 3616 2928 192 ) __TB_empty 0 0 0 0.5 0.5
-( 3616 2928 200 ) ( 3680 2928 200 ) ( 3680 2864 200 ) wooden_plate_with_rusty_metal 0 -32 0 0.5 0.5
-( 3680 2928 192 ) ( 3680 2928 200 ) ( 3616 2928 200 ) wooden_plate_with_rusty_metal -64 -48 0 0.5 0.5
-( 3680 2864 200 ) ( 3680 2928 200 ) ( 3680 2928 192 ) wooden_plate_with_rusty_metal -32 -48 0 0.5 0.5
+( 3616 2928 200 ) ( 3680 2928 200 ) ( 3680 2864 200 ) glowing_button 64 -32 0 0.5 0.5
+( 3680 2928 192 ) ( 3680 2928 200 ) ( 3616 2928 200 ) glowing_button -64 0 0 0.5 0.5
+( 3680 2864 200 ) ( 3680 2928 200 ) ( 3680 2928 192 ) glowing_button 32 0 0 0.5 0.5
 }
 }
 // entity 122
@@ -19046,12 +19046,12 @@
 "lip" "2"
 // brush 0
 {
-( 3872 2992 296 ) ( 3872 2928 296 ) ( 3872 2928 288 ) wooden_plate_with_rusty_metal 32 -48 0 0.5 0.5
-( 3872 2928 296 ) ( 3936 2928 296 ) ( 3936 2928 288 ) wooden_plate_with_rusty_metal 0 -48 0 0.5 0.5
+( 3872 2992 296 ) ( 3872 2928 296 ) ( 3872 2928 288 ) glowing_button 32 -48 0 0.5 0.5
+( 3872 2928 296 ) ( 3936 2928 296 ) ( 3936 2928 288 ) glowing_button 64 -48 0 0.5 0.5
 ( 3936 2928 288 ) ( 3936 2992 288 ) ( 3872 2992 288 ) __TB_empty 0 0 0 0.5 0.5
-( 3872 2992 296 ) ( 3936 2992 296 ) ( 3936 2928 296 ) wooden_plate_with_rusty_metal 0 -32 0 0.5 0.5
-( 3936 2992 288 ) ( 3936 2992 296 ) ( 3872 2992 296 ) wooden_plate_with_rusty_metal 0 -48 0 0.5 0.5
-( 3936 2928 296 ) ( 3936 2992 296 ) ( 3936 2992 288 ) wooden_plate_with_rusty_metal 32 16 0 0.5 0.5
+( 3872 2992 296 ) ( 3936 2992 296 ) ( 3936 2928 296 ) glowing_button -64 -32 0 0.5 0.5
+( 3936 2992 288 ) ( 3936 2992 296 ) ( 3872 2992 296 ) glowing_button 64 -48 0 0.5 0.5
+( 3936 2928 296 ) ( 3936 2992 296 ) ( 3936 2992 288 ) glowing_button 32 -48 0 0.5 0.5
 }
 }
 // entity 123
@@ -19064,12 +19064,12 @@
 "lip" "2"
 // brush 0
 {
-( 3872 2640 296 ) ( 3872 2576 296 ) ( 3872 2576 288 ) wooden_plate_with_rusty_metal -32 -48 0 0.5 0.5
-( 3872 2576 296 ) ( 3936 2576 296 ) ( 3936 2576 288 ) wooden_plate_with_rusty_metal 0 -48 0 0.5 0.5
+( 3872 2640 296 ) ( 3872 2576 296 ) ( 3872 2576 288 ) glowing_button -32 -48 0 0.5 0.5
+( 3872 2576 296 ) ( 3936 2576 296 ) ( 3936 2576 288 ) glowing_button 64 -48 0 0.5 0.5
 ( 3936 2576 288 ) ( 3936 2640 288 ) ( 3872 2640 288 ) __TB_empty 0 0 0 0.5 0.5
-( 3872 2640 296 ) ( 3936 2640 296 ) ( 3936 2576 296 ) wooden_plate_with_rusty_metal 0 32 0 0.5 0.5
-( 3936 2640 288 ) ( 3936 2640 296 ) ( 3872 2640 296 ) wooden_plate_with_rusty_metal 0 -48 0 0.5 0.5
-( 3936 2576 296 ) ( 3936 2640 296 ) ( 3936 2640 288 ) wooden_plate_with_rusty_metal -32 -48 0 0.5 0.5
+( 3872 2640 296 ) ( 3936 2640 296 ) ( 3936 2576 296 ) glowing_button 64 32 0 0.5 0.5
+( 3936 2640 288 ) ( 3936 2640 296 ) ( 3872 2640 296 ) glowing_button 64 -48 0 0.5 0.5
+( 3936 2576 296 ) ( 3936 2640 296 ) ( 3936 2640 288 ) glowing_button -32 -48 0 0.5 0.5
 }
 }
 // entity 124
@@ -20344,28 +20344,12 @@
 // entity 230
 {
 "classname" "light_wall_oil_lamp"
-"origin" "3232 2160 -264"
-"light" "250"
-"color" "255 192 128"
-"angle" "90"
-}
-// entity 231
-{
-"classname" "light_wall_oil_lamp"
-"origin" "3360 2160 -264"
-"light" "250"
-"color" "255 192 128"
-"angle" "90"
-}
-// entity 232
-{
-"classname" "light_wall_oil_lamp"
 "origin" "3232 2352 -264"
 "light" "250"
 "color" "255 192 128"
 "angle" "270"
 }
-// entity 233
+// entity 231
 {
 "classname" "light_wall_oil_lamp"
 "origin" "3360 2352 -264"
@@ -20373,7 +20357,7 @@
 "color" "255 192 128"
 "angle" "270"
 }
-// entity 234
+// entity 232
 {
 "classname" "func_camera_portal"
 "target" "security_camera_5"
@@ -20387,7 +20371,7 @@
 ( 3205 2236 -264 ) ( 3205 2268 -264 ) ( 3205 2268 -296 ) crt_display 32 -64 0 0.125 0.125
 }
 }
-// entity 235
+// entity 233
 {
 "classname" "func_camera_portal"
 "target" "security_camera_6"
@@ -20401,7 +20385,7 @@
 ( 3214.107030547929 2236 -228.80400582447737 ) ( 3214.107030547929 2268 -228.80400582447737 ) ( 3205.824821104649 2268 -259.7136322657277 ) crt_display 32 123 0 0.125 0.119
 }
 }
-// entity 236
+// entity 234
 {
 "classname" "func_camera_portal"
 "target" "security_camera_0"
@@ -20415,7 +20399,7 @@
 ( 3214.107030547929 2272 -228.80400582447737 ) ( 3214.107030547929 2304 -228.80400582447737 ) ( 3205.824821104649 2304 -259.7136322657277 ) crt_display 0 123 0 0.125 0.119
 }
 }
-// entity 237
+// entity 235
 {
 "classname" "func_camera_portal"
 "target" "security_camera_4"
@@ -20429,7 +20413,7 @@
 ( 3378.85889527836 2272 -228.54518677937494 ) ( 3378.85889527836 2304 -228.54518677937494 ) ( 3387.1411047216397 2304 -259.4548132206253 ) __TB_empty -8 0 180 0.5 -0.5
 }
 }
-// entity 238
+// entity 236
 {
 "classname" "func_camera_portal"
 "target" "security_camera_2"
@@ -20443,7 +20427,7 @@
 ( 3388 2236 -264 ) ( 3388 2268 -264 ) ( 3388 2268 -296 ) __TB_empty -8 0 180 0.5 -0.5
 }
 }
-// entity 239
+// entity 237
 {
 "classname" "func_camera_portal"
 "target" "security_camera_1"
@@ -20457,7 +20441,7 @@
 ( 3388 2272 -264 ) ( 3388 2304 -264 ) ( 3388 2304 -296 ) __TB_empty -8 0 180 0.5 -0.5
 }
 }
-// entity 240
+// entity 238
 {
 "classname" "func_camera_portal"
 "target" "security_camera_3"
@@ -20471,15 +20455,7 @@
 ( 3378.85889527836 2236 -228.54518677937494 ) ( 3378.85889527836 2268 -228.54518677937494 ) ( 3387.1411047216397 2268 -259.4548132206253 ) __TB_empty -8 0 180 0.5 -0.5
 }
 }
-// entity 241
-{
-"classname" "light_wall_oil_lamp"
-"origin" "3320 2048 -264"
-"light" "250"
-"color" "255 192 128"
-"angle" "180"
-}
-// entity 242
+// entity 239
 {
 "classname" "misc_portal_camera"
 "origin" "3600 3056 376"
@@ -20487,7 +20463,7 @@
 "fov" "100"
 "targetname" "security_camera_1"
 }
-// entity 243
+// entity 240
 {
 "classname" "misc_portal_camera"
 "origin" "3056 4592 -24"
@@ -20495,7 +20471,7 @@
 "fov" "100"
 "targetname" "security_camera_2"
 }
-// entity 244
+// entity 241
 {
 "classname" "misc_portal_camera"
 "origin" "2456 4560 -504"
@@ -20503,7 +20479,7 @@
 "fov" "100"
 "targetname" "security_camera_3"
 }
-// entity 245
+// entity 242
 {
 "classname" "misc_portal_camera"
 "origin" "2704 4816 8"
@@ -20511,7 +20487,7 @@
 "fov" "100"
 "targetname" "security_camera_4"
 }
-// entity 246
+// entity 243
 {
 "classname" "misc_portal_camera"
 "origin" "2848 -688 88"
@@ -20519,7 +20495,7 @@
 "fov" "100"
 "targetname" "security_camera_5"
 }
-// entity 247
+// entity 244
 {
 "classname" "misc_portal_camera"
 "origin" "3248 -672 -288"
@@ -20527,7 +20503,7 @@
 "fov" "100"
 "targetname" "security_camera_6"
 }
-// entity 248
+// entity 245
 {
 "classname" "misc_portal_camera"
 "origin" "3024 1136 440"
@@ -20535,7 +20511,7 @@
 "fov" "100"
 "targetname" "security_camera_7"
 }
-// entity 249
+// entity 246
 {
 "classname" "func_parallax_portal"
 "target" "slope_portal_camera_0"
@@ -20548,14 +20524,14 @@
 ( 3456 2944 -64 ) ( 3456 2944 -63 ) ( 3456 2945 -64 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 250
+// entity 247
 {
 "classname" "light"
 "origin" "3424 2912 -128"
 "color" "128 255 128"
 "light" "500"
 }
-// entity 251
+// entity 248
 {
 "classname" "func_parallax_portal"
 "target" "slope_portal_camera_1"
@@ -20568,7 +20544,7 @@
 ( 3456 2432 -192 ) ( 3456 2431 -192 ) ( 3456 2432 -191 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 252
+// entity 249
 {
 "classname" "light"
 "origin" "3424 2464 -256"
@@ -20576,35 +20552,35 @@
 "angle" "270"
 "light" "500"
 }
-// entity 253
+// entity 250
 {
 "classname" "misc_portal_camera"
 "origin" "3424 2464 -288"
 "angles" "45 180 0"
 "targetname" "slope_portal_camera_0"
 }
-// entity 254
+// entity 251
 {
 "classname" "misc_portal_camera"
 "origin" "3424 2912 -160"
 "angles" "45 -90 0"
 "targetname" "slope_portal_camera_1"
 }
-// entity 255
+// entity 252
 {
 "classname" "info_teleport_destination"
 "origin" "3376 2464 -320"
 "angle" "180"
 "targetname" "slope_teleport_destination_0"
 }
-// entity 256
+// entity 253
 {
 "classname" "info_teleport_destination"
 "origin" "3424 2864 -192"
 "angle" "270"
 "targetname" "slope_teleport_destination_1"
 }
-// entity 257
+// entity 254
 {
 "classname" "trigger_teleport"
 "targetname" ""
@@ -20619,7 +20595,7 @@
 ( 3440 2928 -128 ) ( 3440 2928 -127 ) ( 3440 2929 -128 ) trigger 0 0 0 0.5 0.5
 }
 }
-// entity 258
+// entity 255
 {
 "classname" "trigger_teleport"
 "target" "slope_teleport_destination_1"
@@ -20633,21 +20609,7 @@
 ( 3440 2480 -256 ) ( 3440 2480 -255 ) ( 3440 2481 -256 ) trigger 0 0 0 0.5 0.5
 }
 }
-// entity 259
-{
-"classname" "trigger_multiple"
-"target" "security_room_door"
-// brush 0
-{
-( 2992 2064 -96 ) ( 2992 2032 -96 ) ( 2992 2032 -176 ) trigger 0 0 0 0.5 0.5
-( 2992 2032 -96 ) ( 3040 2032 -96 ) ( 3040 2032 -176 ) trigger 0 0 0 0.5 0.5
-( 3040 2032 -176 ) ( 3040 2064 -176 ) ( 2992 2064 -176 ) trigger 0 0 0 0.5 0.5
-( 2992 2064 -96 ) ( 3040 2064 -96 ) ( 3040 2032 -96 ) trigger 0 0 0 0.5 0.5
-( 3040 2064 -176 ) ( 3040 2064 -96 ) ( 2992 2064 -96 ) trigger 0 0 0 0.5 0.5
-( 3040 2032 -96 ) ( 3040 2064 -96 ) ( 3040 2064 -176 ) trigger 0 0 0 0.5 0.5
-}
-}
-// entity 260
+// entity 256
 {
 "classname" "func_door"
 "angle" "-1"
@@ -20661,5 +20623,23 @@
 ( 2952 2016 -48 ) ( 2952 2080 -48 ) ( 2968 2080 -48 ) __TB_empty 0 0 0 0.5 0.5
 ( 2968 2080 -48 ) ( 2952 2080 -48 ) ( 2952 2080 -176 ) __TB_empty 0 0 0 0.5 0.5
 ( 2968 2016 -48 ) ( 2968 2080 -48 ) ( 2968 2080 -176 ) wooden_plate_with_rusty_metal 0 32 0 0.5 0.5
+}
+}
+// entity 257
+{
+"classname" "func_button"
+"targetname" ""
+"target" "security_room_door"
+"angle" "270"
+"wait" "1000000"
+"lip" "2"
+// brush 0
+{
+( 3280 2020 -272 ) ( 3280 2016 -272 ) ( 3280 2016 -304 ) glowing_button -14 64 0 0.25 0.25
+( 3280 2016 -272 ) ( 3312 2016 -272 ) ( 3312 2016 -304 ) __TB_empty 0 0 0 0.5 0.5
+( 3312 2016 -304 ) ( 3312 2020 -304 ) ( 3280 2020 -304 ) glowing_button 64 16 0 0.25 0.25
+( 3280 2020 -272 ) ( 3312 2020 -272 ) ( 3312 2016 -272 ) glowing_button 64 16 0 0.25 0.25
+( 3312 2020 -304 ) ( 3312 2020 -272 ) ( 3280 2020 -272 ) glowing_button 64 64 0 0.25 0.25
+( 3312 2016 -272 ) ( 3312 2020 -272 ) ( 3312 2020 -304 ) glowing_button -14 64 0 0.25 0.25
 }
 }
