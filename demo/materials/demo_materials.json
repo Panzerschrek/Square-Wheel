@@ -60,6 +60,17 @@
 		"diffuse": "dirt.png",
 		"normal_map": "dirt_normal.png"
 	},
+	"glowing_button":
+	{
+		"diffuse": "glowing_button.png",
+		"normal_map": "glowing_button_normal.png",
+		"emissive_layer" :
+		{
+			"image" : "glowing_button_emission.png",
+			"light" : [80.0, 80.0, 80.0]
+		},
+		"emissive_light" : [20.0, 20.0, 20.0]
+	},
 	"grass":
 	{
 		"diffuse": "grass.png",
