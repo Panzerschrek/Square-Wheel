@@ -100,6 +100,11 @@ def main():
 		if os.path.exists(orm_file_path):
 			finalize_image_roughness(orm_file_path, os.path.join(output_dir, base_texture_name + "_roughness.png"))
 
+		emission_file_name = base_texture_name + "_emission.png"
+		emission_file_path = os.path.join(intermediate_dir, emission_file_name)
+		if os.path.exists(emission_file_path):
+			finalize_image(emission_file_path, os.path.join(output_dir, base_texture_name + "_emission.png"))
+
 	print("Remove intermediate directory", flush = True)
 	shutil.rmtree(intermediate_dir)
 
