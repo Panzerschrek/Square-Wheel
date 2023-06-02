@@ -56,19 +56,22 @@ gimp.pdb.gimp_quit(0)
 
 def main():
 	parser= argparse.ArgumentParser(description= 'Textures export escript.')
-	parser.add_argument("--input-dir", help= "Directory with source textures", type=str)
+	parser.add_argument("--input", help= "Directory with source textures or single file", type=str)
 	parser.add_argument("--output-dir", help= "Directory with output textures", type=str)
 
 	args= parser.parse_args()
 
-	input_dir = os.path.abspath(args.input_dir)
+	input_dir_or_file = os.path.abspath(args.input)
 	output_dir = os.path.abspath(args.output_dir)
 	intermediate_dir = os.path.abspath("textures_intermediate")
 
-	print("Collecting list of material files", flush = True)
-	in_files_list = []
-	for file_name in os.listdir(input_dir):
-		in_files_list.append(os.path.join(input_dir, file_name))
+	if os.path.isdir(input_dir_or_file):
+		print("Collecting list of material files", flush = True)
+		in_files_list = []
+		for file_name in os.listdir(input_dir):
+			in_files_list.append(os.path.join(input_dir, file_name))
+	else:
+		in_files_list = [input_dir_or_file]
 
 	print("Generate textures", flush = True)
 	os.makedirs(intermediate_dir, exist_ok= True)
