@@ -17,3 +17,7 @@ weapons:
 fern.blend:
 	https://opengameart.org/content/fern
 	Gladius.s
+
+Dark_Priest.blend:
+	https://opengameart.org/content/dark-priest
+	Danimal
