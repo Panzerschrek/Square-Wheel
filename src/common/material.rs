@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 pub type MaterialsMap = HashMap<String, Material>;
 
+// TODO - put rarely used fields into box.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Material
 {
@@ -65,6 +66,10 @@ pub struct Material
 	#[serde(default)]
 	pub scroll_speed: [f32; 2],
 
+	/// If non-empty - additional texture will be composed atop of surface, multiplied by specified light.
+	#[serde(default)]
+	pub emissive_layer: Option<EmissiveLayer>,
+
 	/// If some - use texture turbulence effect.
 	#[serde(default)]
 	pub turb: Option<TurbParams>,
@@ -103,6 +108,15 @@ impl Default for BlendingMode
 	{
 		BlendingMode::None
 	}
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct EmissiveLayer
+{
+	/// Path to emissive image.
+	pub image: String,
+	/// Value, by which texture value is multiplied in order to build surface.
+	pub light: [f32; 3],
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone)]
@@ -148,6 +162,7 @@ impl Default for Material
 			emissive_light: [0.0, 0.0, 0.0],
 			blending_mode: BlendingMode::None,
 			scroll_speed: [0.0, 0.0],
+			emissive_layer: None,
 			turb: None,
 			skybox: None,
 			extra: HashMap::new(),

@@ -22,7 +22,6 @@ Renderer:
 * Models rendering improvements - avoid splitting models into pieces for each BSP tree leaf in some cases
 * Shadows from triangle models
 * Multithreaded shadowmaps building
-* Emissive textures (lamps, screens)
 * Increase max number of dynamic objects drawn in one leaf
 * Support portals and mirrors with mixed texture, prepared as regular surface (with lightmaps, normal-mapping, dynamic lights, etc.)
 

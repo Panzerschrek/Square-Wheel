@@ -1802,6 +1802,19 @@ impl PartialRenderer
 					surface_data,
 				);
 			}
+
+			if let Some(emissive_texture) = materials_processor.get_emissive_texture(polygon.texture)
+			{
+				// Add emissive texture, multiplied by specified color, to the surface.
+				mix_surface_with_texture(
+					surface_size,
+					tc_start,
+					&emissive_texture.0[polygon_data.mip as usize],
+					material::BlendingMode::Additive,
+					emissive_texture.1,
+					surface_data,
+				);
+			}
 		};
 
 		if rayon::current_num_threads() == 1

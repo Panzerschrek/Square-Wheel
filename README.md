@@ -140,6 +140,9 @@ Each frame for each visible polygon unique texture is created, with proper mip-l
 This texture is generated based on polygon lightmap and polygon regular texture (normal texture, usually tileable).
 For surfaces with specular camera position is used to calculate proper lighting.
 
+Additionaly emissive texture may be added atop of the surface.
+This texture is modulated by light, specified in material properties.
+
 Result polygon texture (aka "surface") is used later for rasterization.
 
 Approach with lighting as separate step allows to simplify rendering code and reduce computational cost, because usually there are less surfaces texels than screen pixels.
