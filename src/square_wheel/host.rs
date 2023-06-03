@@ -494,7 +494,10 @@ impl Host
 
 			if let Some(active_map) = active_map
 			{
-				active_map.debug_stats_printer.flush(pixels, surface_info);
+				if active_map.debug_stats_printer.show_debug_stats()
+				{
+					active_map.debug_stats_printer.flush(pixels, surface_info);
+				}
 			}
 
 			console.lock().unwrap().draw(pixels, surface_info);
