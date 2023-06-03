@@ -55,22 +55,26 @@ Use script with "i686" suffix on 32-bit system, use script with "_generic" suffi
 * "postprocessor.hdr_rendering" (true/false) - Enable/disable HDR rendering.
 * "renderer.use_directional_lightmaps" (true/false) - Enable/disable directional lightmaps.
 * "renderer.textures_mip_bias". Affects textures quality. Default value is 0, negative value for overdetailed textures, positive value for lower quality.
+* "renderer.portals_depth". Affects rendering depth of portals and mirrors. Use 0 to disable rendering of portals and mirrors at all.
 * "host.frame_scale". Use value greater than 1 to make image pixilated and increase performance.
+* "host.max_fps". Set specific value if demo runs too fast. Set 0 in order to remove FPS limit at all.
 
 
 ### How to build this demo
 
-* Build engine itself. Rust compiler and SDL2 libraries are required.
-* Generate textures, using "export_textures.py" script. MaterialMaker v 0.99 (https://github.com/RodZill4/material-maker/) and GIMP 2.10 are required.
-* Compile demo map using "map_compiler" executable and build lightmaps, using "lightmapper" executable.
-* Export models, using blender and newest IQM export script (see iqm directory in repository root).
+* Build engine itself. Rust compiler and SDL2 libraries are required. Use build scripts inside "src" directory in order to obtain diffirent executable versions.
+* Generate textures, using "export_textures.py" script. MaterialMaker v 0.99 (https://github.com/RodZill4/material-maker/) and GIMP 2.10 are required. Use directory "textures" as destination.
+* Copy png textures from "textures_src" into "textures" directory.
+* Copy models textures into "textures" directory.
 * Export skybox textures, using "sky.blend".
+* Export models into "models" directory, using Blender and newest IQM export script (see "iqm" directory in repository root).
+* Compile demo map and calculate light for it using "build_demo_map_2.sh" script.
 * Package engine executables, launch scripts, demo map, textures, materials, models and config file together.
 
 
 ### Authors
 
-(c) Copyright 2022 "Panzerschrek"
+(c) Copyright 2022-2023 "Panzerschrek"
 Source code: https://github.com/Panzerschrek/Square-Wheel
 
-Models: Trym Horgen, quaternius
+Models: Trym Horgen, quaternius, Gladius.s, Danimal
