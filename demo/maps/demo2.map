@@ -17959,7 +17959,7 @@
 }
 // entity 1
 {
-"classname" "info_player_start_old"
+"classname" "info_player_start"
 "origin" "2560 -648 -352"
 }
 // entity 2
@@ -18784,12 +18784,6 @@
 }
 // entity 90
 {
-"classname" "info_player_start"
-"origin" "2672 2440 -152"
-"angle" "90"
-}
-// entity 91
-{
 "classname" "func_door"
 "angle" "-1"
 // brush 0
@@ -18802,7 +18796,7 @@
 ( 3904 2464 -64 ) ( 3904 2480 -64 ) ( 3904 2480 -192 ) __TB_empty -16 0 0 0.5 0.5
 }
 }
-// entity 92
+// entity 91
 {
 "classname" "func_parallax_portal"
 "target" "portal_camera_1"
@@ -18816,7 +18810,7 @@
 ( 3904 2784.5 -112 ) ( 3904 2785 -112 ) ( 3904 2785 -176 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 93
+// entity 92
 {
 "classname" "func_parallax_portal"
 "target" "portal_camera_0"
@@ -18830,21 +18824,21 @@
 ( 3904 2783 -112 ) ( 3904 2783.5 -112 ) ( 3904 2783.5 -176 ) __TB_empty 0 0 180 0.25 -0.5
 }
 }
-// entity 94
+// entity 93
 {
 "classname" "misc_portal_camera"
 "origin" "3648 2744 224"
 "angle" "270"
 "targetname" "portal_camera_0"
 }
-// entity 95
+// entity 94
 {
 "classname" "misc_portal_camera"
 "origin" "3648 2824 224"
 "angle" "90"
 "targetname" "portal_camera_1"
 }
-// entity 96
+// entity 95
 {
 "classname" "trigger_teleport"
 "target" "teleport_destination_0"
@@ -18858,14 +18852,14 @@
 ( 3896 2768 -120 ) ( 3896 2776 -120 ) ( 3896 2776 -168 ) trigger 0 32 0 0.5 0.5
 }
 }
-// entity 97
+// entity 96
 {
 "classname" "info_teleport_destination"
 "origin" "3648 2744 192"
 "targetname" "teleport_destination_0"
 "angle" "270"
 }
-// entity 98
+// entity 97
 {
 "classname" "trigger_teleport"
 "target" "teleport_destination_1"
@@ -18879,14 +18873,14 @@
 ( 3896 2792 -120 ) ( 3896 2800 -120 ) ( 3896 2800 -168 ) trigger -48 32 0 0.5 0.5
 }
 }
-// entity 99
+// entity 98
 {
 "classname" "info_teleport_destination"
 "origin" "3648 2824 192"
 "targetname" "teleport_destination_1"
 "angle" "90"
 }
-// entity 100
+// entity 99
 {
 "classname" "func_parallax_portal"
 "target" "portal_camera_2"
@@ -18900,21 +18894,21 @@
 ( 3672 2783 256 ) ( 3672 2783.5 256 ) ( 3672 2783.5 192 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 101
+// entity 100
 {
 "classname" "info_teleport_destination"
 "origin" "3880 2744 -176"
 "targetname" "teleport_destination_2"
 "angle" "270"
 }
-// entity 102
+// entity 101
 {
 "classname" "misc_portal_camera"
 "origin" "3880 2744 -144"
 "angle" "270"
 "targetname" "portal_camera_2"
 }
-// entity 103
+// entity 102
 {
 "classname" "func_parallax_portal"
 "target" "portal_camera_3"
@@ -18928,21 +18922,21 @@
 ( 3672 2784.5 256 ) ( 3672 2785 256 ) ( 3672 2785 192 ) __TB_empty 0 0 180 0.5 -0.5
 }
 }
-// entity 104
+// entity 103
 {
 "classname" "info_teleport_destination"
 "origin" "3880 2824 -176"
 "targetname" "teleport_destination_3"
 "angle" "90"
 }
-// entity 105
+// entity 104
 {
 "classname" "misc_portal_camera"
 "origin" "3880 2824 -144"
 "angle" "90"
 "targetname" "portal_camera_3"
 }
-// entity 106
+// entity 105
 {
 "classname" "trigger_teleport"
 "target" "teleport_destination_2"
@@ -18956,7 +18950,7 @@
 ( 3664 2768 248 ) ( 3664 2776 248 ) ( 3664 2776 200 ) trigger 0 0 0 0.5 0.5
 }
 }
-// entity 107
+// entity 106
 {
 "classname" "trigger_teleport"
 "target" "teleport_destination_3"
@@ -18970,7 +18964,7 @@
 ( 3664 2792 248 ) ( 3664 2800 248 ) ( 3664 2800 200 ) trigger -48 0 0 0.5 0.5
 }
 }
-// entity 108
+// entity 107
 {
 "classname" "func_parallax_portal"
 "target" "portal_camera_4"
@@ -18984,21 +18978,21 @@
 ( 4160 2560 -128 ) ( 4160 2608 -128 ) ( 4160 2608 -192 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 109
+// entity 108
 {
 "classname" "misc_portal_camera"
 "origin" "3904 2524 320"
 "angle" "90"
 "targetname" "portal_camera_4"
 }
-// entity 110
+// entity 109
 {
 "classname" "info_teleport_destination"
 "origin" "3904 2524 288"
 "angle" "90"
 "targetname" "teleport_destination_4"
 }
-// entity 111
+// entity 110
 {
 "classname" "trigger_teleport"
 "target" "teleport_destination_4"
@@ -19012,7 +19006,7 @@
 ( 4152 2568 -136 ) ( 4152 2600 -136 ) ( 4152 2600 -184 ) trigger 0 0 0 0.5 0.5
 }
 }
-// entity 112
+// entity 111
 {
 "classname" "func_parallax_portal"
 "target" "portal_camera_5"
@@ -19026,7 +19020,7 @@
 ( 4256 2560 192 ) ( 4256 2608 192 ) ( 4256 2608 128 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 113
+// entity 112
 {
 "classname" "trigger_teleport"
 "target" "teleport_destination_5"
@@ -19040,21 +19034,21 @@
 ( 4248 2568 184 ) ( 4248 2600 184 ) ( 4248 2600 136 ) trigger 0 0 0 0.5 0.5
 }
 }
-// entity 114
+// entity 113
 {
 "classname" "info_teleport_destination"
 "origin" "3904 3044 288"
 "angle" "270"
 "targetname" "teleport_destination_5"
 }
-// entity 115
+// entity 114
 {
 "classname" "misc_portal_camera"
 "origin" "3904 3044 320"
 "angle" "270"
 "targetname" "portal_camera_5"
 }
-// entity 116
+// entity 115
 {
 "classname" "func_door"
 "angle" "90"
@@ -19071,7 +19065,7 @@
 ( 3560 2760 -160 ) ( 3560 2808 -160 ) ( 3560 2808 -168 ) dark_metal 0 8 0 0.5 0.5
 }
 }
-// entity 117
+// entity 116
 {
 "classname" "func_button"
 "targetname" ""
@@ -19089,7 +19083,7 @@
 ( 3680 2640 200 ) ( 3680 2704 200 ) ( 3680 2704 192 ) glowing_button -32 16 0 0.5 0.5
 }
 }
-// entity 118
+// entity 117
 {
 "classname" "func_door"
 "angle" "-1"
@@ -19106,7 +19100,7 @@
 ( 3576 2788 -112 ) ( 3576 2796 -112 ) ( 3576 2796 -192 ) dark_metal -16 0 180 0.5 0.5
 }
 }
-// entity 119
+// entity 118
 {
 "classname" "func_door"
 "angle" "270"
@@ -19123,7 +19117,7 @@
 ( 3560 2760 -136 ) ( 3560 2808 -136 ) ( 3560 2808 -144 ) dark_metal 0 0 0 0.5 0.5
 }
 }
-// entity 120
+// entity 119
 {
 "classname" "func_door"
 "angle" "-2"
@@ -19140,7 +19134,7 @@
 ( 3576 2772 -112 ) ( 3576 2780 -112 ) ( 3576 2780 -192 ) dark_metal -8 0 180 0.5 0.5
 }
 }
-// entity 121
+// entity 120
 {
 "classname" "func_button"
 "targetname" ""
@@ -19158,7 +19152,7 @@
 ( 3680 2864 200 ) ( 3680 2928 200 ) ( 3680 2928 192 ) glowing_button 32 16 0 0.5 0.5
 }
 }
-// entity 122
+// entity 121
 {
 "classname" "func_button"
 "targetname" ""
@@ -19176,7 +19170,7 @@
 ( 3936 2928 296 ) ( 3936 2992 296 ) ( 3936 2992 288 ) glowing_button 32 -48 0 0.5 0.5
 }
 }
-// entity 123
+// entity 122
 {
 "classname" "func_button"
 "targetname" ""
@@ -19194,7 +19188,7 @@
 ( 3936 2576 296 ) ( 3936 2640 296 ) ( 3936 2640 288 ) glowing_button -32 -48 0 0.5 0.5
 }
 }
-// entity 124
+// entity 123
 {
 "classname" "light_wall_oil_lamp"
 "origin" "3816 2512 -136"
@@ -19202,7 +19196,7 @@
 "color" "255 192 128"
 "angle" "90"
 }
-// entity 125
+// entity 124
 {
 "classname" "light_wall_oil_lamp"
 "origin" "3928 2512 -136"
@@ -19210,62 +19204,62 @@
 "color" "255 192 128"
 "angle" "90"
 }
-// entity 126
+// entity 125
 {
 "classname" "light"
 "origin" "3648 2744 240"
 "color" "64 255 64"
 "light" "600"
 }
-// entity 127
+// entity 126
 {
 "classname" "light"
 "origin" "3880 2744 -128"
 "color" "64 255 64"
 "light" "600"
 }
-// entity 128
+// entity 127
 {
 "classname" "light"
 "origin" "3648 2824 240"
 "color" "255 64 64"
 "light" "600"
 }
-// entity 129
+// entity 128
 {
 "classname" "light"
 "origin" "3880 2824 -128"
 "color" "255 64 64"
 "light" "600"
 }
-// entity 130
+// entity 129
 {
 "classname" "light"
 "origin" "3904 2524 336"
 "color" "64 64 255"
 "light" "600"
 }
-// entity 131
+// entity 130
 {
 "classname" "light"
 "origin" "4120 2584 -144"
 "color" "128 128 255"
 }
-// entity 132
+// entity 131
 {
 "classname" "light"
 "origin" "4216 2584 176"
 "color" "255 64 255"
 "light" "600"
 }
-// entity 133
+// entity 132
 {
 "classname" "light"
 "origin" "3904 3044 336"
 "color" "255 64 255"
 "light" "600"
 }
-// entity 134
+// entity 133
 {
 "classname" "light_wall_oil_lamp"
 "origin" "3600 2840 -136"
@@ -19273,7 +19267,7 @@
 "color" "255 192 128"
 "angle" "0"
 }
-// entity 135
+// entity 134
 {
 "classname" "light_wall_oil_lamp"
 "origin" "3600 2728 -136"
@@ -19281,7 +19275,7 @@
 "color" "255 192 128"
 "angle" "0"
 }
-// entity 136
+// entity 135
 {
 "classname" "light_wall_oil_lamp"
 "origin" "3712 3056 -136"
@@ -19289,7 +19283,7 @@
 "color" "255 192 128"
 "angle" "270"
 }
-// entity 137
+// entity 136
 {
 "classname" "light_wall_oil_lamp"
 "origin" "4176 3056 48"
@@ -19297,7 +19291,7 @@
 "color" "255 192 128"
 "angle" "270"
 }
-// entity 138
+// entity 137
 {
 "classname" "func_detail"
 // brush 0
@@ -19337,7 +19331,7 @@
 ( 3720 2876 140 ) ( 3720 2875 140 ) ( 3720 2876 141 ) marble_trim 0 0 0 0.5 0.5
 }
 }
-// entity 139
+// entity 138
 {
 "classname" "func_detail"
 // brush 0
@@ -19368,7 +19362,7 @@
 ( 3720 2660 188 ) ( 3720 2659 188 ) ( 3720 2660 189 ) marble_trim 0 0 0 0.5 0.5
 }
 }
-// entity 140
+// entity 139
 {
 "classname" "func_detail"
 // brush 0
@@ -19417,7 +19411,7 @@
 ( 3932 2912 236 ) ( 3932 2912 237 ) ( 3932 2913 236 ) marble_trim 0 0 0 0.5 0.5
 }
 }
-// entity 141
+// entity 140
 {
 "classname" "func_detail"
 // brush 0
@@ -19468,7 +19462,7 @@
 ( 3932 2664 228 ) ( 3932 2663 228 ) ( 3932 2664 229 ) marble_trim 0 0 0 0.5 0.5
 }
 }
-// entity 142
+// entity 141
 {
 "classname" "func_detail"
 // brush 0
@@ -19499,7 +19493,7 @@
 ( 3984 2184 344 ) ( 3984 2184 345 ) ( 3984 2185 344 ) marble_trim 0 0 0 0.5 0.5
 }
 }
-// entity 143
+// entity 142
 {
 "classname" "func_detail"
 // brush 0
@@ -19539,7 +19533,7 @@
 ( 4032 2184 344 ) ( 4032 2184 345 ) ( 4032 2185 344 ) marble_trim 0 0 0 0.5 0.5
 }
 }
-// entity 144
+// entity 143
 {
 "classname" "func_detail"
 // brush 0
@@ -19588,7 +19582,7 @@
 ( 4096 2184 344 ) ( 4096 2184 345 ) ( 4096 2185 344 ) marble_trim 0 0 0 0.5 0.5
 }
 }
-// entity 145
+// entity 144
 {
 "classname" "func_detail"
 // brush 0
@@ -19639,7 +19633,7 @@
 ( 4160 2184 344 ) ( 4160 2184 345 ) ( 4160 2185 344 ) marble_trim 0 0 0 0.5 0.5
 }
 }
-// entity 146
+// entity 145
 {
 "classname" "misc_decal"
 "origin" "3680 3070 232"
@@ -19648,7 +19642,7 @@
 "scale" "0.5"
 "angle" "90"
 }
-// entity 147
+// entity 146
 {
 "classname" "func_detail"
 // brush 0
@@ -19697,7 +19691,7 @@
 ( 3687.4644292742178 2504 223.30203064121042 ) ( 3687.2056102291153 2504 224.26795646749952 ) ( 3687.4644292742178 2505 223.30203064121042 ) wooden_beam 0 30.358551 0 0.5 0.4829629
 }
 }
-// entity 148
+// entity 147
 {
 "classname" "func_mirror"
 // brush 0
@@ -19714,7 +19708,7 @@
 ( 2240 3584 -64 ) ( 2240 3712 -64 ) ( 2240 3712 -160 ) __TB_empty 0 -10.666668 0 0.5 0.375
 }
 }
-// entity 149
+// entity 148
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2176 3408 -136"
@@ -19722,7 +19716,7 @@
 "color" "255 192 128"
 "angle" "90"
 }
-// entity 150
+// entity 149
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2176 3824 -136"
@@ -19730,7 +19724,7 @@
 "color" "255 192 128"
 "angle" "270"
 }
-// entity 151
+// entity 150
 {
 "classname" "func_mirror"
 "blending_mode" "1"
@@ -19744,7 +19738,7 @@
 ( 2409.0717967697246 3600.2871870788977 -80 ) ( 2377.0717967697246 3655.7128129211014 -80 ) ( 2377.0717967697246 3655.7128129211014 -176 ) __TB_empty -26.506836 0 0 0.4330127 0.5
 }
 }
-// entity 152
+// entity 151
 {
 "classname" "func_mirror"
 "blending_mode" "1"
@@ -19758,7 +19752,7 @@
 ( 2409.9378221735087 3600.7871870788977 -80 ) ( 2377.9378221735087 3656.2128129211014 -80 ) ( 2377.9378221735087 3656.2128129211014 -176 ) mirror -23.324219 0 0 0.21650635 0.25
 }
 }
-// entity 153
+// entity 152
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2544 3776 -136"
@@ -19766,7 +19760,7 @@
 "color" "255 192 128"
 "angle" "180"
 }
-// entity 154
+// entity 153
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2544 3448 -136"
@@ -19774,7 +19768,7 @@
 "color" "255 192 128"
 "angle" "180"
 }
-// entity 155
+// entity 154
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2368 3824 -136"
@@ -19782,7 +19776,7 @@
 "color" "255 192 128"
 "angle" "270"
 }
-// entity 156
+// entity 155
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2368 3408 -136"
@@ -19790,7 +19784,7 @@
 "color" "255 192 128"
 "angle" "90"
 }
-// entity 157
+// entity 156
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2544 3616 -136"
@@ -19798,7 +19792,7 @@
 "color" "255 192 128"
 "angle" "180"
 }
-// entity 158
+// entity 157
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2288 3648 -136"
@@ -19806,7 +19800,7 @@
 "color" "255 192 128"
 "angle" "0"
 }
-// entity 159
+// entity 158
 {
 "classname" "func_mirror"
 // brush 0
@@ -19819,7 +19813,7 @@
 ( 2304 3120 32 ) ( 2304 3120 33 ) ( 2304 3121 32 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 160
+// entity 159
 {
 "classname" "func_mirror"
 // brush 0
@@ -19832,7 +19826,7 @@
 ( 2304 3120 -32 ) ( 2304 3120 -31 ) ( 2304 3121 -32 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 161
+// entity 160
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2368 2960 -40"
@@ -19840,7 +19834,7 @@
 "color" "255 192 128"
 "angle" "90"
 }
-// entity 162
+// entity 161
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2368 3152 -40"
@@ -19848,7 +19842,7 @@
 "color" "255 192 128"
 "angle" "270"
 }
-// entity 163
+// entity 162
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2536 3152 -40"
@@ -19856,7 +19850,7 @@
 "color" "255 192 128"
 "angle" "270"
 }
-// entity 164
+// entity 163
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2536 2960 -40"
@@ -19864,7 +19858,7 @@
 "color" "255 192 128"
 "angle" "90"
 }
-// entity 165
+// entity 164
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2832 3240 -104"
@@ -19872,7 +19866,7 @@
 "color" "255 192 128"
 "angle" "180"
 }
-// entity 166
+// entity 165
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2672 3240 -104"
@@ -19880,7 +19874,7 @@
 "color" "255 192 128"
 "angle" "0"
 }
-// entity 167
+// entity 166
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2680 3424 -104"
@@ -19888,7 +19882,7 @@
 "color" "255 192 128"
 "angle" "0"
 }
-// entity 168
+// entity 167
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2824 3424 -104"
@@ -19896,7 +19890,7 @@
 "color" "255 192 128"
 "angle" "180"
 }
-// entity 169
+// entity 168
 {
 "classname" "func_mirror"
 // brush 0
@@ -19909,7 +19903,7 @@
 ( 2657 3264 0 ) ( 2657 3392 0 ) ( 2657 3392 -128 ) mirror 0 0 0 0.25 0.25
 }
 }
-// entity 170
+// entity 169
 {
 "classname" "func_mirror"
 // brush 0
@@ -19922,7 +19916,7 @@
 ( 2848 3264 0 ) ( 2848 3392 0 ) ( 2848 3392 -128 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 171
+// entity 170
 {
 "classname" "func_mirror"
 // brush 0
@@ -19935,7 +19929,7 @@
 ( 2848 3456 0 ) ( 2848 3584 0 ) ( 2848 3584 -128 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 172
+// entity 171
 {
 "classname" "func_mirror"
 // brush 0
@@ -19948,7 +19942,7 @@
 ( 2657 3456 0 ) ( 2657 3584 0 ) ( 2657 3584 -128 ) mirror 0 0 0 0.25 0.25
 }
 }
-// entity 173
+// entity 172
 {
 "classname" "func_mirror"
 // brush 0
@@ -19961,7 +19955,7 @@
 ( 2816 3776 32 ) ( 2816 3776 31 ) ( 2816 3648 31 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 174
+// entity 173
 {
 "classname" "func_mirror"
 // brush 0
@@ -19974,7 +19968,7 @@
 ( 2816 3648 -160 ) ( 2816 3648 -159 ) ( 2816 3776 -159 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 175
+// entity 174
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2824 3616 -104"
@@ -19982,7 +19976,7 @@
 "color" "255 192 128"
 "angle" "180"
 }
-// entity 176
+// entity 175
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2680 3616 -104"
@@ -19990,7 +19984,7 @@
 "color" "255 192 128"
 "angle" "0"
 }
-// entity 177
+// entity 176
 {
 "classname" "func_mirror"
 // brush 0
@@ -20003,7 +19997,7 @@
 ( 2816 3968 32 ) ( 2816 3968 31 ) ( 2816 3840 31 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 178
+// entity 177
 {
 "classname" "func_mirror"
 // brush 0
@@ -20016,7 +20010,7 @@
 ( 2816 3840 -160 ) ( 2816 3840 -159 ) ( 2816 3968 -159 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 179
+// entity 178
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2824 3808 -104"
@@ -20024,7 +20018,7 @@
 "color" "255 192 128"
 "angle" "180"
 }
-// entity 180
+// entity 179
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2680 3808 -104"
@@ -20032,7 +20026,7 @@
 "color" "255 192 128"
 "angle" "0"
 }
-// entity 181
+// entity 180
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2680 4000 -104"
@@ -20040,7 +20034,7 @@
 "color" "255 192 128"
 "angle" "0"
 }
-// entity 182
+// entity 181
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2824 4000 -104"
@@ -20048,7 +20042,7 @@
 "color" "255 192 128"
 "angle" "180"
 }
-// entity 183
+// entity 182
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2432 4272 -104"
@@ -20056,7 +20050,7 @@
 "color" "255 192 128"
 "angle" "270"
 }
-// entity 184
+// entity 183
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2304 4272 -104"
@@ -20064,7 +20058,7 @@
 "color" "255 192 128"
 "angle" "270"
 }
-// entity 185
+// entity 184
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2432 4048 -104"
@@ -20072,7 +20066,7 @@
 "color" "255 192 128"
 "angle" "90"
 }
-// entity 186
+// entity 185
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2304 4048 -104"
@@ -20080,7 +20074,7 @@
 "color" "255 192 128"
 "angle" "90"
 }
-// entity 187
+// entity 186
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2192 4160 -104"
@@ -20088,7 +20082,7 @@
 "color" "255 192 128"
 "angle" "0"
 }
-// entity 188
+// entity 187
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2496 4160 -104"
@@ -20096,7 +20090,7 @@
 "color" "255 192 128"
 "angle" "180"
 }
-// entity 189
+// entity 188
 {
 "classname" "func_mirror"
 // brush 0
@@ -20109,7 +20103,7 @@
 ( 2400 4032 -32 ) ( 2400 4034 -32 ) ( 2400 4034 -160 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 190
+// entity 189
 {
 "classname" "func_mirror"
 // brush 0
@@ -20130,60 +20124,60 @@
 ( 2178 4192 -160 ) ( 2178 4192 -32 ) ( 2178 4256 -32 ) rusted_mirror 0 46 0 0.25 0.25
 }
 }
-// entity 191
+// entity 190
 {
 "classname" "light"
 "origin" "2192 4048 -120"
 }
-// entity 192
+// entity 191
 {
 "classname" "light"
 "origin" "2104 4008 -343"
 "light" "100"
 }
-// entity 193
+// entity 192
 {
 "classname" "light"
 "origin" "2152 4008 -343"
 "light" "100"
 }
-// entity 194
+// entity 193
 {
 "classname" "light"
 "origin" "2152 3960 -343"
 "light" "100"
 }
-// entity 195
+// entity 194
 {
 "classname" "light"
 "origin" "2104 3960 -343"
 "light" "100"
 }
-// entity 196
+// entity 195
 {
 "classname" "light"
 "origin" "2152 4008 -296"
 "light" "100"
 }
-// entity 197
+// entity 196
 {
 "classname" "light"
 "origin" "2104 4008 -296"
 "light" "100"
 }
-// entity 198
+// entity 197
 {
 "classname" "light"
 "origin" "2104 3960 -296"
 "light" "100"
 }
-// entity 199
+// entity 198
 {
 "classname" "light"
 "origin" "2152 3960 -296"
 "light" "100"
 }
-// entity 200
+// entity 199
 {
 "classname" "misc_sprite"
 "origin" "2128 3984 -322"
@@ -20193,7 +20187,7 @@
 "blending_mode" "2"
 "orientation" "1"
 }
-// entity 201
+// entity 200
 {
 "classname" "func_mirror"
 // brush 0
@@ -20206,7 +20200,7 @@
 ( 2192 4063 -257 ) ( 2192 4064 -257 ) ( 2192 4064 -384 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 202
+// entity 201
 {
 "classname" "func_mirror"
 // brush 0
@@ -20219,7 +20213,7 @@
 ( 2192 3904 -257 ) ( 2192 3905 -257 ) ( 2192 3905 -384 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 203
+// entity 202
 {
 "classname" "func_mirror"
 // brush 0
@@ -20232,7 +20226,7 @@
 ( 2208 3920 -256 ) ( 2208 4048 -256 ) ( 2208 4048 -384 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 204
+// entity 203
 {
 "classname" "func_mirror"
 // brush 0
@@ -20245,7 +20239,7 @@
 ( 2049 3920 -256 ) ( 2049 4048 -256 ) ( 2049 4048 -384 ) mirror 0 0 0 0.5 0.5
 }
 }
-// entity 205
+// entity 204
 {
 "classname" "func_parallax_portal"
 "target" "horisontal_portal_camera_0"
@@ -20259,35 +20253,35 @@
 ( 3776 2272 -32 ) ( 3776 2336 -32 ) ( 3776 2336 -33 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 206
+// entity 205
 {
 "classname" "light"
 "origin" "3760 2320 -79.426"
 "color" "200 200 255"
 "light" "200"
 }
-// entity 207
+// entity 206
 {
 "classname" "light"
 "origin" "3728 2320 -79.426"
 "color" "200 200 255"
 "light" "200"
 }
-// entity 208
+// entity 207
 {
 "classname" "light"
 "origin" "3760 2288 -79.426"
 "color" "200 200 255"
 "light" "200"
 }
-// entity 209
+// entity 208
 {
 "classname" "light"
 "origin" "3728 2288 -79.426"
 "color" "200 200 255"
 "light" "200"
 }
-// entity 210
+// entity 209
 {
 "classname" "func_parallax_portal"
 "target" "horisontal_portal_camera_1"
@@ -20301,49 +20295,49 @@
 ( 2016 3872 -640 ) ( 2016 3808 -640 ) ( 2016 3808 -639 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 211
+// entity 210
 {
 "classname" "light"
 "origin" "2000 3856 -591.426"
 "color" "200 200 255"
 "light" "200"
 }
-// entity 212
+// entity 211
 {
 "classname" "light"
 "origin" "1968 3856 -591.426"
 "color" "200 200 255"
 "light" "200"
 }
-// entity 213
+// entity 212
 {
 "classname" "light"
 "origin" "1968 3824 -591.426"
 "color" "200 200 255"
 "light" "200"
 }
-// entity 214
+// entity 213
 {
 "classname" "light"
 "origin" "2000 3824 -591.426"
 "color" "200 200 255"
 "light" "200"
 }
-// entity 215
+// entity 214
 {
 "classname" "misc_portal_camera"
 "origin" "1984 3840 -639"
 "angles" "-90 0 0"
 "targetname" "horisontal_portal_camera_0"
 }
-// entity 216
+// entity 215
 {
 "classname" "misc_portal_camera"
 "origin" "3744 2304 -34"
 "angles" "90 0 90"
 "targetname" "horisontal_portal_camera_1"
 }
-// entity 217
+// entity 216
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2064 3840 -560"
@@ -20351,7 +20345,7 @@
 "color" "255 192 128"
 "angle" "180"
 }
-// entity 218
+// entity 217
 {
 "classname" "func_detail"
 // brush 0
@@ -20364,7 +20358,7 @@
 ( 2000 3898 -604.7128129211019 ) ( 2000 3930 -549.2871870788981 ) ( 2000 3935.1961524227063 -552.2871870788981 ) bolted_metal_crate 93.39307 -188.46191 60 0.5 0.5
 }
 }
-// entity 219
+// entity 218
 {
 "classname" "func_mirror"
 // brush 0
@@ -20377,7 +20371,7 @@
 ( 2512 4033 -80 ) ( 2512 4096 -80 ) ( 2512 4096 -160 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 220
+// entity 219
 {
 "classname" "func_mirror"
 // brush 0
@@ -20390,7 +20384,7 @@
 ( 2511 4032 -80 ) ( 2511 4033 -80 ) ( 2511 4033 -160 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 221
+// entity 220
 {
 "classname" "trigger_teleport"
 "target" "horisontal_teleport_destination"
@@ -20404,13 +20398,13 @@
 ( 2000 3824 -624 ) ( 2000 3856 -624 ) ( 2000 3856 -640 ) trigger 0 0 0 0.5 0.5
 }
 }
-// entity 222
+// entity 221
 {
 "classname" "info_teleport_destination"
 "origin" "3744 2304 -112"
 "targetname" "horisontal_teleport_destination"
 }
-// entity 223
+// entity 222
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2752 4272 -104"
@@ -20418,7 +20412,7 @@
 "color" "255 192 128"
 "angle" "270"
 }
-// entity 224
+// entity 223
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2768 3056 -104"
@@ -20426,7 +20420,7 @@
 "color" "255 192 128"
 "angle" "180"
 }
-// entity 225
+// entity 224
 {
 "classname" "misc_decal"
 "origin" "2480 3832 -136"
@@ -20435,7 +20429,7 @@
 "scale" "0.5"
 "angle" "90"
 }
-// entity 226
+// entity 225
 {
 "classname" "misc_decal"
 "origin" "2512 3832 -120"
@@ -20444,7 +20438,7 @@
 "scale" "0.5"
 "angle" "90"
 }
-// entity 227
+// entity 226
 {
 "classname" "misc_decal"
 "origin" "2504 3832 -160"
@@ -20453,7 +20447,7 @@
 "scale" "0.5"
 "angle" "90"
 }
-// entity 228
+// entity 227
 {
 "classname" "func_camera_portal"
 "target" "security_camera_7"
@@ -20467,7 +20461,7 @@
 ( 3205 2272 -264 ) ( 3205 2304 -264 ) ( 3205 2304 -296 ) crt_display 0 -64 0 0.125 0.125
 }
 }
-// entity 229
+// entity 228
 {
 "classname" "misc_portal_camera"
 "origin" "3648 1984 -1"
@@ -20475,7 +20469,7 @@
 "fov" "100"
 "targetname" "security_camera_0"
 }
-// entity 230
+// entity 229
 {
 "classname" "light_wall_oil_lamp"
 "origin" "3232 2352 -264"
@@ -20483,7 +20477,7 @@
 "color" "255 192 128"
 "angle" "270"
 }
-// entity 231
+// entity 230
 {
 "classname" "light_wall_oil_lamp"
 "origin" "3360 2352 -264"
@@ -20491,7 +20485,7 @@
 "color" "255 192 128"
 "angle" "270"
 }
-// entity 232
+// entity 231
 {
 "classname" "func_camera_portal"
 "target" "security_camera_5"
@@ -20505,7 +20499,7 @@
 ( 3205 2236 -264 ) ( 3205 2268 -264 ) ( 3205 2268 -296 ) crt_display 32 -64 0 0.125 0.125
 }
 }
-// entity 233
+// entity 232
 {
 "classname" "func_camera_portal"
 "target" "security_camera_6"
@@ -20519,7 +20513,7 @@
 ( 3214.107030547929 2236 -228.80400582447737 ) ( 3214.107030547929 2268 -228.80400582447737 ) ( 3205.824821104649 2268 -259.7136322657277 ) crt_display 32 123 0 0.125 0.119
 }
 }
-// entity 234
+// entity 233
 {
 "classname" "func_camera_portal"
 "target" "security_camera_0"
@@ -20533,7 +20527,7 @@
 ( 3214.107030547929 2272 -228.80400582447737 ) ( 3214.107030547929 2304 -228.80400582447737 ) ( 3205.824821104649 2304 -259.7136322657277 ) crt_display 0 123 0 0.125 0.119
 }
 }
-// entity 235
+// entity 234
 {
 "classname" "func_camera_portal"
 "target" "security_camera_4"
@@ -20547,7 +20541,7 @@
 ( 3378.85889527836 2272 -228.54518677937494 ) ( 3378.85889527836 2304 -228.54518677937494 ) ( 3387.1411047216397 2304 -259.4548132206253 ) __TB_empty -8 0 180 0.5 -0.5
 }
 }
-// entity 236
+// entity 235
 {
 "classname" "func_camera_portal"
 "target" "security_camera_2"
@@ -20561,7 +20555,7 @@
 ( 3388 2236 -264 ) ( 3388 2268 -264 ) ( 3388 2268 -296 ) __TB_empty -8 0 180 0.5 -0.5
 }
 }
-// entity 237
+// entity 236
 {
 "classname" "func_camera_portal"
 "target" "security_camera_1"
@@ -20575,7 +20569,7 @@
 ( 3388 2272 -264 ) ( 3388 2304 -264 ) ( 3388 2304 -296 ) __TB_empty -8 0 180 0.5 -0.5
 }
 }
-// entity 238
+// entity 237
 {
 "classname" "func_camera_portal"
 "target" "security_camera_3"
@@ -20589,7 +20583,7 @@
 ( 3378.85889527836 2236 -228.54518677937494 ) ( 3378.85889527836 2268 -228.54518677937494 ) ( 3387.1411047216397 2268 -259.4548132206253 ) __TB_empty -8 0 180 0.5 -0.5
 }
 }
-// entity 239
+// entity 238
 {
 "classname" "misc_portal_camera"
 "origin" "3600 3056 376"
@@ -20597,7 +20591,7 @@
 "fov" "100"
 "targetname" "security_camera_1"
 }
-// entity 240
+// entity 239
 {
 "classname" "misc_portal_camera"
 "origin" "2544 3824 -24"
@@ -20605,7 +20599,7 @@
 "fov" "100"
 "targetname" "security_camera_2"
 }
-// entity 241
+// entity 240
 {
 "classname" "misc_portal_camera"
 "origin" "1944 3792 -504"
@@ -20613,7 +20607,7 @@
 "fov" "100"
 "targetname" "security_camera_3"
 }
-// entity 242
+// entity 241
 {
 "classname" "misc_portal_camera"
 "origin" "2192 4048 8"
@@ -20621,7 +20615,7 @@
 "fov" "100"
 "targetname" "security_camera_4"
 }
-// entity 243
+// entity 242
 {
 "classname" "misc_portal_camera"
 "origin" "2850 -688 88"
@@ -20629,7 +20623,7 @@
 "fov" "100"
 "targetname" "security_camera_5"
 }
-// entity 244
+// entity 243
 {
 "classname" "misc_portal_camera"
 "origin" "3248 -672 -288"
@@ -20637,7 +20631,7 @@
 "fov" "100"
 "targetname" "security_camera_6"
 }
-// entity 245
+// entity 244
 {
 "classname" "misc_portal_camera"
 "origin" "3024 1136 440"
@@ -20645,7 +20639,7 @@
 "fov" "100"
 "targetname" "security_camera_7"
 }
-// entity 246
+// entity 245
 {
 "classname" "func_parallax_portal"
 "target" "slope_portal_camera_0"
@@ -20658,14 +20652,14 @@
 ( 3456 2944 -64 ) ( 3456 2944 -63 ) ( 3456 2945 -64 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 247
+// entity 246
 {
 "classname" "light"
 "origin" "3424 2912 -128"
 "color" "128 255 128"
 "light" "500"
 }
-// entity 248
+// entity 247
 {
 "classname" "func_parallax_portal"
 "target" "slope_portal_camera_1"
@@ -20678,7 +20672,7 @@
 ( 3456 2432 -192 ) ( 3456 2431 -192 ) ( 3456 2432 -191 ) __TB_empty 0 0 0 0.5 0.5
 }
 }
-// entity 249
+// entity 248
 {
 "classname" "light"
 "origin" "3424 2464 -256"
@@ -20686,35 +20680,35 @@
 "angle" "270"
 "light" "500"
 }
-// entity 250
+// entity 249
 {
 "classname" "misc_portal_camera"
 "origin" "3424 2464 -288"
 "angles" "45 180 0"
 "targetname" "slope_portal_camera_0"
 }
-// entity 251
+// entity 250
 {
 "classname" "misc_portal_camera"
 "origin" "3424 2912 -160"
 "angles" "45 -90 0"
 "targetname" "slope_portal_camera_1"
 }
-// entity 252
+// entity 251
 {
 "classname" "info_teleport_destination"
 "origin" "3376 2464 -320"
 "angle" "180"
 "targetname" "slope_teleport_destination_0"
 }
-// entity 253
+// entity 252
 {
 "classname" "info_teleport_destination"
 "origin" "3424 2864 -192"
 "angle" "270"
 "targetname" "slope_teleport_destination_1"
 }
-// entity 254
+// entity 253
 {
 "classname" "trigger_teleport"
 "targetname" ""
@@ -20729,7 +20723,7 @@
 ( 3440 2928 -128 ) ( 3440 2928 -127 ) ( 3440 2929 -128 ) trigger 0 0 0 0.5 0.5
 }
 }
-// entity 255
+// entity 254
 {
 "classname" "trigger_teleport"
 "target" "slope_teleport_destination_1"
@@ -20743,7 +20737,7 @@
 ( 3440 2480 -256 ) ( 3440 2480 -255 ) ( 3440 2481 -256 ) trigger 0 0 0 0.5 0.5
 }
 }
-// entity 256
+// entity 255
 {
 "classname" "func_door"
 "angle" "-1"
@@ -20759,7 +20753,7 @@
 ( 2968 2016 -48 ) ( 2968 2080 -48 ) ( 2968 2080 -176 ) wooden_plate_with_rusty_metal 0 32 0 0.5 0.5
 }
 }
-// entity 257
+// entity 256
 {
 "classname" "func_button"
 "targetname" ""
@@ -20777,7 +20771,7 @@
 ( 3312 2016 -272 ) ( 3312 2020 -272 ) ( 3312 2020 -304 ) glowing_button -14 64 0 0.25 0.25
 }
 }
-// entity 258
+// entity 257
 {
 "classname" "func_detail"
 // brush 0
@@ -20794,7 +20788,7 @@
 ( 2072 2500.776415186663 -111.05595867160991 ) ( 2072 2532.7764151866627 -55.6303328294058 ) ( 2072 2643.627666871071 -119.63033282940535 ) wooden_plate_with_rusty_metal 59.578125 -90.52734 60 0.5 0.5
 }
 }
-// entity 259
+// entity 258
 {
 "classname" "light_wall_oil_lamp"
 "origin" "1792 3136 -136"
@@ -20802,7 +20796,7 @@
 "color" "255 192 128"
 "angle" "0"
 }
-// entity 260
+// entity 259
 {
 "classname" "light_wall_oil_lamp"
 "origin" "1792 2880 -136"
@@ -20810,7 +20804,7 @@
 "color" "255 192 128"
 "angle" "0"
 }
-// entity 261
+// entity 260
 {
 "classname" "light_wall_oil_lamp"
 "origin" "1912 3360 -136"
@@ -20818,7 +20812,7 @@
 "color" "255 192 128"
 "angle" "135"
 }
-// entity 262
+// entity 261
 {
 "classname" "light_wall_oil_lamp"
 "origin" "2056 3504 -136"
@@ -20826,7 +20820,7 @@
 "color" "255 192 128"
 "angle" "135"
 }
-// entity 263
+// entity 262
 {
 "classname" "misc_model"
 "origin" "2410 3094 -88"
@@ -20834,7 +20828,7 @@
 "blending_mode" "4"
 "angle" "45"
 }
-// entity 264
+// entity 263
 {
 "classname" "misc_model"
 "origin" "2446 3056 -88"
