@@ -899,7 +899,7 @@ pub fn update_named_activations(ecs: &mut hecs::World)
 	}
 }
 
-pub fn update_animations(ecs: &mut hecs::World, game_time: f32)
+pub fn update_simple_animations(ecs: &mut hecs::World, game_time: f32)
 {
 	for (_id, (_simple_animation_component, model)) in ecs.query_mut::<(&SimpleAnimationComponent, &mut ModelEntity)>()
 	{
@@ -907,6 +907,23 @@ pub fn update_animations(ecs: &mut hecs::World, game_time: f32)
 		let frame_f = game_time * 10.0;
 		model.animation.frames[0] = (frame_f as u32) % num_frames;
 		model.animation.frames[1] = (frame_f as u32 + 1) % num_frames;
+		model.animation.lerp = 1.0 - frame_f.fract();
+	}
+}
+
+pub fn update_specific_animations(ecs: &mut hecs::World, time_delta_s: f32)
+{
+	for (_id, (specific_animation_component, model)) in
+		ecs.query_mut::<(&mut SpecificAnimationComponent, &mut ModelEntity)>()
+	{
+		specific_animation_component.cur_animation_time += time_delta_s;
+
+		let animation = &model.model.animations[specific_animation_component.animation_index];
+
+		let frame_f = specific_animation_component.cur_animation_time * animation.frames_per_second;
+
+		model.animation.frames[0] = animation.start_frame + (frame_f as u32) % animation.num_frames;
+		model.animation.frames[1] = animation.start_frame + (frame_f as u32 + 1) % animation.num_frames;
 		model.animation.lerp = 1.0 - frame_f.fract();
 	}
 }

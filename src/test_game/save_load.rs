@@ -345,6 +345,7 @@ impl<'a> hecs::serialize::row::SerializeContext for SerializeContext<'a>
 		self.try_serialize_component::<DynamicLightLocationLinkComponent, S>(entity, &mut map)?;
 
 		self.try_serialize_component::<SimpleAnimationComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<SpecificAnimationComponent, S>(entity, &mut map)?;
 
 		self.try_serialize_component::<PlayerComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<PlayerControllerComponent, S>(entity, &mut map)?;
@@ -466,6 +467,7 @@ impl<'a> hecs::serialize::row::DeserializeContext for DeserializeContext<'a>
 			self.try_deserialize_component::<ViewPortalTargetLocationLinkComponent, M>(&key, &mut map, entity)?;
 
 			self.try_deserialize_component::<SimpleAnimationComponent, M>(&key, &mut map, entity)?;
+			self.try_deserialize_component::<SpecificAnimationComponent, M>(&key, &mut map, entity)?;
 
 			self.try_deserialize_component::<PlayerComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<PlayerControllerComponent, M>(&key, &mut map, entity)?;

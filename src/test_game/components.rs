@@ -111,6 +111,14 @@ pub struct ViewPortalTargetLocationLinkComponent {}
 #[derive(Serialize, Deserialize)]
 pub struct SimpleAnimationComponent {}
 
+// Just play specified animation in loop.
+#[derive(Serialize, Deserialize)]
+pub struct SpecificAnimationComponent
+{
+	pub animation_index: usize,
+	pub cur_animation_time: f32,
+}
+
 // General player component.
 #[derive(Serialize, Deserialize)]
 pub struct PlayerComponent

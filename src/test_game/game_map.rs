@@ -485,6 +485,7 @@ impl GameMap
 		}
 
 		let mut r = self.resources_manager.lock().unwrap();
+		let model = r.get_model(&args[0]);
 
 		self.ecs
 			.insert(
@@ -497,7 +498,7 @@ impl GameMap
 							frames: [0, 0],
 							lerp: 0.0,
 						},
-						model: r.get_model(&args[0]),
+						model: model.clone(),
 						texture: r.get_texture_lite(&args[1]),
 						blending_mode: material::BlendingMode::None,
 						lighting: ModelLighting::Default,
@@ -508,12 +509,36 @@ impl GameMap
 				),
 			)
 			.ok();
+
+		if args.len() >= 2
+		{
+			let animation_name = &args[2];
+			for (animation_index, animation) in model.animations.iter().enumerate()
+			{
+				if animation.name == *animation_name
+				{
+					self.ecs
+						.insert_one(
+							self.player_entity,
+							SpecificAnimationComponent {
+								animation_index,
+								cur_animation_time: 0.0,
+							},
+						)
+						.ok();
+				}
+			}
+		}
 	}
 
 	fn command_reset_player_model(&mut self, _args: commands_queue::CommandArgs)
 	{
 		self.ecs
-			.remove::<(ModelEntity, ModelEntityLocationLinkComponent)>(self.player_entity)
+			.remove::<(
+				ModelEntity,
+				ModelEntityLocationLinkComponent,
+				SpecificAnimationComponent,
+			)>(self.player_entity)
 			.ok();
 	}
 
@@ -787,7 +812,8 @@ impl GameMap
 		world_update::update_teleported_entities(&mut self.ecs, &mut self.physics);
 		world_update::update_named_activations(&mut self.ecs);
 
-		world_update::update_animations(&mut self.ecs, self.game_time);
+		world_update::update_simple_animations(&mut self.ecs, self.game_time);
+		world_update::update_specific_animations(&mut self.ecs, time_delta_s);
 
 		// Update location of player entity, taken from player controller.
 		world_update::update_player_controller_locations(&mut self.ecs, &self.physics);
