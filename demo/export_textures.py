@@ -68,8 +68,8 @@ def main():
 	if os.path.isdir(input_dir_or_file):
 		print("Collecting list of material files", flush = True)
 		in_files_list = []
-		for file_name in os.listdir(input_dir):
-			in_files_list.append(os.path.join(input_dir, file_name))
+		for file_name in os.listdir(input_dir_or_file):
+			in_files_list.append(os.path.join(input_dir_or_file, file_name))
 	else:
 		in_files_list = [input_dir_or_file]
 
