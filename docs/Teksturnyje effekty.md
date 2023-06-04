@@ -19,11 +19,11 @@ Dlä nekotoryh effektov možno ukazatj teksturu izlucajuscego sloja.
 Eta tekstura prosto primenäjetsä k poverhnosti posle jejo postrojenija i umnožajetsä na zadannyj v svojstvah materiala svet.
 
 
-### Pokadrovaja animaçija
+### Pokadrovaja animaçija (realizovano)
 
 Tekstura çikliceski menäjetsä vo vremeni s ispoljzovanijem räda izobraženij.
-Eto ne trebujet dopolniteljnyh vycislenij - prosto možno každyj kadr menätj indeks v tabliçe tekstur na tekuscij kadr animaçii.
-Realizovatj eto možno kak sväzannyj spisok materialov.
+Eto ne trebujet dopolniteljnyh vycislenij - prosto každyj kadr menäjetsä indeks v tabliçe tekstur na tekuscij kadr animaçii.
+Realizovano eto kak sväzannyj spisok materialov.
 Cerez zadanije razlicnogo nacaljnogo materiala možno realizovatj razlicnuju nacaljnuju fazu animaçii u razlicnyh poligonov.
 
 
@@ -54,6 +54,8 @@ Ih transformaçii mogut potrebovatj renormalizaçii.
 Vozmožno, stoit ih transformaçii vklücatj toljko jesli eto neobhodimo (javno zadavatj v svojstvah materiala).
 
 Krome sobstvenno osnovnoj tekstury stoit predusmotretj vozmožnostj realizovatj mnogoslojnyj effekt dlä izlucajuscego sloja.
+
+Odin iz variantov realizaçii - ispoljzovatj ssylki na drugije materialy, kak sloi dannogo mnogoslojnogo materiala.
 
 
 ### O proizvoditeljnosti

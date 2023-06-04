@@ -4,7 +4,7 @@ import os
 import sys
 
 def generate_material_json(textures_dir, texture_file_name):
-	# TODO - process sky textures specially. Also generate proper materials for animated textures.
+	# TODO - process sky textures specially.
 	res = { "diffuse": texture_file_name }
 
 	if texture_file_name.startswith("*"):
