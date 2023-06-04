@@ -151,7 +151,17 @@ impl MapMaterialsProcessor
 				current_time_s >= mapping_element.frame_change_time_point
 			{
 				mapping_element.index = self.textures[mapping_element.index as usize].next_frame_texture_index;
-				mapping_element.frame_change_time_point = current_time_s + 0.5;
+				let duration = if let Some(framed_animation) =
+					&self.textures[mapping_element.index as usize].material.framed_animation
+				{
+					framed_animation.duration
+				}
+				else
+				{
+					0.5 // WTF?
+				};
+
+				mapping_element.frame_change_time_point = current_time_s + duration;
 			}
 		}
 
