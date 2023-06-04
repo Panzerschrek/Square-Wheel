@@ -21,6 +21,14 @@
 		"blending_mode": "AlphaTest",
 		"blocks_view": false
 	},
+	"alpha_grid_mirror":
+	{
+		"diffuse": "alpha_grid_mirror.png",
+		"blocks_view": false,
+		"light": false,
+		"portal_texture" : "alpha_grid_mirror.png",
+		"portal_blending_mode" : "AlphaTest"
+	},
 	"bricks":
 	{
 		"diffuse": "bricks.png",
@@ -33,6 +41,14 @@
 		"roughness_map" : "bolted_metal_crate_roughness.png",
 		"is_metal": true
 	},
+	"crt_display":
+	{
+		"diffuse": "crt_display.png",
+		"blocks_view": false,
+		"light": false,
+		"portal_texture" : "crt_display.png",
+		"portal_blending_mode" : "AlphaBlend"
+	},
 	"dark_metal":
 	{
 		"diffuse": "dark_metal.png",
@@ -43,6 +59,17 @@
 	{
 		"diffuse": "dirt.png",
 		"normal_map": "dirt_normal.png"
+	},
+	"glowing_button":
+	{
+		"diffuse": "glowing_button.png",
+		"normal_map": "glowing_button_normal.png",
+		"emissive_layer" :
+		{
+			"image" : "glowing_button_emission.png",
+			"light" : [80.0, 80.0, 80.0]
+		},
+		"emissive_light" : [20.0, 20.0, 20.0]
 	},
 	"grass":
 	{
@@ -110,12 +137,14 @@
 	"mirror":
 	{
 		"diffuse": "mirror.png",
-		"light" : false
+		"light" : false,
+		"comment" : "Disable lightmaps in order to avoid splitting mirrors polygons"
 	},
 	"portal":
 	{
 		"diffuse": "portal.png",
-		"portal" : false
+		"light" : false,
+		"comment" : "Disable lightmaps in order to avoid splitting portals polygons"
 	},
 	"roof_tiles":
 	{
@@ -127,12 +156,28 @@
 		"diffuse": "rope.png",
 		"normal_map": "rope_normal.png"
 	},
+	"rusted_mirror":
+	{
+		"diffuse": "rusted_mirror.png",
+		"blocks_view": false,
+		"light": false,
+		"portal_texture" : "rusted_mirror.png",
+		"portal_blending_mode" : "AlphaBlend"
+	},
 	"stained_glass":
 	{
 		"diffuse": "stained_glass.png",
 		"blending_mode": "Average",
 		"roughness": 0.0,
 		"blocks_view": false
+	},
+	"trigger":
+	{
+		"diffuse": "trigger.png",
+		"bsp" : true,
+		"light" : false,
+		"draw" : false,
+		"comment" : "Leave triggers in BSP in order to avoid deleting trigger brushes"
 	},
 	"water":
 	{

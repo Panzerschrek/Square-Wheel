@@ -1,0 +1,308 @@
+{
+	"connections": [
+		{
+			"from": "bricks2",
+			"from_port": 0,
+			"to": "blend",
+			"to_port": 2
+		},
+		{
+			"from": "uniform_2",
+			"from_port": 0,
+			"to": "blend",
+			"to_port": 1
+		},
+		{
+			"from": "blend",
+			"from_port": 0,
+			"to": "Material",
+			"to_port": 7
+		},
+		{
+			"from": "blend_2",
+			"from_port": 0,
+			"to": "Material",
+			"to_port": 0
+		},
+		{
+			"from": "uniform_3",
+			"from_port": 0,
+			"to": "blend_2",
+			"to_port": 0
+		},
+		{
+			"from": "perlin",
+			"from_port": 0,
+			"to": "brightness_contrast",
+			"to_port": 0
+		},
+		{
+			"from": "brightness_contrast",
+			"from_port": 0,
+			"to": "blend_2",
+			"to_port": 1
+		},
+		{
+			"from": "bricks2",
+			"from_port": 0,
+			"to": "blend_2",
+			"to_port": 2
+		},
+		{
+			"from": "uniform_5",
+			"from_port": 0,
+			"to": "blend_3",
+			"to_port": 1
+		},
+		{
+			"from": "uniform_4",
+			"from_port": 0,
+			"to": "blend_3",
+			"to_port": 0
+		},
+		{
+			"from": "blend_3",
+			"from_port": 0,
+			"to": "blend",
+			"to_port": 0
+		},
+		{
+			"from": "pattern",
+			"from_port": 0,
+			"to": "blend_3",
+			"to_port": 2
+		}
+	],
+	"label": "Graph",
+	"longdesc": "",
+	"name": "312",
+	"node_position": {
+		"x": 0,
+		"y": 0
+	},
+	"nodes": [
+		{
+			"export_paths": {
+				"Godot": "C:/Users/user/Documents/Projects/other/Square-Wheel/demo/crt_display"
+			},
+			"name": "Material",
+			"node_position": {
+				"x": 716,
+				"y": 110
+			},
+			"parameters": {
+				"albedo_color": {
+					"a": 1,
+					"b": 1,
+					"g": 1,
+					"r": 1,
+					"type": "Color"
+				},
+				"ao": 1,
+				"depth_scale": 0.5,
+				"emission_energy": 1,
+				"flags_transparent": true,
+				"metallic": 0,
+				"normal": 1,
+				"roughness": 1,
+				"size": 10,
+				"sss": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "material"
+		},
+		{
+			"name": "bricks2",
+			"node_position": {
+				"x": 0,
+				"y": 300
+			},
+			"parameters": {
+				"bevel": 0.05,
+				"columns": 1,
+				"corner": 0.3,
+				"mortar": 0,
+				"pattern": 0,
+				"round": 0.1,
+				"row_offset": 0,
+				"rows": 1
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "bricks2"
+		},
+		{
+			"name": "blend",
+			"node_position": {
+				"x": 500,
+				"y": 280
+			},
+			"parameters": {
+				"amount": 1,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "uniform_2",
+			"node_position": {
+				"x": 340,
+				"y": 300
+			},
+			"parameters": {
+				"color": {
+					"a": 1,
+					"b": 0.980392,
+					"g": 0.980392,
+					"r": 0.980392,
+					"type": "Color"
+				}
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "uniform"
+		},
+		{
+			"name": "perlin",
+			"node_position": {
+				"x": -140,
+				"y": 0
+			},
+			"parameters": {
+				"iterations": 4,
+				"persistence": 0.5,
+				"scale_x": 12,
+				"scale_y": 12
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "perlin"
+		},
+		{
+			"name": "blend_2",
+			"node_position": {
+				"x": 360,
+				"y": -20
+			},
+			"parameters": {
+				"amount": 1,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "uniform_3",
+			"node_position": {
+				"x": 200,
+				"y": -60
+			},
+			"parameters": {
+				"color": {
+					"a": 1,
+					"b": 0.062745,
+					"g": 0.062745,
+					"r": 0.062745,
+					"type": "Color"
+				}
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "uniform"
+		},
+		{
+			"name": "brightness_contrast",
+			"node_position": {
+				"x": 120,
+				"y": 0
+			},
+			"parameters": {
+				"brightness": 0,
+				"contrast": 0.2
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "brightness_contrast"
+		},
+		{
+			"name": "pattern",
+			"node_position": {
+				"x": -299,
+				"y": 242
+			},
+			"parameters": {
+				"mix": 0,
+				"x_scale": 128,
+				"x_wave": 2,
+				"y_scale": 1,
+				"y_wave": 4
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "pattern"
+		},
+		{
+			"name": "blend_3",
+			"node_position": {
+				"x": 260,
+				"y": 180
+			},
+			"parameters": {
+				"amount": 1,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "uniform_4",
+			"node_position": {
+				"x": 100,
+				"y": 120
+			},
+			"parameters": {
+				"color": {
+					"a": 1,
+					"b": 0.423529,
+					"g": 0.423529,
+					"r": 0.423529,
+					"type": "Color"
+				}
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "uniform"
+		},
+		{
+			"name": "uniform_5",
+			"node_position": {
+				"x": 100,
+				"y": 200
+			},
+			"parameters": {
+				"color": {
+					"a": 1,
+					"b": 0.564706,
+					"g": 0.564706,
+					"r": 0.564706,
+					"type": "Color"
+				}
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "uniform"
+		}
+	],
+	"parameters": {
+
+	},
+	"seed": 0,
+	"seed_locked": false,
+	"shortdesc": "",
+	"type": "graph"
+}
