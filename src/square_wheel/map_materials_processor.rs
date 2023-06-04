@@ -6,7 +6,7 @@ pub struct MapMaterialsProcessor
 {
 	// First map textures, than additional textures.
 	textures: Vec<MapTextureData>,
-	textures_mapping_table: Vec<u32>,
+	textures_mapping_table: Vec<TextureMappingElement>,
 	skybox_textures_32: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color32>>>,
 	skybox_textures_64: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color64>>>,
 	temp_buffer: Vec<TextureElement>,
@@ -123,10 +123,13 @@ impl MapMaterialsProcessor
 		}
 
 		// Prepare mapping table. Initially all textures are mapped to themselves.
-		let mut textures_mapping_table = vec![0; textures.len()];
+		let mut textures_mapping_table = vec![TextureMappingElement::default(); textures.len()];
 		for (index, table_element) in textures_mapping_table.iter_mut().enumerate()
 		{
-			*table_element = index as u32;
+			*table_element = TextureMappingElement {
+				index: index as u32,
+				frame_change_time_point: 0.0,
+			};
 		}
 
 		Self {
@@ -141,6 +144,17 @@ impl MapMaterialsProcessor
 
 	pub fn update(&mut self, current_time_s: f32)
 	{
+		// Update framed animations.
+		for mapping_element in &mut self.textures_mapping_table
+		{
+			if self.textures[mapping_element.index as usize].next_frame_texture_index < self.textures.len() as u32 &&
+				current_time_s >= mapping_element.frame_change_time_point
+			{
+				mapping_element.index = self.textures[mapping_element.index as usize].next_frame_texture_index;
+				mapping_element.frame_change_time_point = current_time_s + 0.5;
+			}
+		}
+
 		// Update shifts.
 		for texture_data in &mut self.textures
 		{
@@ -209,13 +223,13 @@ impl MapMaterialsProcessor
 
 	pub fn get_material(&self, material_index: u32) -> &Material
 	{
-		let current_material_index = self.textures_mapping_table[material_index as usize];
+		let current_material_index = self.textures_mapping_table[material_index as usize].index;
 		&self.textures[current_material_index as usize].material
 	}
 
 	pub fn get_texture(&self, material_index: u32) -> &TextureWithMips
 	{
-		let current_material_index = self.textures_mapping_table[material_index as usize];
+		let current_material_index = self.textures_mapping_table[material_index as usize].index;
 		let texture_data = &self.textures[current_material_index as usize];
 		if !texture_data.texture_modified[0].pixels.is_empty()
 		{
@@ -231,14 +245,14 @@ impl MapMaterialsProcessor
 
 	pub fn get_texture_shift(&self, material_index: u32) -> TextureShift
 	{
-		let current_material_index = self.textures_mapping_table[material_index as usize];
+		let current_material_index = self.textures_mapping_table[material_index as usize].index;
 		self.textures[current_material_index as usize].shift
 	}
 
 	// If material has emissive texture - return it together with specified light.
 	pub fn get_emissive_texture(&self, material_index: u32) -> Option<(&TextureLiteWithMips, [f32; 3])>
 	{
-		let current_material_index = self.textures_mapping_table[material_index as usize];
+		let current_material_index = self.textures_mapping_table[material_index as usize].index;
 		let texture_data = &self.textures[current_material_index as usize];
 		if let (Some(emissive_layer), Some(emissive_texture)) =
 			(&texture_data.material.emissive_layer, &texture_data.emissive_texture)
@@ -304,6 +318,13 @@ struct MapTextureData
 	shift: TextureShift,
 	// Invalid index if has no framed animation.
 	next_frame_texture_index: u32,
+}
+
+#[derive(Default, Copy, Clone)]
+struct TextureMappingElement
+{
+	index: u32,
+	frame_change_time_point: f32,
 }
 
 fn make_turb_distortion<T: Copy + Default>(
