@@ -4,7 +4,9 @@ use std::{borrow::Borrow, collections::HashMap};
 
 pub struct MapMaterialsProcessor
 {
+	// First map textures, than additional textures.
 	textures: Vec<MapTextureData>,
+	textures_mapping_table: Vec<TextureMappingElement>,
 	skybox_textures_32: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color32>>>,
 	skybox_textures_64: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color64>>>,
 	temp_buffer: Vec<TextureElement>,
@@ -22,8 +24,11 @@ impl MapMaterialsProcessor
 
 		let mut skybox_textures_32 = HashMap::new();
 		let mut skybox_textures_64 = HashMap::new();
-
 		let mut textures = Vec::with_capacity(map.textures.len());
+		let mut material_name_to_texture_index = HashMap::<String, u32>::new();
+
+		let invalid_texture_index = !0;
+
 		for (texture_index, (texture, material_name)) in r
 			.get_map_material_textures(map)
 			.drain(..)
@@ -51,6 +56,7 @@ impl MapMaterialsProcessor
 				skybox_textures_64.insert(texture_index as u32, r.get_skybox_textures_64(material_name));
 			}
 
+			material_name_to_texture_index.insert(material_name.to_string(), textures.len() as u32);
 			textures.push(MapTextureData {
 				material,
 				texture,
@@ -58,11 +64,69 @@ impl MapMaterialsProcessor
 				emissive_texture,
 				emissive_texture_modified: TextureLiteWithMips::default(),
 				shift: [0, 0],
+				next_frame_texture_index: invalid_texture_index,
 			});
+		}
+
+		// Load additional materials for animation frames.
+		// TODO - try to load textures in parallel.
+		// Can't use "for" loop here, because range is calculated once, but we need to iterate over all textures, including newly loaded.
+		let mut i = 0;
+		while i < textures.len()
+		{
+			let material = &textures[i].material;
+			if let Some(framed_animation) = &material.framed_animation
+			{
+				if let Some(already_loaded_texture_index) =
+					material_name_to_texture_index.get(&framed_animation.next_material_name)
+				{
+					textures[i].next_frame_texture_index = *already_loaded_texture_index;
+				}
+				else
+				{
+					if let Some(material) = all_materials.get(&framed_animation.next_material_name).as_deref()
+					{
+						let texture = r.get_material_texture(&framed_animation.next_material_name);
+						let emissive_texture = material.emissive_layer.as_ref().map(|l| r.get_texture_lite(&l.image));
+
+						let texture_index = textures.len() as u32;
+						material_name_to_texture_index
+							.insert(framed_animation.next_material_name.clone(), texture_index);
+						textures.push(MapTextureData {
+							material: material.clone(),
+							texture,
+							texture_modified: TextureWithMips::default(),
+							emissive_texture,
+							emissive_texture_modified: TextureLiteWithMips::default(),
+							shift: [0, 0],
+							next_frame_texture_index: invalid_texture_index,
+						});
+
+						textures[i].next_frame_texture_index = texture_index;
+					}
+					else
+					{
+						println!("Can't find material {}", framed_animation.next_material_name);
+					}
+				}
+			}
+
+			i += 1;
+		}
+
+		// Prepare mapping table. Initially all textures are mapped to themselves.
+		let mut textures_mapping_table = vec![TextureMappingElement::default(); textures.len()];
+		for (index, table_element) in textures_mapping_table.iter_mut().enumerate()
+		{
+			*table_element = TextureMappingElement {
+				index: index as u32,
+				frame_change_time_point: 0.0,
+			};
 		}
 
 		Self {
 			textures,
+			textures_mapping_table,
 			skybox_textures_32,
 			skybox_textures_64,
 			temp_buffer: Vec::new(),
@@ -72,6 +136,37 @@ impl MapMaterialsProcessor
 
 	pub fn update(&mut self, current_time_s: f32)
 	{
+		// Update framed animations.
+		// Assume time never goes backwards.
+		for mapping_element in &mut self.textures_mapping_table
+		{
+			if self.textures[mapping_element.index as usize].next_frame_texture_index < self.textures.len() as u32
+			{
+				// Valid next frame index - this is animated texture.
+				if current_time_s >= mapping_element.frame_change_time_point
+				{
+					// Reached frame switch time point.
+					// Assume, that materials update frame rate is higher than animation frequency.
+
+					// Set new index.
+					let current_index = self.textures[mapping_element.index as usize].next_frame_texture_index;
+					mapping_element.index = current_index;
+					// Use duration of current frame for calculation of next frame change time point.
+					let duration = if let Some(framed_animation) =
+						&self.textures[current_index as usize].material.framed_animation
+					{
+						framed_animation.duration
+					}
+					else
+					{
+						0.5 // WTF?
+					};
+
+					mapping_element.frame_change_time_point += duration;
+				}
+			}
+		}
+
 		// Update shifts.
 		for texture_data in &mut self.textures
 		{
@@ -140,12 +235,14 @@ impl MapMaterialsProcessor
 
 	pub fn get_material(&self, material_index: u32) -> &Material
 	{
-		&self.textures[material_index as usize].material
+		let current_material_index = self.textures_mapping_table[material_index as usize].index;
+		&self.textures[current_material_index as usize].material
 	}
 
 	pub fn get_texture(&self, material_index: u32) -> &TextureWithMips
 	{
-		let texture_data = &self.textures[material_index as usize];
+		let current_material_index = self.textures_mapping_table[material_index as usize].index;
+		let texture_data = &self.textures[current_material_index as usize];
 		if !texture_data.texture_modified[0].pixels.is_empty()
 		{
 			// Return texture animated for current frame.
@@ -160,13 +257,15 @@ impl MapMaterialsProcessor
 
 	pub fn get_texture_shift(&self, material_index: u32) -> TextureShift
 	{
-		self.textures[material_index as usize].shift
+		let current_material_index = self.textures_mapping_table[material_index as usize].index;
+		self.textures[current_material_index as usize].shift
 	}
 
 	// If material has emissive texture - return it together with specified light.
 	pub fn get_emissive_texture(&self, material_index: u32) -> Option<(&TextureLiteWithMips, [f32; 3])>
 	{
-		let texture_data = &self.textures[material_index as usize];
+		let current_material_index = self.textures_mapping_table[material_index as usize].index;
+		let texture_data = &self.textures[current_material_index as usize];
 		if let (Some(emissive_layer), Some(emissive_texture)) =
 			(&texture_data.material.emissive_layer, &texture_data.emissive_texture)
 		{
@@ -229,6 +328,15 @@ struct MapTextureData
 	// Exists only for emissive texturex with mips.
 	emissive_texture_modified: TextureLiteWithMips,
 	shift: TextureShift,
+	// Invalid index if has no framed animation.
+	next_frame_texture_index: u32,
+}
+
+#[derive(Default, Copy, Clone)]
+struct TextureMappingElement
+{
+	index: u32,
+	frame_change_time_point: f32,
 }
 
 fn make_turb_distortion<T: Copy + Default>(
