@@ -152,7 +152,8 @@ impl MapMaterialsProcessor
 					let current_index = self.textures[mapping_element.index as usize].next_frame_texture_index;
 					mapping_element.index = current_index;
 					// Use duration of current frame for calculation of next frame change time point.
-					let duration = if let Some(framed_animation) = &self.textures[current_index as usize].material.framed_animation
+					let duration = if let Some(framed_animation) =
+						&self.textures[current_index as usize].material.framed_animation
 					{
 						framed_animation.duration
 					}
