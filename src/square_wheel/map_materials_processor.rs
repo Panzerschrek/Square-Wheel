@@ -6,6 +6,7 @@ pub struct MapMaterialsProcessor
 {
 	// First map textures, than additional textures.
 	textures: Vec<MapTextureData>,
+	textures_mapping_table: Vec<u32>,
 	skybox_textures_32: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color32>>>,
 	skybox_textures_64: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color64>>>,
 	temp_buffer: Vec<TextureElement>,
@@ -121,8 +122,16 @@ impl MapMaterialsProcessor
 			i += 1;
 		}
 
+		// Prepare mapping table. Initially all textures are mapped to themselves.
+		let mut textures_mapping_table = vec![0; textures.len()];
+		for (index, table_element) in textures_mapping_table.iter_mut().enumerate()
+		{
+			*table_element = index as u32;
+		}
+
 		Self {
 			textures,
+			textures_mapping_table,
 			skybox_textures_32,
 			skybox_textures_64,
 			temp_buffer: Vec::new(),
@@ -200,12 +209,14 @@ impl MapMaterialsProcessor
 
 	pub fn get_material(&self, material_index: u32) -> &Material
 	{
-		&self.textures[material_index as usize].material
+		let current_material_index = self.textures_mapping_table[material_index as usize];
+		&self.textures[current_material_index as usize].material
 	}
 
 	pub fn get_texture(&self, material_index: u32) -> &TextureWithMips
 	{
-		let texture_data = &self.textures[material_index as usize];
+		let current_material_index = self.textures_mapping_table[material_index as usize];
+		let texture_data = &self.textures[current_material_index as usize];
 		if !texture_data.texture_modified[0].pixels.is_empty()
 		{
 			// Return texture animated for current frame.
@@ -220,13 +231,15 @@ impl MapMaterialsProcessor
 
 	pub fn get_texture_shift(&self, material_index: u32) -> TextureShift
 	{
-		self.textures[material_index as usize].shift
+		let current_material_index = self.textures_mapping_table[material_index as usize];
+		self.textures[current_material_index as usize].shift
 	}
 
 	// If material has emissive texture - return it together with specified light.
 	pub fn get_emissive_texture(&self, material_index: u32) -> Option<(&TextureLiteWithMips, [f32; 3])>
 	{
-		let texture_data = &self.textures[material_index as usize];
+		let current_material_index = self.textures_mapping_table[material_index as usize];
+		let texture_data = &self.textures[current_material_index as usize];
 		if let (Some(emissive_layer), Some(emissive_texture)) =
 			(&texture_data.material.emissive_layer, &texture_data.emissive_texture)
 		{
