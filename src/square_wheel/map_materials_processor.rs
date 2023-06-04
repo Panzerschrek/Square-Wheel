@@ -70,6 +70,7 @@ impl MapMaterialsProcessor
 
 		// Load additional materials for animation frames.
 		// TODO - try to load textures in parallel.
+		// Can't use "for" loop here, because range is calculated once, but we need to iterate over all textures, including newly loaded.
 		let mut i = 0;
 		while i < textures.len()
 		{
@@ -79,21 +80,12 @@ impl MapMaterialsProcessor
 				if let Some(already_loaded_texture_index) =
 					material_name_to_texture_index.get(&framed_animation.next_material_name)
 				{
-					println!(
-						"Reuse already loaded material {} for framed animation",
-						framed_animation.next_material_name
-					);
 					textures[i].next_frame_texture_index = *already_loaded_texture_index;
 				}
 				else
 				{
 					if let Some(material) = all_materials.get(&framed_animation.next_material_name).as_deref()
 					{
-						println!(
-							"Load additional framed animation material {}",
-							framed_animation.next_material_name
-						);
-
 						let texture = r.get_material_texture(&framed_animation.next_material_name);
 						let emissive_texture = material.emissive_layer.as_ref().map(|l| r.get_texture_lite(&l.image));
 
@@ -145,23 +137,32 @@ impl MapMaterialsProcessor
 	pub fn update(&mut self, current_time_s: f32)
 	{
 		// Update framed animations.
+		// Assume time never goes backwards.
 		for mapping_element in &mut self.textures_mapping_table
 		{
-			if self.textures[mapping_element.index as usize].next_frame_texture_index < self.textures.len() as u32 &&
-				current_time_s >= mapping_element.frame_change_time_point
+			if self.textures[mapping_element.index as usize].next_frame_texture_index < self.textures.len() as u32
 			{
-				mapping_element.index = self.textures[mapping_element.index as usize].next_frame_texture_index;
-				let duration = if let Some(framed_animation) =
-					&self.textures[mapping_element.index as usize].material.framed_animation
+				// Valid next frame index - this is animated texture.
+				if current_time_s >= mapping_element.frame_change_time_point
 				{
-					framed_animation.duration
-				}
-				else
-				{
-					0.5 // WTF?
-				};
+					// Reached frame switch time point.
+					// Assume, that materials update frame rate is higher than animation frequency.
 
-				mapping_element.frame_change_time_point = current_time_s + duration;
+					// Set new index.
+					let current_index = self.textures[mapping_element.index as usize].next_frame_texture_index;
+					mapping_element.index = current_index;
+					// Use duration of current frame for calculation of next frame change time point.
+					let duration = if let Some(framed_animation) = &self.textures[current_index as usize].material.framed_animation
+					{
+						framed_animation.duration
+					}
+					else
+					{
+						0.5 // WTF?
+					};
+
+					mapping_element.frame_change_time_point += duration;
+				}
 			}
 		}
 
