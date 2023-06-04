@@ -4,6 +4,7 @@ use std::{borrow::Borrow, collections::HashMap};
 
 pub struct MapMaterialsProcessor
 {
+	// First map textures, than additional textures.
 	textures: Vec<MapTextureData>,
 	skybox_textures_32: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color32>>>,
 	skybox_textures_64: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color64>>>,
@@ -22,8 +23,11 @@ impl MapMaterialsProcessor
 
 		let mut skybox_textures_32 = HashMap::new();
 		let mut skybox_textures_64 = HashMap::new();
-
 		let mut textures = Vec::with_capacity(map.textures.len());
+		let mut material_name_to_texture_index = HashMap::<String, u32>::new();
+
+		let invalid_texture_index = !0;
+
 		for (texture_index, (texture, material_name)) in r
 			.get_map_material_textures(map)
 			.drain(..)
@@ -51,6 +55,7 @@ impl MapMaterialsProcessor
 				skybox_textures_64.insert(texture_index as u32, r.get_skybox_textures_64(material_name));
 			}
 
+			material_name_to_texture_index.insert(material_name.to_string(), textures.len() as u32);
 			textures.push(MapTextureData {
 				material,
 				texture,
@@ -58,7 +63,62 @@ impl MapMaterialsProcessor
 				emissive_texture,
 				emissive_texture_modified: TextureLiteWithMips::default(),
 				shift: [0, 0],
+				next_frame_texture_index: invalid_texture_index,
 			});
+		}
+
+		// Load additional materials for animation frames.
+		// TODO - try to load textures in parallel.
+		let mut i = 0;
+		while i < textures.len()
+		{
+			let material = &textures[i].material;
+			if let Some(framed_animation) = &material.framed_animation
+			{
+				if let Some(already_loaded_texture_index) =
+					material_name_to_texture_index.get(&framed_animation.next_material_name)
+				{
+					println!(
+						"Reuse already loaded material {} for framed animation",
+						framed_animation.next_material_name
+					);
+					textures[i].next_frame_texture_index = *already_loaded_texture_index;
+				}
+				else
+				{
+					if let Some(material) = all_materials.get(&framed_animation.next_material_name).as_deref()
+					{
+						println!(
+							"Load additional framed animation material {}",
+							framed_animation.next_material_name
+						);
+
+						let texture = r.get_material_texture(&framed_animation.next_material_name);
+						let emissive_texture = material.emissive_layer.as_ref().map(|l| r.get_texture_lite(&l.image));
+
+						let texture_index = textures.len() as u32;
+						material_name_to_texture_index
+							.insert(framed_animation.next_material_name.clone(), texture_index);
+						textures.push(MapTextureData {
+							material: material.clone(),
+							texture,
+							texture_modified: TextureWithMips::default(),
+							emissive_texture,
+							emissive_texture_modified: TextureLiteWithMips::default(),
+							shift: [0, 0],
+							next_frame_texture_index: invalid_texture_index,
+						});
+
+						textures[i].next_frame_texture_index = texture_index;
+					}
+					else
+					{
+						println!("Can't find material {}", framed_animation.next_material_name);
+					}
+				}
+			}
+
+			i += 1;
 		}
 
 		Self {
@@ -229,6 +289,8 @@ struct MapTextureData
 	// Exists only for emissive texturex with mips.
 	emissive_texture_modified: TextureLiteWithMips,
 	shift: TextureShift,
+	// Invalid index if has no framed animation.
+	next_frame_texture_index: u32,
 }
 
 fn make_turb_distortion<T: Copy + Default>(
