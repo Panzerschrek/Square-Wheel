@@ -74,6 +74,13 @@ pub struct Material
 	#[serde(default)]
 	pub turb: Option<TurbParams>,
 
+	/// If some - this is frame-animated material and displayed texture will be switched in specified time interval.
+	/// Create loop of references in order to create looped animation.
+	/// Frame animation presense doesn't affect map compiler and lightmaper - only selected material properties will be used.
+	/// Only main image will be used as albedo for lightmapper.
+	#[serde(default)]
+	pub framed_animation: Option<AnimationFrame>,
+
 	/// If some - this is a skybox.
 	#[serde(default)]
 	pub skybox: Option<SkyboxParams>,
@@ -133,6 +140,16 @@ pub struct TurbParams
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AnimationFrame
+{
+	/// Duration of this frame, in seconds.
+	#[serde(default = "default_animation_frame_duration")]
+	pub duration: f32,
+	/// Name of next material. Must be valid material name.
+	pub next_material_name: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SkyboxParams
 {
 	/// Side images in order -X, +X, -Y, +Y, -Z, +Z. If empty - side is not drawn.
@@ -165,6 +182,7 @@ impl Default for Material
 			emissive_layer: None,
 			turb: None,
 			skybox: None,
+			framed_animation: None,
 			extra: HashMap::new(),
 		}
 	}
@@ -273,4 +291,9 @@ fn default_true() -> bool
 fn default_one() -> f32
 {
 	1.0
+}
+
+fn default_animation_frame_duration() -> f32
+{
+	0.5
 }
