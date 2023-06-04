@@ -1,5 +1,6 @@
 use super::{abstract_color::*, fast_math::*, resources_manager::*, textures::*};
 use crate::common::{bsp_map_compact, color::*, material::*};
+use rayon::prelude::*;
 use std::{borrow::Borrow, collections::HashMap};
 
 pub struct MapMaterialsProcessor
@@ -9,8 +10,6 @@ pub struct MapMaterialsProcessor
 	textures_mapping_table: Vec<TextureMappingElement>,
 	skybox_textures_32: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color32>>>,
 	skybox_textures_64: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color64>>>,
-	temp_buffer: Vec<TextureElement>,
-	temp_color_buffer: Vec<Color32>,
 }
 
 pub type TextureShift = [i32; 2];
@@ -129,8 +128,6 @@ impl MapMaterialsProcessor
 			textures_mapping_table,
 			skybox_textures_32,
 			skybox_textures_64,
-			temp_buffer: Vec::new(),
-			temp_color_buffer: Vec::new(),
 		}
 	}
 
@@ -180,56 +177,19 @@ impl MapMaterialsProcessor
 			}
 		}
 
+		// Perform animation in parallel (if has enough threads).
 		// TODO - maybe perform lazy update (on demand)?
-
-		// TODO - maybe use parallel for here?
-		for texture_data in &mut self.textures
+		if rayon::current_num_threads() == 1
 		{
-			if let Some(turb) = &texture_data.material.turb
-			{
-				for mip_index in 0 .. NUM_MIPS
-				{
-					let src_mip = &texture_data.texture[mip_index];
-					let dst_mip = &mut texture_data.texture_modified[mip_index];
-					if dst_mip.pixels.is_empty()
-					{
-						*dst_mip = src_mip.clone();
-					}
-
-					make_turb_distortion(
-						turb,
-						current_time_s,
-						[src_mip.size[0] as i32, src_mip.size[1] as i32],
-						mip_index,
-						&src_mip.pixels,
-						&mut dst_mip.pixels,
-						&mut self.temp_buffer,
-					);
-				}
-
-				if let Some(emissive_texture) = &mut texture_data.emissive_texture
-				{
-					for mip_index in 0 .. NUM_MIPS
-					{
-						let src_mip = &emissive_texture[mip_index];
-						let dst_mip = &mut texture_data.emissive_texture_modified[mip_index];
-						if dst_mip.pixels.is_empty()
-						{
-							*dst_mip = src_mip.clone();
-						}
-
-						make_turb_distortion(
-							turb,
-							current_time_s,
-							[src_mip.size[0] as i32, src_mip.size[1] as i32],
-							mip_index,
-							&src_mip.pixels,
-							&mut dst_mip.pixels,
-							&mut self.temp_color_buffer,
-						);
-					}
-				}
-			}
+			self.textures
+				.iter_mut()
+				.for_each(|t| animate_texture(t, current_time_s));
+		}
+		else
+		{
+			self.textures
+				.par_iter_mut()
+				.for_each(|t| animate_texture(t, current_time_s));
 		}
 	}
 
@@ -339,6 +299,53 @@ struct TextureMappingElement
 	frame_change_time_point: f32,
 }
 
+fn animate_texture(texture_data: &mut MapTextureData, current_time_s: f32)
+{
+	if let Some(turb) = &texture_data.material.turb
+	{
+		for mip_index in 0 .. NUM_MIPS
+		{
+			let src_mip = &texture_data.texture[mip_index];
+			let dst_mip = &mut texture_data.texture_modified[mip_index];
+			if dst_mip.pixels.is_empty()
+			{
+				*dst_mip = src_mip.clone();
+			}
+
+			make_turb_distortion(
+				turb,
+				current_time_s,
+				[src_mip.size[0] as i32, src_mip.size[1] as i32],
+				mip_index,
+				&src_mip.pixels,
+				&mut dst_mip.pixels,
+			);
+		}
+
+		if let Some(emissive_texture) = &mut texture_data.emissive_texture
+		{
+			for mip_index in 0 .. NUM_MIPS
+			{
+				let src_mip = &emissive_texture[mip_index];
+				let dst_mip = &mut texture_data.emissive_texture_modified[mip_index];
+				if dst_mip.pixels.is_empty()
+				{
+					*dst_mip = src_mip.clone();
+				}
+
+				make_turb_distortion(
+					turb,
+					current_time_s,
+					[src_mip.size[0] as i32, src_mip.size[1] as i32],
+					mip_index,
+					&src_mip.pixels,
+					&mut dst_mip.pixels,
+				);
+			}
+		}
+	}
+}
+
 fn make_turb_distortion<T: Copy + Default>(
 	turb: &TurbParams,
 	current_time_s: f32,
@@ -346,7 +353,6 @@ fn make_turb_distortion<T: Copy + Default>(
 	mip: usize,
 	src_pixels: &[T],
 	dst_pixels: &mut [T],
-	temp_buffer: &mut Vec<T>,
 )
 {
 	// TODO - speed-up this. Use unsafe f32 -> i32 conversion, use indexing without bounds check.
@@ -379,9 +385,14 @@ fn make_turb_distortion<T: Copy + Default>(
 		}
 	}
 
-	// TODO - use stack buffer instead
 	// Shift columns.
-	temp_buffer.resize(size[1] as usize, T::default());
+	const MAX_TURB_TEXTURE_HEIGHT: usize = 1024;
+	if size[1] > MAX_TURB_TEXTURE_HEIGHT as i32
+	{
+		return;
+	}
+
+	let mut temp_buffer = [T::default(); MAX_TURB_TEXTURE_HEIGHT]; // TODO - use uninitialized memory
 
 	for x in 0 .. size[0]
 	{
