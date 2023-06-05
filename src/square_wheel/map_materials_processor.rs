@@ -438,7 +438,20 @@ fn animate_texture(
 				let shift = animation_layer
 					.tex_coord_shift_func
 					.map(|f| (f.evaluate(current_time_s) as i32) >> mip_index);
-				let light = [1.0; 3];
+
+				const MAX_LIGHT: f32 = 127.0;
+				let light = if let Some(modulate_color) = &animation_layer.modulate_color
+				{
+					modulate_color.map(|f| f.evaluate(current_time_s).max(0.0).min(MAX_LIGHT))
+				}
+				else if let Some(modulate) = &animation_layer.modulate
+				{
+					[modulate.evaluate(current_time_s).max(0.0).min(MAX_LIGHT); 3]
+				}
+				else
+				{
+					[1.0; 3]
+				};
 
 				let layer_texture = &all_textures_data[*texture_index as usize];
 				let src_mip = &layer_texture.texture[mip_index];
@@ -686,7 +699,8 @@ fn apply_texture_layer_impl_2<const BLENDING_MODE: usize, const MODULATE: bool>(
 
 				if BLENDING_MODE == BLENDING_MODE_NONE
 				{
-					*dst_texel = texel_value;
+					dst_texel.diffuse = texel_value_modulated.into();
+					dst_texel.packed_normal_roughness = texel_value.packed_normal_roughness;
 				}
 				else if BLENDING_MODE == BLENDING_MODE_AVERAGE
 				{

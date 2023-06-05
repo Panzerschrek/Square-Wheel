@@ -175,6 +175,15 @@ pub struct LayeredAnimationLayer
 	/// How to perform shift of texture, depending on time.
 	#[serde(default)]
 	pub tex_coord_shift_func: [SingleArgumentFunction; 2],
+
+	/// If some - modulate texture color using this function.
+	#[serde(default)]
+	pub modulate: Option<SingleArgumentFunction>,
+	/// If some - modulate texture color by this value.
+
+	/// Same as abowe, but per-component modulation function.
+	#[serde(default)]
+	pub modulate_color: Option<[SingleArgumentFunction; 3]>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
