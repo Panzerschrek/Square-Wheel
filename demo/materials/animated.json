@@ -1,0 +1,158 @@
+{
+	"monkey_head_anim_0":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0000.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_1",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_1":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0001.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_2",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_2":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0002.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_3",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_3":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0003.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_4",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_4":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0004.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_5",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_5":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0005.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_6",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_6":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0006.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_7",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_7":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0007.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_8",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_8":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0008.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_9",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_9":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0009.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_10",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_10":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0010.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_11",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_11":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0011.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_0",
+			"duration" : 0.2
+		}
+	}
+}
