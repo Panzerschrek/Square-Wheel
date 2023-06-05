@@ -430,12 +430,14 @@ fn animate_texture(
 			dst_mip.has_non_one_roughness = false;
 			dst_mip.is_metal = false;
 
-			for (_animation_layer, texture_index) in layered_animation
+			for (animation_layer, texture_index) in layered_animation
 				.layers
 				.iter()
 				.zip(&texture_data.layered_animation_layers_texture_index)
 			{
-				let shift = [0, 0];
+				let shift = animation_layer
+					.tex_coord_shift_func
+					.map(|f| (f.evaluate(current_time_s) as i32) >> mip_index);
 				let light = [1.0; 3];
 
 				let layer_texture = &all_textures_data[*texture_index as usize];
@@ -462,6 +464,7 @@ fn animate_texture(
 						*dst_emissive_mip = src_emissive_mip.clone();
 					}
 
+					// Use for emissive texture blending same code, as for surfaces.
 					surfaces::mix_surface_with_texture(
 						dst_emissive_mip.size,
 						shift,

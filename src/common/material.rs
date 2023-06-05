@@ -1,3 +1,4 @@
+use super::material_function::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -170,6 +171,10 @@ pub struct LayeredAnimationLayer
 	/// blending mode of this material is used for blending of result animated texture.
 	/// Note that only static material texture is used, layerd animation of that material can't be used, because this can cause infinite recursion.
 	pub material_name: String,
+
+	/// How to perform shift of texture, depending on time.
+	#[serde(default)]
+	pub tex_coord_shift_func: [SingleArgumentFunction; 2],
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
