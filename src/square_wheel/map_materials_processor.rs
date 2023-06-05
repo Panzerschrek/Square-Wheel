@@ -233,19 +233,21 @@ impl MapMaterialsProcessor
 
 		// Perform animation in parallel (if has enough threads).
 		// TODO - maybe perform lazy update (on demand)?
+		let textures = &self.textures;
+		let textures_mutable = &mut self.textures_mutable;
 		if rayon::current_num_threads() == 1
 		{
-			self.textures
+			textures_mutable
 				.iter_mut()
-				.zip(&mut self.textures_mutable)
-				.for_each(|(t, tm)| animate_texture(t, tm, current_time_s));
+				.zip(textures)
+				.for_each(|(tm, t)| animate_texture(tm, t, textures, current_time_s));
 		}
 		else
 		{
-			self.textures
+			textures_mutable
 				.par_iter_mut()
-				.zip_eq(&mut self.textures_mutable)
-				.for_each(|(t, tm)| animate_texture(t, tm, current_time_s));
+				.zip_eq(textures)
+				.for_each(|(tm, t)| animate_texture(tm, t, textures, current_time_s));
 		}
 	}
 
@@ -364,8 +366,9 @@ struct TextureMappingElement
 }
 
 fn animate_texture(
-	texture_data: &mut MapTextureData,
 	texture_data_mutable: &mut MapTextureDataMutable,
+	texture_data: &MapTextureData,
+	all_textures_data: &[MapTextureData],
 	current_time_s: f32,
 )
 {
@@ -390,7 +393,7 @@ fn animate_texture(
 			);
 		}
 
-		if let Some(emissive_texture) = &mut texture_data.emissive_texture
+		if let Some(emissive_texture) = &texture_data.emissive_texture
 		{
 			for mip_index in 0 .. NUM_MIPS
 			{
@@ -409,6 +412,43 @@ fn animate_texture(
 					&src_mip.pixels,
 					&mut dst_mip.pixels,
 				);
+			}
+		}
+	}
+
+	if let Some(layered_animation) = &texture_data.material.layered_animation
+	{
+		for mip_index in 0 .. NUM_MIPS
+		{
+			let dst_mip = &mut texture_data_mutable.texture_modified[mip_index];
+			if dst_mip.pixels.is_empty()
+			{
+				*dst_mip = texture_data.texture[mip_index].clone();
+			}
+
+			dst_mip.has_normal_map = false;
+			dst_mip.has_non_one_roughness = false;
+			dst_mip.is_metal = false;
+
+			for (_animation_layer, texture_index) in layered_animation
+				.layers
+				.iter()
+				.zip(&texture_data.layered_animation_layers_texture_index)
+			{
+				let layer_texture = &all_textures_data[*texture_index as usize];
+				let src_mip = &layer_texture.texture[mip_index];
+				apply_texture_layer(
+					dst_mip.size,
+					&mut dst_mip.pixels,
+					src_mip,
+					[0, 0],
+					[1.0, 1.0, 1.0],
+					layer_texture.material.blending_mode,
+				);
+
+				dst_mip.has_normal_map |= src_mip.has_normal_map;
+				dst_mip.has_non_one_roughness |= src_mip.has_non_one_roughness;
+				dst_mip.is_metal |= src_mip.is_metal;
 			}
 		}
 	}
@@ -480,6 +520,150 @@ fn make_turb_distortion<T: Copy + Default>(
 			if src_y == size[1]
 			{
 				src_y = 0;
+			}
+		}
+	}
+}
+
+fn apply_texture_layer(
+	texture_size: [u32; 2],
+	texture_data: &mut [TextureElement],
+	layer_texture: &Texture,
+	layer_texture_offset: [i32; 2],
+	light: [f32; 3],
+	blending_mode: BlendingMode,
+)
+{
+	match blending_mode
+	{
+		BlendingMode::None =>
+		{
+			apply_texture_layer_impl::<BLENDING_MODE_NONE>(
+				texture_size,
+				texture_data,
+				layer_texture,
+				layer_texture_offset,
+				light,
+			);
+		},
+		BlendingMode::Average =>
+		{
+			apply_texture_layer_impl::<BLENDING_MODE_AVERAGE>(
+				texture_size,
+				texture_data,
+				layer_texture,
+				layer_texture_offset,
+				light,
+			);
+		},
+		BlendingMode::Additive =>
+		{
+			apply_texture_layer_impl::<BLENDING_MODE_ADDITIVE>(
+				texture_size,
+				texture_data,
+				layer_texture,
+				layer_texture_offset,
+				light,
+			);
+		},
+		BlendingMode::AlphaTest =>
+		{
+			apply_texture_layer_impl::<BLENDING_MODE_ALPHA_TEST>(
+				texture_size,
+				texture_data,
+				layer_texture,
+				layer_texture_offset,
+				light,
+			);
+		},
+		BlendingMode::AlphaBlend =>
+		{
+			apply_texture_layer_impl::<BLENDING_MODE_ALPHA_BLEND>(
+				texture_size,
+				texture_data,
+				layer_texture,
+				layer_texture_offset,
+				light,
+			);
+		},
+	}
+}
+
+fn apply_texture_layer_impl<const BLENDING_MODE: usize>(
+	texture_size: [u32; 2],
+	texture_data: &mut [TextureElement],
+	layer_texture: &Texture,
+	layer_texture_offset: [i32; 2],
+	light: [f32; 3],
+)
+{
+	const LIGHT_SHIFT: i32 = 8;
+	let light_scale = (1 << LIGHT_SHIFT) as f32;
+	let light_vec =
+		ColorVecI::from_color_f32x3(&[light[0] * light_scale, light[1] * light_scale, light[1] * light_scale]);
+
+	for dst_v in 0 .. texture_size[1]
+	{
+		let dst_line_start = (dst_v * texture_size[0]) as usize;
+		let dst_line = &mut texture_data[dst_line_start .. dst_line_start + (texture_size[0] as usize)];
+
+		let src_v = (layer_texture_offset[1] + (dst_v as i32)).rem_euclid(layer_texture.size[1] as i32);
+		let src_line_start = ((src_v as u32) * layer_texture.size[0]) as usize;
+		let src_line = &layer_texture.pixels[src_line_start .. src_line_start + (layer_texture.size[0] as usize)];
+		let mut src_u = layer_texture_offset[0].rem_euclid(layer_texture.size[0] as i32);
+
+		for dst_texel in dst_line.iter_mut()
+		{
+			// TODO - try optimize this (somehow).
+
+			let texel_value = unsafe { debug_only_checked_fetch(src_line, src_u as usize) };
+			let texel_value_modulated = ColorVecI::shift_right::<LIGHT_SHIFT>(&ColorVecI::mul(
+				&ColorVecI::from_color32(texel_value.diffuse),
+				&light_vec,
+			));
+
+			if BLENDING_MODE == BLENDING_MODE_NONE
+			{
+				*dst_texel = texel_value;
+			}
+			else if BLENDING_MODE == BLENDING_MODE_AVERAGE
+			{
+				// TODO - support normals/roughness blending.
+				dst_texel.diffuse = ColorVecI::shift_right::<1>(&ColorVecI::add(
+					&texel_value_modulated,
+					&ColorVecI::from_color32(dst_texel.diffuse),
+				))
+				.into();
+			}
+			else if BLENDING_MODE == BLENDING_MODE_ADDITIVE
+			{
+				// TODO - support normals/roughness blending.
+				dst_texel.diffuse =
+					ColorVecI::add(&texel_value_modulated, &ColorVecI::from_color32(dst_texel.diffuse)).into();
+			}
+			else if BLENDING_MODE == BLENDING_MODE_ALPHA_TEST
+			{
+				if texel_value.diffuse.test_alpha()
+				{
+					dst_texel.diffuse = texel_value_modulated.into();
+					dst_texel.packed_normal_roughness = texel_value.packed_normal_roughness;
+				}
+			}
+			else if BLENDING_MODE == BLENDING_MODE_ALPHA_BLEND
+			{
+				// TODO - support normals/roughness blending.
+				let alpha = texel_value.diffuse.get_alpha();
+				dst_texel.diffuse = ColorVecI::shift_right::<8>(&ColorVecI::add(
+					&ColorVecI::mul_scalar(&texel_value_modulated, alpha),
+					&ColorVecI::mul_scalar(&ColorVecI::from_color32(dst_texel.diffuse), 255 - alpha),
+				))
+				.into();
+			}
+
+			src_u += 1;
+			if src_u == (layer_texture.size[0] as i32)
+			{
+				src_u = 0;
 			}
 		}
 	}
