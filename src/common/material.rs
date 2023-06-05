@@ -67,6 +67,7 @@ pub struct Material
 	pub scroll_speed: [f32; 2],
 
 	/// If non-empty - additional texture will be composed atop of surface, multiplied by specified light.
+	/// Note that if ths material uses layered animation and at least some of the layers include emissive layer, emissive layer of this materials must be present (with dummy emissive texture).
 	#[serde(default)]
 	pub emissive_layer: Option<EmissiveLayer>,
 

@@ -1,4 +1,4 @@
-use super::{abstract_color::*, fast_math::*, resources_manager::*, textures::*};
+use super::{abstract_color::*, fast_math::*, resources_manager::*, surfaces, textures::*};
 use crate::common::{bsp_map_compact, color::*, material::*};
 use rayon::prelude::*;
 use std::{borrow::Borrow, collections::HashMap};
@@ -435,20 +435,42 @@ fn animate_texture(
 				.iter()
 				.zip(&texture_data.layered_animation_layers_texture_index)
 			{
+				let shift = [0, 0];
+				let light = [1.0; 3];
+
 				let layer_texture = &all_textures_data[*texture_index as usize];
 				let src_mip = &layer_texture.texture[mip_index];
 				apply_texture_layer(
 					dst_mip.size,
 					&mut dst_mip.pixels,
 					src_mip,
-					[0, 0],
-					[1.0, 1.0, 1.0],
+					shift,
+					light,
 					layer_texture.material.blending_mode,
 				);
 
 				dst_mip.has_normal_map |= src_mip.has_normal_map;
 				dst_mip.has_non_one_roughness |= src_mip.has_non_one_roughness;
 				dst_mip.is_metal |= src_mip.is_metal;
+
+				if let Some(emissive_texture) = &layer_texture.emissive_texture
+				{
+					let src_emissive_mip = &emissive_texture[mip_index];
+					let dst_emissive_mip = &mut texture_data_mutable.emissive_texture_modified[mip_index];
+					if dst_emissive_mip.pixels.is_empty()
+					{
+						*dst_emissive_mip = src_emissive_mip.clone();
+					}
+
+					surfaces::mix_surface_with_texture(
+						dst_emissive_mip.size,
+						shift,
+						src_emissive_mip,
+						layer_texture.material.blending_mode,
+						light,
+						&mut dst_emissive_mip.pixels,
+					);
+				}
 			}
 		}
 	}
