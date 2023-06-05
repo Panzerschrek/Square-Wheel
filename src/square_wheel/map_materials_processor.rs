@@ -563,7 +563,7 @@ fn apply_texture_layer(
 	{
 		BlendingMode::None =>
 		{
-			apply_texture_layer_impl::<BLENDING_MODE_NONE>(
+			apply_texture_layer_impl_1::<BLENDING_MODE_NONE>(
 				texture_size,
 				texture_data,
 				layer_texture,
@@ -573,7 +573,7 @@ fn apply_texture_layer(
 		},
 		BlendingMode::Average =>
 		{
-			apply_texture_layer_impl::<BLENDING_MODE_AVERAGE>(
+			apply_texture_layer_impl_1::<BLENDING_MODE_AVERAGE>(
 				texture_size,
 				texture_data,
 				layer_texture,
@@ -583,7 +583,7 @@ fn apply_texture_layer(
 		},
 		BlendingMode::Additive =>
 		{
-			apply_texture_layer_impl::<BLENDING_MODE_ADDITIVE>(
+			apply_texture_layer_impl_1::<BLENDING_MODE_ADDITIVE>(
 				texture_size,
 				texture_data,
 				layer_texture,
@@ -593,7 +593,7 @@ fn apply_texture_layer(
 		},
 		BlendingMode::AlphaTest =>
 		{
-			apply_texture_layer_impl::<BLENDING_MODE_ALPHA_TEST>(
+			apply_texture_layer_impl_1::<BLENDING_MODE_ALPHA_TEST>(
 				texture_size,
 				texture_data,
 				layer_texture,
@@ -603,7 +603,7 @@ fn apply_texture_layer(
 		},
 		BlendingMode::AlphaBlend =>
 		{
-			apply_texture_layer_impl::<BLENDING_MODE_ALPHA_BLEND>(
+			apply_texture_layer_impl_1::<BLENDING_MODE_ALPHA_BLEND>(
 				texture_size,
 				texture_data,
 				layer_texture,
@@ -614,7 +614,43 @@ fn apply_texture_layer(
 	}
 }
 
-fn apply_texture_layer_impl<const BLENDING_MODE: usize>(
+fn apply_texture_layer_impl_1<const BLENDING_MODE: usize>(
+	texture_size: [u32; 2],
+	texture_data: &mut [TextureElement],
+	layer_texture: &Texture,
+	layer_texture_offset: [i32; 2],
+	light: [f32; 3],
+)
+{
+	let mut modulate = false;
+	for component in light
+	{
+		modulate |= component < 0.98 || component > 1.02
+	}
+
+	if modulate
+	{
+		apply_texture_layer_impl_2::<BLENDING_MODE, true>(
+			texture_size,
+			texture_data,
+			layer_texture,
+			layer_texture_offset,
+			light,
+		);
+	}
+	else
+	{
+		apply_texture_layer_impl_2::<BLENDING_MODE, false>(
+			texture_size,
+			texture_data,
+			layer_texture,
+			layer_texture_offset,
+			light,
+		);
+	}
+}
+
+fn apply_texture_layer_impl_2<const BLENDING_MODE: usize, const MODULATE: bool>(
 	texture_size: [u32; 2],
 	texture_data: &mut [TextureElement],
 	layer_texture: &Texture,
@@ -639,50 +675,92 @@ fn apply_texture_layer_impl<const BLENDING_MODE: usize>(
 
 		for dst_texel in dst_line.iter_mut()
 		{
-			// TODO - try optimize this (somehow).
-
 			let texel_value = unsafe { debug_only_checked_fetch(src_line, src_u as usize) };
-			let texel_value_modulated = ColorVecI::shift_right::<LIGHT_SHIFT>(&ColorVecI::mul(
-				&ColorVecI::from_color32(texel_value.diffuse),
-				&light_vec,
-			));
+			if MODULATE
+			{
+				// Mix with modulated by light layer.
+				let texel_value_modulated = ColorVecI::shift_right::<LIGHT_SHIFT>(&ColorVecI::mul(
+					&ColorVecI::from_color32(texel_value.diffuse),
+					&light_vec,
+				));
 
-			if BLENDING_MODE == BLENDING_MODE_NONE
-			{
-				*dst_texel = texel_value;
-			}
-			else if BLENDING_MODE == BLENDING_MODE_AVERAGE
-			{
-				// TODO - support normals/roughness blending.
-				dst_texel.diffuse = ColorVecI::shift_right::<1>(&ColorVecI::add(
-					&texel_value_modulated,
-					&ColorVecI::from_color32(dst_texel.diffuse),
-				))
-				.into();
-			}
-			else if BLENDING_MODE == BLENDING_MODE_ADDITIVE
-			{
-				// TODO - support normals/roughness blending.
-				dst_texel.diffuse =
-					ColorVecI::add(&texel_value_modulated, &ColorVecI::from_color32(dst_texel.diffuse)).into();
-			}
-			else if BLENDING_MODE == BLENDING_MODE_ALPHA_TEST
-			{
-				if texel_value.diffuse.test_alpha()
+				if BLENDING_MODE == BLENDING_MODE_NONE
 				{
-					dst_texel.diffuse = texel_value_modulated.into();
-					dst_texel.packed_normal_roughness = texel_value.packed_normal_roughness;
+					*dst_texel = texel_value;
+				}
+				else if BLENDING_MODE == BLENDING_MODE_AVERAGE
+				{
+					// TODO - support normals/roughness blending.
+					dst_texel.diffuse = ColorVecI::shift_right::<1>(&ColorVecI::add(
+						&texel_value_modulated,
+						&ColorVecI::from_color32(dst_texel.diffuse),
+					))
+					.into();
+				}
+				else if BLENDING_MODE == BLENDING_MODE_ADDITIVE
+				{
+					// TODO - support normals/roughness blending.
+					dst_texel.diffuse =
+						ColorVecI::add(&texel_value_modulated, &ColorVecI::from_color32(dst_texel.diffuse)).into();
+				}
+				else if BLENDING_MODE == BLENDING_MODE_ALPHA_TEST
+				{
+					if texel_value.diffuse.test_alpha()
+					{
+						dst_texel.diffuse = texel_value_modulated.into();
+						dst_texel.packed_normal_roughness = texel_value.packed_normal_roughness;
+					}
+				}
+				else if BLENDING_MODE == BLENDING_MODE_ALPHA_BLEND
+				{
+					// TODO - support normals/roughness blending.
+					let alpha = texel_value.diffuse.get_alpha();
+					dst_texel.diffuse = ColorVecI::shift_right::<8>(&ColorVecI::add(
+						&ColorVecI::mul_scalar(&texel_value_modulated, alpha),
+						&ColorVecI::mul_scalar(&ColorVecI::from_color32(dst_texel.diffuse), 255 - alpha),
+					))
+					.into();
 				}
 			}
-			else if BLENDING_MODE == BLENDING_MODE_ALPHA_BLEND
+			else
 			{
-				// TODO - support normals/roughness blending.
-				let alpha = texel_value.diffuse.get_alpha();
-				dst_texel.diffuse = ColorVecI::shift_right::<8>(&ColorVecI::add(
-					&ColorVecI::mul_scalar(&texel_value_modulated, alpha),
-					&ColorVecI::mul_scalar(&ColorVecI::from_color32(dst_texel.diffuse), 255 - alpha),
-				))
-				.into();
+				// Mix with initial texture (without modulation).
+				if BLENDING_MODE == BLENDING_MODE_NONE
+				{
+					*dst_texel = texel_value;
+				}
+				else if BLENDING_MODE == BLENDING_MODE_AVERAGE
+				{
+					// TODO - support normals/roughness blending.
+					dst_texel.diffuse = Color32::get_average(dst_texel.diffuse, texel_value.diffuse);
+				}
+				else if BLENDING_MODE == BLENDING_MODE_ADDITIVE
+				{
+					// TODO - support normals/roughness blending.
+					dst_texel.diffuse = ColorVecI::add(
+						&ColorVecI::from_color32(texel_value.diffuse),
+						&ColorVecI::from_color32(dst_texel.diffuse),
+					)
+					.into();
+				}
+				else if BLENDING_MODE == BLENDING_MODE_ALPHA_TEST
+				{
+					if texel_value.diffuse.test_alpha()
+					{
+						dst_texel.diffuse = dst_texel.diffuse;
+						dst_texel.packed_normal_roughness = texel_value.packed_normal_roughness;
+					}
+				}
+				else if BLENDING_MODE == BLENDING_MODE_ALPHA_BLEND
+				{
+					// TODO - support normals/roughness blending.
+					let alpha = texel_value.diffuse.get_alpha();
+					dst_texel.diffuse = ColorVecI::shift_right::<8>(&ColorVecI::add(
+						&ColorVecI::mul_scalar(&ColorVecI::from_color32(dst_texel.diffuse), alpha),
+						&ColorVecI::mul_scalar(&ColorVecI::from_color32(dst_texel.diffuse), 255 - alpha),
+					))
+					.into();
+				}
 			}
 
 			src_u += 1;
