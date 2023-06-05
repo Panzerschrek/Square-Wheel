@@ -68,7 +68,9 @@ pub struct Material
 	pub scroll_speed: [f32; 2],
 
 	/// If non-empty - additional texture will be composed atop of surface, multiplied by specified light.
-	/// Note that if ths material uses layered animation and at least some of the layers include emissive layer, emissive layer of this materials must be present (with dummy emissive texture).
+	/// Note that if this material uses layered animation and at least some of the layers include emissive layer,
+	/// emissive layer of this materials must be present (with dummy emissive texture).
+	/// This is required in order to set proper light value.
 	#[serde(default)]
 	pub emissive_layer: Option<EmissiveLayer>,
 
@@ -86,7 +88,7 @@ pub struct Material
 	/// If some - this is layered-animated material.
 	/// Material texture will be generated each frame, based on provided layers and params.
 	/// Material texture needs to be regenerated each frame and this may take significant amount of frame time.
-	/// So, avoid using too many textures with layered animations - prefer framed animations and/or scrolling.
+	/// So, avoid using too many textures in map or tool large textures with layered animations - prefer framed animations and/or scrolling.
 	/// Layered animation presense doesn't affect map compiler and lightmaper - like framed animation.
 	pub layered_animation: Option<LayeredAnimation>,
 
@@ -161,6 +163,8 @@ pub struct AnimationFrame
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LayeredAnimation
 {
+	/// Size of result image is determined by size of first layer.
+	/// So, it is possible to create large texture (with large first layer) with additional layers as smaller tileable textures.
 	pub layers: Vec<LayeredAnimationLayer>,
 }
 
@@ -174,14 +178,16 @@ pub struct LayeredAnimationLayer
 
 	/// How to perform shift of texture, depending on time.
 	#[serde(default)]
-	pub tex_coord_shift_func: [SingleArgumentFunction; 2],
+	pub tex_coord_shift: [SingleArgumentFunction; 2],
 
-	/// If some - modulate texture color using this function.
+	/// If some - modulate texture color using this time-dependent function.
+	/// Value is clamped to 0.
+	/// Values greater than one are possible, but result texture will be clamped to range [0, 1], because textures have only 8 bits per channel.
 	#[serde(default)]
 	pub modulate: Option<SingleArgumentFunction>,
-	/// If some - modulate texture color by this value.
 
 	/// Same as abowe, but per-component modulation function.
+	/// If both modulation params are none - no modulation will be used (is equivalent to multiplication by 1).
 	#[serde(default)]
 	pub modulate_color: Option<[SingleArgumentFunction; 3]>,
 }

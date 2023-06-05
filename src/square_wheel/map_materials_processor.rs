@@ -436,7 +436,7 @@ fn animate_texture(
 				.zip(&texture_data.layered_animation_layers_texture_index)
 			{
 				let shift = animation_layer
-					.tex_coord_shift_func
+					.tex_coord_shift
 					.map(|f| (f.evaluate(current_time_s) as i32) >> mip_index);
 
 				const MAX_LIGHT: f32 = 127.0;

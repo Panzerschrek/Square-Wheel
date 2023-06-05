@@ -32,16 +32,7 @@
 	"bricks":
 	{
 		"diffuse": "bricks.png",
-		"normal_map": "bricks_normal.png",
-		"layered_animation" :
-		{
-			"layers" :
-			[
-				{
-					"material_name" : "glowing_button"
-				}
-			]
-		}
+		"normal_map": "bricks_normal.png"
 	},
 	"bolted_metal_crate":
 	{
