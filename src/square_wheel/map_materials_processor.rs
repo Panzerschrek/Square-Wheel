@@ -5,8 +5,8 @@ use std::{borrow::Borrow, collections::HashMap};
 
 pub struct MapMaterialsProcessor
 {
-	// First map textures, than additional textures.
-	// use two vectors in order to have immutable access to one, while modifying another.
+	// Store here first map textures, than additional textures.
+	// Use two vectors in order to have immutable access to one, while modifying another.
 	textures: Vec<MapTextureData>,
 	textures_mutable: Vec<MapTextureDataMutable>,
 	textures_mapping_table: Vec<TextureMappingElement>,
@@ -63,55 +63,11 @@ impl MapMaterialsProcessor
 				texture,
 				emissive_texture,
 				next_frame_texture_index: invalid_texture_index,
-				layered_animation_layers_texture_index: Vec::new(),
+				layered_animation_textures: Vec::new(),
 			});
 		}
 
-		// Load additional materials for animation frames.
-		// TODO - try to load textures in parallel.
-		// Can't use "for" loop here, because range is calculated once, but we need to iterate over all textures, including newly loaded.
-		let mut i = 0;
-		while i < textures.len()
-		{
-			let material = &textures[i].material;
-			if let Some(framed_animation) = &material.framed_animation
-			{
-				if let Some(already_loaded_texture_index) =
-					material_name_to_texture_index.get(&framed_animation.next_material_name)
-				{
-					textures[i].next_frame_texture_index = *already_loaded_texture_index;
-				}
-				else
-				{
-					if let Some(material) = all_materials.get(&framed_animation.next_material_name).as_deref()
-					{
-						let texture = r.get_material_texture(&framed_animation.next_material_name);
-						let emissive_texture = material.emissive_layer.as_ref().map(|l| r.get_texture_lite(&l.image));
-
-						let texture_index = textures.len() as u32;
-						material_name_to_texture_index
-							.insert(framed_animation.next_material_name.clone(), texture_index);
-						textures.push(MapTextureData {
-							material: material.clone(),
-							texture,
-							emissive_texture,
-							next_frame_texture_index: invalid_texture_index,
-							layered_animation_layers_texture_index: Vec::new(),
-						});
-
-						textures[i].next_frame_texture_index = texture_index;
-					}
-					else
-					{
-						println!("Can't find material {}", framed_animation.next_material_name);
-					}
-				}
-			}
-
-			i += 1;
-		}
-
-		// Load additional materials for layered animations.
+		// Load additional materials for animation frames and layered animations.
 		// TODO - try to load textures in parallel.
 		// Can't use "for" loop here, because range is calculated once, but we need to iterate over all textures, including newly loaded.
 		let mut i = 0;
@@ -119,46 +75,69 @@ impl MapMaterialsProcessor
 		{
 			if let Some(layered_animation) = textures[i].material.layered_animation.clone()
 			{
-				for layered_animation_layer in &layered_animation.layers
+				for animation_layer in &layered_animation.layers
 				{
 					if let Some(already_loaded_texture_index) =
-						material_name_to_texture_index.get(&layered_animation_layer.material_name)
+						material_name_to_texture_index.get(&animation_layer.material_name)
 					{
 						textures[i]
-							.layered_animation_layers_texture_index
+							.layered_animation_textures
 							.push(*already_loaded_texture_index);
+					}
+					else if let Some(material) = all_materials.get(&animation_layer.material_name).cloned()
+					{
+						let texture = r.get_material_texture(&animation_layer.material_name);
+						let emissive_texture = material.emissive_layer.as_ref().map(|l| r.get_texture_lite(&l.image));
+
+						let texture_index = textures.len() as u32;
+						material_name_to_texture_index.insert(animation_layer.material_name.clone(), texture_index);
+						textures.push(MapTextureData {
+							material,
+							texture,
+							emissive_texture,
+							next_frame_texture_index: invalid_texture_index,
+							layered_animation_textures: Vec::new(),
+						});
+
+						textures[i].layered_animation_textures.push(texture_index);
 					}
 					else
 					{
-						if let Some(material) = all_materials.get(&layered_animation_layer.material_name).as_deref()
-						{
-							let texture = r.get_material_texture(&layered_animation_layer.material_name);
-							let emissive_texture =
-								material.emissive_layer.as_ref().map(|l| r.get_texture_lite(&l.image));
-
-							let texture_index = textures.len() as u32;
-							material_name_to_texture_index
-								.insert(layered_animation_layer.material_name.clone(), texture_index);
-							textures.push(MapTextureData {
-								material: material.clone(),
-								texture,
-								emissive_texture,
-								next_frame_texture_index: invalid_texture_index,
-								layered_animation_layers_texture_index: Vec::new(),
-							});
-
-							textures[i].layered_animation_layers_texture_index.push(texture_index);
-						}
-						else
-						{
-							println!("Can't find material {}", layered_animation_layer.material_name);
-							textures[i].layered_animation_layers_texture_index.push(0);
-						}
+						println!("Can't find material {}", animation_layer.material_name);
+						textures[i].layered_animation_textures.push(0);
 					}
 				}
-				debug_assert!(
-					textures[i].layered_animation_layers_texture_index.len() == layered_animation.layers.len()
-				);
+				debug_assert!(textures[i].layered_animation_textures.len() == layered_animation.layers.len());
+			}
+
+			if let Some(framed_animation) = &textures[i].material.framed_animation
+			{
+				if let Some(already_loaded_texture_index) =
+					material_name_to_texture_index.get(&framed_animation.next_material_name)
+				{
+					textures[i].next_frame_texture_index = *already_loaded_texture_index;
+				}
+				else if let Some(material) = all_materials.get(&framed_animation.next_material_name).cloned()
+				{
+					let texture = r.get_material_texture(&framed_animation.next_material_name);
+					let emissive_texture = material.emissive_layer.as_ref().map(|l| r.get_texture_lite(&l.image));
+
+					let texture_index = textures.len() as u32;
+					material_name_to_texture_index.insert(framed_animation.next_material_name.clone(), texture_index);
+					textures.push(MapTextureData {
+						material,
+						texture,
+						emissive_texture,
+						next_frame_texture_index: invalid_texture_index,
+						layered_animation_textures: Vec::new(),
+					});
+
+					textures[i].next_frame_texture_index = texture_index;
+				}
+				else
+				{
+					println!("Can't find material {}", framed_animation.next_material_name);
+				}
 			}
 
 			i += 1;
@@ -345,7 +324,8 @@ struct MapTextureData
 	emissive_texture: Option<SharedResourcePtr<TextureLiteWithMips>>,
 	// Invalid index if has no framed animation.
 	next_frame_texture_index: u32,
-	layered_animation_layers_texture_index: Vec<u32>,
+	// Indeces of textures, used as layers for layered animation (if this texture uses layerd animation).
+	layered_animation_textures: Vec<u32>,
 }
 
 #[derive(Default, Clone)]
@@ -433,7 +413,7 @@ fn animate_texture(
 			for (animation_layer, texture_index) in layered_animation
 				.layers
 				.iter()
-				.zip(&texture_data.layered_animation_layers_texture_index)
+				.zip(&texture_data.layered_animation_textures)
 			{
 				let shift = animation_layer
 					.tex_coord_shift
