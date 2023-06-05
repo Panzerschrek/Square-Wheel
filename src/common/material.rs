@@ -176,6 +176,10 @@ pub struct LayeredAnimationLayer
 	/// Note that only static material texture is used, layerd animation of that material can't be used, because this can cause infinite recursion.
 	pub material_name: String,
 
+	/// If true - fetch not layer material itself, but its current framed animation frame.
+	#[serde(default)]
+	pub follow_framed_animation: bool,
+
 	/// How to perform shift of texture, depending on time.
 	#[serde(default)]
 	pub tex_coord_shift: [SingleArgumentFunction; 2],

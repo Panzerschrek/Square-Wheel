@@ -214,19 +214,20 @@ impl MapMaterialsProcessor
 		// TODO - maybe perform lazy update (on demand)?
 		let textures = &self.textures;
 		let textures_mutable = &mut self.textures_mutable;
+		let textures_mapping_table = &self.textures_mapping_table;
 		if rayon::current_num_threads() == 1
 		{
 			textures_mutable
 				.iter_mut()
 				.zip(textures)
-				.for_each(|(tm, t)| animate_texture(tm, t, textures, current_time_s));
+				.for_each(|(tm, t)| animate_texture(tm, t, textures, textures_mapping_table, current_time_s));
 		}
 		else
 		{
 			textures_mutable
 				.par_iter_mut()
 				.zip_eq(textures)
-				.for_each(|(tm, t)| animate_texture(tm, t, textures, current_time_s));
+				.for_each(|(tm, t)| animate_texture(tm, t, textures, textures_mapping_table, current_time_s));
 		}
 	}
 
@@ -349,6 +350,7 @@ fn animate_texture(
 	texture_data_mutable: &mut MapTextureDataMutable,
 	texture_data: &MapTextureData,
 	all_textures_data: &[MapTextureData],
+	textures_mapping_table: &[TextureMappingElement],
 	current_time_s: f32,
 )
 {
@@ -433,7 +435,16 @@ fn animate_texture(
 					[1.0; 3]
 				};
 
-				let layer_texture = &all_textures_data[*texture_index as usize];
+				let texture_index_corrected = if animation_layer.follow_framed_animation
+				{
+					textures_mapping_table[*texture_index as usize].index
+				}
+				else
+				{
+					*texture_index
+				};
+				let layer_texture = &all_textures_data[texture_index_corrected as usize];
+
 				let src_mip = &layer_texture.texture[mip_index];
 				apply_texture_layer(
 					dst_mip.size,
