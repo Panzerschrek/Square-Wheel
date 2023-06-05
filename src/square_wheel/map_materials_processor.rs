@@ -770,7 +770,7 @@ fn apply_texture_layer_impl_2<const BLENDING_MODE: usize, const MODULATE: bool>(
 					// TODO - support normals/roughness blending.
 					let alpha = texel_value.diffuse.get_alpha();
 					dst_texel.diffuse = ColorVecI::shift_right::<8>(&ColorVecI::add(
-						&ColorVecI::mul_scalar(&ColorVecI::from_color32(dst_texel.diffuse), alpha),
+						&ColorVecI::mul_scalar(&ColorVecI::from_color32(texel_value.diffuse), alpha),
 						&ColorVecI::mul_scalar(&ColorVecI::from_color32(dst_texel.diffuse), 255 - alpha),
 					))
 					.into();
