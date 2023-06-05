@@ -4,20 +4,20 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 pub enum SingleArgumentFunction
 {
+	/// y = c
 	Constant(f32),
+	/// y = x * scale + offset
 	Linear
 	{
-		/// y = x * scale + offset
 		#[serde(default = "default_one")]
 		scale: f32,
 
 		#[serde(default)]
 		offset: f32,
 	},
+	/// y = amplitude * sin(2 * pi * x + phase) + offset
 	SinWave
 	{
-		/// y = amplitude * sin(2 * pi * x + phase) + offset
-
 		#[serde(default = "default_one")]
 		frequency: f32,
 
@@ -30,9 +30,9 @@ pub enum SingleArgumentFunction
 		#[serde(default)]
 		offset: f32,
 	},
+	// Like sin-wave, but triangular.
 	TriangleWave
 	{
-		// Like sin-wave, but triangular.
 		#[serde(default = "default_one")]
 		frequency: f32,
 
@@ -45,9 +45,9 @@ pub enum SingleArgumentFunction
 		#[serde(default)]
 		offset: f32,
 	},
+	// Like sin-wave, but saw-tooth shaped.
 	SawToothWave
 	{
-		// Like sin-wave, but saw-tooth shaped.
 		#[serde(default = "default_one")]
 		frequency: f32,
 
@@ -60,9 +60,9 @@ pub enum SingleArgumentFunction
 		#[serde(default)]
 		offset: f32,
 	},
+	// Like sin-wave, but step shaped (first half of the period equals 1, than -1).
 	StepWave
 	{
-		// Like sin-wave, but step shaped (first 1, than -1).
 		#[serde(default = "default_one")]
 		frequency: f32,
 
@@ -81,7 +81,7 @@ impl Default for SingleArgumentFunction
 {
 	fn default() -> Self
 	{
-		SingleArgumentFunction::Constant(0.0)
+		Self::Constant(0.0)
 	}
 }
 
