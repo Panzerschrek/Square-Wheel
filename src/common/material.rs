@@ -81,6 +81,13 @@ pub struct Material
 	#[serde(default)]
 	pub framed_animation: Option<AnimationFrame>,
 
+	/// If some - this is layered-animated material.
+	/// Material texture will be generated each frame, based on provided layers and params.
+	/// Material texture needs to be regenerated each frame and this may take significant amount of frame time.
+	/// So, avoid using too many textures with layered animations - prefer framed animations and/or scrolling.
+	/// Layered animation presense doesn't affect map compiler and lightmaper - like framed animation.
+	pub layered_animation: Option<LayeredAnimation>,
+
 	/// If some - this is a skybox.
 	#[serde(default)]
 	pub skybox: Option<SkyboxParams>,
@@ -150,6 +157,21 @@ pub struct AnimationFrame
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct LayeredAnimation
+{
+	pub layers: Vec<LayeredAnimationLayer>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct LayeredAnimationLayer
+{
+	/// Material, that will be used for this layer.
+	/// blending mode of this material is used for blending of result animated texture.
+	/// Note that only static material texture is used, layerd animation of that material can't be used, because this can cause infinite recursion.
+	pub material_name: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SkyboxParams
 {
 	/// Side images in order -X, +X, -Y, +Y, -Z, +Z. If empty - side is not drawn.
@@ -181,8 +203,9 @@ impl Default for Material
 			scroll_speed: [0.0, 0.0],
 			emissive_layer: None,
 			turb: None,
-			skybox: None,
 			framed_animation: None,
+			layered_animation: None,
+			skybox: None,
 			extra: HashMap::new(),
 		}
 	}
