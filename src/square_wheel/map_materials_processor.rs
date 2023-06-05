@@ -324,7 +324,7 @@ struct MapTextureData
 	emissive_texture: Option<SharedResourcePtr<TextureLiteWithMips>>,
 	// Invalid index if has no framed animation.
 	next_frame_texture_index: u32,
-	// Indeces of textures, used as layers for layered animation (if this texture uses layerd animation).
+	// Indeces of textures, used as layers for layered animation (if this texture uses layered animation).
 	layered_animation_textures: Vec<u32>,
 }
 
@@ -741,8 +741,7 @@ fn apply_texture_layer_impl_2<const BLENDING_MODE: usize, const MODULATE: bool>(
 				{
 					if texel_value.diffuse.test_alpha()
 					{
-						dst_texel.diffuse = dst_texel.diffuse;
-						dst_texel.packed_normal_roughness = texel_value.packed_normal_roughness;
+						*dst_texel = texel_value;
 					}
 				}
 				else if BLENDING_MODE == BLENDING_MODE_ALPHA_BLEND
