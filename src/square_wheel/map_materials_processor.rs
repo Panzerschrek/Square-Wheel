@@ -435,6 +435,10 @@ fn animate_texture(
 					[1.0; 3]
 				};
 
+				const ALMOST_ZERO_LIGHT: f32 = 1.0 / 128.0;
+				let light_is_zero =
+					light[0] <= ALMOST_ZERO_LIGHT && light[1] <= ALMOST_ZERO_LIGHT && light[2] <= ALMOST_ZERO_LIGHT;
+
 				let texture_index_corrected = if animation_layer.follow_framed_animation
 				{
 					textures_mapping_table[*texture_index as usize].index
@@ -444,20 +448,19 @@ fn animate_texture(
 					*texture_index
 				};
 				let layer_texture = &all_textures_data[texture_index_corrected as usize];
+				let blending_mode = layer_texture.material.blending_mode;
 
-				let src_mip = &layer_texture.texture[mip_index];
-				apply_texture_layer(
-					dst_mip.size,
-					&mut dst_mip.pixels,
-					src_mip,
-					shift,
-					light,
-					layer_texture.material.blending_mode,
-				);
+				// Adding zero has no effect. So, if light is zero skip applying this layer textures.
+				let adding_zero = blending_mode == BlendingMode::Additive && light_is_zero;
+				if !adding_zero
+				{
+					let src_mip = &layer_texture.texture[mip_index];
+					apply_texture_layer(dst_mip.size, &mut dst_mip.pixels, src_mip, shift, light, blending_mode);
 
-				dst_mip.has_normal_map |= src_mip.has_normal_map;
-				dst_mip.has_non_one_roughness |= src_mip.has_non_one_roughness;
-				dst_mip.is_metal |= src_mip.is_metal;
+					dst_mip.has_normal_map |= src_mip.has_normal_map;
+					dst_mip.has_non_one_roughness |= src_mip.has_non_one_roughness;
+					dst_mip.is_metal |= src_mip.is_metal;
+				}
 
 				if let Some(emissive_texture) = &layer_texture.emissive_texture
 				{
@@ -468,15 +471,18 @@ fn animate_texture(
 						*dst_emissive_mip = src_emissive_mip.clone();
 					}
 
-					// Use for emissive texture blending same code, as for surfaces.
-					surfaces::mix_surface_with_texture(
-						dst_emissive_mip.size,
-						shift,
-						src_emissive_mip,
-						layer_texture.material.blending_mode,
-						light,
-						&mut dst_emissive_mip.pixels,
-					);
+					if !adding_zero
+					{
+						// Use for emissive texture blending same code, as for surfaces.
+						surfaces::mix_surface_with_texture(
+							dst_emissive_mip.size,
+							shift,
+							src_emissive_mip,
+							blending_mode,
+							light,
+							&mut dst_emissive_mip.pixels,
+						);
+					}
 				}
 			}
 		}
@@ -565,56 +571,41 @@ fn apply_texture_layer(
 {
 	match blending_mode
 	{
-		BlendingMode::None =>
-		{
-			apply_texture_layer_impl_1::<BLENDING_MODE_NONE>(
-				texture_size,
-				texture_data,
-				layer_texture,
-				layer_texture_offset,
-				light,
-			);
-		},
-		BlendingMode::Average =>
-		{
-			apply_texture_layer_impl_1::<BLENDING_MODE_AVERAGE>(
-				texture_size,
-				texture_data,
-				layer_texture,
-				layer_texture_offset,
-				light,
-			);
-		},
-		BlendingMode::Additive =>
-		{
-			apply_texture_layer_impl_1::<BLENDING_MODE_ADDITIVE>(
-				texture_size,
-				texture_data,
-				layer_texture,
-				layer_texture_offset,
-				light,
-			);
-		},
-		BlendingMode::AlphaTest =>
-		{
-			apply_texture_layer_impl_1::<BLENDING_MODE_ALPHA_TEST>(
-				texture_size,
-				texture_data,
-				layer_texture,
-				layer_texture_offset,
-				light,
-			);
-		},
-		BlendingMode::AlphaBlend =>
-		{
-			apply_texture_layer_impl_1::<BLENDING_MODE_ALPHA_BLEND>(
-				texture_size,
-				texture_data,
-				layer_texture,
-				layer_texture_offset,
-				light,
-			);
-		},
+		BlendingMode::None => apply_texture_layer_impl_1::<BLENDING_MODE_NONE>(
+			texture_size,
+			texture_data,
+			layer_texture,
+			layer_texture_offset,
+			light,
+		),
+		BlendingMode::Average => apply_texture_layer_impl_1::<BLENDING_MODE_AVERAGE>(
+			texture_size,
+			texture_data,
+			layer_texture,
+			layer_texture_offset,
+			light,
+		),
+		BlendingMode::Additive => apply_texture_layer_impl_1::<BLENDING_MODE_ADDITIVE>(
+			texture_size,
+			texture_data,
+			layer_texture,
+			layer_texture_offset,
+			light,
+		),
+		BlendingMode::AlphaTest => apply_texture_layer_impl_1::<BLENDING_MODE_ALPHA_TEST>(
+			texture_size,
+			texture_data,
+			layer_texture,
+			layer_texture_offset,
+			light,
+		),
+		BlendingMode::AlphaBlend => apply_texture_layer_impl_1::<BLENDING_MODE_ALPHA_BLEND>(
+			texture_size,
+			texture_data,
+			layer_texture,
+			layer_texture_offset,
+			light,
+		),
 	}
 }
 
