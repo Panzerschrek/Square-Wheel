@@ -165,6 +165,7 @@ pub struct LayeredAnimation
 {
 	/// Size of result image is determined by size of first layer.
 	/// So, it is possible to create large texture (with large first layer) with additional layers as smaller tileable textures.
+	/// First layer should have None blending in order to avoid mixing with garbage color data.
 	pub layers: Vec<LayeredAnimationLayer>,
 }
 

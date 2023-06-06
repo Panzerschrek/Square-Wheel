@@ -402,16 +402,6 @@ fn animate_texture(
 	{
 		for mip_index in 0 .. NUM_MIPS
 		{
-			let dst_mip = &mut texture_data_mutable.texture_modified[mip_index];
-			if dst_mip.pixels.is_empty()
-			{
-				*dst_mip = texture_data.texture[mip_index].clone();
-			}
-
-			dst_mip.has_normal_map = false;
-			dst_mip.has_non_one_roughness = false;
-			dst_mip.is_metal = false;
-
 			for (animation_layer, texture_index) in layered_animation
 				.layers
 				.iter()
@@ -452,35 +442,51 @@ fn animate_texture(
 
 				// Adding zero has no effect. So, if light is zero skip applying this layer textures.
 				let adding_zero = blending_mode == BlendingMode::Additive && light_is_zero;
-				if !adding_zero
-				{
-					let src_mip = &layer_texture.texture[mip_index];
-					apply_texture_layer(dst_mip.size, &mut dst_mip.pixels, src_mip, shift, light, blending_mode);
 
-					dst_mip.has_normal_map |= src_mip.has_normal_map;
-					dst_mip.has_non_one_roughness |= src_mip.has_non_one_roughness;
-					dst_mip.is_metal |= src_mip.is_metal;
+				if layer_texture.material.diffuse.is_some()
+				{
+					// Mix diffuse layer only if it exists.
+					let src_mip = &layer_texture.texture[mip_index];
+					let dst_mip = &mut texture_data_mutable.texture_modified[mip_index];
+					if dst_mip.pixels.is_empty()
+					{
+						*dst_mip = src_mip.clone();
+					}
+
+					dst_mip.has_normal_map = false;
+					dst_mip.has_non_one_roughness = false;
+					dst_mip.is_metal = false;
+
+					if !adding_zero
+					{
+						apply_texture_layer(dst_mip.size, &mut dst_mip.pixels, src_mip, shift, light, blending_mode);
+
+						dst_mip.has_normal_map |= src_mip.has_normal_map;
+						dst_mip.has_non_one_roughness |= src_mip.has_non_one_roughness;
+						dst_mip.is_metal |= src_mip.is_metal;
+					}
 				}
 
 				if let Some(emissive_texture) = &layer_texture.emissive_texture
 				{
-					let src_emissive_mip = &emissive_texture[mip_index];
-					let dst_emissive_mip = &mut texture_data_mutable.emissive_texture_modified[mip_index];
-					if dst_emissive_mip.pixels.is_empty()
+					// Mix emissive layer only if it exists.
+					let src_mip = &emissive_texture[mip_index];
+					let dst_mip = &mut texture_data_mutable.emissive_texture_modified[mip_index];
+					if dst_mip.pixels.is_empty()
 					{
-						*dst_emissive_mip = src_emissive_mip.clone();
+						*dst_mip = src_mip.clone();
 					}
 
 					if !adding_zero
 					{
 						// Use for emissive texture blending same code, as for surfaces.
 						surfaces::mix_surface_with_texture(
-							dst_emissive_mip.size,
+							dst_mip.size,
 							shift,
-							src_emissive_mip,
+							src_mip,
 							blending_mode,
 							light,
-							&mut dst_emissive_mip.pixels,
+							&mut dst_mip.pixels,
 						);
 					}
 				}
