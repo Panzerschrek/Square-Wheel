@@ -862,48 +862,41 @@ pub fn mix_surface_with_texture<ColorT: AbstractColor>(
 {
 	match blending_mode
 	{
-		BlendingMode::None =>
-		{},
-		BlendingMode::Average =>
-		{
-			mix_surface_with_texture_impl::<ColorT, BLENDING_MODE_AVERAGE>(
-				surface_size,
-				surface_tc_min,
-				texture,
-				light,
-				surface_data,
-			);
-		},
-		BlendingMode::Additive =>
-		{
-			mix_surface_with_texture_impl::<ColorT, BLENDING_MODE_ADDITIVE>(
-				surface_size,
-				surface_tc_min,
-				texture,
-				light,
-				surface_data,
-			);
-		},
-		BlendingMode::AlphaTest =>
-		{
-			mix_surface_with_texture_impl::<ColorT, BLENDING_MODE_ALPHA_TEST>(
-				surface_size,
-				surface_tc_min,
-				texture,
-				light,
-				surface_data,
-			);
-		},
-		BlendingMode::AlphaBlend =>
-		{
-			mix_surface_with_texture_impl::<ColorT, BLENDING_MODE_ALPHA_BLEND>(
-				surface_size,
-				surface_tc_min,
-				texture,
-				light,
-				surface_data,
-			);
-		},
+		BlendingMode::None => mix_surface_with_texture_impl::<ColorT, BLENDING_MODE_NONE>(
+			surface_size,
+			surface_tc_min,
+			texture,
+			light,
+			surface_data,
+		),
+		BlendingMode::Average => mix_surface_with_texture_impl::<ColorT, BLENDING_MODE_AVERAGE>(
+			surface_size,
+			surface_tc_min,
+			texture,
+			light,
+			surface_data,
+		),
+		BlendingMode::Additive => mix_surface_with_texture_impl::<ColorT, BLENDING_MODE_ADDITIVE>(
+			surface_size,
+			surface_tc_min,
+			texture,
+			light,
+			surface_data,
+		),
+		BlendingMode::AlphaTest => mix_surface_with_texture_impl::<ColorT, BLENDING_MODE_ALPHA_TEST>(
+			surface_size,
+			surface_tc_min,
+			texture,
+			light,
+			surface_data,
+		),
+		BlendingMode::AlphaBlend => mix_surface_with_texture_impl::<ColorT, BLENDING_MODE_ALPHA_BLEND>(
+			surface_size,
+			surface_tc_min,
+			texture,
+			light,
+			surface_data,
+		),
 	}
 }
 
@@ -938,7 +931,11 @@ fn mix_surface_with_texture_impl<ColorT: AbstractColor, const BLENDING_MODE: usi
 				&light_vec,
 			));
 
-			if BLENDING_MODE == BLENDING_MODE_AVERAGE
+			if BLENDING_MODE == BLENDING_MODE_NONE
+			{
+				*dst_texel = texel_value_modulated.into();
+			}
+			else if BLENDING_MODE == BLENDING_MODE_AVERAGE
 			{
 				*dst_texel =
 					ColorVecI::shift_right::<1>(&ColorVecI::add(&texel_value_modulated, &(*dst_texel).into())).into();
