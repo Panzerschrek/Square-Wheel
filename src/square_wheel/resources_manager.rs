@@ -6,7 +6,7 @@ use crate::common::{bbox::*, bsp_map_compact::*, bsp_map_save_load::*, color::*,
 use rayon::prelude::*;
 use std::{
 	collections::HashMap,
-	path::PathBuf,
+	path::{Path, PathBuf},
 	sync::{Arc, Mutex},
 };
 
@@ -67,7 +67,7 @@ impl ResourcesManager
 		let config = ResourcesManagerConfig::from_app_config(&app_config);
 		config.update_app_config(&app_config); // Update JSON with struct fields.
 
-		let materials = SharedResourcePtr::new(load_materials(&PathBuf::from(config.materials_path.clone())));
+		let materials = SharedResourcePtr::new(load_materials(Path::new(&config.materials_path)));
 
 		Arc::new(Mutex::new(Self {
 			console,
