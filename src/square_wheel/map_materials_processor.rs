@@ -669,7 +669,7 @@ fn apply_texture_layer_impl_2<const BLENDING_MODE: usize, const MODULATE: bool>(
 	const LIGHT_SHIFT: i32 = 8;
 	let light_scale = (1 << LIGHT_SHIFT) as f32;
 	let light_vec =
-		ColorVecI::from_color_f32x3(&[light[0] * light_scale, light[1] * light_scale, light[1] * light_scale]);
+		ColorVecI::from_color_f32x3(&[light[0] * light_scale, light[1] * light_scale, light[2] * light_scale]);
 
 	for dst_v in 0 .. texture_size[1]
 	{

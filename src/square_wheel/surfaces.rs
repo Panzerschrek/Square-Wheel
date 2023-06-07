@@ -911,7 +911,7 @@ fn mix_surface_with_texture_impl<ColorT: AbstractColor, const BLENDING_MODE: usi
 	const LIGHT_SHIFT: i32 = 8;
 	let light_scale = (1 << LIGHT_SHIFT) as f32;
 	let light_vec =
-		ColorVecI::from_color_f32x3(&[light[0] * light_scale, light[1] * light_scale, light[1] * light_scale]);
+		ColorVecI::from_color_f32x3(&[light[0] * light_scale, light[1] * light_scale, light[2] * light_scale]);
 
 	for dst_v in 0 .. surface_size[1]
 	{
