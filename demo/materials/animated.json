@@ -1,4 +1,33 @@
 {
+	"bricks_with_rolling_ball":
+	{
+		"diffuse" : "bricks_with_rolling_ball.png",
+		"normal_map" : "bricks_with_rolling_ball_normal.png",
+		"layered_animation" :
+		{
+			"layers" :
+			[
+				{
+					"material_name" : "bricks_with_rolling_ball"
+				},
+				{
+					"material_name" : "rolling_ball",
+					"tex_coord_shift" :
+					[
+						{ "SinWave" : { "offset": 64, "frequency" : 0.25, "amplitude" : 44, "phase" : 1.570796 } },
+						{ "SinWave" : { "offset": 64, "frequency" : 0.25, "amplitude" : 44, "phase" : 0 } }
+					]
+				}
+			]
+		}
+	},
+	"rolling_ball":
+	{
+		"diffuse" : "rolling_ball.png",
+		"normal_map" : "rolling_ball_normal.png",
+		"blocks_view" : false,
+		"blending_mode" : "AlphaTest"
+	},
 	"monkey_head_anim_0":
 	{
 		"emissive_layer" :
