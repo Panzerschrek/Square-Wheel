@@ -451,20 +451,19 @@ fn animate_texture(
 					if dst_mip.pixels.is_empty()
 					{
 						*dst_mip = src_mip.clone();
+						dst_mip.has_normal_map = false;
+						dst_mip.has_non_one_roughness = false;
+						dst_mip.is_metal = false;
 					}
-
-					dst_mip.has_normal_map = false;
-					dst_mip.has_non_one_roughness = false;
-					dst_mip.is_metal = false;
 
 					if !adding_zero
 					{
 						apply_texture_layer(dst_mip.size, &mut dst_mip.pixels, src_mip, shift, light, blending_mode);
-
-						dst_mip.has_normal_map |= src_mip.has_normal_map;
-						dst_mip.has_non_one_roughness |= src_mip.has_non_one_roughness;
-						dst_mip.is_metal |= src_mip.is_metal;
 					}
+
+					dst_mip.has_normal_map |= src_mip.has_normal_map;
+					dst_mip.has_non_one_roughness |= src_mip.has_non_one_roughness;
+					dst_mip.is_metal |= src_mip.is_metal;
 				}
 
 				if let Some(emissive_texture) = &layer_texture.emissive_texture
@@ -575,9 +574,12 @@ fn apply_texture_layer(
 	blending_mode: BlendingMode,
 )
 {
-	if blending_mode == BlendingMode::None && texture_size == layer_texture.size && layer_texture_offset == [0, 0]
+	if blending_mode == BlendingMode::None &&
+		texture_size == layer_texture.size &&
+		layer_texture_offset == [0, 0] &&
+		light == [1.0, 1.0, 1.0]
 	{
-		// Fast path - just copy source into destination without any shift, tiling and blending.
+		// Fast path - just copy source into destination without any modulation, shift, tiling and blending.
 		texture_data.copy_from_slice(&layer_texture.pixels);
 		return;
 	}
@@ -737,6 +739,7 @@ fn apply_texture_layer_impl_2<const BLENDING_MODE: usize, const MODULATE: bool>(
 				if BLENDING_MODE == BLENDING_MODE_NONE
 				{
 					*dst_texel = texel_value;
+					dst_texel.packed_normal_roughness = texel_value.packed_normal_roughness;
 				}
 				else if BLENDING_MODE == BLENDING_MODE_AVERAGE
 				{
@@ -757,6 +760,7 @@ fn apply_texture_layer_impl_2<const BLENDING_MODE: usize, const MODULATE: bool>(
 					if texel_value.diffuse.test_alpha()
 					{
 						*dst_texel = texel_value;
+						dst_texel.packed_normal_roughness = texel_value.packed_normal_roughness;
 					}
 				}
 				else if BLENDING_MODE == BLENDING_MODE_ALPHA_BLEND
