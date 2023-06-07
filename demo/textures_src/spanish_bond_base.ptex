@@ -1,0 +1,217 @@
+{
+	"connections": [
+		{
+			"from": "normal_map2",
+			"from_port": 0,
+			"to": "Material",
+			"to_port": 4
+		},
+		{
+			"from": "bricks2",
+			"from_port": 0,
+			"to": "blend",
+			"to_port": 0
+		},
+		{
+			"from": "blend",
+			"from_port": 0,
+			"to": "normal_map2",
+			"to_port": 0
+		},
+		{
+			"from": "perlin",
+			"from_port": 0,
+			"to": "blend",
+			"to_port": 1
+		},
+		{
+			"from": "uniform",
+			"from_port": 0,
+			"to": "blend_2",
+			"to_port": 0
+		},
+		{
+			"from": "uniform_2",
+			"from_port": 0,
+			"to": "blend_2",
+			"to_port": 1
+		},
+		{
+			"from": "blend_2",
+			"from_port": 0,
+			"to": "Material",
+			"to_port": 0
+		},
+		{
+			"from": "bricks2",
+			"from_port": 0,
+			"to": "blend_2",
+			"to_port": 2
+		}
+	],
+	"label": "Graph",
+	"longdesc": "",
+	"name": "312",
+	"node_position": {
+		"x": 0,
+		"y": 0
+	},
+	"nodes": [
+		{
+			"export_paths": {
+
+			},
+			"name": "Material",
+			"node_position": {
+				"x": 1000,
+				"y": 80
+			},
+			"parameters": {
+				"albedo_color": {
+					"a": 1,
+					"b": 1,
+					"g": 1,
+					"r": 1,
+					"type": "Color"
+				},
+				"ao": 1,
+				"depth_scale": 0.5,
+				"emission_energy": 1,
+				"flags_transparent": true,
+				"metallic": 0,
+				"normal": 1,
+				"roughness": 1,
+				"size": 8,
+				"sss": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "material"
+		},
+		{
+			"name": "bricks2",
+			"node_position": {
+				"x": 100,
+				"y": 240
+			},
+			"parameters": {
+				"bevel": 0.02,
+				"columns": 2,
+				"corner": 0.3,
+				"mortar": 0.03,
+				"pattern": 5,
+				"round": 0,
+				"row_offset": 0.5,
+				"rows": 2
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "bricks2"
+		},
+		{
+			"name": "normal_map2",
+			"node_position": {
+				"x": 800,
+				"y": 220
+			},
+			"parameters": {
+				"buffer": 1,
+				"param2": 0,
+				"size": 9,
+				"strength": 1
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "normal_map2"
+		},
+		{
+			"name": "blend",
+			"node_position": {
+				"x": 580,
+				"y": 260
+			},
+			"parameters": {
+				"amount": 0.5,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "perlin",
+			"node_position": {
+				"x": 320,
+				"y": 300
+			},
+			"parameters": {
+				"iterations": 4,
+				"persistence": 0.5,
+				"scale_x": 8,
+				"scale_y": 8
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "perlin"
+		},
+		{
+			"name": "blend_2",
+			"node_position": {
+				"x": 760,
+				"y": 80
+			},
+			"parameters": {
+				"amount": 1,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "uniform",
+			"node_position": {
+				"x": 600,
+				"y": 60
+			},
+			"parameters": {
+				"color": {
+					"a": 1,
+					"b": 0.585938,
+					"g": 0.585938,
+					"r": 0.585938,
+					"type": "Color"
+				}
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "uniform"
+		},
+		{
+			"name": "uniform_2",
+			"node_position": {
+				"x": 600,
+				"y": 120
+			},
+			"parameters": {
+				"color": {
+					"a": 1,
+					"b": 0.226562,
+					"g": 0.226562,
+					"r": 0.226562,
+					"type": "Color"
+				}
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "uniform"
+		}
+	],
+	"parameters": {
+
+	},
+	"seed": 0,
+	"seed_locked": false,
+	"shortdesc": "",
+	"type": "graph"
+}

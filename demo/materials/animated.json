@@ -1,4 +1,48 @@
 {
+	"spanish_bond_base":
+	{
+		"diffuse" : "spanish_bond_base.png",
+		"normal_map" : "spanish_bond_base_normal.png",
+		"layered_animation" :
+		{
+			"layers" :
+			[
+				{
+					"_comment": "add base layer, modulated by 0, in order to fill normals data",
+					"material_name" : "spanish_bond_base",
+					"modulate" : { "Constant" : 0.0 }
+				},
+				{
+					"material_name" : "spanish_bond_a",
+					"modulate" : { "TriangleWave" : { "frequency" : 0.15, "amplitude": 0.75, "offset" : 0.25, "phase" : 0.0 } }
+				},
+				{
+					"material_name" : "spanish_bond_b",
+					"modulate" : { "TriangleWave" : { "frequency" : 0.15, "amplitude": 0.75, "offset" : 0.25, "phase" : 0.333333 } }
+				},
+				{
+					"material_name" : "spanish_bond_c",
+					"modulate" : { "TriangleWave" : { "frequency" : 0.15, "amplitude": 0.75, "offset" : 0.25, "phase" : 0.666666 } }
+				}
+			]
+		}
+	},
+	"spanish_bond_a":
+	{
+		"diffuse" : "spanish_bond_a.png",
+		"blending_mode": "Additive"
+	},
+	"spanish_bond_b":
+	{
+		"diffuse" : "spanish_bond_b.png",
+		"blending_mode": "Additive"
+	},
+	"spanish_bond_c":
+	{
+		"diffuse" : "spanish_bond_c.png",
+		"blending_mode": "Additive"
+	},
+
 	"basket_weave_grid":
 	{
 		"diffuse" : "basket_weave_grid.png",
