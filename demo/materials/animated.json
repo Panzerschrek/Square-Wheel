@@ -171,6 +171,66 @@
 		"blending_mode" : "AlphaTest"
 	},
 
+	"monkey_head_display":
+	{
+		"blending_mode" : "None",
+		"emissive_layer" :
+		{
+			"image": "none",
+			"light" : [6.0, 6.0, 6.0]
+		},
+		"layered_animation" :
+		{
+			"layers" :
+			[
+				{
+					"_comment": "base (diffuse) layer",
+					"material_name" : "monkey_head_display_base"
+				},
+				{
+					"_comment": "use frame-animated texture for display image",
+					"material_name" : "monkey_head_anim_0",
+					"follow_framed_animation" : true
+				},
+				{
+					"_comment": "add some noise",
+					"material_name" : "monkey_head_display_noise",
+					"tex_coord_shift" :
+					[
+						{ "Linear" : { "scale" : 512.0 } },
+						{ "Linear" : { "scale" : -96.0 } }
+					]
+				},
+				{
+					"comment": "make sure noise stays inside screeen",
+					"material_name" : "monkey_head_display_mask"
+				}
+			]
+		}
+	},
+	"monkey_head_display_base" :
+	{
+		"diffuse": "monkey_head/display.png"
+	},
+	"monkey_head_display_noise" :
+	{
+		"blending_mode" : "Additive",
+		"emissive_layer" :
+		{
+			"image": "monkey_head_display_noise_emission.png",
+			"light" : [1.0, 1.0, 1.0]
+		}
+	},
+	"monkey_head_display_mask" :
+	{
+		"blending_mode" : "AlphaTest",
+		"emissive_layer" :
+		{
+			"image": "monkey_head/display_mask.png",
+			"light" : [1.0, 1.0, 1.0]
+		}
+	},
+
 	"monkey_head_anim_0":
 	{
 		"emissive_layer" :
