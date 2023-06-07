@@ -575,6 +575,13 @@ fn apply_texture_layer(
 	blending_mode: BlendingMode,
 )
 {
+	if blending_mode == BlendingMode::None && texture_size == layer_texture.size && layer_texture_offset == [0, 0]
+	{
+		// Fast path - just copy source into destination without any shift, tiling and blending.
+		texture_data.copy_from_slice(&layer_texture.pixels);
+		return;
+	}
+
 	match blending_mode
 	{
 		BlendingMode::None => apply_texture_layer_impl_1::<BLENDING_MODE_NONE>(
