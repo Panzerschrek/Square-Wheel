@@ -154,5 +154,52 @@
 			"next_material_name" : "monkey_head_anim_0",
 			"duration" : 0.2
 		}
+	},
+	"metal_wire_mesh":
+	{
+		"diffuse" : "metal_wire_mesh.png",
+		"normal_map" : "metal_wire_mesh_normal.png",
+		"is_metal" : true,
+		"roughness" : 0.3,
+		"blending_mode": "AlphaTest",
+		"blocks_view" : false,
+		"layered_animation" :
+		{
+			"layers" :
+			[
+				{
+					"material_name" : "metal_wire_mesh_base"
+				},
+				{
+					"material_name" : "metal_wire_mesh",
+					"tex_coord_shift" :
+					[
+						{ "Linear" : { "scale" : -6.9282 } },
+						{ "Linear" : { "scale" : 4.0 } }
+					]
+				}
+				,
+				{
+					"material_name" : "metal_wire_mesh",
+					"tex_coord_shift" :
+					[
+						{ "Linear" : { "scale" : 6.9282 } },
+						{ "Linear" : { "scale" : 4.0 } }
+					]
+				},
+				{
+					"material_name" : "metal_wire_mesh",
+					"tex_coord_shift" :
+					[
+						{ "Constant" : 0.0 },
+						{ "Linear" : { "scale" : -8.0 } }
+					]
+				}
+			]
+		}
+	},
+	"metal_wire_mesh_base":
+	{
+		"diffuse" : "metal_wire_mesh_base.png"
 	}
 }
