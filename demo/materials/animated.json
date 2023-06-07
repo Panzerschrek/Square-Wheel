@@ -201,5 +201,49 @@
 	"metal_wire_mesh_base":
 	{
 		"diffuse" : "metal_wire_mesh_base.png"
+	},
+	"roman_number_i":
+	{
+		"diffuse" : "roman_number_i.png",
+		"normal_map" : "roman_number_i_normal.png",
+		"roughness" : 0.05,
+		"framed_animation" :
+		{
+			"next_material_name" : "roman_number_ii",
+			"duration" : 1.0
+		}
+	},
+	"roman_number_ii":
+	{
+		"diffuse" : "roman_number_ii.png",
+		"normal_map" : "roman_number_ii_normal.png",
+		"roughness" : 0.05,
+		"framed_animation" :
+		{
+			"next_material_name" : "roman_number_iii",
+			"duration" : 1.0
+		}
+	},
+	"roman_number_iii":
+	{
+		"diffuse" : "roman_number_iii.png",
+		"normal_map" : "roman_number_iii_normal.png",
+		"roughness" : 0.05,
+		"framed_animation" :
+		{
+			"next_material_name" : "roman_number_iv",
+			"duration" : 1.0
+		}
+	},
+	"roman_number_iv":
+	{
+		"diffuse" : "roman_number_iv.png",
+		"normal_map" : "roman_number_iv_normal.png",
+		"roughness" : 0.05,
+		"framed_animation" :
+		{
+			"next_material_name" : "roman_number_i",
+			"duration" : 1.0
+		}
 	}
 }
