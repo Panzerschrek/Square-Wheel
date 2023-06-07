@@ -1,4 +1,102 @@
 {
+	"basket_weave_grid":
+	{
+		"diffuse" : "basket_weave_grid.png",
+		"normal_map" : "basket_weave_grid_normal.png",
+		"blending_mode" : "None",
+		"emissive_layer":
+		{
+			"image" : "basket_weave_grid_base.png",
+			"light" : [80.0, 80.0, 80.0]
+		},
+		"layered_animation":
+		{
+			"layers":
+			[
+				{
+					"material_name" : "basket_weave_grid_base"
+				},
+				{
+					"material_name" : "glowing_sin_wave",
+					"tex_coord_shift" :
+					[
+						{ "SinWave" : { "frequency" : 0.3, "amplitude" : 16.0, "phase" : 0.0 } },
+						{ "Linear" : { "scale" : -24.0 } }
+					],
+					"modulate_color" :
+					[
+						{ "SinWave" : { "frequency" : 1.0, "amplitude" : 0.3, "offset" : 0.5, "phase" : 0.0 } },
+						{ "Constant" : 0.1 },
+						{ "Constant" : 0.1 }
+					]
+				},
+				{
+					"material_name" : "glowing_sin_wave",
+					"tex_coord_shift" :
+					[
+						{ "SinWave" : { "frequency" : 0.3, "amplitude" : 16.0, "phase" : 2.0943951 } },
+						{ "Linear" : { "scale" : -36.0 } }
+					],
+					"modulate_color" :
+					[
+						{ "Constant" : 0.1 },
+						{ "SinWave" : { "frequency" : 1.0, "amplitude" : 0.3, "offset" : 0.5, "phase" : 2.0943951 } },
+						{ "Constant" : 0.1 }
+					]
+				},
+				{
+					"material_name" : "glowing_sin_wave",
+					"tex_coord_shift" :
+					[
+						{ "SinWave" : { "frequency" : 0.3, "amplitude" : 16.0, "phase" : 4.18879 } },
+						{ "Linear" : { "scale" : -60.0 } }
+					],
+					"modulate_color" :
+					[
+						{ "Constant" : 0.1 },
+						{ "Constant" : 0.1 },
+						{ "SinWave" : { "frequency" : 1.0, "amplitude" : 0.3, "offset" : 0.5, "phase" : 4.18879 } }
+					]
+				},
+				{
+					"material_name" : "basket_weave_grid_grid"
+				}
+			]
+		}
+	},
+	"basket_weave_grid_base":
+	{
+		"diffuse": "basket_weave_grid_base.png",
+		"normal_map": "basket_weave_grid_base_normal.png",
+		"emissive_layer":
+		{
+			"image" : "basket_weave_grid_base_emission.png",
+			"light" : [1.0, 1.0, 1.0]
+		}
+	},
+	"glowing_sin_wave":
+	{
+		"blocks_view" : false,
+		"blending_mode" : "Additive",
+		"emissive_layer":
+		{
+			"image" : "glowing_sin_wave_emission.png",
+			"light" : [4.0, 4.0, 4.0]
+		}
+	},
+	"basket_weave_grid_grid":
+	{
+		"diffuse" : "basket_weave_grid.png",
+		"normal_map" : "basket_weave_grid_normal.png",
+		"blocks_view" : false,
+		"blending_mode" : "AlphaTest",
+		"emissive_layer":
+		{
+			"image" : "basket_weave_grid_mask.png",
+			"light" : [1.0, 1.0, 1.0]
+		}
+	},
+
 	"bricks_with_rolling_ball":
 	{
 		"diffuse" : "bricks_with_rolling_ball.png",
@@ -28,6 +126,7 @@
 		"blocks_view" : false,
 		"blending_mode" : "AlphaTest"
 	},
+
 	"monkey_head_anim_0":
 	{
 		"emissive_layer" :
@@ -184,6 +283,7 @@
 			"duration" : 0.2
 		}
 	},
+
 	"metal_wire_mesh":
 	{
 		"diffuse" : "metal_wire_mesh.png",
@@ -231,6 +331,7 @@
 	{
 		"diffuse" : "metal_wire_mesh_base.png"
 	},
+
 	"roman_number_i":
 	{
 		"diffuse" : "roman_number_i.png",
