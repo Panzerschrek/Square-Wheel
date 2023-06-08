@@ -48,11 +48,11 @@
 		"diffuse" : "basket_weave_grid.png",
 		"normal_map" : "basket_weave_grid_normal.png",
 		"blending_mode" : "None",
-		"emissive_light" : [20.0, 20.0, 20.0],
+		"emissive_light" : [10.0, 10.0, 10.0],
 		"emissive_layer":
 		{
 			"image" : "basket_weave_grid_base.png",
-			"light" : [60.0, 60.0, 60.0]
+			"light" : [40.0, 40.0, 40.0]
 		},
 		"layered_animation":
 		{
