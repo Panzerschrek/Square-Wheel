@@ -68,4 +68,4 @@ Posemu stoit generirovatj tekstury paralleljno.
 Takže ne stoit ispoljzovatj na karte siljno mnogo podobnyh tekstur i/ili sdelatj ih vesjma neboljšogo razrešenija.
 
 Jescö odin sposob snizitj nagruzku - generirovatj tekstury ne každyj kadr.
-Každyj kadr v takom variante budet generirovatjsä toljko 1/N dolä tekstur, gde N - zadavajemyj v nastrojkah parametr castoty obnovlenija (ot 1 i boleje).
+Dlä etogo suscestvujut speçialjnyje parametry konfiga, kotoryje pozvoläjut sdelatj tak, ctoby každyj kadr obnovlälasj toljko 1/N dolä animirovannyh tekstur.
