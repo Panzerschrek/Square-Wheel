@@ -12,6 +12,7 @@ pub struct MapMaterialsProcessor
 	textures_mapping_table: Vec<TextureMappingElement>,
 	skybox_textures_32: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color32>>>,
 	skybox_textures_64: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color64>>>,
+	current_frame: u32,
 }
 
 pub type TextureShift = [i32; 2];
@@ -62,6 +63,7 @@ impl MapMaterialsProcessor
 				material,
 				texture,
 				emissive_texture,
+				animated_texture_order: 0,
 				next_frame_texture_index: invalid_texture_index,
 				layered_animation_textures: Vec::new(),
 			});
@@ -95,6 +97,7 @@ impl MapMaterialsProcessor
 							material,
 							texture,
 							emissive_texture,
+							animated_texture_order: 0,
 							next_frame_texture_index: invalid_texture_index,
 							layered_animation_textures: Vec::new(),
 						});
@@ -128,6 +131,7 @@ impl MapMaterialsProcessor
 						material,
 						texture,
 						emissive_texture,
+						animated_texture_order: 0,
 						next_frame_texture_index: invalid_texture_index,
 						layered_animation_textures: Vec::new(),
 					});
@@ -141,6 +145,18 @@ impl MapMaterialsProcessor
 			}
 
 			i += 1;
+		}
+
+		// Calculate animated textures order.
+		// We need to enumerate only animated texture sequentially in order to perform balanced sparse update.
+		let mut animated_texture_order = 0;
+		for texture in &mut textures
+		{
+			if texture.material.turb.is_some() || texture.material.layered_animation.is_some()
+			{
+				texture.animated_texture_order = animated_texture_order;
+				animated_texture_order += 1;
+			}
 		}
 
 		let textures_mutable = vec![MapTextureDataMutable::default(); textures.len()];
@@ -161,11 +177,14 @@ impl MapMaterialsProcessor
 			textures_mapping_table,
 			skybox_textures_32,
 			skybox_textures_64,
+			current_frame: 0,
 		}
 	}
 
 	pub fn update(&mut self, current_time_s: f32)
 	{
+		self.current_frame += 1;
+
 		// Update framed animations.
 		// Assume time never goes backwards.
 		for mapping_element in &mut self.textures_mapping_table
@@ -215,19 +234,25 @@ impl MapMaterialsProcessor
 		let textures = &self.textures;
 		let textures_mutable = &mut self.textures_mutable;
 		let textures_mapping_table = &self.textures_mapping_table;
+		let current_frame = self.current_frame;
+		let update_period = 5; // TODO - read from config.
+		let current_update_order = current_frame % update_period;
+
+		let animate_func = |(tm, t): (&mut MapTextureDataMutable, &MapTextureData)| {
+			// Perform sparse update - update each frame only one fraction of all animated textures.
+			if t.animated_texture_order % update_period == current_update_order
+			{
+				animate_texture(tm, t, textures, textures_mapping_table, current_time_s);
+			}
+		};
+
 		if rayon::current_num_threads() == 1
 		{
-			textures_mutable
-				.iter_mut()
-				.zip(textures)
-				.for_each(|(tm, t)| animate_texture(tm, t, textures, textures_mapping_table, current_time_s));
+			textures_mutable.iter_mut().zip(textures).for_each(animate_func);
 		}
 		else
 		{
-			textures_mutable
-				.par_iter_mut()
-				.zip_eq(textures)
-				.for_each(|(tm, t)| animate_texture(tm, t, textures, textures_mapping_table, current_time_s));
+			textures_mutable.par_iter_mut().zip_eq(textures).for_each(animate_func);
 		}
 	}
 
@@ -323,6 +348,8 @@ struct MapTextureData
 	texture: SharedResourcePtr<TextureWithMips>,
 	// Non-empty if emissive texture exists.
 	emissive_texture: Option<SharedResourcePtr<TextureLiteWithMips>>,
+	// Used only for sparse texture update.
+	animated_texture_order: u32,
 	// Invalid index if has no framed animation.
 	next_frame_texture_index: u32,
 	// Indeces of textures, used as layers for layered animation (if this texture uses layered animation).
