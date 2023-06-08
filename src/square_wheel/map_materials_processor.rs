@@ -17,6 +17,7 @@ pub struct MapMaterialsProcessor
 	textures_mapping_table: Vec<TextureMappingElement>,
 	skybox_textures_32: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color32>>>,
 	skybox_textures_64: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color64>>>,
+	num_animated_texels: u32,
 	current_frame: u32,
 }
 
@@ -171,6 +172,44 @@ impl MapMaterialsProcessor
 			}
 		}
 
+		// Calculate amount of animated textures texels.
+		// Count all animation layers. Count emissive texels as half texels. Do not count mips.
+		let mut num_animated_texels = 0;
+		for texture in &textures
+		{
+			if texture.material.turb.is_some()
+			{
+				num_animated_texels += texture.texture[0].size[0] * texture.texture[0].size[1];
+			}
+			if !texture.layered_animation_textures.is_empty()
+			{
+				let mut size = [0, 0];
+				let mut emissive_size = [0, 0];
+				for texture_index in &texture.layered_animation_textures
+				{
+					let layer_texture = &textures[*texture_index as usize];
+					if layer_texture.material.diffuse.is_some()
+					{
+						if size == [0, 0]
+						{
+							// Size of result texture is determined by size of first non-empty layer.
+							size = layer_texture.texture[0].size;
+						}
+						num_animated_texels += size[0] * size[1];
+					}
+					if let Some(emissive_texture) = &layer_texture.emissive_texture
+					{
+						if emissive_size == [0, 0]
+						{
+							// Size of result emissive texture is determined by size of first non-empty emissive layer.
+							emissive_size = emissive_texture[0].size;
+						}
+						num_animated_texels += emissive_size[0] * emissive_size[1] / 2;
+					}
+				}
+			}
+		}
+
 		let textures_mutable = vec![MapTextureDataMutable::default(); textures.len()];
 
 		// Prepare mapping table. Initially all textures are mapped to themselves.
@@ -191,6 +230,7 @@ impl MapMaterialsProcessor
 			textures_mapping_table,
 			skybox_textures_32,
 			skybox_textures_64,
+			num_animated_texels,
 			current_frame: 0,
 		}
 	}
@@ -249,8 +289,23 @@ impl MapMaterialsProcessor
 		let textures = &self.textures;
 		let textures_mutable = &mut self.textures_mutable;
 		let textures_mapping_table = &self.textures_mapping_table;
+
 		let current_frame = self.current_frame;
-		let update_period = self.config.animated_textures_update_period;
+
+		let dynamic_period = if self.config.animated_textures_update_texels_limit == 0
+		{
+			// No limit - try to update all textures each frame.
+			1
+		}
+		else
+		{
+			// More animated texels - greater update period.
+			(self.num_animated_texels / self.config.animated_textures_update_texels_limit)
+				.max(ANIMATIONS_UPDATE_PERIOD_MIN)
+				.min(ANIMATIONS_UPDATE_PERIOD_MAX)
+		};
+		// use maximum period of two values - from config and dynamically-calculated one.
+		let update_period = std::cmp::max(self.config.animated_textures_update_period, dynamic_period);
 		let current_update_order = current_frame % update_period;
 
 		let animate_func = |(tm, t): (&mut MapTextureDataMutable, &MapTextureData)| {
@@ -363,14 +418,14 @@ impl MapMaterialsProcessor
 
 		// Make sure that config values are reasonable.
 		let mut config_is_dirty = false;
-		if self.config.animated_textures_update_period < 1
+		if self.config.animated_textures_update_period < ANIMATIONS_UPDATE_PERIOD_MIN
 		{
-			self.config.animated_textures_update_period = 1;
+			self.config.animated_textures_update_period = ANIMATIONS_UPDATE_PERIOD_MIN;
 			config_is_dirty = true;
 		}
-		if self.config.animated_textures_update_period > 10
+		if self.config.animated_textures_update_period > ANIMATIONS_UPDATE_PERIOD_MAX
 		{
-			self.config.animated_textures_update_period = 10;
+			self.config.animated_textures_update_period = ANIMATIONS_UPDATE_PERIOD_MAX;
 			config_is_dirty = true;
 		}
 
@@ -411,6 +466,9 @@ struct TextureMappingElement
 	index: u32,
 	frame_change_time_point: f32,
 }
+
+const ANIMATIONS_UPDATE_PERIOD_MIN: u32 = 1;
+const ANIMATIONS_UPDATE_PERIOD_MAX: u32 = 16;
 
 fn animate_texture(
 	texture_data_mutable: &mut MapTextureDataMutable,
