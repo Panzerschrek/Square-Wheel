@@ -235,6 +235,11 @@ impl MapMaterialsProcessor
 		}
 	}
 
+	pub fn get_num_animated_texels(&self) -> u32
+	{
+		self.num_animated_texels
+	}
+
 	pub fn update(&mut self, current_time_s: f32)
 	{
 		self.current_frame += 1;

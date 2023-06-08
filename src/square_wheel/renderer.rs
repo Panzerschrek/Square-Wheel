@@ -127,8 +127,9 @@ impl Renderer
 		let performance_counters = performance_counters_ptr.lock().unwrap();
 
 		debug_stats_printer.add_line(format!(
-			"materials update: {:04.2}ms",
-			self.materials_update_performance_counter.get_average_value() * 1000.0
+			"materials update: {:04.2}ms, animated texels: {}k",
+			self.materials_update_performance_counter.get_average_value() * 1000.0,
+			(self.common_data.materials_processor.get_num_animated_texels() + 1023) / 1024
 		));
 		debug_stats_printer.add_line(format!(
 			"object index build: {:04.2}ms",
