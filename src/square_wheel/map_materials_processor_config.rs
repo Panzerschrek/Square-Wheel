@@ -12,6 +12,16 @@ pub struct MapMaterialsProcessorConfig
 	// Count all layers of animated textures, count emissive layers as half-texels, do not count mips.
 	#[serde(default)]
 	pub animated_textures_update_texels_limit: u32,
+
+	#[serde(default = "default_true")]
+	pub enable_framed_animations: bool,
+
+	#[serde(default = "default_true")]
+	pub enable_scrolling: bool,
+
+	// This includes turn effect and layered animations.
+	#[serde(default = "default_true")]
+	pub enable_generative_animations: bool,
 }
 
 impl MapMaterialsProcessorConfig
@@ -32,4 +42,9 @@ impl MapMaterialsProcessorConfig
 fn animated_textures_update_period_default() -> u32
 {
 	1
+}
+
+fn default_true() -> bool
+{
+	true
 }

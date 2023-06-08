@@ -247,6 +247,11 @@ impl MapMaterialsProcessor
 
 	fn update_framed_animations(&mut self, current_time_s: f32)
 	{
+		if !self.config.enable_framed_animations
+		{
+			return;
+		}
+
 		// Assume time never goes backwards.
 		for mapping_element in &mut self.textures_mapping_table
 		{
@@ -280,6 +285,11 @@ impl MapMaterialsProcessor
 
 	fn update_shifts(&mut self, current_time_s: f32)
 	{
+		if !self.config.enable_scrolling
+		{
+			return;
+		}
+
 		for (texture_data, texture_data_mutable) in self.textures.iter().zip(self.textures_mutable.iter_mut())
 		{
 			for i in 0 .. 2
@@ -295,6 +305,11 @@ impl MapMaterialsProcessor
 
 	fn update_animations(&mut self, current_time_s: f32)
 	{
+		if !self.config.enable_generative_animations
+		{
+			return;
+		}
+
 		// TODO - maybe perform lazy update (on demand)?
 		let dynamic_period = if self.config.animated_textures_update_texels_limit == 0
 		{
