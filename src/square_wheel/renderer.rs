@@ -35,11 +35,11 @@ impl Renderer
 		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
 
 		Self {
-			app_config,
+			app_config: app_config.clone(),
 			config: config_parsed,
 			console,
 			common_data: RenderersCommonData {
-				materials_processor: MapMaterialsProcessor::new(resources_manager.clone(), &*map),
+				materials_processor: MapMaterialsProcessor::new(resources_manager.clone(), app_config, &*map),
 				inline_models_index: InlineModelsIndex::new(map.clone()),
 				dynamic_models_index: DynamicObjectsIndex::new(map.clone()),
 				decals_index: DynamicObjectsIndex::new(map.clone()),

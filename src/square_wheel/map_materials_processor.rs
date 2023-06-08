@@ -1,10 +1,15 @@
-use super::{abstract_color::*, fast_math::*, resources_manager::*, surfaces, textures::*};
+use super::{
+	abstract_color::*, config, fast_math::*, map_materials_processor_config::*, resources_manager::*, surfaces,
+	textures::*,
+};
 use crate::common::{bsp_map_compact, color::*, material::*};
 use rayon::prelude::*;
 use std::{borrow::Borrow, collections::HashMap};
 
 pub struct MapMaterialsProcessor
 {
+	app_config: config::ConfigSharedPtr,
+	config: MapMaterialsProcessorConfig,
 	// Store here first map textures, than additional textures.
 	// Use two vectors in order to have immutable access to one, while modifying another.
 	textures: Vec<MapTextureData>,
@@ -19,8 +24,15 @@ pub type TextureShift = [i32; 2];
 
 impl MapMaterialsProcessor
 {
-	pub fn new(resources_manager: ResourcesManagerSharedPtr, map: &bsp_map_compact::BSPMap) -> Self
+	pub fn new(
+		resources_manager: ResourcesManagerSharedPtr,
+		app_config: config::ConfigSharedPtr,
+		map: &bsp_map_compact::BSPMap,
+	) -> Self
 	{
+		let config_parsed = MapMaterialsProcessorConfig::from_app_config(&app_config);
+		config_parsed.update_app_config(&app_config); // Update JSON with struct fields.
+
 		let mut r = resources_manager.lock().unwrap();
 		let all_materials = r.get_materials();
 
@@ -172,6 +184,8 @@ impl MapMaterialsProcessor
 		}
 
 		Self {
+			app_config,
+			config: config_parsed,
 			textures,
 			textures_mutable,
 			textures_mapping_table,
@@ -184,6 +198,7 @@ impl MapMaterialsProcessor
 	pub fn update(&mut self, current_time_s: f32)
 	{
 		self.current_frame += 1;
+		self.synchronize_config();
 
 		// Update framed animations.
 		// Assume time never goes backwards.
@@ -235,7 +250,7 @@ impl MapMaterialsProcessor
 		let textures_mutable = &mut self.textures_mutable;
 		let textures_mapping_table = &self.textures_mapping_table;
 		let current_frame = self.current_frame;
-		let update_period = 5; // TODO - read from config.
+		let update_period = self.config.animated_textures_update_period;
 		let current_update_order = current_frame % update_period;
 
 		let animate_func = |(tm, t): (&mut MapTextureDataMutable, &MapTextureData)| {
@@ -339,6 +354,30 @@ impl MapMaterialsProcessor
 	pub fn get_skybox_textures_64(&self, material_index: u32) -> Option<&SkyboxTextures<Color64>>
 	{
 		self.skybox_textures_64.get(&material_index).map(|x| x.borrow())
+	}
+
+	fn synchronize_config(&mut self)
+	{
+		let config_updated = MapMaterialsProcessorConfig::from_app_config(&self.app_config);
+		self.config = config_updated;
+
+		// Make sure that config values are reasonable.
+		let mut config_is_dirty = false;
+		if self.config.animated_textures_update_period < 1
+		{
+			self.config.animated_textures_update_period = 1;
+			config_is_dirty = true;
+		}
+		if self.config.animated_textures_update_period > 10
+		{
+			self.config.animated_textures_update_period = 10;
+			config_is_dirty = true;
+		}
+
+		if config_is_dirty
+		{
+			self.config.update_app_config(&self.app_config);
+		}
 	}
 }
 
