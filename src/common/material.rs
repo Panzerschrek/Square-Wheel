@@ -88,7 +88,7 @@ pub struct Material
 	/// If some - this is layered-animated material.
 	/// Material texture will be generated each frame, based on provided layers and params.
 	/// Material texture needs to be regenerated each frame and this may take significant amount of frame time.
-	/// So, avoid using too many textures in map or tool large textures with layered animations - prefer framed animations and/or scrolling.
+	/// So, avoid using too many textures in map or too large textures with layered animations - prefer framed animations and/or scrolling.
 	/// Layered animation presense doesn't affect map compiler and lightmaper - like framed animation.
 	pub layered_animation: Option<LayeredAnimation>,
 
@@ -174,7 +174,9 @@ pub struct LayeredAnimationLayer
 {
 	/// Material, that will be used for this layer.
 	/// blending mode of this material is used for blending of result animated texture.
-	/// Note that only static material texture is used, layerd animation of that material can't be used, because this can cause infinite recursion.
+	/// It's important to know, that blending doesn't work for normal and roughness data.
+	/// Normal/roughness is written only with blending mode = none or alpha test. Modulation is not used.
+	/// Note that only static material texture is used, layered animation of that material can't be used, because this can cause infinite recursion.
 	pub material_name: String,
 
 	/// If true - fetch not layer material itself, but its current framed animation frame.

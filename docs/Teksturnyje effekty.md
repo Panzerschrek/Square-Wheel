@@ -39,7 +39,7 @@ Tekstura generirujetsä každyj kadr iz neskoljkih slojov.
 Sloi smešivajutsä drug s drugom zadannym sposobom (Aljfa-test, Aljfa-smešivanije, dobavlenije i t. d.).
 Pri etom každyj sloj možno izmenitj - promodulirovatj çvetom, sdvinutj.
 
-V etom variante dlä parametrov sdviga ili moduläçii vozmožno zadanije razlicnyh funkçij .
+V etom variante dlä parametrov sdviga ili moduläçii vozmožno zadanije razlicnyh funkçij.
 Vidy funkçj: konstantnaja, linejnaja, sinusoidaljnaja volna, treugoljnaja volna, piloobraznaja volna, kvadratnaja volna.
 
 Necto pohožeje bylo v "Quake III Arena", pravda tam smešivanije vypolnälosj pri rasterizaçii (videokartoj).
