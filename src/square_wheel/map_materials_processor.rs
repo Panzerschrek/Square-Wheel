@@ -240,7 +240,13 @@ impl MapMaterialsProcessor
 		self.current_frame += 1;
 		self.synchronize_config();
 
-		// Update framed animations.
+		self.update_framed_animations(current_time_s);
+		self.update_shifts(current_time_s);
+		self.update_animations(current_time_s);
+	}
+
+	fn update_framed_animations(&mut self, current_time_s: f32)
+	{
 		// Assume time never goes backwards.
 		for mapping_element in &mut self.textures_mapping_table
 		{
@@ -270,8 +276,10 @@ impl MapMaterialsProcessor
 				}
 			}
 		}
+	}
 
-		// Update shifts.
+	fn update_shifts(&mut self, current_time_s: f32)
+	{
 		for (texture_data, texture_data_mutable) in self.textures.iter().zip(self.textures_mutable.iter_mut())
 		{
 			for i in 0 .. 2
@@ -283,15 +291,11 @@ impl MapMaterialsProcessor
 				}
 			}
 		}
+	}
 
-		// Perform animation in parallel (if has enough threads).
+	fn update_animations(&mut self, current_time_s: f32)
+	{
 		// TODO - maybe perform lazy update (on demand)?
-		let textures = &self.textures;
-		let textures_mutable = &mut self.textures_mutable;
-		let textures_mapping_table = &self.textures_mapping_table;
-
-		let current_frame = self.current_frame;
-
 		let dynamic_period = if self.config.animated_textures_update_texels_limit == 0
 		{
 			// No limit - try to update all textures each frame.
@@ -306,7 +310,11 @@ impl MapMaterialsProcessor
 		};
 		// use maximum period of two values - from config and dynamically-calculated one.
 		let update_period = std::cmp::max(self.config.animated_textures_update_period, dynamic_period);
-		let current_update_order = current_frame % update_period;
+		let current_update_order = self.current_frame % update_period;
+
+		let textures = &self.textures;
+		let textures_mutable = &mut self.textures_mutable;
+		let textures_mapping_table = &self.textures_mapping_table;
 
 		let animate_func = |(tm, t): (&mut MapTextureDataMutable, &MapTextureData)| {
 			// Perform sparse update - update each frame only one fraction of all animated textures.
@@ -316,6 +324,7 @@ impl MapMaterialsProcessor
 			}
 		};
 
+		// Perform animation in parallel (if has enough threads).
 		if rayon::current_num_threads() == 1
 		{
 			textures_mutable.iter_mut().zip(textures).for_each(animate_func);
