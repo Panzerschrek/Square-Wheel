@@ -1,3 +1,4 @@
+use super::material_function::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -67,6 +68,9 @@ pub struct Material
 	pub scroll_speed: [f32; 2],
 
 	/// If non-empty - additional texture will be composed atop of surface, multiplied by specified light.
+	/// Note that if this material uses layered animation and at least some of the layers include emissive layer,
+	/// emissive layer of this materials must be present (with dummy emissive texture).
+	/// This is required in order to set proper light value.
 	#[serde(default)]
 	pub emissive_layer: Option<EmissiveLayer>,
 
@@ -80,6 +84,13 @@ pub struct Material
 	/// Only main image will be used as albedo for lightmapper.
 	#[serde(default)]
 	pub framed_animation: Option<AnimationFrame>,
+
+	/// If some - this is layered-animated material.
+	/// Material texture will be generated each frame, based on provided layers and params.
+	/// Material texture needs to be regenerated each frame and this may take significant amount of frame time.
+	/// So, avoid using too many textures in map or too large textures with layered animations - prefer framed animations and/or scrolling.
+	/// Layered animation presense doesn't affect map compiler and lightmaper - like framed animation.
+	pub layered_animation: Option<LayeredAnimation>,
 
 	/// If some - this is a skybox.
 	#[serde(default)]
@@ -150,6 +161,45 @@ pub struct AnimationFrame
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct LayeredAnimation
+{
+	/// Size of result image is determined by size of first layer.
+	/// So, it is possible to create large texture (with large first layer) with additional layers as smaller tileable textures.
+	/// First layer should have None blending in order to avoid mixing with garbage color data.
+	pub layers: Vec<LayeredAnimationLayer>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct LayeredAnimationLayer
+{
+	/// Material, that will be used for this layer.
+	/// blending mode of this material is used for blending of result animated texture.
+	/// It's important to know, that blending doesn't work for normal and roughness data.
+	/// Normal/roughness is written only with blending mode = none or alpha test. Modulation is not used.
+	/// Note that only static material texture is used, layered animation of that material can't be used, because this can cause infinite recursion.
+	pub material_name: String,
+
+	/// If true - fetch not layer material itself, but its current framed animation frame.
+	#[serde(default)]
+	pub follow_framed_animation: bool,
+
+	/// How to perform shift of texture, depending on time.
+	#[serde(default)]
+	pub tex_coord_shift: [SingleArgumentFunction; 2],
+
+	/// If some - modulate texture color using this time-dependent function.
+	/// Value is clamped to 0.
+	/// Values greater than one are possible, but result texture will be clamped to range [0, 1], because textures have only 8 bits per channel.
+	#[serde(default)]
+	pub modulate: Option<SingleArgumentFunction>,
+
+	/// Same as abowe, but per-component modulation function.
+	/// If both modulation params are none - no modulation will be used (is equivalent to multiplication by 1).
+	#[serde(default)]
+	pub modulate_color: Option<[SingleArgumentFunction; 3]>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SkyboxParams
 {
 	/// Side images in order -X, +X, -Y, +Y, -Z, +Z. If empty - side is not drawn.
@@ -181,8 +231,9 @@ impl Default for Material
 			scroll_speed: [0.0, 0.0],
 			emissive_layer: None,
 			turb: None,
-			skybox: None,
 			framed_animation: None,
+			layered_animation: None,
+			skybox: None,
 			extra: HashMap::new(),
 		}
 	}

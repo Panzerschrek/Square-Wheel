@@ -33,18 +33,18 @@ Vozmožno zadanije aljternativnogo materiala v jego svojstvah.
 Vklücenije zameny materiala aljternativnym možno realizovatj globaljno (na vesj urovenj) ili dlä konkretnoj vstrojennoj modeli.
 
 
-### Mnogoslojnyj effekt
+### Mnogoslojnyj effekt (realizovano)
 
 Tekstura generirujetsä každyj kadr iz neskoljkih slojov.
-Sloi smešivajutsä drug s drugom zadannym sposobom (Aljfa-test, Aljfa-smešivanije, umnoženije i t. d.).
-Pri etom každyj sloj možno izmenitj - promodulirovatj çvetom, sdvinutj, primenitj "turb" effekt i t. d.
+Sloi smešivajutsä drug s drugom zadannym sposobom (Aljfa-test, Aljfa-smešivanije, dobavlenije i t. d.).
+Pri etom každyj sloj možno izmenitj - promodulirovatj çvetom, sdvinutj.
 
-V etom variante dlä parametrov sdviga ili moduläçii nužno zadanije razlicnyh funkçij.
-Vidy funkçj: linejnaja, stupencataja, piloobraznaja, sinusoidaljnaja i t. d.
+V etom variante dlä parametrov sdviga ili moduläçii vozmožno zadanije razlicnyh funkçij.
+Vidy funkçj: konstantnaja, linejnaja, sinusoidaljnaja volna, treugoljnaja volna, piloobraznaja volna, kvadratnaja volna.
 
 Necto pohožeje bylo v "Quake III Arena", pravda tam smešivanije vypolnälosj pri rasterizaçii (videokartoj).
 
-V otlicaje ot "Quake III" v "SquareWheel" budet prakticeski nevozmožno primenitj effekty tekstur, takije kak masštabirovanije ili vrascenije.
+V otlicaje ot "Quake III" v "SquareWheel" netu effektov tekstur, takih kak masštabirovanije ili vrascenije.
 Takije effekty trebujut vyborki iz tekstury po proizvoljnym koordinatam i vozmožno s filjtraçijej.
 Eto bylo by sliškom medlenno.
 Bystrymi mogut bytj toljko effekty so sdvigom teksturnyh koordinat na çeluju velicinu.
@@ -53,9 +53,11 @@ Ne vpolne ponätno, cto delatj s kartami normalej i šerohovatosti.
 Ih transformaçii mogut potrebovatj renormalizaçii.
 Vozmožno, stoit ih transformaçii vklücatj toljko jesli eto neobhodimo (javno zadavatj v svojstvah materiala).
 
-Krome sobstvenno osnovnoj tekstury stoit predusmotretj vozmožnostj realizovatj mnogoslojnyj effekt dlä izlucajuscego sloja.
+Krome sobstvenno osnovnoj tekstury smešivanije po vsem tem že pravilam proishodit i dlä izlucajuscego sloja.
 
-Odin iz variantov realizaçii - ispoljzovatj ssylki na drugije materialy, kak sloi dannogo mnogoslojnogo materiala.
+Sloi zadajutsä kak ssylki na materialy.
+Eto pozvoläjet bez problem zadatj vse te že parametry tekstur - "diffuse", "normal", "roughness" i t. d., ne dubliruja kod.
+Režim smešivanija sloja takže berötsä iz sootvetstvujuscego jemu materiala.
 
 
 ### O proizvoditeljnosti
@@ -64,3 +66,6 @@ Effekty, trebujuscije generaçii tekstur každyj kadr, mogut bytj vesjma medlenn
 Pricina etomu zaklücajetsä v tom, cto effekty primenäjutsä ko vsem teksturam, nezavisimo ot togo, kakije iz nih vidny v tekuscem kadre.
 Posemu stoit generirovatj tekstury paralleljno.
 Takže ne stoit ispoljzovatj na karte siljno mnogo podobnyh tekstur i/ili sdelatj ih vesjma neboljšogo razrešenija.
+
+Jescö odin sposob snizitj nagruzku - generirovatj tekstury ne každyj kadr.
+Každyj kadr v takom variante budet generirovatjsä toljko 1/N dolä tekstur, gde N - zadavajemyj v nastrojkah parametr castoty obnovlenija (ot 1 i boleje).

@@ -22,7 +22,9 @@ Renderer:
 * Shadows from triangle models
 * Multithreaded shadowmaps building
 * Increase max number of dynamic objects drawn in one leaf
-* Complex textures animation - with texture combined each frame from several layers
+* Add possibility to configure update frequency of animated textures
+* Mix normals and roughness in layered texture animations
+* Support materials without diffuse layer (only with emissive layer)
 * Support portals and mirrors with mixed texture, prepared as regular surface (with lightmaps, normal-mapping, dynamic lights, etc.)
 
 Lightmapper:
