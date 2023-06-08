@@ -1,10 +1,10 @@
-../src/target/release/map_compiler.exe \
+../src/target/release/map_compiler \
 	-i maps/demo2.map \
 	-o maps/demo2.sqwm \
 	--materials-dir materials \
 	--textures-dir textures \
 	&&\
-../src/target/release/lightmapper.exe \
+../src/target/release/lightmapper \
 	--num-threads 4 \
 	-i maps/demo2.sqwm \
 	-o maps/demo2.sqwm \
