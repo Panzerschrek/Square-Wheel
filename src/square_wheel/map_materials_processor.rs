@@ -656,7 +656,7 @@ fn make_turb_distortion<T: Copy + Default>(
 	dst_pixels: &mut [T],
 )
 {
-	// TODO - speed-up this. Use unsafe f32 -> i32 conversion, use indexing without bounds check.
+	// TODO - speed-up this. Use unsafe f32 -> i32 conversion.
 
 	let mip_scale = 1.0 / ((1 << mip) as f32);
 	let amplitude_corrected = mip_scale * turb.amplitude;
@@ -677,7 +677,7 @@ fn make_turb_distortion<T: Copy + Default>(
 		let mut src_x = shift.rem_euclid(size[0]);
 		for dst in dst_line
 		{
-			*dst = src_line[src_x as usize];
+			*dst = unsafe { debug_only_checked_fetch(src_line, src_x as usize) };
 			src_x += 1;
 			if src_x == size[0]
 			{
@@ -699,7 +699,7 @@ fn make_turb_distortion<T: Copy + Default>(
 	{
 		for (temp_dst, y) in temp_buffer.iter_mut().zip(0 .. size[1])
 		{
-			*temp_dst = dst_pixels[(x + y * size[0]) as usize];
+			*temp_dst = unsafe { debug_only_checked_fetch(dst_pixels, (x + y * size[0]) as usize) };
 		}
 
 		let shift =
@@ -708,7 +708,13 @@ fn make_turb_distortion<T: Copy + Default>(
 		let mut src_y = shift.rem_euclid(size[1]);
 		for y in 0 .. size[1]
 		{
-			dst_pixels[(x + y * size[0]) as usize] = temp_buffer[src_y as usize];
+			unsafe {
+				debug_only_checked_write(
+					dst_pixels,
+					(x + y * size[0]) as usize,
+					debug_only_checked_fetch(&temp_buffer, src_y as usize),
+				);
+			};
 			src_y += 1;
 			if src_y == size[1]
 			{
