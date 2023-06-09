@@ -23,7 +23,7 @@ Main features are related to world static geometry:
 * Translucent surfaces
 * Alpha-blending and alpha-test
 * Skyboxes
-* "Turb" effects for textures
+* Texture effects - framed animations, layered animations, "turb" effect
 * Decals (for bullet holes, blood spots, etc.)
 * Portals and mirrors
 

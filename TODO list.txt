@@ -22,6 +22,10 @@ Renderer:
 * Shadows from triangle models
 * Multithreaded shadowmaps building
 * Increase max number of dynamic objects drawn in one leaf
+* Animated simple textures (with color only), that are used for models, sprites, decalse
+* Unreal-style animated fire textures
+* Unreal-style animated water textures
+* Unreal-style animated ice textrures (with one layer, refracted via another layer)
 * Mix normals and roughness in layered texture animations
 * Support materials without diffuse layer (only with emissive layer)
 * Support portals and mirrors with mixed texture, prepared as regular surface (with lightmaps, normal-mapping, dynamic lights, etc.)
