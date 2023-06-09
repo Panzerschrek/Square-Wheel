@@ -1,0 +1,705 @@
+{
+	"connections": [
+		{
+			"from": "shape",
+			"from_port": 0,
+			"to": "math",
+			"to_port": 0
+		},
+		{
+			"from": "shape_2",
+			"from_port": 0,
+			"to": "math",
+			"to_port": 1
+		},
+		{
+			"from": "math",
+			"from_port": 0,
+			"to": "invert",
+			"to_port": 0
+		},
+		{
+			"from": "perlin",
+			"from_port": 0,
+			"to": "colorize",
+			"to_port": 0
+		},
+		{
+			"from": "colorize",
+			"from_port": 0,
+			"to": "fill_to_color",
+			"to_port": 1
+		},
+		{
+			"from": "bricks2",
+			"from_port": 1,
+			"to": "fill_to_color",
+			"to_port": 0
+		},
+		{
+			"from": "fill_to_color",
+			"from_port": 0,
+			"to": "circle_map",
+			"to_port": 0
+		},
+		{
+			"from": "bricks2",
+			"from_port": 0,
+			"to": "circle_map_2",
+			"to_port": 0
+		},
+		{
+			"from": "circle_map",
+			"from_port": 0,
+			"to": "blend_2",
+			"to_port": 0
+		},
+		{
+			"from": "circle_map_2",
+			"from_port": 0,
+			"to": "blend_2",
+			"to_port": 2
+		},
+		{
+			"from": "bricks2_2",
+			"from_port": 1,
+			"to": "fill_to_color_2",
+			"to_port": 0
+		},
+		{
+			"from": "colorize",
+			"from_port": 0,
+			"to": "fill_to_color_2",
+			"to_port": 1
+		},
+		{
+			"from": "fill_to_color_2",
+			"from_port": 0,
+			"to": "blend_3",
+			"to_port": 0
+		},
+		{
+			"from": "bricks2_2",
+			"from_port": 0,
+			"to": "blend_3",
+			"to_port": 2
+		},
+		{
+			"from": "blend_3",
+			"from_port": 0,
+			"to": "blend_4",
+			"to_port": 0
+		},
+		{
+			"from": "blend_2",
+			"from_port": 0,
+			"to": "blend_4",
+			"to_port": 1
+		},
+		{
+			"from": "shape_4",
+			"from_port": 0,
+			"to": "invert_2",
+			"to_port": 0
+		},
+		{
+			"from": "invert_2",
+			"from_port": 0,
+			"to": "math_2",
+			"to_port": 1
+		},
+		{
+			"from": "shape_3",
+			"from_port": 0,
+			"to": "math_2",
+			"to_port": 0
+		},
+		{
+			"from": "math_2",
+			"from_port": 0,
+			"to": "blend_4",
+			"to_port": 2
+		},
+		{
+			"from": "normal_map2",
+			"from_port": 0,
+			"to": "Material",
+			"to_port": 4
+		},
+		{
+			"from": "math_2",
+			"from_port": 0,
+			"to": "blend_5",
+			"to_port": 2
+		},
+		{
+			"from": "bricks2_2",
+			"from_port": 0,
+			"to": "blend_5",
+			"to_port": 0
+		},
+		{
+			"from": "circle_map_2",
+			"from_port": 0,
+			"to": "blend_5",
+			"to_port": 1
+		},
+		{
+			"from": "blend_4",
+			"from_port": 0,
+			"to": "blend_6",
+			"to_port": 0
+		},
+		{
+			"from": "invert",
+			"from_port": 0,
+			"to": "blend_6",
+			"to_port": 2
+		},
+		{
+			"from": "blend_6",
+			"from_port": 0,
+			"to": "Material",
+			"to_port": 0
+		},
+		{
+			"from": "invert",
+			"from_port": 0,
+			"to": "blend_7",
+			"to_port": 2
+		},
+		{
+			"from": "uniform",
+			"from_port": 0,
+			"to": "blend_7",
+			"to_port": 1
+		},
+		{
+			"from": "blend_5",
+			"from_port": 0,
+			"to": "blend_7",
+			"to_port": 0
+		},
+		{
+			"from": "blend_7",
+			"from_port": 0,
+			"to": "normal_map2",
+			"to_port": 0
+		},
+		{
+			"from": "uniform_2",
+			"from_port": 0,
+			"to": "blend_3",
+			"to_port": 1
+		},
+		{
+			"from": "uniform_2",
+			"from_port": 0,
+			"to": "blend_2",
+			"to_port": 1
+		},
+		{
+			"from": "perlin_2",
+			"from_port": 0,
+			"to": "brightness_contrast",
+			"to_port": 0
+		},
+		{
+			"from": "brightness_contrast",
+			"from_port": 0,
+			"to": "blend_6",
+			"to_port": 1
+		}
+	],
+	"label": "Graph",
+	"longdesc": "",
+	"name": "312",
+	"node_position": {
+		"x": 0,
+		"y": 0
+	},
+	"nodes": [
+		{
+			"export_paths": {
+
+			},
+			"name": "Material",
+			"node_position": {
+				"x": 1320,
+				"y": 260
+			},
+			"parameters": {
+				"albedo_color": {
+					"a": 1,
+					"b": 1,
+					"g": 1,
+					"r": 1,
+					"type": "Color"
+				},
+				"ao": 1,
+				"depth_scale": 0.5,
+				"emission_energy": 1,
+				"flags_transparent": true,
+				"metallic": 0,
+				"normal": 1,
+				"roughness": 1,
+				"size": 9,
+				"sss": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "material"
+		},
+		{
+			"name": "shape",
+			"node_position": {
+				"x": 60,
+				"y": 840
+			},
+			"parameters": {
+				"edge": 0,
+				"radius": 0.87,
+				"shape": 0,
+				"sides": 2
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "shape"
+		},
+		{
+			"name": "shape_2",
+			"node_position": {
+				"x": 60,
+				"y": 980
+			},
+			"parameters": {
+				"edge": 0,
+				"radius": 0.5,
+				"shape": 0,
+				"sides": 2
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "shape"
+		},
+		{
+			"name": "math",
+			"node_position": {
+				"x": 220,
+				"y": 840
+			},
+			"parameters": {
+				"clamp": true,
+				"default_in1": 0,
+				"default_in2": 0,
+				"op": 1
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "math"
+		},
+		{
+			"name": "invert",
+			"node_position": {
+				"x": 440,
+				"y": 840
+			},
+			"parameters": {
+
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "invert"
+		},
+		{
+			"name": "bricks2",
+			"node_position": {
+				"x": -220,
+				"y": 200
+			},
+			"parameters": {
+				"bevel": 0.05,
+				"columns": 6,
+				"corner": 0.1,
+				"mortar": 0.05,
+				"pattern": 0,
+				"round": 0.1,
+				"row_offset": 0.5,
+				"rows": 8
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "bricks2"
+		},
+		{
+			"name": "circle_map",
+			"node_position": {
+				"x": 240,
+				"y": 200
+			},
+			"parameters": {
+				"radius": 1,
+				"repeat": 3
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "circle_map"
+		},
+		{
+			"name": "perlin",
+			"node_position": {
+				"x": -680,
+				"y": 420
+			},
+			"parameters": {
+				"iterations": 1,
+				"persistence": 0.5,
+				"scale_x": 32,
+				"scale_y": 32
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "perlin"
+		},
+		{
+			"name": "colorize",
+			"node_position": {
+				"x": -440,
+				"y": 420
+			},
+			"parameters": {
+				"gradient": {
+					"interpolation": 1,
+					"points": [
+						{
+							"a": 1,
+							"b": 0.13176,
+							"g": 0.210759,
+							"pos": 0,
+							"r": 0.613281
+						},
+						{
+							"a": 1,
+							"b": 0.038101,
+							"g": 0.236996,
+							"pos": 1,
+							"r": 0.886719
+						}
+					],
+					"type": "Gradient"
+				}
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "colorize"
+		},
+		{
+			"name": "fill_to_color",
+			"node_position": {
+				"x": 20,
+				"y": 200
+			},
+			"parameters": {
+				"edgecolor": {
+					"a": 1,
+					"b": 0,
+					"g": 0,
+					"r": 0,
+					"type": "Color"
+				}
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "fill_to_color"
+		},
+		{
+			"name": "circle_map_2",
+			"node_position": {
+				"x": 240,
+				"y": 300
+			},
+			"parameters": {
+				"radius": 1,
+				"repeat": 3
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "circle_map"
+		},
+		{
+			"name": "blend_2",
+			"node_position": {
+				"x": 540,
+				"y": 280
+			},
+			"parameters": {
+				"amount": 1,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "bricks2_2",
+			"node_position": {
+				"x": -220,
+				"y": 460
+			},
+			"parameters": {
+				"bevel": 0.01,
+				"columns": 4,
+				"corner": 0.5,
+				"mortar": 0.05,
+				"pattern": 2,
+				"round": 0.08,
+				"row_offset": 0.5,
+				"rows": 16
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "bricks2"
+		},
+		{
+			"name": "fill_to_color_2",
+			"node_position": {
+				"x": 20,
+				"y": 460
+			},
+			"parameters": {
+				"edgecolor": {
+					"a": 1,
+					"b": 0,
+					"g": 0,
+					"r": 0,
+					"type": "Color"
+				}
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "fill_to_color"
+		},
+		{
+			"name": "blend_3",
+			"node_position": {
+				"x": 540,
+				"y": 160
+			},
+			"parameters": {
+				"amount": 1,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "shape_3",
+			"node_position": {
+				"x": 60,
+				"y": 560
+			},
+			"parameters": {
+				"edge": 0,
+				"radius": 0.37,
+				"shape": 0,
+				"sides": 2
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "shape"
+		},
+		{
+			"name": "blend_4",
+			"node_position": {
+				"x": 820,
+				"y": 240
+			},
+			"parameters": {
+				"amount": 1,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "shape_4",
+			"node_position": {
+				"x": 60,
+				"y": 700
+			},
+			"parameters": {
+				"edge": 0,
+				"radius": 1,
+				"shape": 0,
+				"sides": 2
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "shape"
+		},
+		{
+			"name": "math_2",
+			"node_position": {
+				"x": 360,
+				"y": 560
+			},
+			"parameters": {
+				"clamp": false,
+				"default_in1": 0,
+				"default_in2": 0,
+				"op": 14
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "math"
+		},
+		{
+			"name": "invert_2",
+			"node_position": {
+				"x": 220,
+				"y": 620
+			},
+			"parameters": {
+
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "invert"
+		},
+		{
+			"name": "normal_map2",
+			"node_position": {
+				"x": 1120,
+				"y": 380
+			},
+			"parameters": {
+				"buffer": 0,
+				"param2": 0,
+				"size": 9,
+				"strength": 1
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "normal_map2"
+		},
+		{
+			"name": "blend_5",
+			"node_position": {
+				"x": 680,
+				"y": 380
+			},
+			"parameters": {
+				"amount": 1,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "blend_6",
+			"node_position": {
+				"x": 1040,
+				"y": 240
+			},
+			"parameters": {
+				"amount": 1,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "blend_7",
+			"node_position": {
+				"x": 900,
+				"y": 380
+			},
+			"parameters": {
+				"amount": 1,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "uniform",
+			"node_position": {
+				"x": 680,
+				"y": 500
+			},
+			"parameters": {
+				"color": {
+					"a": 1,
+					"b": 0,
+					"g": 0,
+					"r": 0,
+					"type": "Color"
+				}
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "uniform"
+		},
+		{
+			"name": "uniform_2",
+			"node_position": {
+				"x": 300,
+				"y": 120
+			},
+			"parameters": {
+				"color": {
+					"a": 1,
+					"b": 0.488281,
+					"g": 0.488281,
+					"r": 0.488281,
+					"type": "Color"
+				}
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "uniform"
+		},
+		{
+			"name": "perlin_2",
+			"node_position": {
+				"x": 580,
+				"y": 20
+			},
+			"parameters": {
+				"iterations": 4,
+				"persistence": 0.5,
+				"scale_x": 16,
+				"scale_y": 16
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "perlin"
+		},
+		{
+			"name": "brightness_contrast",
+			"node_position": {
+				"x": 820,
+				"y": 20
+			},
+			"parameters": {
+				"brightness": -0.25,
+				"contrast": 0.3
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "brightness_contrast"
+		}
+	],
+	"parameters": {
+
+	},
+	"seed": 0,
+	"seed_locked": false,
+	"shortdesc": "",
+	"type": "graph"
+}

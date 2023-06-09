@@ -1,0 +1,485 @@
+{
+	"spanish_bond_base":
+	{
+		"diffuse" : "spanish_bond_base.png",
+		"normal_map" : "spanish_bond_base_normal.png",
+		"layered_animation" :
+		{
+			"layers" :
+			[
+				{
+					"_comment": "add base layer, modulated by 0, in order to fill normals data",
+					"material_name" : "spanish_bond_base",
+					"modulate" : { "Constant" : 0.0 }
+				},
+				{
+					"material_name" : "spanish_bond_a",
+					"modulate" : { "TriangleWave" : { "frequency" : 0.15, "amplitude": 0.75, "offset" : 0.25, "phase" : 0.0 } }
+				},
+				{
+					"material_name" : "spanish_bond_b",
+					"modulate" : { "TriangleWave" : { "frequency" : 0.15, "amplitude": 0.75, "offset" : 0.25, "phase" : 0.333333 } }
+				},
+				{
+					"material_name" : "spanish_bond_c",
+					"modulate" : { "TriangleWave" : { "frequency" : 0.15, "amplitude": 0.75, "offset" : 0.25, "phase" : 0.666666 } }
+				}
+			]
+		}
+	},
+	"spanish_bond_a":
+	{
+		"diffuse" : "spanish_bond_a.png",
+		"blending_mode": "Additive"
+	},
+	"spanish_bond_b":
+	{
+		"diffuse" : "spanish_bond_b.png",
+		"blending_mode": "Additive"
+	},
+	"spanish_bond_c":
+	{
+		"diffuse" : "spanish_bond_c.png",
+		"blending_mode": "Additive"
+	},
+
+	"basket_weave_grid":
+	{
+		"diffuse" : "basket_weave_grid.png",
+		"normal_map" : "basket_weave_grid_normal.png",
+		"blending_mode" : "None",
+		"emissive_light" : [10.0, 10.0, 10.0],
+		"emissive_layer":
+		{
+			"image" : "basket_weave_grid_base.png",
+			"light" : [40.0, 40.0, 40.0]
+		},
+		"layered_animation":
+		{
+			"layers":
+			[
+				{
+					"material_name" : "basket_weave_grid_base"
+				},
+				{
+					"material_name" : "glowing_sin_wave",
+					"tex_coord_shift" :
+					[
+						{ "SinWave" : { "frequency" : 0.3, "amplitude" : 16.0, "phase" : 0.0 } },
+						{ "Linear" : { "scale" : -24.0 } }
+					],
+					"modulate_color" :
+					[
+						{ "SinWave" : { "frequency" : 1.0, "amplitude" : 0.3, "offset" : 0.5, "phase" : 0.0 } },
+						{ "Constant" : 0.1 },
+						{ "Constant" : 0.1 }
+					]
+				},
+				{
+					"material_name" : "glowing_sin_wave",
+					"tex_coord_shift" :
+					[
+						{ "SinWave" : { "frequency" : 0.3, "amplitude" : 16.0, "phase" : 2.0943951 } },
+						{ "Linear" : { "scale" : -36.0 } }
+					],
+					"modulate_color" :
+					[
+						{ "Constant" : 0.1 },
+						{ "SinWave" : { "frequency" : 1.0, "amplitude" : 0.3, "offset" : 0.5, "phase" : 2.0943951 } },
+						{ "Constant" : 0.1 }
+					]
+				},
+				{
+					"material_name" : "glowing_sin_wave",
+					"tex_coord_shift" :
+					[
+						{ "SinWave" : { "frequency" : 0.3, "amplitude" : 16.0, "phase" : 4.18879 } },
+						{ "Linear" : { "scale" : -60.0 } }
+					],
+					"modulate_color" :
+					[
+						{ "Constant" : 0.1 },
+						{ "Constant" : 0.1 },
+						{ "SinWave" : { "frequency" : 1.0, "amplitude" : 0.3, "offset" : 0.5, "phase" : 4.18879 } }
+					]
+				},
+				{
+					"material_name" : "basket_weave_grid_grid"
+				}
+			]
+		}
+	},
+	"basket_weave_grid_base":
+	{
+		"diffuse": "basket_weave_grid_base.png",
+		"normal_map": "basket_weave_grid_base_normal.png",
+		"emissive_layer":
+		{
+			"image" : "basket_weave_grid_base_emission.png",
+			"light" : [1.0, 1.0, 1.0]
+		}
+	},
+	"glowing_sin_wave":
+	{
+		"blocks_view" : false,
+		"blending_mode" : "Additive",
+		"emissive_layer":
+		{
+			"image" : "glowing_sin_wave_emission.png",
+			"light" : [4.0, 4.0, 4.0]
+		}
+	},
+	"basket_weave_grid_grid":
+	{
+		"diffuse" : "basket_weave_grid.png",
+		"normal_map" : "basket_weave_grid_normal.png",
+		"blocks_view" : false,
+		"blending_mode" : "AlphaTest",
+		"emissive_layer":
+		{
+			"image" : "basket_weave_grid_mask.png",
+			"light" : [1.0, 1.0, 1.0]
+		}
+	},
+
+	"bricks_with_rolling_ball":
+	{
+		"diffuse" : "bricks_with_rolling_ball.png",
+		"normal_map" : "bricks_with_rolling_ball_normal.png",
+		"layered_animation" :
+		{
+			"layers" :
+			[
+				{
+					"material_name" : "bricks_with_rolling_ball"
+				},
+				{
+					"material_name" : "rolling_ball",
+					"tex_coord_shift" :
+					[
+						{ "SinWave" : { "offset": 64, "frequency" : 0.25, "amplitude" : 44, "phase" : 1.570796 } },
+						{ "SinWave" : { "offset": 64, "frequency" : 0.25, "amplitude" : 44, "phase" : 0 } }
+					]
+				}
+			]
+		}
+	},
+	"rolling_ball":
+	{
+		"diffuse" : "rolling_ball.png",
+		"normal_map" : "rolling_ball_normal.png",
+		"blocks_view" : false,
+		"blending_mode" : "AlphaTest"
+	},
+
+	"monkey_head/display":
+	{
+		"blending_mode" : "None",
+		"emissive_light" : [4.0, 4.0, 4.0],
+		"emissive_layer" :
+		{
+			"image": "none",
+			"light" : [6.0, 6.0, 6.0]
+		},
+		"layered_animation" :
+		{
+			"layers" :
+			[
+				{
+					"_comment": "base (diffuse) layer",
+					"material_name" : "monkey_head_display_base"
+				},
+				{
+					"_comment": "use frame-animated texture for display image",
+					"material_name" : "monkey_head_anim_0",
+					"follow_framed_animation" : true
+				},
+				{
+					"_comment": "add some noise",
+					"material_name" : "monkey_head_display_noise",
+					"tex_coord_shift" :
+					[
+						{ "Linear" : { "scale" : 512.0 } },
+						{ "Linear" : { "scale" : -96.0 } }
+					]
+				},
+				{
+					"comment": "make sure noise stays inside screeen",
+					"material_name" : "monkey_head_display_mask"
+				}
+			]
+		}
+	},
+	"monkey_head_display_base" :
+	{
+		"diffuse": "monkey_head/display.png"
+	},
+	"monkey_head_display_noise" :
+	{
+		"blending_mode" : "Additive",
+		"emissive_layer" :
+		{
+			"image": "monkey_head_display_noise_emission.png",
+			"light" : [1.0, 1.0, 1.0]
+		}
+	},
+	"monkey_head_display_mask" :
+	{
+		"blending_mode" : "AlphaTest",
+		"emissive_layer" :
+		{
+			"image": "monkey_head/display_mask.png",
+			"light" : [1.0, 1.0, 1.0]
+		}
+	},
+
+	"monkey_head_anim_0":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0000.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_1",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_1":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0001.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_2",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_2":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0002.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_3",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_3":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0003.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_4",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_4":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0004.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_5",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_5":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0005.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_6",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_6":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0006.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_7",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_7":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0007.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_8",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_8":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0008.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_9",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_9":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0009.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_10",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_10":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0010.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_11",
+			"duration" : 0.2
+		}
+	},
+	"monkey_head_anim_11":
+	{
+		"emissive_layer" :
+		{
+			"image": "monkey_head/0011.png",
+			"light" : [12.0, 12.0, 12.0]
+		},
+		"framed_animation" : 
+		{
+			"next_material_name" : "monkey_head_anim_0",
+			"duration" : 0.2
+		}
+	},
+
+	"metal_wire_mesh":
+	{
+		"diffuse" : "metal_wire_mesh.png",
+		"normal_map" : "metal_wire_mesh_normal.png",
+		"is_metal" : true,
+		"roughness" : 0.3,
+		"blending_mode": "AlphaTest",
+		"blocks_view" : false,
+		"layered_animation" :
+		{
+			"layers" :
+			[
+				{
+					"material_name" : "metal_wire_mesh_base"
+				},
+				{
+					"material_name" : "metal_wire_mesh",
+					"tex_coord_shift" :
+					[
+						{ "Linear" : { "scale" : -6.9282 } },
+						{ "Linear" : { "scale" : 4.0 } }
+					]
+				}
+				,
+				{
+					"material_name" : "metal_wire_mesh",
+					"tex_coord_shift" :
+					[
+						{ "Linear" : { "scale" : 6.9282 } },
+						{ "Linear" : { "scale" : 4.0 } }
+					]
+				},
+				{
+					"material_name" : "metal_wire_mesh",
+					"tex_coord_shift" :
+					[
+						{ "Constant" : 0.0 },
+						{ "Linear" : { "scale" : -8.0 } }
+					]
+				}
+			]
+		}
+	},
+	"metal_wire_mesh_base":
+	{
+		"diffuse" : "metal_wire_mesh_base.png"
+	},
+
+	"roman_number_i":
+	{
+		"diffuse" : "roman_number_i.png",
+		"normal_map" : "roman_number_i_normal.png",
+		"roughness" : 0.05,
+		"framed_animation" :
+		{
+			"next_material_name" : "roman_number_ii",
+			"duration" : 1.0
+		}
+	},
+	"roman_number_ii":
+	{
+		"diffuse" : "roman_number_ii.png",
+		"normal_map" : "roman_number_ii_normal.png",
+		"roughness" : 0.05,
+		"framed_animation" :
+		{
+			"next_material_name" : "roman_number_iii",
+			"duration" : 1.0
+		}
+	},
+	"roman_number_iii":
+	{
+		"diffuse" : "roman_number_iii.png",
+		"normal_map" : "roman_number_iii_normal.png",
+		"roughness" : 0.05,
+		"framed_animation" :
+		{
+			"next_material_name" : "roman_number_iv",
+			"duration" : 1.0
+		}
+	},
+	"roman_number_iv":
+	{
+		"diffuse" : "roman_number_iv.png",
+		"normal_map" : "roman_number_iv_normal.png",
+		"roughness" : 0.05,
+		"framed_animation" :
+		{
+			"next_material_name" : "roman_number_i",
+			"duration" : 1.0
+		}
+	}
+}
