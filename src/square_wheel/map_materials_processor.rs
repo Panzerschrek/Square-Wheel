@@ -77,8 +77,6 @@ impl MapMaterialsProcessor
 			});
 		}
 
-		let invalid_texture_index = !0;
-
 		// Load additional materials for animation frames and generative effects.
 		// TODO - try to load textures in parallel.
 		// Fill internal texture data struct.
@@ -89,23 +87,22 @@ impl MapMaterialsProcessor
 		let mut i = 0;
 		while i < textures.len()
 		{
-			let mut texture_data_internal = MapTextureDataInternal::default();
+			// Clone some material fields, in order to create lambda, that captures mutable reference to "textures" vector.
+			let framed_animation = textures[i].material.framed_animation.clone();
+			let special_effect = textures[i].material.special_effect.clone();
 
-			texture_data_internal.next_frame_texture_index = if let Some(framed_animation) =
-				&textures[i].material.framed_animation
-			{
-				if let Some(already_loaded_texture_index) =
-					material_name_to_texture_index.get(&framed_animation.next_material_name)
+			let mut load_texture_func = |material_name: &str| {
+				if let Some(already_loaded_texture_index) = material_name_to_texture_index.get(material_name)
 				{
 					*already_loaded_texture_index
 				}
-				else if let Some(material) = all_materials.get(&framed_animation.next_material_name).cloned()
+				else if let Some(material) = all_materials.get(material_name).cloned()
 				{
-					let texture = r.get_material_texture(&framed_animation.next_material_name);
+					let texture = r.get_material_texture(&material_name);
 					let emissive_texture = material.emissive_layer.as_ref().map(|l| r.get_texture_lite(&l.image));
 
 					let texture_index = textures.len() as TextureIndex;
-					material_name_to_texture_index.insert(framed_animation.next_material_name.clone(), texture_index);
+					material_name_to_texture_index.insert(material_name.to_string(), texture_index);
 					textures.push(MapTextureData {
 						material,
 						texture,
@@ -116,50 +113,34 @@ impl MapMaterialsProcessor
 				}
 				else
 				{
-					println!("Can't find material {}", framed_animation.next_material_name);
-					invalid_texture_index
+					println!("Can't find material {}", material_name);
+					0
 				}
+			};
+
+			let mut texture_data_internal = MapTextureDataInternal::default();
+
+			texture_data_internal.next_frame_texture_index = if let Some(framed_animation) = framed_animation
+			{
+				load_texture_func(&framed_animation.next_material_name)
 			}
 			else
 			{
-				invalid_texture_index
+				!0 // Out of bounds index - means no animation
 			};
 
 			texture_data_internal.generative_effect =
-				create_generative_texture_effect(textures[i].material.special_effect.clone(), &mut |material_name| {
-					if let Some(already_loaded_texture_index) = material_name_to_texture_index.get(material_name)
-					{
-						*already_loaded_texture_index
-					}
-					else if let Some(material) = all_materials.get(material_name).cloned()
-					{
-						let texture = r.get_material_texture(&material_name);
-						let emissive_texture = material.emissive_layer.as_ref().map(|l| r.get_texture_lite(&l.image));
+				create_generative_texture_effect(special_effect, &mut load_texture_func);
 
-						let texture_index = textures.len() as TextureIndex;
-						material_name_to_texture_index.insert(material_name.to_string(), texture_index);
-						textures.push(MapTextureData {
-							material,
-							texture,
-							emissive_texture,
-						});
-
-						texture_index
-					}
-					else
-					{
-						println!("Can't find material {}", material_name);
-						0
-					}
-				});
-
-			// Calculate animated textures order, count amount of animated textures texels.
-			// We need to enumerate only animated texture sequentially in order to perform balanced sparse update.
 			if let Some(generative_effect) = &texture_data_internal.generative_effect
 			{
-				num_animated_texels += generative_effect.get_estimated_texel_count(&textures[i], &textures);
+				// Calculate animated textures order.
+				// We need to enumerate only animated texture sequentially in order to perform balanced sparse update.
 				texture_data_internal.animated_texture_order = animated_texture_order;
 				animated_texture_order += 1;
+
+				// Count amount of animated textures texels.
+				num_animated_texels += generative_effect.get_estimated_texel_count(&textures[i], &textures);
 			}
 
 			textures_internal.push(texture_data_internal);

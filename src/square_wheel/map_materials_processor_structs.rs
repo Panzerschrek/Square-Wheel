@@ -3,7 +3,9 @@ use crate::common::material::*;
 
 pub struct MapTextureData
 {
+	// Material for wich tthis texture is created.
 	pub material: Material,
+	// Regular texture (color + normal + roughness data).
 	pub texture: SharedResourcePtr<TextureWithMips>,
 	// Non-empty if emissive texture exists.
 	pub emissive_texture: Option<SharedResourcePtr<TextureLiteWithMips>>,
@@ -19,7 +21,8 @@ pub struct GenerativeTextureData
 	pub emissive_texture: TextureLiteWithMips,
 }
 
-pub type OptDynGenerativeTextureEffect = Option<Box<dyn GenerativeTextureEffect + Send + Sync>>;
+pub type OptDynGenerativeTextureEffect = Option<DynGenerativeTextureEffect>;
+pub type DynGenerativeTextureEffect = Box<dyn GenerativeTextureEffect + Send + Sync>;
 
 // Interface for textures, that are generated each frame.
 pub trait GenerativeTextureEffect
