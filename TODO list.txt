@@ -22,7 +22,7 @@ Renderer:
 * Shadows from triangle models
 * Multithreaded shadowmaps building
 * Increase max number of dynamic objects drawn in one leaf
-* Animated simple textures (with color only), that are used for models, sprites, decalse
+* Animated simple textures (with color only), that are used for models, sprites, decals
 * Unreal-style animated fire textures
 * Unreal-style animated water textures
 * Unreal-style animated ice textrures (with one layer, refracted via another layer)
