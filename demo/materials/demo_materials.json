@@ -186,11 +186,14 @@
 		"roughness": 0.0,
 		"blending_mode": "Average",
 		"blocks_view": false,
-		"turb":
+		"special_effect":
 		{
-			"amplitude": 16.0,
-			"wave_length": 128.0,
-			"frequency": 0.25
+			"Turb":
+			{
+				"amplitude": 16.0,
+				"wave_length": 128.0,
+				"frequency": 0.25
+			}
 		}
 	},
 	"water_flowing_slow":
