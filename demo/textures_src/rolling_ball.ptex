@@ -1,0 +1,293 @@
+{
+	"connections": [
+		{
+			"from": "sdf3d_sphere",
+			"from_port": 0,
+			"to": "raymarching",
+			"to_port": 0
+		},
+		{
+			"from": "raymarching",
+			"from_port": 0,
+			"to": "tones_step",
+			"to_port": 0
+		},
+		{
+			"from": "raymarching",
+			"from_port": 1,
+			"to": "normal_blend",
+			"to_port": 0
+		},
+		{
+			"from": "perlin",
+			"from_port": 0,
+			"to": "normal_map2",
+			"to_port": 0
+		},
+		{
+			"from": "normal_map2",
+			"from_port": 0,
+			"to": "normal_blend",
+			"to_port": 1
+		},
+		{
+			"from": "normal_blend",
+			"from_port": 0,
+			"to": "Material",
+			"to_port": 4
+		},
+		{
+			"from": "shape",
+			"from_port": 0,
+			"to": "blend",
+			"to_port": 2
+		},
+		{
+			"from": "uniform_2",
+			"from_port": 0,
+			"to": "blend",
+			"to_port": 1
+		},
+		{
+			"from": "uniform",
+			"from_port": 0,
+			"to": "blend",
+			"to_port": 0
+		},
+		{
+			"from": "blend",
+			"from_port": 0,
+			"to": "Material",
+			"to_port": 0
+		},
+		{
+			"from": "tones_step",
+			"from_port": 0,
+			"to": "math",
+			"to_port": 0
+		},
+		{
+			"from": "math",
+			"from_port": 0,
+			"to": "Material",
+			"to_port": 7
+		}
+	],
+	"label": "Graph",
+	"longdesc": "",
+	"name": "@@312",
+	"node_position": {
+		"x": 0,
+		"y": 0
+	},
+	"nodes": [
+		{
+			"export_paths": {
+
+			},
+			"name": "Material",
+			"node_position": {
+				"x": 620,
+				"y": -20
+			},
+			"parameters": {
+				"albedo_color": {
+					"a": 1,
+					"b": 1,
+					"g": 1,
+					"r": 1,
+					"type": "Color"
+				},
+				"ao": 1,
+				"depth_scale": 1,
+				"emission_energy": 1,
+				"flags_transparent": true,
+				"metallic": 0,
+				"normal": 1,
+				"roughness": 1,
+				"size": 10,
+				"sss": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "material"
+		},
+		{
+			"name": "sdf3d_sphere",
+			"node_position": {
+				"x": -160,
+				"y": 20
+			},
+			"parameters": {
+				"r": 0.045
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "sdf3d_sphere"
+		},
+		{
+			"name": "raymarching",
+			"node_position": {
+				"x": 0,
+				"y": 20
+			},
+			"parameters": {
+
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "raymarching"
+		},
+		{
+			"name": "tones_step",
+			"node_position": {
+				"x": 200,
+				"y": 180
+			},
+			"parameters": {
+				"invert": false,
+				"value": 0.02,
+				"width": 0.02
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "tones_step"
+		},
+		{
+			"name": "normal_blend",
+			"node_position": {
+				"x": 380,
+				"y": 40
+			},
+			"parameters": {
+				"amount": 0.95
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "normal_blend"
+		},
+		{
+			"name": "perlin",
+			"node_position": {
+				"x": -300,
+				"y": 140
+			},
+			"parameters": {
+				"iterations": 4,
+				"persistence": 0.5,
+				"scale_x": 12,
+				"scale_y": 12
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "perlin"
+		},
+		{
+			"name": "normal_map2",
+			"node_position": {
+				"x": -40,
+				"y": 140
+			},
+			"parameters": {
+				"buffer": 0,
+				"param2": 0,
+				"size": 10,
+				"strength": 0.5
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "normal_map2"
+		},
+		{
+			"name": "shape",
+			"node_position": {
+				"x": 220,
+				"y": 0
+			},
+			"parameters": {
+				"edge": 1,
+				"radius": 1,
+				"shape": 4,
+				"sides": 7
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "shape"
+		},
+		{
+			"name": "uniform",
+			"node_position": {
+				"x": 220,
+				"y": -140
+			},
+			"parameters": {
+				"color": {
+					"a": 1,
+					"b": 0.292603,
+					"g": 0.69641,
+					"r": 0.734375,
+					"type": "Color"
+				}
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "uniform"
+		},
+		{
+			"name": "uniform_2",
+			"node_position": {
+				"x": 220,
+				"y": -80
+			},
+			"parameters": {
+				"color": {
+					"a": 1,
+					"b": 0.171204,
+					"g": 0.552472,
+					"r": 0.796875,
+					"type": "Color"
+				}
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "uniform"
+		},
+		{
+			"name": "blend",
+			"node_position": {
+				"x": 380,
+				"y": -80
+			},
+			"parameters": {
+				"amount": 1,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "math",
+			"node_position": {
+				"x": 400,
+				"y": 160
+			},
+			"parameters": {
+				"clamp": true,
+				"default_in1": 0,
+				"default_in2": 0.01,
+				"op": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "math"
+		}
+	],
+	"parameters": {
+
+	},
+	"seed": 0,
+	"seed_locked": false,
+	"shortdesc": "",
+	"type": "graph"
+}

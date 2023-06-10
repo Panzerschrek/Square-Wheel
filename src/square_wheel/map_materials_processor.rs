@@ -460,6 +460,7 @@ fn create_generative_texture_effect<MaterialLoadFunction: FnMut(&str) -> Texture
 	special_effect: SpecialMaterialEffect,
 	material_load_function: &mut MaterialLoadFunction,
 ) -> OptDynGenerativeTextureEffect
+
 {
 	match special_effect
 	{
