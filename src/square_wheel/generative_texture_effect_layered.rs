@@ -63,7 +63,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectLayered
 
 	fn update(
 		&mut self,
-		texture_data_mutable: &mut GenerativeTextureData,
+		out_texture_data: &mut GenerativeTextureData,
 		_texture_data: &MapTextureData,
 		all_textures_data: &[MapTextureData],
 		textures_mapping_table: &[TextureMappingElement],
@@ -114,7 +114,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectLayered
 				{
 					// Mix diffuse layer only if it exists.
 					let src_mip = &layer_texture.texture[mip_index];
-					let dst_mip = &mut texture_data_mutable.texture_modified[mip_index];
+					let dst_mip = &mut out_texture_data.texture[mip_index];
 					if dst_mip.pixels.is_empty()
 					{
 						*dst_mip = src_mip.clone();
@@ -137,7 +137,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectLayered
 				{
 					// Mix emissive layer only if it exists.
 					let src_mip = &emissive_texture[mip_index];
-					let dst_mip = &mut texture_data_mutable.emissive_texture_modified[mip_index];
+					let dst_mip = &mut out_texture_data.emissive_texture[mip_index];
 					if dst_mip.pixels.is_empty()
 					{
 						*dst_mip = src_mip.clone();

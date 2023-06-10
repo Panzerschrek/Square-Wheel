@@ -13,13 +13,15 @@ pub struct MapMaterialsProcessor
 	// Store here first map textures, than additional textures.
 	// Use two vectors in order to have immutable access to one, while modifying another.
 	textures: Vec<MapTextureData>,
-	textures_mutable: Vec<MapTextureDataMutable>,
+	textures_internal: Vec<MapTextureDataInternal>,
 	textures_mapping_table: Vec<TextureMappingElement>,
 	skybox_textures_32: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color32>>>,
 	skybox_textures_64: HashMap<u32, SharedResourcePtr<SkyboxTextures<Color64>>>,
 	num_animated_texels: u32,
 	current_frame: u32,
 }
+
+pub type TextureShift = [i32; 2];
 
 impl MapMaterialsProcessor
 {
@@ -39,8 +41,6 @@ impl MapMaterialsProcessor
 		let mut skybox_textures_64 = HashMap::new();
 		let mut textures = Vec::with_capacity(map.textures.len());
 		let mut material_name_to_texture_index = HashMap::<String, TextureIndex>::new();
-
-		let invalid_texture_index = !0;
 
 		for (texture_index, (texture, material_name)) in r
 			.get_map_material_textures(map)
@@ -74,25 +74,30 @@ impl MapMaterialsProcessor
 				material,
 				texture,
 				emissive_texture,
-				animated_texture_order: 0,
-				next_frame_texture_index: invalid_texture_index,
 			});
 		}
 
+		let invalid_texture_index = !0;
+
 		// Load additional materials for animation frames and generative effects.
 		// TODO - try to load textures in parallel.
+		// Fill internal texture data struct.
 		// Can't use "for" loop here, because range is calculated once, but we need to iterate over all textures, including newly loaded.
-		let mut textures_mutable = Vec::with_capacity(textures.len());
+		let mut textures_internal = Vec::with_capacity(textures.len());
 		let mut animated_texture_order = 0;
+		let mut num_animated_texels = 0;
 		let mut i = 0;
 		while i < textures.len()
 		{
-			if let Some(framed_animation) = &textures[i].material.framed_animation
+			let mut texture_data_internal = MapTextureDataInternal::default();
+
+			texture_data_internal.next_frame_texture_index = if let Some(framed_animation) =
+				&textures[i].material.framed_animation
 			{
 				if let Some(already_loaded_texture_index) =
 					material_name_to_texture_index.get(&framed_animation.next_material_name)
 				{
-					textures[i].next_frame_texture_index = *already_loaded_texture_index;
+					*already_loaded_texture_index
 				}
 				else if let Some(material) = all_materials.get(&framed_animation.next_material_name).cloned()
 				{
@@ -105,21 +110,22 @@ impl MapMaterialsProcessor
 						material,
 						texture,
 						emissive_texture,
-						animated_texture_order: 0,
-						next_frame_texture_index: invalid_texture_index,
 					});
 
-					textures[i].next_frame_texture_index = texture_index;
+					texture_index
 				}
 				else
 				{
 					println!("Can't find material {}", framed_animation.next_material_name);
+					invalid_texture_index
 				}
 			}
+			else
+			{
+				invalid_texture_index
+			};
 
-			let mut texture_mutable = MapTextureDataMutable::default();
-
-			texture_mutable.generative_effect =
+			texture_data_internal.generative_effect =
 				create_generative_texture_effect(textures[i].material.special_effect.clone(), &mut |material_name| {
 					if let Some(already_loaded_texture_index) = material_name_to_texture_index.get(material_name)
 					{
@@ -136,8 +142,6 @@ impl MapMaterialsProcessor
 							material,
 							texture,
 							emissive_texture,
-							animated_texture_order: 0,
-							next_frame_texture_index: invalid_texture_index,
 						});
 
 						texture_index
@@ -149,30 +153,21 @@ impl MapMaterialsProcessor
 					}
 				});
 
-			// Calculate animated textures order.
+			// Calculate animated textures order, count amount of animated textures texels.
 			// We need to enumerate only animated texture sequentially in order to perform balanced sparse update.
-			if texture_mutable.generative_effect.is_some()
+			if let Some(generative_effect) = &texture_data_internal.generative_effect
 			{
-				textures[i].animated_texture_order = animated_texture_order;
+				num_animated_texels += generative_effect.get_estimated_texel_count(&textures[i], &textures);
+				texture_data_internal.animated_texture_order = animated_texture_order;
 				animated_texture_order += 1;
 			}
 
-			textures_mutable.push(texture_mutable);
+			textures_internal.push(texture_data_internal);
 
 			i += 1;
 		}
 
-		debug_assert!(textures.len() == textures_mutable.len());
-
-		// Calculate amount of animated textures texels.
-		let mut num_animated_texels = 0;
-		for (texture_data, texture_data_mutable) in textures.iter().zip(textures_mutable.iter_mut())
-		{
-			if let Some(generative_effect) = &texture_data_mutable.generative_effect
-			{
-				num_animated_texels += generative_effect.get_estimated_texel_count(texture_data, &textures);
-			}
-		}
+		debug_assert!(textures.len() == textures_internal.len());
 
 		// Prepare mapping table. Initially all textures are mapped to themselves.
 		let mut textures_mapping_table = vec![TextureMappingElement::default(); textures.len()];
@@ -188,7 +183,7 @@ impl MapMaterialsProcessor
 			app_config,
 			config: config_parsed,
 			textures,
-			textures_mutable,
+			textures_internal,
 			textures_mapping_table,
 			skybox_textures_32,
 			skybox_textures_64,
@@ -222,7 +217,8 @@ impl MapMaterialsProcessor
 		// Assume time never goes backwards.
 		for mapping_element in &mut self.textures_mapping_table
 		{
-			if (self.textures[mapping_element.index as usize].next_frame_texture_index as usize) < self.textures.len()
+			if (self.textures_internal[mapping_element.index as usize].next_frame_texture_index as usize) <
+				self.textures.len()
 			{
 				// Valid next frame index - this is animated texture.
 				if current_time_s >= mapping_element.frame_change_time_point
@@ -231,7 +227,7 @@ impl MapMaterialsProcessor
 					// Assume, that materials update frame rate is higher than animation frequency.
 
 					// Set new index.
-					let current_index = self.textures[mapping_element.index as usize].next_frame_texture_index;
+					let current_index = self.textures_internal[mapping_element.index as usize].next_frame_texture_index;
 					mapping_element.index = current_index;
 					// Use duration of current frame for calculation of next frame change time point.
 					let duration = if let Some(framed_animation) =
@@ -257,13 +253,13 @@ impl MapMaterialsProcessor
 			return;
 		}
 
-		for (texture_data, texture_data_mutable) in self.textures.iter().zip(self.textures_mutable.iter_mut())
+		for (texture_data, texture_data_internal) in self.textures.iter().zip(self.textures_internal.iter_mut())
 		{
 			for i in 0 .. 2
 			{
 				if texture_data.material.scroll_speed[i] != 0.0
 				{
-					texture_data_mutable.shift[i] = ((texture_data.material.scroll_speed[i] * current_time_s) as i32)
+					texture_data_internal.shift[i] = ((texture_data.material.scroll_speed[i] * current_time_s) as i32)
 						.rem_euclid(texture_data.texture[0].size[i] as i32);
 				}
 			}
@@ -295,17 +291,17 @@ impl MapMaterialsProcessor
 		let current_update_order = self.current_frame % update_period;
 
 		let textures = &self.textures;
-		let textures_mutable = &mut self.textures_mutable;
+		let textures_internal = &mut self.textures_internal;
 		let textures_mapping_table = &self.textures_mapping_table;
 
-		let animate_func = |(tm, t): (&mut MapTextureDataMutable, &MapTextureData)| {
+		let animate_func = |(ti, t): (&mut MapTextureDataInternal, &MapTextureData)| {
 			// Perform sparse update - update each frame only one fraction of all animated textures.
-			if t.animated_texture_order % update_period == current_update_order
+			if ti.animated_texture_order % update_period == current_update_order
 			{
-				if let Some(generative_effect) = &mut tm.generative_effect
+				if let Some(generative_effect) = &mut ti.generative_effect
 				{
 					generative_effect.update(
-						&mut tm.generative_texture_data,
+						&mut ti.generative_texture_data,
 						t,
 						textures,
 						textures_mapping_table,
@@ -318,11 +314,11 @@ impl MapMaterialsProcessor
 		// Perform animation in parallel (if has enough threads).
 		if rayon::current_num_threads() == 1
 		{
-			textures_mutable.iter_mut().zip(textures).for_each(animate_func);
+			textures_internal.iter_mut().zip(textures).for_each(animate_func);
 		}
 		else
 		{
-			textures_mutable.par_iter_mut().zip_eq(textures).for_each(animate_func);
+			textures_internal.par_iter_mut().zip_eq(textures).for_each(animate_func);
 		}
 	}
 
@@ -336,13 +332,13 @@ impl MapMaterialsProcessor
 	{
 		let current_material_index = self.textures_mapping_table[material_index as usize].index as usize;
 		let texture_data = &self.textures[current_material_index];
-		let texture_data_mutable = &self.textures_mutable[current_material_index];
-		if !texture_data_mutable.generative_texture_data.texture_modified[0]
+		let texture_data_internal = &self.textures_internal[current_material_index];
+		if !texture_data_internal.generative_texture_data.texture[0]
 			.pixels
 			.is_empty()
 		{
 			// Return texture animated for current frame.
-			&texture_data_mutable.generative_texture_data.texture_modified
+			&texture_data_internal.generative_texture_data.texture
 		}
 		else
 		{
@@ -354,7 +350,7 @@ impl MapMaterialsProcessor
 	pub fn get_texture_shift(&self, material_index: u32) -> TextureShift
 	{
 		let current_material_index = self.textures_mapping_table[material_index as usize].index;
-		self.textures_mutable[current_material_index as usize].shift
+		self.textures_internal[current_material_index as usize].shift
 	}
 
 	// If material has emissive texture - return it together with specified light.
@@ -362,17 +358,17 @@ impl MapMaterialsProcessor
 	{
 		let current_material_index = self.textures_mapping_table[material_index as usize].index as usize;
 		let texture_data = &self.textures[current_material_index];
-		let texture_data_mutable = &self.textures_mutable[current_material_index];
+		let texture_data_internal = &self.textures_internal[current_material_index];
 		if let (Some(emissive_layer), Some(emissive_texture)) =
 			(&texture_data.material.emissive_layer, &texture_data.emissive_texture)
 		{
-			if !texture_data_mutable.generative_texture_data.emissive_texture_modified[0]
+			if !texture_data_internal.generative_texture_data.emissive_texture[0]
 				.pixels
 				.is_empty()
 			{
 				// Return emissive texture animated for current frame.
 				Some((
-					&texture_data_mutable.generative_texture_data.emissive_texture_modified,
+					&texture_data_internal.generative_texture_data.emissive_texture,
 					emissive_layer.light,
 				))
 			}
@@ -441,6 +437,20 @@ impl MapMaterialsProcessor
 			self.config.update_app_config(&self.app_config);
 		}
 	}
+}
+
+#[derive(Default)]
+struct MapTextureDataInternal
+{
+	shift: TextureShift,
+	// Invalid index if has no framed animation.
+	next_frame_texture_index: TextureIndex,
+	// Effect instance itself (if exists).
+	generative_effect: OptDynGenerativeTextureEffect,
+	// Data for generative texture effects.
+	generative_texture_data: GenerativeTextureData,
+	// Used only for sparse texture update.
+	animated_texture_order: u32,
 }
 
 const ANIMATIONS_UPDATE_PERIOD_MIN: u32 = 1;

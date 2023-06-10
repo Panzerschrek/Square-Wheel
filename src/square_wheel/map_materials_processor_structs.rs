@@ -1,26 +1,12 @@
 use super::{resources_manager::*, textures::*};
 use crate::common::material::*;
 
-pub type TextureShift = [i32; 2];
-
 pub struct MapTextureData
 {
 	pub material: Material,
 	pub texture: SharedResourcePtr<TextureWithMips>,
 	// Non-empty if emissive texture exists.
 	pub emissive_texture: Option<SharedResourcePtr<TextureLiteWithMips>>,
-	// Used only for sparse texture update.
-	pub animated_texture_order: u32,
-	// Invalid index if has no framed animation.
-	pub next_frame_texture_index: TextureIndex,
-}
-
-#[derive(Default)]
-pub struct MapTextureDataMutable
-{
-	pub generative_texture_data: GenerativeTextureData,
-	pub generative_effect: OptDynGenerativeTextureEffect,
-	pub shift: TextureShift,
 }
 
 // Data created/modified by generative effect.
@@ -28,13 +14,14 @@ pub struct MapTextureDataMutable
 pub struct GenerativeTextureData
 {
 	// Non-empty for textures with animations.
-	pub texture_modified: TextureWithMips,
-	// Exists only for emissive textures with animations.
-	pub emissive_texture_modified: TextureLiteWithMips,
+	pub texture: TextureWithMips,
+	// Nono-empty for emissive textures with animations.
+	pub emissive_texture: TextureLiteWithMips,
 }
 
 pub type OptDynGenerativeTextureEffect = Option<Box<dyn GenerativeTextureEffect + Send + Sync>>;
 
+// Interface for textures, that are generated each frame.
 pub trait GenerativeTextureEffect
 {
 	// This is used in order to calculate update frequency and show some statistics.
@@ -42,7 +29,7 @@ pub trait GenerativeTextureEffect
 
 	fn update(
 		&mut self,
-		texture_data_mutable: &mut GenerativeTextureData,
+		out_texture_data: &mut GenerativeTextureData,
 		texture_data: &MapTextureData,
 		all_textures_data: &[MapTextureData],
 		textures_mapping_table: &[TextureMappingElement],

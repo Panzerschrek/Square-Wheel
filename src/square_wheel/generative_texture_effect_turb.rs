@@ -30,7 +30,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectTurb
 
 	fn update(
 		&mut self,
-		texture_data_mutable: &mut GenerativeTextureData,
+		out_texture_data: &mut GenerativeTextureData,
 		texture_data: &MapTextureData,
 		_all_textures_data: &[MapTextureData],
 		_textures_mapping_table: &[TextureMappingElement],
@@ -40,7 +40,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectTurb
 		for mip_index in 0 .. NUM_MIPS
 		{
 			let src_mip = &texture_data.texture[mip_index];
-			let dst_mip = &mut texture_data_mutable.texture_modified[mip_index];
+			let dst_mip = &mut out_texture_data.texture[mip_index];
 			if dst_mip.pixels.is_empty()
 			{
 				*dst_mip = src_mip.clone();
@@ -61,7 +61,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectTurb
 			for mip_index in 0 .. NUM_MIPS
 			{
 				let src_mip = &emissive_texture[mip_index];
-				let dst_mip = &mut texture_data_mutable.emissive_texture_modified[mip_index];
+				let dst_mip = &mut out_texture_data.emissive_texture[mip_index];
 				if dst_mip.pixels.is_empty()
 				{
 					*dst_mip = src_mip.clone();
