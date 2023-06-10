@@ -1,17 +1,22 @@
 use super::{fast_math::*, map_materials_processor_structs::*, textures::*};
-use crate::common::material::*;
+use crate::common::{color::*, material::*};
 
 pub struct GenerativeTextureEffectTurb
 {
 	turb_params: TurbParams,
-	// TODO - put temp buffer here.
+	temp_buffer: Vec<TextureElement>,
+	temp_buffer_emissive: Vec<Color32>,
 }
 
 impl GenerativeTextureEffectTurb
 {
 	pub fn new(turb_params: TurbParams) -> Self
 	{
-		Self { turb_params }
+		Self {
+			turb_params,
+			temp_buffer: Vec::new(),
+			temp_buffer_emissive: Vec::new(),
+		}
 	}
 }
 
@@ -53,6 +58,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectTurb
 				mip_index,
 				&src_mip.pixels,
 				&mut dst_mip.pixels,
+				&mut self.temp_buffer,
 			);
 		}
 
@@ -74,6 +80,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectTurb
 					mip_index,
 					&src_mip.pixels,
 					&mut dst_mip.pixels,
+					&mut self.temp_buffer_emissive,
 				);
 			}
 		}
@@ -87,6 +94,7 @@ fn make_turb_distortion<T: Copy + Default>(
 	mip: usize,
 	src_pixels: &[T],
 	dst_pixels: &mut [T],
+	temp_buffer: &mut Vec<T>,
 )
 {
 	// TODO - speed-up this. Use unsafe f32 -> i32 conversion.
@@ -120,13 +128,7 @@ fn make_turb_distortion<T: Copy + Default>(
 	}
 
 	// Shift columns.
-	const MAX_TURB_TEXTURE_HEIGHT: usize = 1024;
-	if size[1] > MAX_TURB_TEXTURE_HEIGHT as i32
-	{
-		return;
-	}
-
-	let mut temp_buffer = [T::default(); MAX_TURB_TEXTURE_HEIGHT]; // TODO - use uninitialized memory
+	temp_buffer.resize(size[1] as usize, T::default());
 
 	for x in 0 .. size[0]
 	{
