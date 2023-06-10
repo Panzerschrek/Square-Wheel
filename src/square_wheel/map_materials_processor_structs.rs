@@ -37,6 +37,9 @@ pub type OptDynGenerativeTextureEffect = Option<Box<dyn GenerativeTextureEffect 
 
 pub trait GenerativeTextureEffect
 {
+	// This is used in order to calculate update frequency and show some statistics.
+	fn get_estimated_texel_count(&self, texture_data: &MapTextureData, all_textures_data: &[MapTextureData]) -> u32;
+
 	fn update(
 		&mut self,
 		texture_data_mutable: &mut GenerativeTextureData,

@@ -29,6 +29,38 @@ impl GenerativeTextureEffectLayered
 
 impl GenerativeTextureEffect for GenerativeTextureEffectLayered
 {
+	fn get_estimated_texel_count(&self, _texture_data: &MapTextureData, all_textures_data: &[MapTextureData]) -> u32
+	{
+		let mut s = 0;
+		let mut size = [0, 0];
+		let mut emissive_size = [0, 0];
+		for texture_index in &self.animation_textures
+		{
+			let layer_texture = &all_textures_data[*texture_index as usize];
+			if layer_texture.material.diffuse.is_some()
+			{
+				if size == [0, 0]
+				{
+					// Size of result texture is determined by size of first non-empty layer.
+					size = layer_texture.texture[0].size;
+				}
+				s += size[0] * size[1];
+			}
+			if let Some(emissive_texture) = &layer_texture.emissive_texture
+			{
+				if emissive_size == [0, 0]
+				{
+					// Size of result emissive texture is determined by size of first non-empty emissive layer.
+					emissive_size = emissive_texture[0].size;
+				}
+				// Count emisive texels as half-texels.
+				s += emissive_size[0] * emissive_size[1] / 2;
+			}
+		}
+
+		s
+	}
+
 	fn update(
 		&mut self,
 		texture_data_mutable: &mut GenerativeTextureData,

@@ -17,6 +17,17 @@ impl GenerativeTextureEffectTurb
 
 impl GenerativeTextureEffect for GenerativeTextureEffectTurb
 {
+	fn get_estimated_texel_count(&self, texture_data: &MapTextureData, _all_textures_data: &[MapTextureData]) -> u32
+	{
+		let mut s = texture_data.texture[0].size[0] * texture_data.texture[0].size[1];
+		if let Some(emissive_texture) = &texture_data.emissive_texture
+		{
+			// Count emisive texels as half-texels.
+			s += emissive_texture[0].size[0] * emissive_texture[0].size[1] / 2;
+		}
+		s
+	}
+
 	fn update(
 		&mut self,
 		texture_data_mutable: &mut GenerativeTextureData,

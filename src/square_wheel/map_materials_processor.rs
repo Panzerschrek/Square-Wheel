@@ -165,8 +165,14 @@ impl MapMaterialsProcessor
 		debug_assert!(textures.len() == textures_mutable.len());
 
 		// Calculate amount of animated textures texels.
-		// TODO - fix this.
-		let num_animated_texels = 0;
+		let mut num_animated_texels = 0;
+		for (texture_data, texture_data_mutable) in textures.iter().zip(textures_mutable.iter_mut())
+		{
+			if let Some(generative_effect) = &texture_data_mutable.generative_effect
+			{
+				num_animated_texels += generative_effect.get_estimated_texel_count(texture_data, &textures);
+			}
+		}
 
 		// Prepare mapping table. Initially all textures are mapped to themselves.
 		let mut textures_mapping_table = vec![TextureMappingElement::default(); textures.len()];
