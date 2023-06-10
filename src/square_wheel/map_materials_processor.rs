@@ -40,7 +40,7 @@ impl MapMaterialsProcessor
 		let mut skybox_textures_32 = HashMap::new();
 		let mut skybox_textures_64 = HashMap::new();
 		let mut textures = Vec::with_capacity(map.textures.len());
-		let mut material_name_to_texture_index = HashMap::<String, u32>::new();
+		let mut material_name_to_texture_index = HashMap::<String, TextureIndex>::new();
 
 		let invalid_texture_index = !0;
 
@@ -71,62 +71,24 @@ impl MapMaterialsProcessor
 				skybox_textures_64.insert(texture_index as u32, r.get_skybox_textures_64(material_name));
 			}
 
-			material_name_to_texture_index.insert(material_name.to_string(), textures.len() as u32);
+			material_name_to_texture_index.insert(material_name.to_string(), textures.len() as TextureIndex);
 			textures.push(MapTextureData {
 				material,
 				texture,
 				emissive_texture,
 				animated_texture_order: 0,
 				next_frame_texture_index: invalid_texture_index,
-				layered_animation_textures: Vec::new(),
 			});
 		}
 
-		// Load additional materials for animation frames and layered animations.
+		// Load additional materials for animation frames and generative effects.
 		// TODO - try to load textures in parallel.
 		// Can't use "for" loop here, because range is calculated once, but we need to iterate over all textures, including newly loaded.
+		let mut textures_mutable = Vec::with_capacity(textures.len());
+		let mut animated_texture_order = 0;
 		let mut i = 0;
 		while i < textures.len()
 		{
-			if let SpecialMaterialEffect::LayeredAnimation(layered_animation) =
-				textures[i].material.special_effect.clone()
-			{
-				for animation_layer in &layered_animation.layers
-				{
-					if let Some(already_loaded_texture_index) =
-						material_name_to_texture_index.get(&animation_layer.material_name)
-					{
-						textures[i]
-							.layered_animation_textures
-							.push(*already_loaded_texture_index);
-					}
-					else if let Some(material) = all_materials.get(&animation_layer.material_name).cloned()
-					{
-						let texture = r.get_material_texture(&animation_layer.material_name);
-						let emissive_texture = material.emissive_layer.as_ref().map(|l| r.get_texture_lite(&l.image));
-
-						let texture_index = textures.len() as u32;
-						material_name_to_texture_index.insert(animation_layer.material_name.clone(), texture_index);
-						textures.push(MapTextureData {
-							material,
-							texture,
-							emissive_texture,
-							animated_texture_order: 0,
-							next_frame_texture_index: invalid_texture_index,
-							layered_animation_textures: Vec::new(),
-						});
-
-						textures[i].layered_animation_textures.push(texture_index);
-					}
-					else
-					{
-						println!("Can't find material {}", animation_layer.material_name);
-						textures[i].layered_animation_textures.push(0);
-					}
-				}
-				debug_assert!(textures[i].layered_animation_textures.len() == layered_animation.layers.len());
-			}
-
 			if let Some(framed_animation) = &textures[i].material.framed_animation
 			{
 				if let Some(already_loaded_texture_index) =
@@ -139,7 +101,7 @@ impl MapMaterialsProcessor
 					let texture = r.get_material_texture(&framed_animation.next_material_name);
 					let emissive_texture = material.emissive_layer.as_ref().map(|l| r.get_texture_lite(&l.image));
 
-					let texture_index = textures.len() as u32;
+					let texture_index = textures.len() as TextureIndex;
 					material_name_to_texture_index.insert(framed_animation.next_material_name.clone(), texture_index);
 					textures.push(MapTextureData {
 						material,
@@ -147,7 +109,6 @@ impl MapMaterialsProcessor
 						emissive_texture,
 						animated_texture_order: 0,
 						next_frame_texture_index: invalid_texture_index,
-						layered_animation_textures: Vec::new(),
 					});
 
 					textures[i].next_frame_texture_index = texture_index;
@@ -158,79 +119,63 @@ impl MapMaterialsProcessor
 				}
 			}
 
+			let mut texture_mutable = MapTextureDataMutable::default();
+
+			texture_mutable.generative_effect =
+				create_generative_texture_effect(textures[i].material.special_effect.clone(), &mut |material_name| {
+					if let Some(already_loaded_texture_index) = material_name_to_texture_index.get(material_name)
+					{
+						*already_loaded_texture_index
+					}
+					else if let Some(material) = all_materials.get(material_name).cloned()
+					{
+						let texture = r.get_material_texture(&material_name);
+						let emissive_texture = material.emissive_layer.as_ref().map(|l| r.get_texture_lite(&l.image));
+
+						let texture_index = textures.len() as TextureIndex;
+						material_name_to_texture_index.insert(material_name.to_string(), texture_index);
+						textures.push(MapTextureData {
+							material,
+							texture,
+							emissive_texture,
+							animated_texture_order: 0,
+							next_frame_texture_index: invalid_texture_index,
+						});
+
+						texture_index
+					}
+					else
+					{
+						println!("Can't find material {}", material_name);
+						0
+					}
+				});
+
+			// Calculate animated textures order.
+			// We need to enumerate only animated texture sequentially in order to perform balanced sparse update.
+			if texture_mutable.generative_effect.is_some()
+			{
+				textures[i].animated_texture_order = animated_texture_order;
+				animated_texture_order += 1;
+			}
+
+			textures_mutable.push(texture_mutable);
+
 			i += 1;
 		}
 
-		// Calculate animated textures order.
-		// We need to enumerate only animated texture sequentially in order to perform balanced sparse update.
-		let mut animated_texture_order = 0;
-		for texture in &mut textures
-		{
-			match &texture.material.special_effect
-			{
-				SpecialMaterialEffect::None =>
-				{},
-				SpecialMaterialEffect::Turb { .. } =>
-				{
-					texture.animated_texture_order = animated_texture_order;
-					animated_texture_order += 1;
-				},
-				SpecialMaterialEffect::LayeredAnimation { .. } =>
-				{
-					texture.animated_texture_order = animated_texture_order;
-					animated_texture_order += 1;
-				},
-				SpecialMaterialEffect::Skybox { .. } =>
-				{},
-			};
-		}
+		debug_assert!(textures.len() == textures_mutable.len());
 
 		// Calculate amount of animated textures texels.
-		// Count all animation layers. Count emissive texels as half texels. Do not count mips.
-		let mut num_animated_texels = 0;
-		for texture in &textures
-		{
-			if matches!(&texture.material.special_effect, SpecialMaterialEffect::Turb(..))
-			{
-				num_animated_texels += texture.texture[0].size[0] * texture.texture[0].size[1];
-			}
-			if !texture.layered_animation_textures.is_empty()
-			{
-				let mut size = [0, 0];
-				let mut emissive_size = [0, 0];
-				for texture_index in &texture.layered_animation_textures
-				{
-					let layer_texture = &textures[*texture_index as usize];
-					if layer_texture.material.diffuse.is_some()
-					{
-						if size == [0, 0]
-						{
-							// Size of result texture is determined by size of first non-empty layer.
-							size = layer_texture.texture[0].size;
-						}
-						num_animated_texels += size[0] * size[1];
-					}
-					if let Some(emissive_texture) = &layer_texture.emissive_texture
-					{
-						if emissive_size == [0, 0]
-						{
-							// Size of result emissive texture is determined by size of first non-empty emissive layer.
-							emissive_size = emissive_texture[0].size;
-						}
-						num_animated_texels += emissive_size[0] * emissive_size[1] / 2;
-					}
-				}
-			}
-		}
-
-		let textures_mutable = vec![MapTextureDataMutable::default(); textures.len()];
+		// TODO - fix this.
+		let num_animated_texels = 0;
 
 		// Prepare mapping table. Initially all textures are mapped to themselves.
 		let mut textures_mapping_table = vec![TextureMappingElement::default(); textures.len()];
 		for (index, table_element) in textures_mapping_table.iter_mut().enumerate()
 		{
 			*table_element = TextureMappingElement {
-				index: index as u32,
+				index: index as TextureIndex,
 				frame_change_time_point: 0.0,
 			};
 		}
@@ -273,7 +218,7 @@ impl MapMaterialsProcessor
 		// Assume time never goes backwards.
 		for mapping_element in &mut self.textures_mapping_table
 		{
-			if self.textures[mapping_element.index as usize].next_frame_texture_index < self.textures.len() as u32
+			if (self.textures[mapping_element.index as usize].next_frame_texture_index as usize) < self.textures.len()
 			{
 				// Valid next frame index - this is animated texture.
 				if current_time_s >= mapping_element.frame_change_time_point
@@ -353,7 +298,16 @@ impl MapMaterialsProcessor
 			// Perform sparse update - update each frame only one fraction of all animated textures.
 			if t.animated_texture_order % update_period == current_update_order
 			{
-				animate_texture(tm, t, textures, textures_mapping_table, current_time_s);
+				if let Some(generative_effect) = &mut tm.generative_effect
+				{
+					generative_effect.update(
+						&mut tm.generative_texture_data,
+						t,
+						textures,
+						textures_mapping_table,
+						current_time_s,
+					);
+				}
 			}
 		};
 
@@ -379,10 +333,12 @@ impl MapMaterialsProcessor
 		let current_material_index = self.textures_mapping_table[material_index as usize].index as usize;
 		let texture_data = &self.textures[current_material_index];
 		let texture_data_mutable = &self.textures_mutable[current_material_index];
-		if !texture_data_mutable.texture_modified[0].pixels.is_empty()
+		if !texture_data_mutable.generative_texture_data.texture_modified[0]
+			.pixels
+			.is_empty()
 		{
 			// Return texture animated for current frame.
-			&texture_data_mutable.texture_modified
+			&texture_data_mutable.generative_texture_data.texture_modified
 		}
 		else
 		{
@@ -406,10 +362,15 @@ impl MapMaterialsProcessor
 		if let (Some(emissive_layer), Some(emissive_texture)) =
 			(&texture_data.material.emissive_layer, &texture_data.emissive_texture)
 		{
-			if !texture_data_mutable.emissive_texture_modified[0].pixels.is_empty()
+			if !texture_data_mutable.generative_texture_data.emissive_texture_modified[0]
+				.pixels
+				.is_empty()
 			{
 				// Return emissive texture animated for current frame.
-				Some((&texture_data_mutable.emissive_texture_modified, emissive_layer.light))
+				Some((
+					&texture_data_mutable.generative_texture_data.emissive_texture_modified,
+					emissive_layer.light,
+				))
 			}
 			else
 			{
@@ -487,40 +448,94 @@ struct MapTextureData
 	// Used only for sparse texture update.
 	animated_texture_order: u32,
 	// Invalid index if has no framed animation.
-	next_frame_texture_index: u32,
-	// Indeces of textures, used as layers for layered animation (if this texture uses layered animation).
-	layered_animation_textures: Vec<u32>,
+	next_frame_texture_index: TextureIndex,
 }
 
-#[derive(Default, Clone)]
+#[derive(Default)]
 struct MapTextureDataMutable
+{
+	generative_texture_data: GenerativeTextureData,
+	generative_effect: OptDynGenerativeTextureEffect,
+	shift: TextureShift,
+}
+
+// Data created/modified by generative effect.
+#[derive(Default)]
+struct GenerativeTextureData
 {
 	// Non-empty for textures with animations.
 	texture_modified: TextureWithMips,
-	// Exists only for emissive texturex with mips.
+	// Exists only for emissive textures with animations.
 	emissive_texture_modified: TextureLiteWithMips,
-	shift: TextureShift,
+}
+
+type OptDynGenerativeTextureEffect = Option<Box<dyn GenerativeTextureEffect + Send + Sync>>;
+
+trait GenerativeTextureEffect
+{
+	fn update(
+		&mut self,
+		texture_data_mutable: &mut GenerativeTextureData,
+		texture_data: &MapTextureData,
+		all_textures_data: &[MapTextureData],
+		textures_mapping_table: &[TextureMappingElement],
+		current_time_s: f32,
+	);
 }
 
 #[derive(Default, Copy, Clone)]
 struct TextureMappingElement
 {
-	index: u32,
+	index: TextureIndex,
 	frame_change_time_point: f32,
 }
+
+// Use indeces instead of strings in order to access map textures.
+type TextureIndex = u32;
 
 const ANIMATIONS_UPDATE_PERIOD_MIN: u32 = 1;
 const ANIMATIONS_UPDATE_PERIOD_MAX: u32 = 16;
 
-fn animate_texture(
-	texture_data_mutable: &mut MapTextureDataMutable,
-	texture_data: &MapTextureData,
-	all_textures_data: &[MapTextureData],
-	textures_mapping_table: &[TextureMappingElement],
-	current_time_s: f32,
-)
+fn create_generative_texture_effect<MaterialLoadFunction: FnMut(&str) -> TextureIndex>(
+	special_effect: SpecialMaterialEffect,
+	material_load_function: &mut MaterialLoadFunction,
+) -> OptDynGenerativeTextureEffect
 {
-	if let SpecialMaterialEffect::Turb(turb) = &texture_data.material.special_effect
+	match special_effect
+	{
+		SpecialMaterialEffect::None => None,
+		SpecialMaterialEffect::Turb(turb_params) => Some(Box::new(GenerativeTextureEffectTurb::new(turb_params))),
+		SpecialMaterialEffect::LayeredAnimation(layered_animation) => Some(Box::new(
+			GenerativeTextureEffectLayered::new(layered_animation, material_load_function),
+		)),
+		SpecialMaterialEffect::Skybox(..) => None,
+	}
+}
+
+struct GenerativeTextureEffectTurb
+{
+	turb_params: TurbParams,
+	// TODO - put temp buffer here.
+}
+
+impl GenerativeTextureEffectTurb
+{
+	fn new(turb_params: TurbParams) -> Self
+	{
+		Self { turb_params }
+	}
+}
+
+impl GenerativeTextureEffect for GenerativeTextureEffectTurb
+{
+	fn update(
+		&mut self,
+		texture_data_mutable: &mut GenerativeTextureData,
+		texture_data: &MapTextureData,
+		_all_textures_data: &[MapTextureData],
+		_textures_mapping_table: &[TextureMappingElement],
+		current_time_s: f32,
+	)
 	{
 		for mip_index in 0 .. NUM_MIPS
 		{
@@ -532,7 +547,7 @@ fn animate_texture(
 			}
 
 			make_turb_distortion(
-				turb,
+				&self.turb_params,
 				current_time_s,
 				[src_mip.size[0] as i32, src_mip.size[1] as i32],
 				mip_index,
@@ -553,7 +568,7 @@ fn animate_texture(
 				}
 
 				make_turb_distortion(
-					turb,
+					&self.turb_params,
 					current_time_s,
 					[src_mip.size[0] as i32, src_mip.size[1] as i32],
 					mip_index,
@@ -563,15 +578,119 @@ fn animate_texture(
 			}
 		}
 	}
+}
 
-	if let SpecialMaterialEffect::LayeredAnimation(layered_animation) = &texture_data.material.special_effect
+fn make_turb_distortion<T: Copy + Default>(
+	turb: &TurbParams,
+	current_time_s: f32,
+	size: [i32; 2],
+	mip: usize,
+	src_pixels: &[T],
+	dst_pixels: &mut [T],
+)
+{
+	// TODO - speed-up this. Use unsafe f32 -> i32 conversion, use indexing without bounds check.
+
+	let mip_scale = 1.0 / ((1 << mip) as f32);
+	let amplitude_corrected = mip_scale * turb.amplitude;
+	let frequency_scaled = std::f32::consts::TAU / (turb.wave_length * mip_scale);
+	let time_based_shift = current_time_s * turb.frequency * std::f32::consts::TAU;
+
+	// Shift rows.
+	for y in 0 .. size[1]
+	{
+		let shift =
+			(f32_mul_add(y as f32, frequency_scaled, time_based_shift).sin() * amplitude_corrected).round() as i32;
+
+		let start_offset = (y * size[0]) as usize;
+		let end_offset = ((y + 1) * size[0]) as usize;
+		let src_line = &src_pixels[start_offset .. end_offset];
+		let dst_line = &mut dst_pixels[start_offset .. end_offset];
+
+		let mut src_x = shift.rem_euclid(size[0]);
+		for dst in dst_line
+		{
+			*dst = src_line[src_x as usize];
+			src_x += 1;
+			if src_x == size[0]
+			{
+				src_x = 0;
+			}
+		}
+	}
+
+	// Shift columns.
+	const MAX_TURB_TEXTURE_HEIGHT: usize = 1024;
+	if size[1] > MAX_TURB_TEXTURE_HEIGHT as i32
+	{
+		return;
+	}
+
+	let mut temp_buffer = [T::default(); MAX_TURB_TEXTURE_HEIGHT]; // TODO - use uninitialized memory
+
+	for x in 0 .. size[0]
+	{
+		for (temp_dst, y) in temp_buffer.iter_mut().zip(0 .. size[1])
+		{
+			*temp_dst = dst_pixels[(x + y * size[0]) as usize];
+		}
+
+		let shift =
+			(f32_mul_add(x as f32, frequency_scaled, time_based_shift).sin() * amplitude_corrected).round() as i32;
+
+		let mut src_y = shift.rem_euclid(size[1]);
+		for y in 0 .. size[1]
+		{
+			dst_pixels[(x + y * size[0]) as usize] = temp_buffer[src_y as usize];
+			src_y += 1;
+			if src_y == size[1]
+			{
+				src_y = 0;
+			}
+		}
+	}
+}
+
+struct GenerativeTextureEffectLayered
+{
+	layered_animation: LayeredAnimation,
+	animation_textures: Vec<TextureIndex>,
+}
+
+impl GenerativeTextureEffectLayered
+{
+	fn new<MaterialLoadFunction: FnMut(&str) -> TextureIndex>(
+		layered_animation: LayeredAnimation,
+		material_load_function: &mut MaterialLoadFunction,
+	) -> Self
+	{
+		let mut animation_textures = Vec::with_capacity(layered_animation.layers.len());
+		for layer in &layered_animation.layers
+		{
+			animation_textures.push(material_load_function(&layer.material_name));
+		}
+
+		Self {
+			layered_animation,
+			animation_textures,
+		}
+	}
+}
+
+impl GenerativeTextureEffect for GenerativeTextureEffectLayered
+{
+	fn update(
+		&mut self,
+		texture_data_mutable: &mut GenerativeTextureData,
+		_texture_data: &MapTextureData,
+		all_textures_data: &[MapTextureData],
+		textures_mapping_table: &[TextureMappingElement],
+		current_time_s: f32,
+	)
 	{
 		for mip_index in 0 .. NUM_MIPS
 		{
-			for (animation_layer, texture_index) in layered_animation
-				.layers
-				.iter()
-				.zip(&texture_data.layered_animation_textures)
+			for (animation_layer, texture_index) in self.layered_animation.layers.iter().zip(&self.animation_textures)
 			{
 				let shift = animation_layer
 					.tex_coord_shift
@@ -655,77 +774,6 @@ fn animate_texture(
 						);
 					}
 				}
-			}
-		}
-	}
-}
-
-fn make_turb_distortion<T: Copy + Default>(
-	turb: &TurbParams,
-	current_time_s: f32,
-	size: [i32; 2],
-	mip: usize,
-	src_pixels: &[T],
-	dst_pixels: &mut [T],
-)
-{
-	// TODO - speed-up this. Use unsafe f32 -> i32 conversion, use indexing without bounds check.
-
-	let mip_scale = 1.0 / ((1 << mip) as f32);
-	let amplitude_corrected = mip_scale * turb.amplitude;
-	let frequency_scaled = std::f32::consts::TAU / (turb.wave_length * mip_scale);
-	let time_based_shift = current_time_s * turb.frequency * std::f32::consts::TAU;
-
-	// Shift rows.
-	for y in 0 .. size[1]
-	{
-		let shift =
-			(f32_mul_add(y as f32, frequency_scaled, time_based_shift).sin() * amplitude_corrected).round() as i32;
-
-		let start_offset = (y * size[0]) as usize;
-		let end_offset = ((y + 1) * size[0]) as usize;
-		let src_line = &src_pixels[start_offset .. end_offset];
-		let dst_line = &mut dst_pixels[start_offset .. end_offset];
-
-		let mut src_x = shift.rem_euclid(size[0]);
-		for dst in dst_line
-		{
-			*dst = src_line[src_x as usize];
-			src_x += 1;
-			if src_x == size[0]
-			{
-				src_x = 0;
-			}
-		}
-	}
-
-	// Shift columns.
-	const MAX_TURB_TEXTURE_HEIGHT: usize = 1024;
-	if size[1] > MAX_TURB_TEXTURE_HEIGHT as i32
-	{
-		return;
-	}
-
-	let mut temp_buffer = [T::default(); MAX_TURB_TEXTURE_HEIGHT]; // TODO - use uninitialized memory
-
-	for x in 0 .. size[0]
-	{
-		for (temp_dst, y) in temp_buffer.iter_mut().zip(0 .. size[1])
-		{
-			*temp_dst = dst_pixels[(x + y * size[0]) as usize];
-		}
-
-		let shift =
-			(f32_mul_add(x as f32, frequency_scaled, time_based_shift).sin() * amplitude_corrected).round() as i32;
-
-		let mut src_y = shift.rem_euclid(size[1]);
-		for y in 0 .. size[1]
-		{
-			dst_pixels[(x + y * size[0]) as usize] = temp_buffer[src_y as usize];
-			src_y += 1;
-			if src_y == size[1]
-			{
-				src_y = 0;
 			}
 		}
 	}
