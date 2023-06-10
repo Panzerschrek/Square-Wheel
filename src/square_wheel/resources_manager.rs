@@ -317,18 +317,24 @@ impl ResourcesManager
 			&self.default_material
 		});
 
-		let skybox = material.skybox.as_ref().unwrap();
-
-		let mut skybox_texture = SkyboxTextures::default();
-		for (side_image, out_side) in skybox.side_images.iter().zip(skybox_texture.iter_mut())
+		if let SpecialMaterialEffect::Skybox(skybox) = &material.special_effect
 		{
-			*out_side = load_skybox_texture_side(&self.config.textures_path, side_image, skybox.brightness);
+			let mut skybox_texture = SkyboxTextures::default();
+			for (side_image, out_side) in skybox.side_images.iter().zip(skybox_texture.iter_mut())
+			{
+				*out_side = load_skybox_texture_side(&self.config.textures_path, side_image, skybox.brightness);
+			}
+
+			let ptr = SharedResourcePtr::new(skybox_texture);
+			self.skybox_textures_32.insert(key.to_string(), ptr.clone());
+
+			ptr
 		}
-
-		let ptr = SharedResourcePtr::new(skybox_texture);
-		self.skybox_textures_32.insert(key.to_string(), ptr.clone());
-
-		ptr
+		else
+		{
+			// TODO - avoid panic
+			panic!("Expected skybox material");
+		}
 	}
 
 	pub fn get_skybox_textures_64(&mut self, key: &str) -> SharedResourcePtr<SkyboxTextures<Color64>>
@@ -348,19 +354,24 @@ impl ResourcesManager
 
 		// TODO - maybe use separate files/directories for 32-bit and 64-bit skyboxes?
 
-		// TODO - avoid "unwrap".
-		let skybox = material.skybox.as_ref().unwrap();
-
-		let mut skybox_texture = SkyboxTextures::default();
-		for (side_image, out_side) in skybox.side_images.iter().zip(skybox_texture.iter_mut())
+		if let SpecialMaterialEffect::Skybox(skybox) = &material.special_effect
 		{
-			*out_side = load_skybox_texture_side64(&self.config.textures_path, side_image, skybox.brightness);
+			let mut skybox_texture = SkyboxTextures::default();
+			for (side_image, out_side) in skybox.side_images.iter().zip(skybox_texture.iter_mut())
+			{
+				*out_side = load_skybox_texture_side64(&self.config.textures_path, side_image, skybox.brightness);
+			}
+
+			let ptr = SharedResourcePtr::new(skybox_texture);
+			self.skybox_textures_64.insert(key.to_string(), ptr.clone());
+
+			ptr
 		}
-
-		let ptr = SharedResourcePtr::new(skybox_texture);
-		self.skybox_textures_64.insert(key.to_string(), ptr.clone());
-
-		ptr
+		else
+		{
+			// TODO - avoid panic
+			panic!("Expected skybox material");
+		}
 	}
 
 	pub fn clear_cache(&mut self)

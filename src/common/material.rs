@@ -74,10 +74,6 @@ pub struct Material
 	#[serde(default)]
 	pub emissive_layer: Option<EmissiveLayer>,
 
-	/// If some - use texture turbulence effect.
-	#[serde(default)]
-	pub turb: Option<TurbParams>,
-
 	/// If some - this is frame-animated material and displayed texture will be switched in specified time interval.
 	/// Create loop of references in order to create looped animation.
 	/// Frame animation presense doesn't affect map compiler and lightmaper - only selected material properties will be used.
@@ -85,16 +81,9 @@ pub struct Material
 	#[serde(default)]
 	pub framed_animation: Option<AnimationFrame>,
 
-	/// If some - this is layered-animated material.
-	/// Material texture will be generated each frame, based on provided layers and params.
-	/// Material texture needs to be regenerated each frame and this may take significant amount of frame time.
-	/// So, avoid using too many textures in map or too large textures with layered animations - prefer framed animations and/or scrolling.
-	/// Layered animation presense doesn't affect map compiler and lightmaper - like framed animation.
-	pub layered_animation: Option<LayeredAnimation>,
-
-	/// If some - this is a skybox.
+	/// None for regular textures.
 	#[serde(default)]
-	pub skybox: Option<SkyboxParams>,
+	pub special_effect: SpecialMaterialEffect,
 
 	// Other fields of material.
 	// May be used to store game-specific material properties.
@@ -137,6 +126,44 @@ pub struct EmissiveLayer
 	pub light: [f32; 3],
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AnimationFrame
+{
+	/// Duration of this frame, in seconds.
+	#[serde(default = "default_animation_frame_duration")]
+	pub duration: f32,
+	/// Name of next material. Must be valid material name.
+	pub next_material_name: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum SpecialMaterialEffect
+{
+	// Just display regular texture.
+	None,
+
+	/// Use texture turbulence effect.
+	Turb(TurbParams),
+
+	/// This is layered-animated material.
+	/// Material texture will be generated each frame, based on provided layers and params.
+	/// Material texture needs to be regenerated each frame and this may take significant amount of frame time.
+	/// So, avoid using too many textures in map or too large textures with layered animations - prefer framed animations and/or scrolling.
+	/// Layered animation presense doesn't affect map compiler and lightmaper - like framed animation.
+	LayeredAnimation(LayeredAnimation),
+
+	/// Draw skybox instead of regular texture.
+	Skybox(SkyboxParams),
+}
+
+impl Default for SpecialMaterialEffect
+{
+	fn default() -> Self
+	{
+		Self::None
+	}
+}
+
 #[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 pub struct TurbParams
 {
@@ -148,16 +175,6 @@ pub struct TurbParams
 
 	/// In seconds.
 	pub frequency: f32,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct AnimationFrame
-{
-	/// Duration of this frame, in seconds.
-	#[serde(default = "default_animation_frame_duration")]
-	pub duration: f32,
-	/// Name of next material. Must be valid material name.
-	pub next_material_name: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -230,10 +247,8 @@ impl Default for Material
 			blending_mode: BlendingMode::None,
 			scroll_speed: [0.0, 0.0],
 			emissive_layer: None,
-			turb: None,
 			framed_animation: None,
-			layered_animation: None,
-			skybox: None,
+			special_effect: SpecialMaterialEffect::None,
 			extra: HashMap::new(),
 		}
 	}

@@ -65,7 +65,7 @@ impl MapMaterialsProcessor
 
 			// TODO - load skyboxes lazily.
 			// TODO - create stub regular texture for skyboxes.
-			if material.skybox.is_some()
+			if matches!(&material.special_effect, SpecialMaterialEffect::Skybox(..))
 			{
 				skybox_textures_32.insert(texture_index as u32, r.get_skybox_textures_32(material_name));
 				skybox_textures_64.insert(texture_index as u32, r.get_skybox_textures_64(material_name));
@@ -88,7 +88,8 @@ impl MapMaterialsProcessor
 		let mut i = 0;
 		while i < textures.len()
 		{
-			if let Some(layered_animation) = textures[i].material.layered_animation.clone()
+			if let SpecialMaterialEffect::LayeredAnimation(layered_animation) =
+				textures[i].material.special_effect.clone()
 			{
 				for animation_layer in &layered_animation.layers
 				{
@@ -165,11 +166,23 @@ impl MapMaterialsProcessor
 		let mut animated_texture_order = 0;
 		for texture in &mut textures
 		{
-			if texture.material.turb.is_some() || texture.material.layered_animation.is_some()
+			match &texture.material.special_effect
 			{
-				texture.animated_texture_order = animated_texture_order;
-				animated_texture_order += 1;
-			}
+				SpecialMaterialEffect::None =>
+				{},
+				SpecialMaterialEffect::Turb { .. } =>
+				{
+					texture.animated_texture_order = animated_texture_order;
+					animated_texture_order += 1;
+				},
+				SpecialMaterialEffect::LayeredAnimation { .. } =>
+				{
+					texture.animated_texture_order = animated_texture_order;
+					animated_texture_order += 1;
+				},
+				SpecialMaterialEffect::Skybox { .. } =>
+				{},
+			};
 		}
 
 		// Calculate amount of animated textures texels.
@@ -177,7 +190,7 @@ impl MapMaterialsProcessor
 		let mut num_animated_texels = 0;
 		for texture in &textures
 		{
-			if texture.material.turb.is_some()
+			if matches!(&texture.material.special_effect, SpecialMaterialEffect::Turb(..))
 			{
 				num_animated_texels += texture.texture[0].size[0] * texture.texture[0].size[1];
 			}
@@ -507,7 +520,7 @@ fn animate_texture(
 	current_time_s: f32,
 )
 {
-	if let Some(turb) = &texture_data.material.turb
+	if let SpecialMaterialEffect::Turb(turb) = &texture_data.material.special_effect
 	{
 		for mip_index in 0 .. NUM_MIPS
 		{
@@ -551,7 +564,7 @@ fn animate_texture(
 		}
 	}
 
-	if let Some(layered_animation) = &texture_data.material.layered_animation
+	if let SpecialMaterialEffect::LayeredAnimation(layered_animation) = &texture_data.material.special_effect
 	{
 		for mip_index in 0 .. NUM_MIPS
 		{
