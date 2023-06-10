@@ -5,7 +5,7 @@ use super::{
 	renderer_utils::*, resources_manager::*, surfaces::*, textures::*, triangle_model::*, triangle_models_rendering::*,
 };
 use crate::common::{
-	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, light_cube::*, lightmap, material,
+	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, fixed_math::*, light_cube::*, lightmap, material::*,
 	math_types::*, matrix::*, plane::*, shared_mut_slice::*, system_window,
 };
 use rayon::prelude::*;
@@ -1513,7 +1513,7 @@ impl PartialRenderer
 			return;
 		}
 
-		if material.skybox.is_some()
+		if matches!(&material.special_effect, SpecialMaterialEffect::Skybox(..))
 		{
 			// Do not draw sky polygons but update bounds.
 			let mut polygon_bounds = ClippingPolygon::from_point(&vertices_2d[0]);
@@ -1810,7 +1810,7 @@ impl PartialRenderer
 					surface_size,
 					tc_start,
 					&emissive_texture.0[polygon_data.mip as usize],
-					material::BlendingMode::Additive,
+					BlendingMode::Additive,
 					emissive_texture.1,
 					surface_data,
 				);
@@ -2440,7 +2440,7 @@ impl PartialRenderer
 				&tc_equation_scaled,
 				&[side_texture.size, side_texture.size],
 				&side_texture.pixels,
-				material::BlendingMode::None,
+				BlendingMode::None,
 			);
 		}
 	}
@@ -4023,7 +4023,7 @@ fn draw_polygon<'a, ColorT: AbstractColor>(
 	tex_coord_equation: &TexCoordEquation,
 	texture_size: &[u32; 2],
 	texture_data: &[ColorT],
-	blending_mode: material::BlendingMode,
+	blending_mode: BlendingMode,
 )
 {
 	if vertices_transformed.len() < 3

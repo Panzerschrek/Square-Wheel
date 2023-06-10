@@ -3,28 +3,31 @@
 	{
 		"diffuse" : "spanish_bond_base.png",
 		"normal_map" : "spanish_bond_base_normal.png",
-		"layered_animation" :
+		"special_effect":
 		{
-			"layers" :
-			[
-				{
-					"_comment": "add base layer, modulated by 0, in order to fill normals data",
-					"material_name" : "spanish_bond_base",
-					"modulate" : { "Constant" : 0.0 }
-				},
-				{
-					"material_name" : "spanish_bond_a",
-					"modulate" : { "TriangleWave" : { "frequency" : 0.15, "amplitude": 0.75, "offset" : 0.25, "phase" : 0.0 } }
-				},
-				{
-					"material_name" : "spanish_bond_b",
-					"modulate" : { "TriangleWave" : { "frequency" : 0.15, "amplitude": 0.75, "offset" : 0.25, "phase" : 0.333333 } }
-				},
-				{
-					"material_name" : "spanish_bond_c",
-					"modulate" : { "TriangleWave" : { "frequency" : 0.15, "amplitude": 0.75, "offset" : 0.25, "phase" : 0.666666 } }
-				}
-			]
+			"LayeredAnimation" :
+			{
+				"layers" :
+				[
+					{
+						"_comment": "add base layer, modulated by 0, in order to fill normals data",
+						"material_name" : "spanish_bond_base",
+						"modulate" : { "Constant" : 0.0 }
+					},
+					{
+						"material_name" : "spanish_bond_a",
+						"modulate" : { "TriangleWave" : { "frequency" : 0.15, "amplitude": 0.75, "offset" : 0.25, "phase" : 0.0 } }
+					},
+					{
+						"material_name" : "spanish_bond_b",
+						"modulate" : { "TriangleWave" : { "frequency" : 0.15, "amplitude": 0.75, "offset" : 0.25, "phase" : 0.333333 } }
+					},
+					{
+						"material_name" : "spanish_bond_c",
+						"modulate" : { "TriangleWave" : { "frequency" : 0.15, "amplitude": 0.75, "offset" : 0.25, "phase" : 0.666666 } }
+					}
+				]
+			}
 		}
 	},
 	"spanish_bond_a":
@@ -54,59 +57,62 @@
 			"image" : "basket_weave_grid_base.png",
 			"light" : [40.0, 40.0, 40.0]
 		},
-		"layered_animation":
+		"special_effect":
 		{
-			"layers":
-			[
-				{
-					"material_name" : "basket_weave_grid_base"
-				},
-				{
-					"material_name" : "glowing_sin_wave",
-					"tex_coord_shift" :
-					[
-						{ "SinWave" : { "frequency" : 0.3, "amplitude" : 16.0, "phase" : 0.0 } },
-						{ "Linear" : { "scale" : -24.0 } }
-					],
-					"modulate_color" :
-					[
-						{ "SinWave" : { "frequency" : 1.0, "amplitude" : 0.3, "offset" : 0.5, "phase" : 0.0 } },
-						{ "Constant" : 0.1 },
-						{ "Constant" : 0.1 }
-					]
-				},
-				{
-					"material_name" : "glowing_sin_wave",
-					"tex_coord_shift" :
-					[
-						{ "SinWave" : { "frequency" : 0.3, "amplitude" : 16.0, "phase" : 2.0943951 } },
-						{ "Linear" : { "scale" : -36.0 } }
-					],
-					"modulate_color" :
-					[
-						{ "Constant" : 0.1 },
-						{ "SinWave" : { "frequency" : 1.0, "amplitude" : 0.3, "offset" : 0.5, "phase" : 2.0943951 } },
-						{ "Constant" : 0.1 }
-					]
-				},
-				{
-					"material_name" : "glowing_sin_wave",
-					"tex_coord_shift" :
-					[
-						{ "SinWave" : { "frequency" : 0.3, "amplitude" : 16.0, "phase" : 4.18879 } },
-						{ "Linear" : { "scale" : -60.0 } }
-					],
-					"modulate_color" :
-					[
-						{ "Constant" : 0.1 },
-						{ "Constant" : 0.1 },
-						{ "SinWave" : { "frequency" : 1.0, "amplitude" : 0.3, "offset" : 0.5, "phase" : 4.18879 } }
-					]
-				},
-				{
-					"material_name" : "basket_weave_grid_grid"
-				}
-			]
+			"LayeredAnimation":
+			{
+				"layers":
+				[
+					{
+						"material_name" : "basket_weave_grid_base"
+					},
+					{
+						"material_name" : "glowing_sin_wave",
+						"tex_coord_shift" :
+						[
+							{ "SinWave" : { "frequency" : 0.3, "amplitude" : 16.0, "phase" : 0.0 } },
+							{ "Linear" : { "scale" : -24.0 } }
+						],
+						"modulate_color" :
+						[
+							{ "SinWave" : { "frequency" : 1.0, "amplitude" : 0.3, "offset" : 0.5, "phase" : 0.0 } },
+							{ "Constant" : 0.1 },
+							{ "Constant" : 0.1 }
+						]
+					},
+					{
+						"material_name" : "glowing_sin_wave",
+						"tex_coord_shift" :
+						[
+							{ "SinWave" : { "frequency" : 0.3, "amplitude" : 16.0, "phase" : 2.0943951 } },
+							{ "Linear" : { "scale" : -36.0 } }
+						],
+						"modulate_color" :
+						[
+							{ "Constant" : 0.1 },
+							{ "SinWave" : { "frequency" : 1.0, "amplitude" : 0.3, "offset" : 0.5, "phase" : 2.0943951 } },
+							{ "Constant" : 0.1 }
+						]
+					},
+					{
+						"material_name" : "glowing_sin_wave",
+						"tex_coord_shift" :
+						[
+							{ "SinWave" : { "frequency" : 0.3, "amplitude" : 16.0, "phase" : 4.18879 } },
+							{ "Linear" : { "scale" : -60.0 } }
+						],
+						"modulate_color" :
+						[
+							{ "Constant" : 0.1 },
+							{ "Constant" : 0.1 },
+							{ "SinWave" : { "frequency" : 1.0, "amplitude" : 0.3, "offset" : 0.5, "phase" : 4.18879 } }
+						]
+					},
+					{
+						"material_name" : "basket_weave_grid_grid"
+					}
+				]
+			}
 		}
 	},
 	"basket_weave_grid_base":
@@ -146,22 +152,25 @@
 	{
 		"diffuse" : "bricks_with_rolling_ball.png",
 		"normal_map" : "bricks_with_rolling_ball_normal.png",
-		"layered_animation" :
+		"special_effect":
 		{
-			"layers" :
-			[
-				{
-					"material_name" : "bricks_with_rolling_ball"
-				},
-				{
-					"material_name" : "rolling_ball",
-					"tex_coord_shift" :
-					[
-						{ "SinWave" : { "offset": 64, "frequency" : 0.25, "amplitude" : 44, "phase" : 1.570796 } },
-						{ "SinWave" : { "offset": 64, "frequency" : 0.25, "amplitude" : 44, "phase" : 0 } }
-					]
-				}
-			]
+			"LayeredAnimation" :
+			{
+				"layers" :
+				[
+					{
+						"material_name" : "bricks_with_rolling_ball"
+					},
+					{
+						"material_name" : "rolling_ball",
+						"tex_coord_shift" :
+						[
+							{ "SinWave" : { "offset": 64, "frequency" : 0.25, "amplitude" : 44, "phase" : 1.570796 } },
+							{ "SinWave" : { "offset": 64, "frequency" : 0.25, "amplitude" : 44, "phase" : 0 } }
+						]
+					}
+				]
+			}
 		}
 	},
 	"rolling_ball":
@@ -181,33 +190,36 @@
 			"image": "none",
 			"light" : [6.0, 6.0, 6.0]
 		},
-		"layered_animation" :
+		"special_effect":
 		{
-			"layers" :
-			[
-				{
-					"_comment": "base (diffuse) layer",
-					"material_name" : "monkey_head_display_base"
-				},
-				{
-					"_comment": "use frame-animated texture for display image",
-					"material_name" : "monkey_head_anim_0",
-					"follow_framed_animation" : true
-				},
-				{
-					"_comment": "add some noise",
-					"material_name" : "monkey_head_display_noise",
-					"tex_coord_shift" :
-					[
-						{ "Linear" : { "scale" : 512.0 } },
-						{ "Linear" : { "scale" : -96.0 } }
-					]
-				},
-				{
-					"comment": "make sure noise stays inside screeen",
-					"material_name" : "monkey_head_display_mask"
-				}
-			]
+			"LayeredAnimation" :
+			{
+				"layers" :
+				[
+					{
+						"_comment": "base (diffuse) layer",
+						"material_name" : "monkey_head_display_base"
+					},
+					{
+						"_comment": "use frame-animated texture for display image",
+						"material_name" : "monkey_head_anim_0",
+						"follow_framed_animation" : true
+					},
+					{
+						"_comment": "add some noise",
+						"material_name" : "monkey_head_display_noise",
+						"tex_coord_shift" :
+						[
+							{ "Linear" : { "scale" : 512.0 } },
+							{ "Linear" : { "scale" : -96.0 } }
+						]
+					},
+					{
+						"comment": "make sure noise stays inside screeen",
+						"material_name" : "monkey_head_display_mask"
+					}
+				]
+			}
 		}
 	},
 	"monkey_head_display_base" :
@@ -398,39 +410,42 @@
 		"roughness" : 0.3,
 		"blending_mode": "AlphaTest",
 		"blocks_view" : false,
-		"layered_animation" :
+		"special_effect":
 		{
-			"layers" :
-			[
-				{
-					"material_name" : "metal_wire_mesh_base"
-				},
-				{
-					"material_name" : "metal_wire_mesh",
-					"tex_coord_shift" :
-					[
-						{ "Linear" : { "scale" : -6.9282 } },
-						{ "Linear" : { "scale" : 4.0 } }
-					]
-				}
-				,
-				{
-					"material_name" : "metal_wire_mesh",
-					"tex_coord_shift" :
-					[
-						{ "Linear" : { "scale" : 6.9282 } },
-						{ "Linear" : { "scale" : 4.0 } }
-					]
-				},
-				{
-					"material_name" : "metal_wire_mesh",
-					"tex_coord_shift" :
-					[
-						{ "Constant" : 0.0 },
-						{ "Linear" : { "scale" : -8.0 } }
-					]
-				}
-			]
+			"LayeredAnimation" :
+			{
+				"layers" :
+				[
+					{
+						"material_name" : "metal_wire_mesh_base"
+					},
+					{
+						"material_name" : "metal_wire_mesh",
+						"tex_coord_shift" :
+						[
+							{ "Linear" : { "scale" : -6.9282 } },
+							{ "Linear" : { "scale" : 4.0 } }
+						]
+					}
+					,
+					{
+						"material_name" : "metal_wire_mesh",
+						"tex_coord_shift" :
+						[
+							{ "Linear" : { "scale" : 6.9282 } },
+							{ "Linear" : { "scale" : 4.0 } }
+						]
+					},
+					{
+						"material_name" : "metal_wire_mesh",
+						"tex_coord_shift" :
+						[
+							{ "Constant" : 0.0 },
+							{ "Linear" : { "scale" : -8.0 } }
+						]
+					}
+				]
+			}
 		}
 	},
 	"metal_wire_mesh_base":

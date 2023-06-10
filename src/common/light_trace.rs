@@ -51,7 +51,7 @@ fn get_texture_sky_flag(texture_name: &bsp_map_compact::Texture, materials: &Mat
 {
 	if let Some(material) = materials.get(bsp_map_compact::get_texture_string(texture_name))
 	{
-		material.skybox.is_some()
+		matches!(&material.special_effect, SpecialMaterialEffect::Skybox(..))
 	}
 	else
 	{

@@ -3,10 +3,13 @@
 	{
 		"diffuse": "sky.png",
 		"emissive_light" : [16.0, 16.0, 20.0],
-		"skybox" :
+		"special_effect":
 		{
-			"side_images" : [ "sky/0001.png", "sky/0002.png", "sky/0003.png", "sky/0004.png", "sky/0005.png", "sky/0006.png" ],
-			"brightness" : 80.0
+			"Skybox":
+			{
+				"side_images" : [ "sky/0001.png", "sky/0002.png", "sky/0003.png", "sky/0004.png", "sky/0005.png", "sky/0006.png" ],
+				"brightness" : 80.0
+			}
 		},
 		"light" : false
 	}
