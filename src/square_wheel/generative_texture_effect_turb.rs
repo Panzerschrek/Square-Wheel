@@ -147,7 +147,7 @@ fn make_turb_distortion<T: Copy + Default>(
 				debug_only_checked_write(
 					dst_pixels,
 					(x + y * size[0]) as usize,
-					debug_only_checked_fetch(&temp_buffer, src_y as usize),
+					debug_only_checked_fetch(temp_buffer, src_y as usize),
 				);
 			};
 			src_y += 1;

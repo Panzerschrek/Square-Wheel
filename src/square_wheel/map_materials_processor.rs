@@ -98,7 +98,7 @@ impl MapMaterialsProcessor
 				}
 				else if let Some(material) = all_materials.get(material_name).cloned()
 				{
-					let texture = r.get_material_texture(&material_name);
+					let texture = r.get_material_texture(material_name);
 					let emissive_texture = material.emissive_layer.as_ref().map(|l| r.get_texture_lite(&l.image));
 
 					let texture_index = textures.len() as TextureIndex;
@@ -118,19 +118,13 @@ impl MapMaterialsProcessor
 				}
 			};
 
-			let mut texture_data_internal = MapTextureDataInternal::default();
-
-			texture_data_internal.next_frame_texture_index = if let Some(framed_animation) = framed_animation
-			{
-				load_texture_func(&framed_animation.next_material_name)
-			}
-			else
-			{
-				!0 // Out of bounds index - means no animation
+			let mut texture_data_internal = MapTextureDataInternal {
+				next_frame_texture_index: framed_animation
+					.map(|a| load_texture_func(&a.next_material_name))
+					.unwrap_or(!0), // Out of bounds index - means no animation
+				generative_effect: create_generative_texture_effect(special_effect, &mut load_texture_func),
+				..Default::default()
 			};
-
-			texture_data_internal.generative_effect =
-				create_generative_texture_effect(special_effect, &mut load_texture_func);
 
 			if let Some(generative_effect) = &texture_data_internal.generative_effect
 			{
