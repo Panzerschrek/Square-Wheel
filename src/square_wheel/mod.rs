@@ -17,6 +17,7 @@ pub mod frame_upscaler;
 pub mod game_interface;
 pub mod generative_texture_effect_layered;
 pub mod generative_texture_effect_turb;
+pub mod generative_texture_effect_water;
 pub mod host;
 pub mod host_config;
 pub mod inline_models_index;

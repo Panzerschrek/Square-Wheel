@@ -152,6 +152,8 @@ pub enum SpecialMaterialEffect
 	/// Layered animation presense doesn't affect map compiler and lightmaper - like framed animation.
 	LayeredAnimation(LayeredAnimation),
 
+	Water(WaterEffect),
+
 	/// Draw skybox instead of regular texture.
 	Skybox(SkyboxParams),
 }
@@ -214,6 +216,12 @@ pub struct LayeredAnimationLayer
 	/// If both modulation params are none - no modulation will be used (is equivalent to multiplication by 1).
 	#[serde(default)]
 	pub modulate_color: Option<[SingleArgumentFunction; 3]>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct WaterEffect
+{
+	pub resolution_log2: [u32; 2],
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
