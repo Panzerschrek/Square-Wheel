@@ -6,6 +6,7 @@ pub struct GenerativeTextureEffectWater
 	water_effect: WaterEffect,
 	wave_field_a: Vec<WaveFieldElement>,
 	wave_field_b: Vec<WaveFieldElement>,
+	frame: u32,
 }
 
 impl GenerativeTextureEffectWater
@@ -23,6 +24,7 @@ impl GenerativeTextureEffectWater
 			water_effect,
 			wave_field_a: vec![0.0; size],
 			wave_field_b: vec![0.0; size],
+			frame: 0,
 		}
 	}
 }
@@ -40,38 +42,52 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 		_texture_data: &MapTextureData,
 		_all_textures_data: &[MapTextureData],
 		_textures_mapping_table: &[TextureMappingElement],
-		current_time_s: f32,
+		_current_time_s: f32,
 	)
 	{
 		// TODO - use fixed frequency.
+		self.frame += 1;
+
 		let size = [
 			1 << self.water_effect.resolution_log2[0],
 			1 << self.water_effect.resolution_log2[1],
 		];
 
+		// TODO - setup update frequency.
+		let fixed_time = (self.frame as f32) / 60.0;
+
+		let (dst, src) = if self.frame % 2 == 0
+		{
+			(&mut self.wave_field_b, &mut self.wave_field_a)
+		}
+		else
+		{
+			(&mut self.wave_field_a, &mut self.wave_field_b)
+		};
+
 		// Add test emitter.
-		self.wave_field_a[(size[0] / 2 + size[1] / 2 * size[0]) as usize] = (current_time_s * 8.0).sin() * 4.0;
+		let spot_value = (fixed_time * 24.0).sin() * 2.0;
+		let spot_coord = (size[0] / 2 + size[1] / 2 * size[0]) as usize;
+		src[spot_coord] = spot_value;
 
-		update_wave_field(size, &mut self.wave_field_b, &self.wave_field_a);
-		update_wave_field(size, &mut self.wave_field_a, &self.wave_field_b);
+		// Perfrom wave field calculation.
+		update_wave_field(size, dst, src);
 
-		// TODO - generate texture itself
-
+		// Allocate texture.
 		out_texture_data.texture[0].size = size;
 		out_texture_data.texture[0]
 			.pixels
 			.resize((size[0] * size[1]) as usize, TextureElement::default());
 
+		// Generate texture based on wave field.
 		// TODO - perform more complex texture generation, based on wave field.
-		for (dst_texel, wave_value) in out_texture_data.texture[0]
-			.pixels
-			.iter_mut()
-			.zip(self.wave_field_a.iter())
+		for (dst_texel, wave_value) in out_texture_data.texture[0].pixels.iter_mut().zip(dst.iter())
 		{
 			let v = (wave_value * 255.0).max(0.0).min(255.0) as u8;
 			dst_texel.diffuse = Color32::from_rgb(v, v, v);
 		}
 
+		// TODO - generate mips. Now just fill with stub.
 		for mip in 1 .. NUM_MIPS
 		{
 			if out_texture_data.texture[mip].pixels.is_empty()
@@ -91,7 +107,7 @@ fn update_wave_field(size: [u32; 2], dst: &mut [WaveFieldElement], src: &[WaveFi
 	// TODO - optimize this.
 
 	// TODO - move into config.
-	let attenuation = 0.995;
+	let attenuation = 0.992;
 
 	for y in 1 .. size[1] - 1
 	{
