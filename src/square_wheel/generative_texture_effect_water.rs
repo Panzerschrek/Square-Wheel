@@ -1,4 +1,4 @@
-use super::{map_materials_processor_structs::*, textures::*};
+use super::{fast_math::*, map_materials_processor_structs::*, textures::*};
 use crate::common::{color::*, material::*};
 
 pub struct GenerativeTextureEffectWater
@@ -56,7 +56,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 		// TODO - setup update frequency.
 		let fixed_time = (self.frame as f32) / 60.0;
 
-		let (dst, src) = if self.frame % 2 == 0
+		let (dst_field, src_field) = if self.frame % 2 == 0
 		{
 			(&mut self.wave_field_b, &mut self.wave_field_a)
 		}
@@ -68,10 +68,10 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 		// Add test emitter.
 		let spot_value = (fixed_time * 24.0).sin() * 2.0;
 		let spot_coord = (size[0] / 2 + size[1] / 2 * size[0]) as usize;
-		src[spot_coord] = spot_value;
+		src_field[spot_coord] = spot_value;
 
 		// Perfrom wave field calculation.
-		update_wave_field(size, dst, src);
+		update_wave_field(size, dst_field, src_field);
 
 		// Allocate texture.
 		out_texture_data.texture[0].size = size;
@@ -81,9 +81,9 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 
 		// Generate texture based on wave field.
 		// TODO - perform more complex texture generation, based on wave field.
-		for (dst_texel, wave_value) in out_texture_data.texture[0].pixels.iter_mut().zip(dst.iter())
+		for (dst_texel, wave_value) in out_texture_data.texture[0].pixels.iter_mut().zip(dst_field.iter())
 		{
-			let v = (wave_value * 255.0).max(0.0).min(255.0) as u8;
+			let v = unsafe { (wave_value * 255.0).max(0.0).min(255.0).to_int_unchecked::<u8>() };
 			dst_texel.diffuse = Color32::from_rgb(v, v, v);
 		}
 
@@ -99,26 +99,29 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 	}
 }
 
+// TODO - try to use less memory (16 bit or even 8 bit).
 type WaveFieldElement = f32;
 
 fn update_wave_field(size: [u32; 2], dst: &mut [WaveFieldElement], src: &[WaveFieldElement])
 {
 	// TODO - handle corner case.
-	// TODO - optimize this.
 
 	// TODO - move into config.
 	let attenuation = 0.992;
 
 	for y in 1 .. size[1] - 1
 	{
-		for x in 1 .. size[0] - 1
+		let line_start = y * size[0];
+		for x in line_start + 1 .. line_start + size[0] - 1
 		{
-			let sum = src[((x - 1) + y * size[0]) as usize] +
-				src[((x + 1) + y * size[0]) as usize] +
-				src[(x + (y - 1) * size[0]) as usize] +
-				src[(x + (y + 1) * size[0]) as usize];
-			let val = &mut dst[(x + y * size[0]) as usize];
-			*val = (sum * 0.5 - *val) * attenuation;
+			unsafe {
+				let sum = debug_only_checked_fetch(src, (x - 1) as usize) +
+					debug_only_checked_fetch(src, (x + 1) as usize) +
+					debug_only_checked_fetch(src, (x - size[0]) as usize) +
+					debug_only_checked_fetch(src, (x + size[0]) as usize);
+				let val = debug_only_checked_fetch(dst, x as usize);
+				debug_only_checked_write(dst, x as usize, (sum * 0.5 - val) * attenuation);
+			}
 		}
 	}
 }
