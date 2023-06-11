@@ -1,5 +1,5 @@
 use super::{fast_math::*, map_materials_processor_structs::*, textures::*};
-use crate::common::{color::*, material::*};
+use crate::common::{color::*, material::*, math_types::*};
 
 pub struct GenerativeTextureEffectWater
 {
@@ -73,19 +73,15 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 		// Perfrom wave field calculation.
 		update_wave_field(size, dst_field, src_field);
 
-		// Allocate texture.
-		out_texture_data.texture[0].size = size;
-		out_texture_data.texture[0]
-			.pixels
-			.resize((size[0] * size[1]) as usize, TextureElement::default());
-
-		// Generate texture based on wave field.
-		// TODO - perform more complex texture generation, based on wave field.
-		for (dst_texel, wave_value) in out_texture_data.texture[0].pixels.iter_mut().zip(dst_field.iter())
-		{
-			let v = unsafe { (wave_value * 255.0).max(0.0).min(255.0).to_int_unchecked::<u8>() };
-			dst_texel.diffuse = Color32::from_rgb(v, v, v);
-		}
+		// Generate texture with normals based on wave field.
+		// TODO - support other kinds of textures.
+		make_texture_with_normals_of_wave_field(
+			size,
+			dst_field,
+			&mut out_texture_data.texture[0],
+			Color32::from_rgb(128, 128, 200),
+			1.0 / 64.0,
+		);
 
 		// TODO - generate mips. Now just fill with stub.
 		for mip in 1 .. NUM_MIPS
@@ -208,5 +204,50 @@ fn update_wave_field(size: [u32; 2], dst: &mut [WaveFieldElement], src: &[WaveFi
 			line_end_minus_one - size[0],
 			line_end_minus_one - y_plus_one_offset,
 		);
+	}
+}
+
+fn make_texture_with_normals_of_wave_field(
+	size: [u32; 2],
+	wave_field: &[WaveFieldElement],
+	out_texture: &mut Texture,
+	base_color: Color32,
+	base_roughness: f32,
+)
+{
+	out_texture.has_non_one_roughness = base_roughness < 1.0;
+	out_texture.has_normal_map = true;
+	out_texture.size = size;
+	out_texture
+		.pixels
+		.resize((size[0] * size[1]) as usize, TextureElement::default());
+
+	// TODO -handle corner cases.
+	for y in 1 .. size[1] - 1
+	{
+		let line_start = y * size[0];
+		let line_start_plus_one = line_start + 1;
+		let line_end_minus_one = line_start + size[0] - 1;
+
+		for x in line_start_plus_one .. line_end_minus_one
+		{
+			unsafe {
+				let val_x_minus = debug_only_checked_fetch(wave_field, (x - 1) as usize);
+				let val_x_plus = debug_only_checked_fetch(wave_field, (x + 1) as usize);
+				let val_y_minus = debug_only_checked_fetch(wave_field, (x - size[0]) as usize);
+				let val_y_plus = debug_only_checked_fetch(wave_field, (x + size[0]) as usize);
+
+				let dx = val_x_plus - val_x_minus;
+				let dy = val_y_plus - val_y_minus;
+				let normal = Vec3f::new(dx, dy, 1.0);
+
+				// TODO - perform fast normalization.
+				let result_texel = TextureElement {
+					diffuse: base_color,
+					packed_normal_roughness: PackedNormalRoughness::pack(&normal.normalize(), base_roughness),
+				};
+				debug_only_checked_write(&mut out_texture.pixels, x as usize, result_texel);
+			}
+		}
 	}
 }
