@@ -126,9 +126,9 @@ impl GenerativeTextureEffectWater
 					amplitude,
 				} =>
 				{
-					// TODO - perform wave field modification exactly once per period.
-					let sin_value = (time_s * frequency * std::f32::consts::TAU + phase).sin();
-					if sin_value >= 0.9
+					let inv_frequency_int = (self.update_frequency / frequency).max(1.0) as u32;
+					let phase_int = (self.update_frequency / frequency * phase) as u32;
+					if (self.update_step + phase_int) % inv_frequency_int == 0
 					{
 						let spot_coord =
 							((center[0] & size_mask[0]) + ((center[1] & size_mask[1]) << v_shift)) as usize;
@@ -139,12 +139,12 @@ impl GenerativeTextureEffectWater
 				},
 				WaveSource::Rain {
 					center,
+					frequency,
 					radius,
 					amplitude,
 				} =>
 				{
-					// TODO - setup frequency.
-					if self.rand_engine.next_u32() % 16 == 0
+					if self.rand_engine.gen_range(0.0 ..= 1.0) <= frequency / self.update_frequency
 					{
 						let (x, y) = if *radius > 0.0
 						{

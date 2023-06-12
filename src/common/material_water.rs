@@ -87,16 +87,23 @@ pub enum WaveSource
 		#[serde(default = "default_one")]
 		frequency: f32,
 
+		/// In range 0 - 1.
 		#[serde(default)]
 		phase: f32,
 
 		#[serde(default = "default_one")]
 		amplitude: f32,
 	},
+	/// Produce random droplets.
 	Rain
 	{
 		#[serde(default)]
 		center: [u32; 2],
+
+		/// How often drops are produced (by they are still random).
+		/// If this value is greater than water effect update frequency - new droplet (but only one) will be emitted each frame.
+		#[serde(default = "default_one")]
+		frequency: f32,
 
 		/// If radius is zero - produce rain droplets totally ranomly, if it is non-zero - produce droplets only around center.
 		#[serde(default)]
