@@ -23,6 +23,7 @@ pub mod map_lights;
 pub mod map_polygonizer;
 pub mod material;
 pub mod material_function;
+pub mod material_water;
 pub mod math_types;
 pub mod matrix;
 pub mod plane;

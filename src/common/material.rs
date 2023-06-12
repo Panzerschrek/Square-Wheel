@@ -1,4 +1,4 @@
-use super::material_function::*;
+use super::{material_function::*, material_water::*};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -216,12 +216,6 @@ pub struct LayeredAnimationLayer
 	/// If both modulation params are none - no modulation will be used (is equivalent to multiplication by 1).
 	#[serde(default)]
 	pub modulate_color: Option<[SingleArgumentFunction; 3]>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct WaterEffect
-{
-	pub resolution_log2: [u32; 2],
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

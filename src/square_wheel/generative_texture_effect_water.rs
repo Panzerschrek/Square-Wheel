@@ -1,5 +1,5 @@
 use super::{fast_math::*, map_materials_processor_structs::*, textures::*};
-use crate::common::{color::*, material::*, math_types::*};
+use crate::common::{color::*, material_water::*, math_types::*};
 
 pub struct GenerativeTextureEffectWater
 {
@@ -43,7 +43,8 @@ impl GenerativeTextureEffectWater
 		let spot_coord = (size[0] / 2 + size[1] / 2 * size[0]) as usize;
 		self.wave_field[spot_coord] = spot_value;
 
-		update_wave_field(size, &mut self.wave_field_old, &self.wave_field);
+		let attenuation = 1.0 - 1.0 / self.water_effect.fluidity.max(10.0).min(1000000.0);
+		update_wave_field(size, attenuation, &mut self.wave_field_old, &self.wave_field);
 
 		// Old field is now new field.
 		// Swapping two vectors is cheap.
@@ -101,11 +102,8 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 // TODO - try to use less memory (16 bit or even 8 bit).
 type WaveFieldElement = f32;
 
-fn update_wave_field(size: [u32; 2], dst: &mut [WaveFieldElement], src: &[WaveFieldElement])
+fn update_wave_field(size: [u32; 2], attenuation: f32, dst: &mut [WaveFieldElement], src: &[WaveFieldElement])
 {
-	// TODO - move into config.
-	let attenuation = 0.992;
-
 	let mut update_func = |offset, offset_x_minus_one, offset_x_plus_one, offset_y_minus_one, offset_y_plus_one| unsafe {
 		let sum = debug_only_checked_fetch(src, offset_x_minus_one as usize) +
 			debug_only_checked_fetch(src, offset_x_plus_one as usize) +
