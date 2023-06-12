@@ -39,7 +39,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 	fn update(
 		&mut self,
 		out_texture_data: &mut GenerativeTextureData,
-		_texture_data: &MapTextureData,
+		texture_data: &MapTextureData,
 		_all_textures_data: &[MapTextureData],
 		_textures_mapping_table: &[TextureMappingElement],
 		_current_time_s: f32,
@@ -75,13 +75,14 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 
 		// Generate texture with normals based on wave field.
 		// TODO - support other kinds of textures.
-		// TODO - move base color/roughness into config.
+
+		let last_mip_texel = &texture_data.texture[MAX_MIP].pixels[0];
 		make_texture_with_normals_of_wave_field(
 			size,
 			dst_field,
 			&mut out_texture_data.texture[0],
-			Color32::from_rgb(128, 128, 200),
-			1.0 / 64.0,
+			last_mip_texel.diffuse,
+			last_mip_texel.packed_normal_roughness.unpack_roughness(),
 		);
 
 		// TODO - generate mips. Now just fill with stub.
