@@ -4,8 +4,8 @@ use crate::common::{color::*, material::*, math_types::*};
 pub struct GenerativeTextureEffectWater
 {
 	water_effect: WaterEffect,
-	wave_field_a: Vec<WaveFieldElement>,
-	wave_field_b: Vec<WaveFieldElement>,
+	wave_field: Vec<WaveFieldElement>,
+	wave_field_old: Vec<WaveFieldElement>,
 	frame: u32,
 }
 
@@ -22,10 +22,32 @@ impl GenerativeTextureEffectWater
 
 		Self {
 			water_effect,
-			wave_field_a: vec![0.0; size],
-			wave_field_b: vec![0.0; size],
+			wave_field: vec![0.0; size],
+			wave_field_old: vec![0.0; size],
 			frame: 0,
 		}
+	}
+
+	fn step_update_wave_field(&mut self)
+	{
+		let size = [
+			1 << self.water_effect.resolution_log2[0],
+			1 << self.water_effect.resolution_log2[1],
+		];
+
+		// TODO - setup update frequency.
+		let fixed_time = (self.frame as f32) / 60.0;
+
+		// Add test emitter.
+		let spot_value = (fixed_time * 24.0).sin() * 2.0;
+		let spot_coord = (size[0] / 2 + size[1] / 2 * size[0]) as usize;
+		self.wave_field[spot_coord] = spot_value;
+
+		update_wave_field(size, &mut self.wave_field_old, &self.wave_field);
+
+		// Old field is now new field.
+		// Swapping two vectors is cheap.
+		std::mem::swap(&mut self.wave_field, &mut self.wave_field_old);
 	}
 }
 
@@ -47,31 +69,12 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 	{
 		// TODO - use fixed frequency.
 		self.frame += 1;
+		self.step_update_wave_field();
 
 		let size = [
 			1 << self.water_effect.resolution_log2[0],
 			1 << self.water_effect.resolution_log2[1],
 		];
-
-		// TODO - setup update frequency.
-		let fixed_time = (self.frame as f32) / 60.0;
-
-		let (dst_field, src_field) = if self.frame % 2 == 0
-		{
-			(&mut self.wave_field_b, &mut self.wave_field_a)
-		}
-		else
-		{
-			(&mut self.wave_field_a, &mut self.wave_field_b)
-		};
-
-		// Add test emitter.
-		let spot_value = (fixed_time * 24.0).sin() * 2.0;
-		let spot_coord = (size[0] / 2 + size[1] / 2 * size[0]) as usize;
-		src_field[spot_coord] = spot_value;
-
-		// Perfrom wave field calculation.
-		update_wave_field(size, dst_field, src_field);
 
 		// Generate texture with normals based on wave field.
 		// TODO - support other kinds of textures.
@@ -79,7 +82,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 		let last_mip_texel = &texture_data.texture[MAX_MIP].pixels[0];
 		make_texture_with_normals_of_wave_field(
 			size,
-			dst_field,
+			&self.wave_field,
 			&mut out_texture_data.texture[0],
 			last_mip_texel.diffuse,
 			last_mip_texel.packed_normal_roughness.unpack_roughness(),
