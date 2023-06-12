@@ -34,14 +34,31 @@ impl GenerativeTextureEffectWater
 			1 << self.water_effect.resolution_log2[0],
 			1 << self.water_effect.resolution_log2[1],
 		];
+		let size_mask = [size[0] - 1, size[1] - 1];
+		let v_shift = self.water_effect.resolution_log2[1];
 
 		// TODO - setup update frequency.
 		let fixed_time = (self.frame as f32) / 60.0;
 
-		// Add test emitter.
-		let spot_value = (fixed_time * 24.0).sin() * 4.0;
-		let spot_coord = (size[0] / 2 + size[1] / 2 * size[0]) as usize;
-		self.wave_field[spot_coord] = spot_value;
+		// Add wave sources.
+		for wave_source in &self.water_effect.wave_sources
+		{
+			match wave_source
+			{
+				WaveSource::WavySpot {
+					center,
+					frequency,
+					phase,
+					amplitude,
+					offset,
+				} =>
+				{
+					let spot_coord = ((center[0] & size_mask[0]) + ((center[1] & size_mask[1]) << v_shift)) as usize;
+					self.wave_field[spot_coord] =
+						(fixed_time * frequency * std::f32::consts::TAU + phase).sin() * amplitude + offset;
+				},
+			}
+		}
 
 		let attenuation = 1.0 - 1.0 / self.water_effect.fluidity.max(10.0).min(1000000.0);
 		update_wave_field(size, attenuation, &mut self.wave_field_old, &self.wave_field);
