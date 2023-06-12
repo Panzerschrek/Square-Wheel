@@ -1,11 +1,13 @@
 use super::{fast_math::*, map_materials_processor_structs::*, textures::*};
 use crate::common::{color::*, fixed_math::*, material_water::*, math_types::*};
+use rand::{Rng, RngCore, SeedableRng};
 
 pub struct GenerativeTextureEffectWater
 {
 	water_effect: WaterEffect,
 	wave_field: Vec<WaveFieldElement>,
 	wave_field_old: Vec<WaveFieldElement>,
+	rand_engine: RandEngine,
 	frame: u32,
 }
 
@@ -24,6 +26,8 @@ impl GenerativeTextureEffectWater
 			water_effect,
 			wave_field: vec![0.0; size],
 			wave_field_old: vec![0.0; size],
+			// Initialize random engine generator with good, but deterministic value.
+			rand_engine: RandEngine::seed_from_u64(0b1001100000111010100101010101010111000111010110100101111001010101),
 			frame: 0,
 		}
 	}
@@ -121,7 +125,45 @@ impl GenerativeTextureEffectWater
 					{
 						let spot_coord =
 							((center[0] & size_mask[0]) + ((center[1] & size_mask[1]) << v_shift)) as usize;
-						self.wave_field[spot_coord] = -*amplitude; // Minus because this is a droplet.
+						let field_value = -*amplitude; // Minus because this is a droplet.
+						self.wave_field[spot_coord] = field_value;
+						self.wave_field_old[spot_coord] = -field_value;
+					}
+				},
+				WaveSource::Rain {
+					center,
+					radius,
+					amplitude,
+				} =>
+				{
+					// TODO - setup frequency.
+					if self.rand_engine.next_u32() % 16 == 0
+					{
+						let (x, y) = if *radius > 0.0
+						{
+							let dist: f32 = self.rand_engine.gen_range(0.0 ..= *radius);
+							let angle: f32 = self.rand_engine.gen_range(0.0 ..= std::f32::consts::TAU);
+							let (dx, dy) = (angle.cos() * dist, angle.sin() * dist);
+
+							(
+								(((center[0] as i32) + (dx as i32)) as u32) & size_mask[0],
+								(((center[1] as i32) + (dy as i32)) as u32) & size_mask[1],
+							)
+						}
+						else
+						{
+							(
+								self.rand_engine.next_u32() & size_mask[0],
+								self.rand_engine.next_u32() & size_mask[1],
+							)
+						};
+
+						let spot_coord = (x + (y << v_shift)) as usize;
+						let field_value = -*amplitude; // Minus because this is a droplet.
+
+						// TODO - such random droplets looks ugly. Maybe modify wave field more smoothly?
+						self.wave_field[spot_coord] = field_value;
+						self.wave_field_old[spot_coord] = -field_value;
 					}
 				},
 			}
@@ -135,6 +177,8 @@ impl GenerativeTextureEffectWater
 		std::mem::swap(&mut self.wave_field, &mut self.wave_field_old);
 	}
 }
+
+type RandEngine = rand::rngs::SmallRng;
 
 impl GenerativeTextureEffect for GenerativeTextureEffectWater
 {

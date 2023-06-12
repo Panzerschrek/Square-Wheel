@@ -63,6 +63,18 @@ pub enum WaveSource
 		#[serde(default = "default_one")]
 		amplitude: f32,
 	},
+	Rain
+	{
+		#[serde(default)]
+		center: [u32; 2],
+
+		/// If radius is zero - produce rain droplets totally ranomly, if it is non-zero - produce droplets only around center.
+		#[serde(default)]
+		radius: f32,
+
+		#[serde(default = "default_one")]
+		amplitude: f32,
+	},
 }
 
 fn default_fluidity() -> f32

@@ -18,6 +18,7 @@ cgmath = { version = "0.18", features = ["serde" ] }
 hecs = { version = "0.9.0", features = ["column-serialize", "row-serialize" ] }
 image = { version = "0.24.3", default-features = false, features = ["png", "jpeg", "tga"] }
 num_cpus = "1.13.1"
+rand = { version = "0.8.5", default-features = false, features = ["small_rng"] }
 rayon = "1.5.3"
 sdl2 = { version = "0.35" }
 serde = { version = "1.0", features = ["derive"] }
