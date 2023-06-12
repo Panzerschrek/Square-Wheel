@@ -15,7 +15,25 @@ pub struct WaterEffect
 	#[serde(default = "default_fluidity")]
 	pub fluidity: f32,
 
+	#[serde(default)]
+	pub color_texture_apply_mode: ColorTextureApplyMode,
+
 	pub wave_sources: Vec<WaveSource>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
+pub enum ColorTextureApplyMode
+{
+	SingleColor,
+	SourceTexture,
+}
+
+impl Default for ColorTextureApplyMode
+{
+	fn default() -> Self
+	{
+		Self::SingleColor
+	}
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

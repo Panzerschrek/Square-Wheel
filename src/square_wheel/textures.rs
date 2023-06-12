@@ -161,7 +161,7 @@ pub fn make_texture(
 }
 
 // Resize with simple nearset filter.
-fn resize_image(image: &image::Image, target_size: [u32; 2]) -> image::Image
+pub fn resize_image(image: &image::Image, target_size: [u32; 2]) -> image::Image
 {
 	let mut result = image::Image {
 		size: target_size,

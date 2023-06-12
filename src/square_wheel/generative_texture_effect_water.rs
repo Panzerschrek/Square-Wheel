@@ -1,5 +1,5 @@
 use super::{fast_math::*, map_materials_processor_structs::*, textures::*};
-use crate::common::{color::*, fixed_math::*, material_water::*, math_types::*};
+use crate::common::{color::*, fixed_math::*, image::*, material_water::*, math_types::*};
 use rand::{Rng, RngCore, SeedableRng};
 
 pub struct GenerativeTextureEffectWater
@@ -9,6 +9,8 @@ pub struct GenerativeTextureEffectWater
 	water_effect: WaterEffect,
 	wave_field: Vec<WaveFieldElement>,
 	wave_field_old: Vec<WaveFieldElement>,
+	// Used for setting color of result texture.
+	color_image: Image,
 	rand_engine: RandEngine,
 	update_step: u32,
 	prev_update_time_s: f32,
@@ -30,6 +32,7 @@ impl GenerativeTextureEffectWater
 			water_effect,
 			wave_field: vec![0.0; size],
 			wave_field_old: vec![0.0; size],
+			color_image: Image::default(),
 			// Initialize random engine generator with good, but deterministic value.
 			rand_engine: RandEngine::seed_from_u64(0b1001100000111010100101010101010111000111010110100101111001010101),
 			update_step: 0,
@@ -221,16 +224,32 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 
 		// Generate texture with normals based on wave field.
 		// TODO - support other kinds of textures.
+		let size = [
+			1 << self.water_effect.resolution_log2[0],
+			1 << self.water_effect.resolution_log2[1],
+		];
+
+		if self.water_effect.color_texture_apply_mode != ColorTextureApplyMode::SingleColor &&
+			self.color_image.pixels.is_empty()
+		{
+			// If we apply source texture - extract image itself from it.
+			// It is cache-frendly to work witn 32-bit image rather than with texture containing both color and normals data.
+			self.color_image = extract_color_image_from_texture(&texture_data.texture[0]);
+			if self.color_image.size != size
+			{
+				self.color_image = resize_image(&self.color_image, size);
+			}
+		}
+
 		let last_mip_texel = &texture_data.texture[MAX_MIP].pixels[0];
 		make_texture_with_normals_of_wave_field(
-			[
-				1 << self.water_effect.resolution_log2[0],
-				1 << self.water_effect.resolution_log2[1],
-			],
+			self.water_effect.color_texture_apply_mode,
+			size,
 			&self.wave_field,
 			&mut out_texture_data.texture[0],
 			last_mip_texel.diffuse,
 			last_mip_texel.packed_normal_roughness.unpack_roughness(),
+			&self.color_image.pixels,
 		);
 
 		out_texture_data.texture[0].is_metal = texture_data.material.is_metal;
@@ -355,11 +374,52 @@ fn update_wave_field(size: [u32; 2], attenuation: f32, dst: &mut [WaveFieldEleme
 }
 
 fn make_texture_with_normals_of_wave_field(
+	color_texture_apply_mode: ColorTextureApplyMode,
 	size: [u32; 2],
 	wave_field: &[WaveFieldElement],
 	out_texture: &mut Texture,
 	base_color: Color32,
 	base_roughness: f32,
+	color_image_pixels: &[Color32],
+)
+{
+	match color_texture_apply_mode
+	{
+		ColorTextureApplyMode::SingleColor =>
+		{
+			make_texture_with_normals_of_wave_field_impl::<COLOR_TEXTURE_APPLY_MODE_SINGLE_COLOR>(
+				size,
+				wave_field,
+				out_texture,
+				base_color,
+				base_roughness,
+				color_image_pixels,
+			)
+		},
+		ColorTextureApplyMode::SourceTexture =>
+		{
+			make_texture_with_normals_of_wave_field_impl::<COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE>(
+				size,
+				wave_field,
+				out_texture,
+				base_color,
+				base_roughness,
+				color_image_pixels,
+			)
+		},
+	}
+}
+
+const COLOR_TEXTURE_APPLY_MODE_SINGLE_COLOR: u32 = 0;
+const COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE: u32 = 1;
+
+fn make_texture_with_normals_of_wave_field_impl<const COLOR_TEXTURE_APPLY_MODE: u32>(
+	size: [u32; 2],
+	wave_field: &[WaveFieldElement],
+	out_texture: &mut Texture,
+	base_color: Color32,
+	base_roughness: f32,
+	color_image_pixels: &[Color32],
 )
 {
 	out_texture.has_non_one_roughness = base_roughness < 1.0;
@@ -369,7 +429,21 @@ fn make_texture_with_normals_of_wave_field(
 		.pixels
 		.resize((size[0] * size[1]) as usize, TextureElement::default());
 
-	let mut gen_func = |offset, offset_x_minus_one, offset_x_plus_one, offset_y_minus_one, offset_y_plus_one| unsafe {
+	let mut gen_func = |offset, offset_x_minus_one, offset_x_plus_one, offset_y_minus_one, offset_y_plus_one, x, y| unsafe {
+		let diffuse = if COLOR_TEXTURE_APPLY_MODE == COLOR_TEXTURE_APPLY_MODE_SINGLE_COLOR
+		{
+			base_color
+		}
+		else if COLOR_TEXTURE_APPLY_MODE == COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE
+		{
+			debug_only_checked_fetch(color_image_pixels, offset as usize)
+		}
+		else
+		{
+			// TODO - perform fect with deformation.
+			debug_only_checked_fetch(color_image_pixels, (x + y * size[0]) as usize)
+		};
+
 		let val_x_minus = debug_only_checked_fetch(wave_field, offset_x_minus_one as usize);
 		let val_x_plus = debug_only_checked_fetch(wave_field, offset_x_plus_one as usize);
 		let val_y_minus = debug_only_checked_fetch(wave_field, offset_y_minus_one as usize);
@@ -378,17 +452,19 @@ fn make_texture_with_normals_of_wave_field(
 		let dx = val_x_plus - val_x_minus;
 		let dy = val_y_plus - val_y_minus;
 		let normal = Vec3f::new(dx, dy, 1.0);
+		let normal_normalized = normal.normalize();
 
 		// TODO - perform fast normalization.
 		let result_texel = TextureElement {
-			diffuse: base_color,
-			packed_normal_roughness: PackedNormalRoughness::pack(&normal.normalize(), base_roughness),
+			diffuse,
+			packed_normal_roughness: PackedNormalRoughness::pack(&normal_normalized, base_roughness),
 		};
 		debug_only_checked_write(&mut out_texture.pixels, offset as usize, result_texel);
 	};
 
 	// Special case - upper border.
 	{
+		let y = 0;
 		let y_minus_one_offset = (size[1] - 1) * size[0];
 
 		let line_start = 0;
@@ -402,11 +478,22 @@ fn make_texture_with_normals_of_wave_field(
 			line_start_plus_one,
 			line_start + y_minus_one_offset,
 			line_start + size[0],
+			0,
+			y,
 		);
 
-		for x in line_start_plus_one .. line_end_minus_one
+		for offset in line_start_plus_one .. line_end_minus_one
 		{
-			gen_func(x, x - 1, x + 1, x + y_minus_one_offset, x + size[0]);
+			let x = offset - line_start;
+			gen_func(
+				offset,
+				offset - 1,
+				offset + 1,
+				offset + y_minus_one_offset,
+				offset + size[0],
+				x,
+				y,
+			);
 		}
 
 		// Special case - wrap around right border.
@@ -416,6 +503,8 @@ fn make_texture_with_normals_of_wave_field(
 			line_start,
 			line_end_minus_one + y_minus_one_offset,
 			line_end_minus_one + size[0],
+			size[0] - 1,
+			y,
 		);
 	}
 
@@ -432,11 +521,14 @@ fn make_texture_with_normals_of_wave_field(
 			line_start_plus_one,
 			line_start - size[0],
 			line_start + size[0],
+			0,
+			y,
 		);
 
-		for x in line_start_plus_one .. line_end_minus_one
+		for offset in line_start_plus_one .. line_end_minus_one
 		{
-			gen_func(x, x - 1, x + 1, x - size[0], x + size[0]);
+			let x = offset - line_start;
+			gen_func(offset, offset - 1, offset + 1, offset - size[0], offset + size[0], x, y);
 		}
 
 		// Special case - wrap around right border.
@@ -446,12 +538,15 @@ fn make_texture_with_normals_of_wave_field(
 			line_start,
 			line_end_minus_one - size[0],
 			line_end_minus_one + size[0],
+			size[0] - 1,
+			y,
 		);
 	}
 
 	// Special case - lower border.
 	{
-		let y_plus_one_offset = (size[1] - 1) * size[0];
+		let y = size[1] - 1;
+		let y_plus_one_offset = y * size[0];
 
 		let line_start = (size[1] - 1) * size[0];
 		let line_start_plus_one = line_start + 1;
@@ -464,11 +559,22 @@ fn make_texture_with_normals_of_wave_field(
 			line_start_plus_one,
 			line_start - size[0],
 			line_start - y_plus_one_offset,
+			0,
+			y,
 		);
 
-		for x in line_start_plus_one .. line_end_minus_one
+		for offset in line_start_plus_one .. line_end_minus_one
 		{
-			gen_func(x, x - 1, x + 1, x - size[0], x - y_plus_one_offset);
+			let x = offset - line_start;
+			gen_func(
+				offset,
+				offset - 1,
+				offset + 1,
+				offset - size[0],
+				offset - y_plus_one_offset,
+				x,
+				y,
+			);
 		}
 
 		// Special case - wrap around right border.
@@ -478,6 +584,16 @@ fn make_texture_with_normals_of_wave_field(
 			line_start,
 			line_end_minus_one - size[0],
 			line_end_minus_one - y_plus_one_offset,
+			size[0] - 1,
+			y,
 		);
+	}
+}
+
+fn extract_color_image_from_texture(texture: &Texture) -> Image
+{
+	Image {
+		size: texture.size,
+		pixels: texture.pixels.iter().map(|t| t.diffuse).collect(),
 	}
 }
