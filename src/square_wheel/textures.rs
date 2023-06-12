@@ -339,17 +339,15 @@ pub fn build_texture_mip(mip: &mut Texture, prev_mip: &Texture)
 			let (p10_normal, p10_roughness) = p10.packed_normal_roughness.unpack();
 			let (p11_normal, p11_roughness) = p11.packed_normal_roughness.unpack();
 
-			// TODO - optimise this, avoid too much square roots calculation, try to use fast inverse square root.
 			let normals_sum = p00_normal + p01_normal + p10_normal + p11_normal;
-			let normals_lens_sum =
-				(p00_normal.magnitude() + p01_normal.magnitude() + p10_normal.magnitude() + p11_normal.magnitude())
-					.max(0.000001);
+			// TODO - try to use fast inverse square root.
 			let normals_sum_len = normals_sum.magnitude().max(0.000001);
 
 			let dst_normal = normals_sum / normals_sum_len;
 
 			// Increase roughness by adding deviation of normal.
-			let half_normal_deviation_cos = normals_sum_len / normals_lens_sum;
+			// Since all normals are normalized, sum of lengths is 4.
+			let half_normal_deviation_cos = normals_sum_len * 0.25;
 			const MIN_HALF_NORMAL_DEVIATION_COS: f32 = 0.5;
 			let normal_deviation = (1.0 - half_normal_deviation_cos) / (1.0 - MIN_HALF_NORMAL_DEVIATION_COS);
 
