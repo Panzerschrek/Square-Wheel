@@ -108,6 +108,22 @@ impl GenerativeTextureEffectWater
 						}
 					}
 				},
+				WaveSource::PeriodicDroplet {
+					center,
+					frequency,
+					phase,
+					amplitude,
+				} =>
+				{
+					// TODO - perform wave field modification exactly once per period.
+					let sin_value = (fixed_time * frequency * std::f32::consts::TAU + phase).sin();
+					if sin_value >= 0.9
+					{
+						let spot_coord =
+							((center[0] & size_mask[0]) + ((center[1] & size_mask[1]) << v_shift)) as usize;
+						self.wave_field[spot_coord] = -*amplitude; // Minus because this is a droplet.
+					}
+				},
 			}
 		}
 

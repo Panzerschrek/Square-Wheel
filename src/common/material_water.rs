@@ -50,6 +50,19 @@ pub enum WaveSource
 		#[serde(default)]
 		offset: f32,
 	},
+	PeriodicDroplet
+	{
+		center: [u32; 2],
+
+		#[serde(default = "default_one")]
+		frequency: f32,
+
+		#[serde(default)]
+		phase: f32,
+
+		#[serde(default = "default_one")]
+		amplitude: f32,
+	},
 }
 
 fn default_fluidity() -> f32
