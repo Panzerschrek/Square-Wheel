@@ -233,6 +233,8 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 			last_mip_texel.packed_normal_roughness.unpack_roughness(),
 		);
 
+		out_texture_data.texture[0].is_metal = texture_data.material.is_metal;
+
 		// Generate mips.
 		// TODO - maybe reduce frequency of mips update?
 		for i in 1 .. NUM_MIPS
