@@ -1,5 +1,5 @@
 use super::{fast_math::*, map_materials_processor_structs::*, textures::*};
-use crate::common::{color::*, material_water::*, math_types::*};
+use crate::common::{color::*, fixed_math::*, material_water::*, math_types::*};
 
 pub struct GenerativeTextureEffectWater
 {
@@ -53,9 +53,60 @@ impl GenerativeTextureEffectWater
 					offset,
 				} =>
 				{
-					let spot_coord = ((center[0] & size_mask[0]) + ((center[1] & size_mask[1]) << v_shift)) as usize;
-					self.wave_field[spot_coord] =
+					let field_value =
 						(fixed_time * frequency * std::f32::consts::TAU + phase).sin() * amplitude + offset;
+					let spot_coord = ((center[0] & size_mask[0]) + ((center[1] & size_mask[1]) << v_shift)) as usize;
+					self.wave_field[spot_coord] = field_value;
+				},
+				WaveSource::WavyLine {
+					points,
+					frequency,
+					phase,
+					amplitude,
+					offset,
+				} =>
+				{
+					let field_value =
+						(fixed_time * frequency * std::f32::consts::TAU + phase).sin() * amplitude + offset;
+
+					// Perform simple line reasterization (with integer coords of points).
+					let mut points = *points;
+					let abs_dx = ((points[0][0] as i32) - (points[1][0] as i32)).abs();
+					let abs_dy = ((points[0][1] as i32) - (points[1][1] as i32)).abs();
+					if abs_dx >= abs_dy
+					{
+						if points[0][0] > points[1][0]
+						{
+							points.swap(0, 1);
+						}
+						let y_step = int_to_fixed16((points[1][1] as i32) - (points[0][1] as i32)) / abs_dx;
+						let mut y_fract = int_to_fixed16(points[0][1] as i32);
+						for x_offset in 0 ..= abs_dx as i32
+						{
+							let x = (points[0][0] as i32) + x_offset;
+							let y = fixed16_round_to_int(y_fract);
+							y_fract += y_step;
+							self.wave_field
+								[((x as u32 & size_mask[0]) + ((y as u32 & size_mask[1]) << v_shift)) as usize] = field_value;
+						}
+					}
+					else
+					{
+						if points[0][1] > points[1][1]
+						{
+							points.swap(0, 1);
+						}
+						let x_step = int_to_fixed16((points[1][0] as i32) - (points[0][0] as i32)) / abs_dy;
+						let mut x_fract = int_to_fixed16(points[0][0] as i32);
+						for y_offset in 1 ..= abs_dy as i32
+						{
+							let y = (points[0][1] as i32) + y_offset;
+							let x = fixed16_round_to_int(x_fract);
+							x_fract += x_step;
+							self.wave_field
+								[((x as u32 & size_mask[0]) + ((y as u32 & size_mask[1]) << v_shift)) as usize] = field_value;
+						}
+					}
 				},
 			}
 		}

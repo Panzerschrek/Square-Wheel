@@ -16,10 +16,27 @@ pub struct WaterEffect
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum WaveSource
 {
-	/// Produce sinusoidal vawe at given point.
+	/// Produce sinusoidal wave at given point.
 	WavySpot
 	{
 		center: [u32; 2],
+
+		#[serde(default = "default_one")]
+		frequency: f32,
+
+		#[serde(default)]
+		phase: f32,
+
+		#[serde(default = "default_one")]
+		amplitude: f32,
+
+		#[serde(default)]
+		offset: f32,
+	},
+	/// Produce sinusoidal wave along given line.
+	WavyLine
+	{
+		points: [[u32; 2]; 2],
 
 		#[serde(default = "default_one")]
 		frequency: f32,
