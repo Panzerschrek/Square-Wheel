@@ -75,6 +75,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 
 		// Generate texture with normals based on wave field.
 		// TODO - support other kinds of textures.
+		// TODO - move base color/roughness into config.
 		make_texture_with_normals_of_wave_field(
 			size,
 			dst_field,
@@ -222,32 +223,115 @@ fn make_texture_with_normals_of_wave_field(
 		.pixels
 		.resize((size[0] * size[1]) as usize, TextureElement::default());
 
-	// TODO -handle corner cases.
+	let mut gen_func = |offset, offset_x_minus_one, offset_x_plus_one, offset_y_minus_one, offset_y_plus_one| unsafe {
+		let val_x_minus = debug_only_checked_fetch(wave_field, offset_x_minus_one as usize);
+		let val_x_plus = debug_only_checked_fetch(wave_field, offset_x_plus_one as usize);
+		let val_y_minus = debug_only_checked_fetch(wave_field, offset_y_minus_one as usize);
+		let val_y_plus = debug_only_checked_fetch(wave_field, offset_y_plus_one as usize);
+
+		let dx = val_x_plus - val_x_minus;
+		let dy = val_y_plus - val_y_minus;
+		let normal = Vec3f::new(dx, dy, 1.0);
+
+		// TODO - perform fast normalization.
+		let result_texel = TextureElement {
+			diffuse: base_color,
+			packed_normal_roughness: PackedNormalRoughness::pack(&normal.normalize(), base_roughness),
+		};
+		debug_only_checked_write(&mut out_texture.pixels, offset as usize, result_texel);
+	};
+
+	// Special case - upper border.
+	{
+		let y_minus_one_offset = (size[1] - 1) * size[0];
+
+		let line_start = 0;
+		let line_start_plus_one = line_start + 1;
+		let line_end_minus_one = line_start + size[0] - 1;
+
+		// Special case - wrap around left border.
+		gen_func(
+			line_start,
+			line_end_minus_one,
+			line_start_plus_one,
+			line_start + y_minus_one_offset,
+			line_start + size[0],
+		);
+
+		for x in line_start_plus_one .. line_end_minus_one
+		{
+			gen_func(x, x - 1, x + 1, x + y_minus_one_offset, x + size[0]);
+		}
+
+		// Special case - wrap around right border.
+		gen_func(
+			line_end_minus_one,
+			line_end_minus_one - 1,
+			line_start,
+			line_end_minus_one + y_minus_one_offset,
+			line_end_minus_one + size[0],
+		);
+	}
+
 	for y in 1 .. size[1] - 1
 	{
 		let line_start = y * size[0];
 		let line_start_plus_one = line_start + 1;
 		let line_end_minus_one = line_start + size[0] - 1;
 
+		// Special case - wrap around left border.
+		gen_func(
+			line_start,
+			line_end_minus_one,
+			line_start_plus_one,
+			line_start - size[0],
+			line_start + size[0],
+		);
+
 		for x in line_start_plus_one .. line_end_minus_one
 		{
-			unsafe {
-				let val_x_minus = debug_only_checked_fetch(wave_field, (x - 1) as usize);
-				let val_x_plus = debug_only_checked_fetch(wave_field, (x + 1) as usize);
-				let val_y_minus = debug_only_checked_fetch(wave_field, (x - size[0]) as usize);
-				let val_y_plus = debug_only_checked_fetch(wave_field, (x + size[0]) as usize);
-
-				let dx = val_x_plus - val_x_minus;
-				let dy = val_y_plus - val_y_minus;
-				let normal = Vec3f::new(dx, dy, 1.0);
-
-				// TODO - perform fast normalization.
-				let result_texel = TextureElement {
-					diffuse: base_color,
-					packed_normal_roughness: PackedNormalRoughness::pack(&normal.normalize(), base_roughness),
-				};
-				debug_only_checked_write(&mut out_texture.pixels, x as usize, result_texel);
-			}
+			gen_func(x, x - 1, x + 1, x - size[0], x + size[0]);
 		}
+
+		// Special case - wrap around right border.
+		gen_func(
+			line_end_minus_one,
+			line_end_minus_one - 1,
+			line_start,
+			line_end_minus_one - size[0],
+			line_end_minus_one + size[0],
+		);
+	}
+
+	// Special case - lower border.
+	{
+		let y_plus_one_offset = (size[1] - 1) * size[0];
+
+		let line_start = (size[1] - 1) * size[0];
+		let line_start_plus_one = line_start + 1;
+		let line_end_minus_one = line_start + size[0] - 1;
+
+		// Special case - wrap around left border.
+		gen_func(
+			line_start,
+			line_end_minus_one,
+			line_start_plus_one,
+			line_start - size[0],
+			line_start - y_plus_one_offset,
+		);
+
+		for x in line_start_plus_one .. line_end_minus_one
+		{
+			gen_func(x, x - 1, x + 1, x - size[0], x - y_plus_one_offset);
+		}
+
+		// Special case - wrap around right border.
+		gen_func(
+			line_end_minus_one,
+			line_end_minus_one - 1,
+			line_start,
+			line_end_minus_one - size[0],
+			line_end_minus_one - y_plus_one_offset,
+		);
 	}
 }
