@@ -4,11 +4,14 @@ use rand::{Rng, RngCore, SeedableRng};
 
 pub struct GenerativeTextureEffectWater
 {
+	// Corrected config value.
+	update_frequency: f32,
 	water_effect: WaterEffect,
 	wave_field: Vec<WaveFieldElement>,
 	wave_field_old: Vec<WaveFieldElement>,
 	rand_engine: RandEngine,
-	frame: u32,
+	update_step: u32,
+	prev_update_time_s: f32,
 }
 
 impl GenerativeTextureEffectWater
@@ -23,17 +26,21 @@ impl GenerativeTextureEffectWater
 		}
 
 		Self {
+			update_frequency: water_effect.update_frequency.max(1.0).min(200.0),
 			water_effect,
 			wave_field: vec![0.0; size],
 			wave_field_old: vec![0.0; size],
 			// Initialize random engine generator with good, but deterministic value.
 			rand_engine: RandEngine::seed_from_u64(0b1001100000111010100101010101010111000111010110100101111001010101),
-			frame: 0,
+			update_step: 0,
+			prev_update_time_s: 0.0,
 		}
 	}
 
 	fn step_update_wave_field(&mut self)
 	{
+		self.update_step += 1;
+
 		let size = [
 			1 << self.water_effect.resolution_log2[0],
 			1 << self.water_effect.resolution_log2[1],
@@ -41,8 +48,7 @@ impl GenerativeTextureEffectWater
 		let size_mask = [size[0] - 1, size[1] - 1];
 		let v_shift = self.water_effect.resolution_log2[1];
 
-		// TODO - setup update frequency.
-		let fixed_time = (self.frame as f32) / 60.0;
+		let time_s = (self.update_step as f32) / self.update_frequency;
 
 		// Add wave sources.
 		for wave_source in &self.water_effect.wave_sources
@@ -57,8 +63,7 @@ impl GenerativeTextureEffectWater
 					offset,
 				} =>
 				{
-					let field_value =
-						(fixed_time * frequency * std::f32::consts::TAU + phase).sin() * amplitude + offset;
+					let field_value = (time_s * frequency * std::f32::consts::TAU + phase).sin() * amplitude + offset;
 					let spot_coord = ((center[0] & size_mask[0]) + ((center[1] & size_mask[1]) << v_shift)) as usize;
 					self.wave_field[spot_coord] = field_value;
 				},
@@ -70,8 +75,7 @@ impl GenerativeTextureEffectWater
 					offset,
 				} =>
 				{
-					let field_value =
-						(fixed_time * frequency * std::f32::consts::TAU + phase).sin() * amplitude + offset;
+					let field_value = (time_s * frequency * std::f32::consts::TAU + phase).sin() * amplitude + offset;
 
 					// Perform simple line reasterization (with integer coords of points).
 					let mut points = *points;
@@ -120,7 +124,7 @@ impl GenerativeTextureEffectWater
 				} =>
 				{
 					// TODO - perform wave field modification exactly once per period.
-					let sin_value = (fixed_time * frequency * std::f32::consts::TAU + phase).sin();
+					let sin_value = (time_s * frequency * std::f32::consts::TAU + phase).sin();
 					if sin_value >= 0.9
 					{
 						let spot_coord =
@@ -193,24 +197,36 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 		texture_data: &MapTextureData,
 		_all_textures_data: &[MapTextureData],
 		_textures_mapping_table: &[TextureMappingElement],
-		_current_time_s: f32,
+		current_time_s: f32,
 	)
 	{
-		// TODO - use fixed frequency.
-		self.frame += 1;
-		self.step_update_wave_field();
+		// Wave field update works in fixed step.
+		// Perform 0 or more steps, but avoid performing too much steps (large field size, debug build).
+		let num_update_steps = ((current_time_s * self.update_frequency) as i32 -
+			(self.prev_update_time_s * self.update_frequency) as i32)
+			.max(0)
+			.min(10);
 
-		let size = [
-			1 << self.water_effect.resolution_log2[0],
-			1 << self.water_effect.resolution_log2[1],
-		];
+		self.prev_update_time_s = current_time_s;
+
+		if num_update_steps == 0
+		{
+			return;
+		}
+
+		for _i in 0 .. num_update_steps
+		{
+			self.step_update_wave_field();
+		}
 
 		// Generate texture with normals based on wave field.
 		// TODO - support other kinds of textures.
-
 		let last_mip_texel = &texture_data.texture[MAX_MIP].pixels[0];
 		make_texture_with_normals_of_wave_field(
-			size,
+			[
+				1 << self.water_effect.resolution_log2[0],
+				1 << self.water_effect.resolution_log2[1],
+			],
 			&self.wave_field,
 			&mut out_texture_data.texture[0],
 			last_mip_texel.diffuse,

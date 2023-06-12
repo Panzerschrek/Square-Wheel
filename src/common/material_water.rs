@@ -5,6 +5,11 @@ pub struct WaterEffect
 {
 	pub resolution_log2: [u32; 2],
 
+	/// Number of update steps, performed per second.
+	/// Greater frequency - faster waves but slower computation.
+	#[serde(default = "default_update_frequency")]
+	pub update_frequency: f32,
+
 	/// Greater value - less waves attenuation.
 	/// attenuation = 1.0 - 1.0 / fluidity
 	#[serde(default = "default_fluidity")]
@@ -85,4 +90,9 @@ fn default_fluidity() -> f32
 fn default_one() -> f32
 {
 	1.0
+}
+
+fn default_update_frequency() -> f32
+{
+	30.0
 }
