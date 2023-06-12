@@ -39,7 +39,7 @@ impl GenerativeTextureEffectWater
 		let fixed_time = (self.frame as f32) / 60.0;
 
 		// Add test emitter.
-		let spot_value = (fixed_time * 24.0).sin() * 2.0;
+		let spot_value = (fixed_time * 24.0).sin() * 4.0;
 		let spot_coord = (size[0] / 2 + size[1] / 2 * size[0]) as usize;
 		self.wave_field[spot_coord] = spot_value;
 
@@ -88,14 +88,12 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 			last_mip_texel.packed_normal_roughness.unpack_roughness(),
 		);
 
-		// TODO - generate mips. Now just fill with stub.
-		for mip in 1 .. NUM_MIPS
+		// Generate mips.
+		// TODO - maybe reduce frequency of mips update?
+		for i in 1 .. NUM_MIPS
 		{
-			if out_texture_data.texture[mip].pixels.is_empty()
-			{
-				out_texture_data.texture[mip] =
-					super::textures::make_texture(crate::common::image::make_stub(), None, 0.0, None, false);
-			}
+			let (s0, s1) = out_texture_data.texture.split_at_mut(i);
+			build_texture_mip(&mut s1[0], &s0[i - 1]);
 		}
 	}
 }
