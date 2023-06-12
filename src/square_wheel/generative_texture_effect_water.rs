@@ -54,6 +54,17 @@ impl GenerativeTextureEffectWater
 		let time_s = (self.update_step as f32) / self.update_frequency;
 
 		// Add wave sources.
+
+		let wave_field = &mut self.wave_field;
+		let wave_field_old = &mut self.wave_field_old;
+		let mut add_point_value = |x, y, value: f32| {
+			let address = ((x & size_mask[0]) + ((y & size_mask[1]) << v_shift)) as usize;
+			// Adding (not setting) two values in antiphaze produces good result.
+			// With such approach wave center doesn't look so pointy.
+			wave_field[address] += value;
+			wave_field_old[address] -= value;
+		};
+
 		for wave_source in &self.water_effect.wave_sources
 		{
 			match wave_source
@@ -66,9 +77,9 @@ impl GenerativeTextureEffectWater
 					offset,
 				} =>
 				{
-					let field_value = (time_s * frequency * std::f32::consts::TAU + phase).sin() * amplitude + offset;
-					let spot_coord = ((center[0] & size_mask[0]) + ((center[1] & size_mask[1]) << v_shift)) as usize;
-					self.wave_field[spot_coord] = field_value;
+					let field_value =
+						(time_s * frequency * std::f32::consts::TAU + phase).sin() * amplitude * frequency + offset;
+					add_point_value(center[0], center[1], field_value);
 				},
 				WaveSource::WavyLine {
 					points,
@@ -78,7 +89,8 @@ impl GenerativeTextureEffectWater
 					offset,
 				} =>
 				{
-					let field_value = (time_s * frequency * std::f32::consts::TAU + phase).sin() * amplitude + offset;
+					let field_value =
+						(time_s * frequency * std::f32::consts::TAU + phase).sin() * amplitude * frequency + offset;
 
 					// Perform simple line reasterization (with integer coords of points).
 					let mut points = *points;
@@ -97,8 +109,7 @@ impl GenerativeTextureEffectWater
 							let x = (points[0][0] as i32) + x_offset;
 							let y = fixed16_round_to_int(y_fract);
 							y_fract += y_step;
-							self.wave_field
-								[((x as u32 & size_mask[0]) + ((y as u32 & size_mask[1]) << v_shift)) as usize] = field_value;
+							add_point_value(x as u32, y as u32, field_value);
 						}
 					}
 					else
@@ -114,8 +125,7 @@ impl GenerativeTextureEffectWater
 							let y = (points[0][1] as i32) + y_offset;
 							let x = fixed16_round_to_int(x_fract);
 							x_fract += x_step;
-							self.wave_field
-								[((x as u32 & size_mask[0]) + ((y as u32 & size_mask[1]) << v_shift)) as usize] = field_value;
+							add_point_value(x as u32, y as u32, field_value);
 						}
 					}
 				},
@@ -130,11 +140,7 @@ impl GenerativeTextureEffectWater
 					let phase_int = (self.update_frequency / frequency * phase) as u32;
 					if (self.update_step + phase_int) % inv_frequency_int == 0
 					{
-						let spot_coord =
-							((center[0] & size_mask[0]) + ((center[1] & size_mask[1]) << v_shift)) as usize;
-						let field_value = -*amplitude; // Minus because this is a droplet.
-						self.wave_field[spot_coord] = field_value;
-						self.wave_field_old[spot_coord] = -field_value;
+						add_point_value(center[0], center[1], *amplitude);
 					}
 				},
 				WaveSource::Rain {
@@ -153,24 +159,16 @@ impl GenerativeTextureEffectWater
 							let (dx, dy) = (angle.cos() * dist, angle.sin() * dist);
 
 							(
-								(((center[0] as i32) + (dx as i32)) as u32) & size_mask[0],
-								(((center[1] as i32) + (dy as i32)) as u32) & size_mask[1],
+								((center[0] as i32) + (dx as i32)) as u32,
+								((center[1] as i32) + (dy as i32)) as u32,
 							)
 						}
 						else
 						{
-							(
-								self.rand_engine.next_u32() & size_mask[0],
-								self.rand_engine.next_u32() & size_mask[1],
-							)
+							(self.rand_engine.next_u32(), self.rand_engine.next_u32())
 						};
 
-						let spot_coord = (x + (y << v_shift)) as usize;
-						let field_value = -*amplitude; // Minus because this is a droplet.
-
-						// TODO - such random droplets looks ugly. Maybe modify wave field more smoothly?
-						self.wave_field[spot_coord] = field_value;
-						self.wave_field_old[spot_coord] = -field_value;
+						add_point_value(x, y, *amplitude);
 					}
 				},
 			}
