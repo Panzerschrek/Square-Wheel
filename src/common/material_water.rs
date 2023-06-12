@@ -24,8 +24,12 @@ pub struct WaterEffect
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
 pub enum ColorTextureApplyMode
 {
+	/// Use single color from source texture.
 	SingleColor,
+	/// Use source texture as is.
 	SourceTexture,
+	/// Deform source texture, based on calculated water normals.
+	SourceTextureNormalDeformed,
 }
 
 impl Default for ColorTextureApplyMode

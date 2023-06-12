@@ -407,11 +407,23 @@ fn make_texture_with_normals_of_wave_field(
 				color_image_pixels,
 			)
 		},
+		ColorTextureApplyMode::SourceTextureNormalDeformed =>
+		{
+			make_texture_with_normals_of_wave_field_impl::<COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED>(
+				size,
+				wave_field,
+				out_texture,
+				base_color,
+				base_roughness,
+				color_image_pixels,
+			)
+		},
 	}
 }
 
 const COLOR_TEXTURE_APPLY_MODE_SINGLE_COLOR: u32 = 0;
 const COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE: u32 = 1;
+const COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED: u32 = 2;
 
 fn make_texture_with_normals_of_wave_field_impl<const COLOR_TEXTURE_APPLY_MODE: u32>(
 	size: [u32; 2],
@@ -422,6 +434,9 @@ fn make_texture_with_normals_of_wave_field_impl<const COLOR_TEXTURE_APPLY_MODE: 
 	color_image_pixels: &[Color32],
 )
 {
+	let size_mask = [size[0] - 1, size[1] - 1];
+	let tc_deform_scale = 16.0; // TODO - read from config.
+
 	out_texture.has_non_one_roughness = base_roughness < 1.0;
 	out_texture.has_normal_map = true;
 	out_texture.size = size;
@@ -430,20 +445,6 @@ fn make_texture_with_normals_of_wave_field_impl<const COLOR_TEXTURE_APPLY_MODE: 
 		.resize((size[0] * size[1]) as usize, TextureElement::default());
 
 	let mut gen_func = |offset, offset_x_minus_one, offset_x_plus_one, offset_y_minus_one, offset_y_plus_one, x, y| unsafe {
-		let diffuse = if COLOR_TEXTURE_APPLY_MODE == COLOR_TEXTURE_APPLY_MODE_SINGLE_COLOR
-		{
-			base_color
-		}
-		else if COLOR_TEXTURE_APPLY_MODE == COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE
-		{
-			debug_only_checked_fetch(color_image_pixels, offset as usize)
-		}
-		else
-		{
-			// TODO - perform fect with deformation.
-			debug_only_checked_fetch(color_image_pixels, (x + y * size[0]) as usize)
-		};
-
 		let val_x_minus = debug_only_checked_fetch(wave_field, offset_x_minus_one as usize);
 		let val_x_plus = debug_only_checked_fetch(wave_field, offset_x_plus_one as usize);
 		let val_y_minus = debug_only_checked_fetch(wave_field, offset_y_minus_one as usize);
@@ -452,9 +453,24 @@ fn make_texture_with_normals_of_wave_field_impl<const COLOR_TEXTURE_APPLY_MODE: 
 		let dx = val_x_plus - val_x_minus;
 		let dy = val_y_plus - val_y_minus;
 		let normal = Vec3f::new(dx, dy, 1.0);
+		// TODO - perform fast normalization.
 		let normal_normalized = normal.normalize();
 
-		// TODO - perform fast normalization.
+		let diffuse = match COLOR_TEXTURE_APPLY_MODE
+		{
+			COLOR_TEXTURE_APPLY_MODE_SINGLE_COLOR => base_color,
+			COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE => debug_only_checked_fetch(color_image_pixels, offset as usize),
+			COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED =>
+			{
+				let du = (normal_normalized.x * tc_deform_scale) as i32;
+				let dv = (normal_normalized.y * tc_deform_scale) as i32;
+				let u = (((x as i32) + du) as u32) & size_mask[0];
+				let v = (((y as i32) + dv) as u32) & size_mask[1];
+				debug_only_checked_fetch(color_image_pixels, (u + v * size[0]) as usize)
+			},
+			_ => Color32::black(),
+		};
+
 		let result_texel = TextureElement {
 			diffuse,
 			packed_normal_roughness: PackedNormalRoughness::pack(&normal_normalized, base_roughness),
