@@ -30,6 +30,9 @@ pub enum ColorTextureApplyMode
 	SourceTexture,
 	/// Deform source texture, based on calculated water normals.
 	SourceTextureNormalDeformed,
+	/// Deform source texture, based on calculated water normals. Only X component of normal is used.
+	/// Such deformation is faster, than previous, but looks not so good.
+	SourceTextureNormalDeformedX,
 }
 
 impl Default for ColorTextureApplyMode

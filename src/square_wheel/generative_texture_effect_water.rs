@@ -222,8 +222,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 			self.step_update_wave_field();
 		}
 
-		// Generate texture with normals based on wave field.
-		// TODO - support other kinds of textures.
+		// Generate texture (mip0).
 		let size = [
 			1 << self.water_effect.resolution_log2[0],
 			1 << self.water_effect.resolution_log2[1],
@@ -233,7 +232,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 			self.color_image.pixels.is_empty()
 		{
 			// If we apply source texture - extract image itself from it.
-			// It is cache-frendly to work witn 32-bit image rather than with texture containing both color and normals data.
+			// It is cache-frendly to work with 32-bit image rather than with texture containing both color and normal data.
 			self.color_image = extract_color_image_from_texture(&texture_data.texture[0]);
 			if self.color_image.size != size
 			{
@@ -242,7 +241,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 		}
 
 		let last_mip_texel = &texture_data.texture[MAX_MIP].pixels[0];
-		make_texture_with_normals_of_wave_field(
+		make_wavy_texture(
 			self.water_effect.color_texture_apply_mode,
 			size,
 			&self.wave_field,
@@ -373,7 +372,8 @@ fn update_wave_field(size: [u32; 2], attenuation: f32, dst: &mut [WaveFieldEleme
 	}
 }
 
-fn make_texture_with_normals_of_wave_field(
+// Create texture with normal map calculated based on wave field, (possibly) input color texture and (possible) with deformation of color texture.
+fn make_wavy_texture(
 	color_texture_apply_mode: ColorTextureApplyMode,
 	size: [u32; 2],
 	wave_field: &[WaveFieldElement],
@@ -385,31 +385,36 @@ fn make_texture_with_normals_of_wave_field(
 {
 	match color_texture_apply_mode
 	{
-		ColorTextureApplyMode::SingleColor =>
-		{
-			make_texture_with_normals_of_wave_field_impl::<COLOR_TEXTURE_APPLY_MODE_SINGLE_COLOR>(
-				size,
-				wave_field,
-				out_texture,
-				base_color,
-				base_roughness,
-				color_image_pixels,
-			)
-		},
-		ColorTextureApplyMode::SourceTexture =>
-		{
-			make_texture_with_normals_of_wave_field_impl::<COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE>(
-				size,
-				wave_field,
-				out_texture,
-				base_color,
-				base_roughness,
-				color_image_pixels,
-			)
-		},
+		ColorTextureApplyMode::SingleColor => make_wavy_texture_impl::<COLOR_TEXTURE_APPLY_MODE_SINGLE_COLOR>(
+			size,
+			wave_field,
+			out_texture,
+			base_color,
+			base_roughness,
+			color_image_pixels,
+		),
+		ColorTextureApplyMode::SourceTexture => make_wavy_texture_impl::<COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE>(
+			size,
+			wave_field,
+			out_texture,
+			base_color,
+			base_roughness,
+			color_image_pixels,
+		),
 		ColorTextureApplyMode::SourceTextureNormalDeformed =>
 		{
-			make_texture_with_normals_of_wave_field_impl::<COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED>(
+			make_wavy_texture_impl::<COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED>(
+				size,
+				wave_field,
+				out_texture,
+				base_color,
+				base_roughness,
+				color_image_pixels,
+			)
+		},
+		ColorTextureApplyMode::SourceTextureNormalDeformedX =>
+		{
+			make_wavy_texture_impl::<COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED_X>(
 				size,
 				wave_field,
 				out_texture,
@@ -424,8 +429,9 @@ fn make_texture_with_normals_of_wave_field(
 const COLOR_TEXTURE_APPLY_MODE_SINGLE_COLOR: u32 = 0;
 const COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE: u32 = 1;
 const COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED: u32 = 2;
+const COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED_X: u32 = 3;
 
-fn make_texture_with_normals_of_wave_field_impl<const COLOR_TEXTURE_APPLY_MODE: u32>(
+fn make_wavy_texture_impl<const COLOR_TEXTURE_APPLY_MODE: u32>(
 	size: [u32; 2],
 	wave_field: &[WaveFieldElement],
 	out_texture: &mut Texture,
@@ -467,6 +473,13 @@ fn make_texture_with_normals_of_wave_field_impl<const COLOR_TEXTURE_APPLY_MODE: 
 				let u = (((x as i32) + du) as u32) & size_mask[0];
 				let v = (((y as i32) + dv) as u32) & size_mask[1];
 				debug_only_checked_fetch(color_image_pixels, (u + v * size[0]) as usize)
+			},
+			COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED_X =>
+			{
+				// This is more cache friendly way to deform source texture.
+				let du = (normal_normalized.x * tc_deform_scale) as i32;
+				let u = (((x as i32) + du) as u32) & size_mask[0];
+				debug_only_checked_fetch(color_image_pixels, (u + y * size[0]) as usize)
 			},
 			_ => Color32::black(),
 		};
