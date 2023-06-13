@@ -381,42 +381,61 @@ fn make_wavy_texture(
 	color_image_pixels: &[Color32],
 )
 {
+	out_texture.has_non_one_roughness = base_roughness < 1.0;
+	out_texture.has_normal_map = true;
+	out_texture.size = size;
+
+	if out_texture.pixels.is_empty()
+	{
+		out_texture
+			.pixels
+			.resize((size[0] * size[1]) as usize, TextureElement::default());
+
+		// If deformation is not required - fill color once and later just preserve it.
+		if color_texture_apply_mode == ColorTextureApplyMode::SingleColor
+		{
+			for texel in &mut out_texture.pixels
+			{
+				texel.diffuse = base_color;
+			}
+		}
+		if color_texture_apply_mode == ColorTextureApplyMode::SourceTexture
+		{
+			for (texel, src_texel) in out_texture.pixels.iter_mut().zip(color_image_pixels.iter())
+			{
+				texel.diffuse = *src_texel;
+			}
+		}
+	}
+
 	match color_texture_apply_mode
 	{
-		ColorTextureApplyMode::SingleColor => make_wavy_texture_impl::<COLOR_TEXTURE_APPLY_MODE_SINGLE_COLOR>(
-			size,
-			wave_field,
-			out_texture,
-			base_color,
-			base_roughness,
-			color_image_pixels,
-		),
-		ColorTextureApplyMode::SourceTexture => make_wavy_texture_impl::<COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE>(
-			size,
-			wave_field,
-			out_texture,
-			base_color,
-			base_roughness,
-			color_image_pixels,
-		),
-		ColorTextureApplyMode::SourceTextureNormalDeformed =>
+		ColorTextureApplyMode::SingleColor | ColorTextureApplyMode::SourceTexture =>
 		{
-			make_wavy_texture_impl::<COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED>(
+			make_wavy_texture_impl::<WAVY_TEXTURE_COLOR_MODE_NONE>(
 				size,
 				wave_field,
 				out_texture,
-				base_color,
+				base_roughness,
+				color_image_pixels,
+			)
+		},
+		ColorTextureApplyMode::SourceTextureNormalDeformed =>
+		{
+			make_wavy_texture_impl::<WAVY_TEXTURE_COLOR_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED>(
+				size,
+				wave_field,
+				out_texture,
 				base_roughness,
 				color_image_pixels,
 			)
 		},
 		ColorTextureApplyMode::SourceTextureNormalDeformedX =>
 		{
-			make_wavy_texture_impl::<COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED_X>(
+			make_wavy_texture_impl::<WAVY_TEXTURE_COLOR_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED_X>(
 				size,
 				wave_field,
 				out_texture,
-				base_color,
 				base_roughness,
 				color_image_pixels,
 			)
@@ -424,29 +443,20 @@ fn make_wavy_texture(
 	}
 }
 
-const COLOR_TEXTURE_APPLY_MODE_SINGLE_COLOR: u32 = 0;
-const COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE: u32 = 1;
-const COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED: u32 = 2;
-const COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED_X: u32 = 3;
+const WAVY_TEXTURE_COLOR_MODE_NONE: u32 = 0;
+const WAVY_TEXTURE_COLOR_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED: u32 = 1;
+const WAVY_TEXTURE_COLOR_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED_X: u32 = 2;
 
-fn make_wavy_texture_impl<const COLOR_TEXTURE_APPLY_MODE: u32>(
+fn make_wavy_texture_impl<const COLOR_MODE: u32>(
 	size: [u32; 2],
 	wave_field: &[WaveFieldElement],
 	out_texture: &mut Texture,
-	base_color: Color32,
 	base_roughness: f32,
 	color_image_pixels: &[Color32],
 )
 {
 	let size_mask = [size[0] - 1, size[1] - 1];
 	let tc_deform_scale = 16.0; // TODO - read from config.
-
-	out_texture.has_non_one_roughness = base_roughness < 1.0;
-	out_texture.has_normal_map = true;
-	out_texture.size = size;
-	out_texture
-		.pixels
-		.resize((size[0] * size[1]) as usize, TextureElement::default());
 
 	let mut gen_func = |offset, offset_x_minus_one, offset_x_plus_one, offset_y_minus_one, offset_y_plus_one, x, y| unsafe {
 		let val_x_minus = debug_only_checked_fetch(wave_field, offset_x_minus_one as usize);
@@ -460,33 +470,34 @@ fn make_wavy_texture_impl<const COLOR_TEXTURE_APPLY_MODE: u32>(
 		// TODO - perform fast normalization.
 		let normal_normalized = normal.normalize();
 
-		let diffuse = match COLOR_TEXTURE_APPLY_MODE
+		let out_texel = debug_only_checked_access_mut(&mut out_texture.pixels, offset as usize);
+		out_texel.packed_normal_roughness = PackedNormalRoughness::pack(&normal_normalized, base_roughness);
+
+		match COLOR_MODE
 		{
-			COLOR_TEXTURE_APPLY_MODE_SINGLE_COLOR => base_color,
-			COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE => debug_only_checked_fetch(color_image_pixels, offset as usize),
-			COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED =>
+			WAVY_TEXTURE_COLOR_MODE_NONE =>
+			{
+				// Preserve original color of dst texture.
+				// Such approach allows as to avoid reading/writing color texture each time normal map is regenerated.
+			},
+			WAVY_TEXTURE_COLOR_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED =>
 			{
 				let du = (normal_normalized.x * tc_deform_scale) as i32;
 				let dv = (normal_normalized.y * tc_deform_scale) as i32;
 				let u = (((x as i32) + du) as u32) & size_mask[0];
 				let v = (((y as i32) + dv) as u32) & size_mask[1];
-				debug_only_checked_fetch(color_image_pixels, (u + v * size[0]) as usize)
+				out_texel.diffuse = debug_only_checked_fetch(color_image_pixels, (u + v * size[0]) as usize)
 			},
-			COLOR_TEXTURE_APPLY_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED_X =>
+			WAVY_TEXTURE_COLOR_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED_X =>
 			{
 				// This is more cache friendly way to deform source texture.
 				let du = (normal_normalized.x * tc_deform_scale) as i32;
 				let u = (((x as i32) + du) as u32) & size_mask[0];
-				debug_only_checked_fetch(color_image_pixels, (u + y * size[0]) as usize)
+				out_texel.diffuse = debug_only_checked_fetch(color_image_pixels, (u + y * size[0]) as usize)
 			},
-			_ => Color32::black(),
+			_ =>
+			{},
 		};
-
-		let result_texel = TextureElement {
-			diffuse,
-			packed_normal_roughness: PackedNormalRoughness::pack(&normal_normalized, base_roughness),
-		};
-		debug_only_checked_write(&mut out_texture.pixels, offset as usize, result_texel);
 	};
 
 	// Special case - upper border.
