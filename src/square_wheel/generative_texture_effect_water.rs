@@ -192,7 +192,9 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 {
 	fn get_estimated_texel_count(&self, _texture_data: &MapTextureData, _all_textures_data: &[MapTextureData]) -> u32
 	{
-		0 // TODO
+		let base_size = 1 << (self.water_effect.resolution_log2[0] + self.water_effect.resolution_log2[1]);
+		// Count result texture and wave field.
+		base_size * 2
 	}
 
 	fn update(
