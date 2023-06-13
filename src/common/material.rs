@@ -152,6 +152,12 @@ pub enum SpecialMaterialEffect
 	/// Layered animation presense doesn't affect map compiler and lightmaper - like framed animation.
 	LayeredAnimation(LayeredAnimation),
 
+	/// Perform water simulation (via wave field) and create texture based on it.
+	/// Normal map is generated based on the wave field state.
+	/// Normal map of material itself is not used.
+	/// Roughness map is also not used, only roughness material property itself.
+	/// Color image may be used and potentially deformed by the wave field.
+	/// Color image will be resized to size of wave filed (if sizes doen't equal).
 	Water(WaterEffect),
 
 	/// Draw skybox instead of regular texture.

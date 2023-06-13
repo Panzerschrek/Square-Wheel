@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WaterEffect
 {
+	/// It's recommended to use resolution equal to material's diffuse image.
 	pub resolution_log2: [u32; 2],
 
 	/// Number of update steps, performed per second.
@@ -15,9 +16,12 @@ pub struct WaterEffect
 	#[serde(default = "default_fluidity")]
 	pub fluidity: f32,
 
+	/// How color of this texture should be generated.
 	#[serde(default)]
 	pub color_texture_apply_mode: ColorTextureApplyMode,
 
+	/// Sources of wave field distortion.
+	/// Without any source water texture is completely flat and boring.
 	pub wave_sources: Vec<WaveSource>,
 }
 
@@ -26,7 +30,7 @@ pub enum ColorTextureApplyMode
 {
 	/// Use single color from source texture.
 	SingleColor,
-	/// Use source texture as is.
+	/// Use source texture as is. Resize it if its size isn't equal to the wave field size.
 	SourceTexture,
 	/// Deform source texture, based on calculated water normals.
 	SourceTextureNormalDeformed,
@@ -80,6 +84,7 @@ pub enum WaveSource
 		#[serde(default)]
 		offset: f32,
 	},
+	/// Add single droplet at given point with specified frequency.
 	PeriodicDroplet
 	{
 		center: [u32; 2],
@@ -112,6 +117,7 @@ pub enum WaveSource
 		#[serde(default = "default_one")]
 		amplitude: f32,
 	},
+	// TODO - add more source types.
 }
 
 fn default_fluidity() -> f32

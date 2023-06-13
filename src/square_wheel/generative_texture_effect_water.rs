@@ -20,11 +20,14 @@ impl GenerativeTextureEffectWater
 {
 	pub fn new(water_effect: WaterEffect) -> Self
 	{
-		// TODO - use half-size?
 		let size = 1 << (water_effect.resolution_log2[0] + water_effect.resolution_log2[1]);
-		if size == 0
+		if water_effect.resolution_log2[0] < 2 || water_effect.resolution_log2[1] < 2
 		{
-			panic!("Invalid size");
+			panic!("Water texture must have size at least 4x4!");
+		}
+		if size >= (1 << 22)
+		{
+			panic!("Water texture is too big!");
 		}
 
 		Self {
@@ -266,6 +269,11 @@ type WaveFieldElement = f32;
 
 fn update_wave_field(size: [u32; 2], attenuation: f32, dst: &mut [WaveFieldElement], src: &[WaveFieldElement])
 {
+	debug_assert!(size[0] >= 4);
+	debug_assert!(size[1] >= 4);
+	debug_assert!(dst.len() == src.len());
+	debug_assert!(dst.len() == (size[0] * size[1]) as usize);
+
 	let mut update_func = |offset, offset_x_minus_one, offset_x_plus_one, offset_y_minus_one, offset_y_plus_one| unsafe {
 		let sum = debug_only_checked_fetch(src, offset_x_minus_one as usize) +
 			debug_only_checked_fetch(src, offset_x_plus_one as usize) +
@@ -401,6 +409,7 @@ fn make_wavy_texture(
 		}
 		if color_texture_apply_mode == ColorTextureApplyMode::SourceTexture
 		{
+			debug_assert!(color_image_pixels.len() == (size[0] * size[1]) as usize);
 			for (texel, src_texel) in out_texture.pixels.iter_mut().zip(color_image_pixels.iter())
 			{
 				texel.diffuse = *src_texel;
@@ -455,7 +464,13 @@ fn make_wavy_texture_impl<const COLOR_MODE: u32>(
 	color_image_pixels: &[Color32],
 )
 {
+	debug_assert!(size[0] >= 4);
+	debug_assert!(size[1] >= 4);
+	debug_assert!((size[0] & (size[0] - 1)) == 0);
+	debug_assert!((size[1] & (size[1] - 1)) == 0);
+
 	let size_mask = [size[0] - 1, size[1] - 1];
+
 	let tc_deform_scale = 16.0; // TODO - read from config.
 
 	let mut gen_func = |offset, offset_x_minus_one, offset_x_plus_one, offset_y_minus_one, offset_y_plus_one, x, y| unsafe {
