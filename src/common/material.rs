@@ -143,6 +143,7 @@ pub enum SpecialMaterialEffect
 	None,
 
 	/// Use texture turbulence effect.
+	/// Note that texture size must be power of two.
 	Turb(TurbParams),
 
 	/// This is layered-animated material.

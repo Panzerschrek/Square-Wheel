@@ -1,11 +1,10 @@
 use super::{fast_math::*, map_materials_processor_structs::*, textures::*};
-use crate::common::{color::*, material::*};
+use crate::common::material::*;
 
 pub struct GenerativeTextureEffectTurb
 {
 	turb_params: TurbParams,
-	temp_buffer: Vec<TextureElement>,
-	temp_buffer_emissive: Vec<Color32>,
+	temp_buffer: Vec<i32>,
 }
 
 impl GenerativeTextureEffectTurb
@@ -15,7 +14,6 @@ impl GenerativeTextureEffectTurb
 		Self {
 			turb_params,
 			temp_buffer: Vec::new(),
-			temp_buffer_emissive: Vec::new(),
 		}
 	}
 }
@@ -80,7 +78,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectTurb
 					mip_index,
 					&src_mip.pixels,
 					&mut dst_mip.pixels,
-					&mut self.temp_buffer_emissive,
+					&mut self.temp_buffer,
 				);
 			}
 		}
@@ -94,66 +92,46 @@ fn make_turb_distortion<T: Copy + Default>(
 	mip: usize,
 	src_pixels: &[T],
 	dst_pixels: &mut [T],
-	temp_buffer: &mut Vec<T>,
+	temp_buffer: &mut Vec<i32>,
 )
 {
-	// TODO - speed-up this. Use unsafe f32 -> i32 conversion.
-
 	let mip_scale = 1.0 / ((1 << mip) as f32);
 	let amplitude_corrected = mip_scale * turb.amplitude;
 	let frequency_scaled = std::f32::consts::TAU / (turb.wave_length * mip_scale);
 	let time_based_shift = current_time_s * turb.frequency * std::f32::consts::TAU;
 
-	// Shift rows.
-	for y in 0 .. size[1]
+	// Precalculate shifts.
+	temp_buffer.resize(size[0] as usize, 0);
+	for (dst_shift, x) in temp_buffer.iter_mut().zip(0 .. size[0])
 	{
-		let shift =
-			(f32_mul_add(y as f32, frequency_scaled, time_based_shift).sin() * amplitude_corrected).round() as i32;
-
-		let start_offset = (y * size[0]) as usize;
-		let end_offset = ((y + 1) * size[0]) as usize;
-		let src_line = &src_pixels[start_offset .. end_offset];
-		let dst_line = &mut dst_pixels[start_offset .. end_offset];
-
-		let mut src_x = shift.rem_euclid(size[0]);
-		for dst in dst_line
-		{
-			*dst = unsafe { debug_only_checked_fetch(src_line, src_x as usize) };
-			src_x += 1;
-			if src_x == size[0]
-			{
-				src_x = 0;
-			}
-		}
+		// TODO - speed-up this. Use unsafe f32 -> i32 conversion.
+		*dst_shift =
+			(f32_mul_add(x as f32, frequency_scaled, time_based_shift).sin() * amplitude_corrected).round() as i32;
 	}
 
-	// Shift columns.
-	temp_buffer.resize(size[1] as usize, T::default());
+	debug_assert!((size[0] & (size[0] - 1)) == 0);
+	debug_assert!((size[1] & (size[1] - 1)) == 0);
+	let mask = [size[0] - 1, size[1] - 1];
 
-	for x in 0 .. size[0]
+	// Perform copy with shifts along both axes.
+	// This is a fastest way to perform turb transformation.
+	// Other ways, for example with shift along X and that along Y, are significantly slower.
+	for y in 0 .. size[1]
 	{
-		for (temp_dst, y) in temp_buffer.iter_mut().zip(0 .. size[1])
-		{
-			*temp_dst = unsafe { debug_only_checked_fetch(dst_pixels, (x + y * size[0]) as usize) };
-		}
+		let dst_row = &mut dst_pixels[(y * size[0]) as usize .. ((y + 1) * size[0]) as usize];
 
-		let shift =
-			(f32_mul_add(x as f32, frequency_scaled, time_based_shift).sin() * amplitude_corrected).round() as i32;
-
-		let mut src_y = shift.rem_euclid(size[1]);
-		for y in 0 .. size[1]
+		let row_shift = unsafe { debug_only_checked_fetch(temp_buffer, y as usize) };
+		for x in 0 .. size[0]
 		{
 			unsafe {
+				let column_shift = debug_only_checked_fetch(temp_buffer, x as usize);
+				let u = x + row_shift;
+				let v = y + column_shift;
 				debug_only_checked_write(
-					dst_pixels,
-					(x + y * size[0]) as usize,
-					debug_only_checked_fetch(temp_buffer, src_y as usize),
+					dst_row,
+					x as usize,
+					debug_only_checked_fetch(src_pixels, ((u & mask[0]) + (v & mask[1]) * size[0]) as usize),
 				);
-			};
-			src_y += 1;
-			if src_y == size[1]
-			{
-				src_y = 0;
 			}
 		}
 	}
