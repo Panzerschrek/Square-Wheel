@@ -238,14 +238,14 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 			}
 		}
 
-		let last_mip_texel = &texture_data.texture[MAX_MIP].pixels[0];
+		let last_mip_texel_color = texture_data.texture[MAX_MIP].pixels[0].diffuse;
 		make_wavy_texture(
 			self.water_effect.color_texture_apply_mode,
 			size,
 			&self.wave_field,
 			&mut out_texture_data.texture[0],
-			last_mip_texel.diffuse,
-			last_mip_texel.packed_normal_roughness.unpack_roughness(),
+			last_mip_texel_color,
+			texture_data.material.roughness,
 			&self.color_image.pixels,
 		);
 
@@ -377,11 +377,11 @@ fn make_wavy_texture(
 	wave_field: &[WaveFieldElement],
 	out_texture: &mut Texture,
 	base_color: Color32,
-	base_roughness: f32,
+	roughness: f32,
 	color_image_pixels: &[Color32],
 )
 {
-	out_texture.has_non_one_roughness = base_roughness < 1.0;
+	out_texture.has_non_one_roughness = roughness < 1.0;
 	out_texture.has_normal_map = true;
 	out_texture.size = size;
 
@@ -416,7 +416,7 @@ fn make_wavy_texture(
 				size,
 				wave_field,
 				out_texture,
-				base_roughness,
+				roughness,
 				color_image_pixels,
 			)
 		},
@@ -426,7 +426,7 @@ fn make_wavy_texture(
 				size,
 				wave_field,
 				out_texture,
-				base_roughness,
+				roughness,
 				color_image_pixels,
 			)
 		},
@@ -436,7 +436,7 @@ fn make_wavy_texture(
 				size,
 				wave_field,
 				out_texture,
-				base_roughness,
+				roughness,
 				color_image_pixels,
 			)
 		},
@@ -451,7 +451,7 @@ fn make_wavy_texture_impl<const COLOR_MODE: u32>(
 	size: [u32; 2],
 	wave_field: &[WaveFieldElement],
 	out_texture: &mut Texture,
-	base_roughness: f32,
+	roughness: f32,
 	color_image_pixels: &[Color32],
 )
 {
@@ -471,7 +471,7 @@ fn make_wavy_texture_impl<const COLOR_MODE: u32>(
 		let normal_normalized = normal.normalize();
 
 		let out_texel = debug_only_checked_access_mut(&mut out_texture.pixels, offset as usize);
-		out_texel.packed_normal_roughness = PackedNormalRoughness::pack(&normal_normalized, base_roughness);
+		out_texel.packed_normal_roughness = PackedNormalRoughness::pack(&normal_normalized, roughness);
 
 		match COLOR_MODE
 		{
