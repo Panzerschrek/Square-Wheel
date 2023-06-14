@@ -83,7 +83,6 @@ impl MapMaterialsProcessor
 		// Fill internal texture data struct.
 		// Can't use "for" loop here, because range is calculated once, but we need to iterate over all textures, including newly loaded.
 		let mut textures_internal = Vec::with_capacity(textures.len());
-		let mut animated_texture_order = 0;
 		let mut num_animated_texels = 0;
 		let mut i = 0;
 		while i < textures.len()
@@ -119,7 +118,7 @@ impl MapMaterialsProcessor
 				}
 			};
 
-			let mut texture_data_internal = MapTextureDataInternal {
+			let texture_data_internal = MapTextureDataInternal {
 				next_frame_texture_index: framed_animation
 					.map(|a| load_texture_func(&a.next_material_name))
 					.unwrap_or(!0), // Out of bounds index - means no animation
@@ -129,11 +128,6 @@ impl MapMaterialsProcessor
 
 			if let Some(generative_effect) = &texture_data_internal.generative_effect
 			{
-				// Calculate animated textures order.
-				// We need to enumerate only animated texture sequentially in order to perform balanced sparse update.
-				texture_data_internal.animated_texture_order = animated_texture_order;
-				animated_texture_order += 1;
-
 				// Count amount of animated textures texels.
 				num_animated_texels += generative_effect.get_estimated_texel_count(&textures[i], &textures);
 			}
@@ -155,7 +149,7 @@ impl MapMaterialsProcessor
 			};
 		}
 
-		Self {
+		let mut result = Self {
 			app_config,
 			config: config_parsed,
 			textures,
@@ -165,7 +159,11 @@ impl MapMaterialsProcessor
 			skybox_textures_64,
 			num_animated_texels,
 			current_frame: 0,
-		}
+		};
+
+		result.recalculate_update_order();
+
+		result
 	}
 
 	pub fn get_num_animated_texels(&self) -> u32
@@ -393,6 +391,8 @@ impl MapMaterialsProcessor
 	fn synchronize_config(&mut self)
 	{
 		let config_updated = MapMaterialsProcessorConfig::from_app_config(&self.app_config);
+		let animated_textures_update_period_changed =
+			config_updated.animated_textures_update_period != self.config.animated_textures_update_period;
 		self.config = config_updated;
 
 		// Make sure that config values are reasonable.
@@ -411,6 +411,50 @@ impl MapMaterialsProcessor
 		if config_is_dirty
 		{
 			self.config.update_app_config(&self.app_config);
+		}
+
+		if animated_textures_update_period_changed
+		{
+			self.recalculate_update_order();
+		}
+	}
+
+	fn recalculate_update_order(&mut self)
+	{
+		if self.config.animated_textures_update_period == ANIMATIONS_UPDATE_PERIOD_MIN
+		{
+			for texture_data_iternal in &mut self.textures_internal
+			{
+				texture_data_iternal.animated_texture_order = 0;
+			}
+		}
+		else
+		{
+			// If sparse textures update is enabled - calculate order - in which frame which textures will be updates.
+			// Try to calculate order preserving near even destribution of updates in each frame.
+			// This algorithm is not ideal, but relatively good.
+			let mut bin_texels = [0; ANIMATIONS_UPDATE_PERIOD_MAX as usize];
+			for (texture_data, texture_data_iternal) in self.textures.iter().zip(self.textures_internal.iter_mut())
+			{
+				if let Some(generative_effect) = &mut texture_data_iternal.generative_effect
+				{
+					// Select bin with smalles total amount of texels.
+					let mut best_bin = 0;
+					let mut smallest_best_bin_size = 1 << 30;
+					for i in 0 .. self.config.animated_textures_update_period
+					{
+						if bin_texels[i as usize] < smallest_best_bin_size
+						{
+							smallest_best_bin_size = bin_texels[i as usize];
+							best_bin = i;
+						}
+					}
+
+					texture_data_iternal.animated_texture_order = best_bin;
+					bin_texels[best_bin as usize] +=
+						generative_effect.get_estimated_texel_count(texture_data, &self.textures);
+				}
+			}
 		}
 	}
 }
