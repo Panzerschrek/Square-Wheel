@@ -289,17 +289,17 @@ SquareWheel loads all materials from current material directory.
 SquareWheel supports some ways to animate textures.
 
 The simpliest way - use frame-based animation.
-With frame animation texture is replased with another in given amount of time.
+With frame animation texture is replaced with another in given amount of time.
 Such animation is cheap (requires no run-time computations) but may be boring.
 
 Another type of animation - layered animaton.
 Textures with layerd animation are composed of several layers - with blending, shift, modulation.
-Texture is recalculated each time, so, it is recommended to avoid using too many frame-animated textures or using very large textures.
+Texture is recalculated each time, so, it is recommended to avoid using too many frame-animated textures or using very large textures/textures with too many layers.
 
 SquareWheel has also some special animations:
 * "Turb" effect.
  Texture is deformed by sinusoidal waves.
- This looks like effect of water of lava in Quake.
+ This looks like effect of water or lava in Quake.
 * Water texture.
  This texture is based on wave field simulation.
  Normal map is recalculated based on the wave field.

@@ -11,6 +11,7 @@ pub struct GenerativeTextureEffectWater
 	wave_field_old: Vec<WaveFieldElement>,
 	// Used for setting color of result texture.
 	color_image: Image,
+	// Use random for some wave sources.
 	rand_engine: RandEngine,
 	update_step: u32,
 	prev_update_time_s: f32,
@@ -65,7 +66,7 @@ impl GenerativeTextureEffectWater
 			1 << self.water_effect.resolution_log2[1],
 		];
 		let size_mask = [size[0] - 1, size[1] - 1];
-		let v_shift = self.water_effect.resolution_log2[1];
+		let v_shift = self.water_effect.resolution_log2[0];
 
 		let time_s = (self.update_step as f32) / self.update_frequency;
 
@@ -206,7 +207,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 	fn get_estimated_texel_count(&self, _texture_data: &MapTextureData, _all_textures_data: &[MapTextureData]) -> u32
 	{
 		let base_size = 1 << (self.water_effect.resolution_log2[0] + self.water_effect.resolution_log2[1]);
-		// Count result texture and wave field.
+		// Count result texture and wave field buffers.
 		base_size * 2
 	}
 
@@ -282,6 +283,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 // TODO - try to use less memory (16 bit or even 8 bit).
 type WaveFieldElement = f32;
 
+// This function performs one step of wave field simulation.
 fn update_wave_field(size: [u32; 2], attenuation: f32, dst: &mut [WaveFieldElement], src: &[WaveFieldElement])
 {
 	debug_assert!(size[0] >= 4);
@@ -393,7 +395,7 @@ fn update_wave_field(size: [u32; 2], attenuation: f32, dst: &mut [WaveFieldEleme
 	}
 }
 
-// Create texture with normal map calculated based on wave field, (possibly) input color texture and (possible) with deformation of color texture.
+// Create texture with normal map calculated based on wave field, (possible) input color texture and (possible) with deformation of color texture.
 fn make_wavy_texture(
 	color_texture_apply_mode: ColorTextureApplyMode,
 	size: [u32; 2],
@@ -424,7 +426,7 @@ fn make_wavy_texture(
 		}
 		if color_texture_apply_mode == ColorTextureApplyMode::SourceTexture
 		{
-			debug_assert!(color_image_pixels.len() == (size[0] * size[1]) as usize);
+			debug_assert!(color_image_pixels.len() == out_texture.pixels.len());
 			for (texel, src_texel) in out_texture.pixels.iter_mut().zip(color_image_pixels.iter())
 			{
 				texel.diffuse = *src_texel;
@@ -497,7 +499,7 @@ fn make_wavy_texture_impl<const COLOR_MODE: u32>(
 		let dx = val_x_plus - val_x_minus;
 		let dy = val_y_plus - val_y_minus;
 		let normal = Vec3f::new(dx, dy, 1.0);
-		// TODO - perform fast normalization.
+		// TODO - try to use fast inverse square root.
 		let normal_normalized = normal.normalize();
 
 		let out_texel = debug_only_checked_access_mut(&mut out_texture.pixels, offset as usize);
@@ -508,7 +510,7 @@ fn make_wavy_texture_impl<const COLOR_MODE: u32>(
 			WAVY_TEXTURE_COLOR_MODE_NONE =>
 			{
 				// Preserve original color of dst texture.
-				// Such approach allows as to avoid reading/writing color texture each time normal map is regenerated.
+				// Such approach allows us to avoid reading/writing color texture each time when only normal map is regenerated.
 			},
 			WAVY_TEXTURE_COLOR_MODE_SOURCE_TEXTURE_NORMAL_DEFORMED =>
 			{

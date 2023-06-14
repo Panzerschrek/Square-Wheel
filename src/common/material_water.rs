@@ -105,7 +105,7 @@ pub enum WaveSource
 		#[serde(default)]
 		center: [u32; 2],
 
-		/// How often drops are produced (by they are still random).
+		/// How often drops are produced (but they are still random).
 		/// If this value is greater than water effect update frequency - new droplet (but only one) will be emitted each frame.
 		#[serde(default = "default_one")]
 		frequency: f32,
