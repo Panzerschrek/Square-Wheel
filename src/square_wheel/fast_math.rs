@@ -761,13 +761,18 @@ pub unsafe fn debug_only_checked_fetch<T: Copy>(data: &[T], address: usize) -> T
 
 pub unsafe fn debug_only_checked_write<T: Copy>(data: &mut [T], address: usize, value: T)
 {
+	*debug_only_checked_access_mut(data, address) = value;
+}
+
+pub unsafe fn debug_only_checked_access_mut<T>(data: &mut [T], address: usize) -> &mut T
+{
 	#[cfg(debug_assertions)]
 	{
-		data[address] = value
+		&mut data[address]
 	}
 	#[cfg(not(debug_assertions))]
 	{
-		*data.get_unchecked_mut(address) = value
+		data.get_unchecked_mut(address)
 	}
 }
 

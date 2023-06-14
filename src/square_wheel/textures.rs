@@ -161,7 +161,7 @@ pub fn make_texture(
 }
 
 // Resize with simple nearset filter.
-fn resize_image(image: &image::Image, target_size: [u32; 2]) -> image::Image
+pub fn resize_image(image: &image::Image, target_size: [u32; 2]) -> image::Image
 {
 	let mut result = image::Image {
 		size: target_size,
@@ -291,68 +291,74 @@ pub fn build_texture_mips(mip0: Texture) -> TextureWithMips
 	debug_assert!(mip0.size[0] >= (1 << MAX_MIP));
 	debug_assert!(mip0.size[1] >= (1 << MAX_MIP));
 
-	let mut result = TextureWithMips::default();
+	let mut mip1 = Texture::default();
+	build_texture_mip(&mut mip1, &mip0);
+	let mut mip2 = Texture::default();
+	build_texture_mip(&mut mip2, &mip1);
+	let mut mip3 = Texture::default();
+	build_texture_mip(&mut mip3, &mip2);
+	let mut mip4 = Texture::default();
+	build_texture_mip(&mut mip4, &mip3);
 
-	result[0] = mip0;
-	for i in 1 .. NUM_MIPS
+	[mip0, mip1, mip2, mip3, mip4]
+}
+
+// Build mip in-place.
+// Reuse existing pixels storage.
+// Usable for run-time mips update.
+pub fn build_texture_mip(mip: &mut Texture, prev_mip: &Texture)
+{
+	mip.size = [prev_mip.size[0] >> 1, prev_mip.size[1] >> 1];
+	mip.pixels
+		.resize((mip.size[0] * mip.size[1]) as usize, TextureElement::default());
+
+	mip.has_normal_map = prev_mip.has_normal_map;
+	mip.has_non_one_roughness = prev_mip.has_non_one_roughness;
+	mip.is_metal = prev_mip.is_metal;
+
+	let prev_mip_width = prev_mip.size[0] as usize;
+	let mip_width = mip.size[0] as usize;
+	for y in 0 .. mip.size[1] as usize
 	{
-		let prev_mip = &mut result[i - 1];
-		let mut mip = Texture {
-			size: [prev_mip.size[0] >> 1, prev_mip.size[1] >> 1],
-			pixels: Vec::new(),
-			has_normal_map: prev_mip.has_normal_map,
-			has_non_one_roughness: prev_mip.has_non_one_roughness,
-			is_metal: prev_mip.is_metal,
-		};
-
-		mip.pixels = vec![TextureElement::default(); (mip.size[0] * mip.size[1]) as usize];
-
-		let prev_mip_width = prev_mip.size[0] as usize;
-		let mip_width = mip.size[0] as usize;
-		for y in 0 .. mip.size[1] as usize
+		let src_offset0 = (y * 2) * prev_mip_width;
+		let src_offset1 = (y * 2 + 1) * prev_mip_width;
+		for (dst, x) in mip.pixels[y * mip_width .. (y + 1) * mip_width]
+			.iter_mut()
+			.zip(0 .. mip_width)
 		{
-			let src_offset0 = (y * 2) * prev_mip_width;
-			let src_offset1 = (y * 2 + 1) * prev_mip_width;
-			for (dst, x) in mip.pixels[y * mip_width .. (y + 1) * mip_width]
-				.iter_mut()
-				.zip(0 .. mip_width)
-			{
-				let src_x = x * 2;
-				let p00 = prev_mip.pixels[src_x + src_offset0];
-				let p01 = prev_mip.pixels[src_x + src_offset1];
-				let p10 = prev_mip.pixels[src_x + 1 + src_offset0];
-				let p11 = prev_mip.pixels[src_x + 1 + src_offset1];
+			let src_x = x * 2;
+			let p00 = unsafe { debug_only_checked_fetch(&prev_mip.pixels, src_x + src_offset0) };
+			let p01 = unsafe { debug_only_checked_fetch(&prev_mip.pixels, src_x + src_offset1) };
+			let p10 = unsafe { debug_only_checked_fetch(&prev_mip.pixels, src_x + 1 + src_offset0) };
+			let p11 = unsafe { debug_only_checked_fetch(&prev_mip.pixels, src_x + 1 + src_offset1) };
 
-				dst.diffuse = Color32::get_average_4([p00.diffuse, p01.diffuse, p10.diffuse, p11.diffuse]);
+			dst.diffuse = Color32::get_average_4([p00.diffuse, p01.diffuse, p10.diffuse, p11.diffuse]);
 
-				let (p00_normal, p00_roughness) = p00.packed_normal_roughness.unpack();
-				let (p01_normal, p01_roughness) = p01.packed_normal_roughness.unpack();
-				let (p10_normal, p10_roughness) = p10.packed_normal_roughness.unpack();
-				let (p11_normal, p11_roughness) = p11.packed_normal_roughness.unpack();
+			let (p00_normal, p00_roughness) = p00.packed_normal_roughness.unpack();
+			let (p01_normal, p01_roughness) = p01.packed_normal_roughness.unpack();
+			let (p10_normal, p10_roughness) = p10.packed_normal_roughness.unpack();
+			let (p11_normal, p11_roughness) = p11.packed_normal_roughness.unpack();
 
-				let normals_sum = p00_normal + p01_normal + p10_normal + p11_normal;
-				let normals_lens_sum =
-					(p00_normal.magnitude() + p01_normal.magnitude() + p10_normal.magnitude() + p11_normal.magnitude())
-						.max(0.000001);
-				let normals_sum_len = normals_sum.magnitude().max(0.000001);
+			let normals_sum = p00_normal + p01_normal + p10_normal + p11_normal;
+			// TODO - try to use fast inverse square root.
+			let normals_sum_len = normals_sum.magnitude().max(0.000001);
 
-				let dst_normal = normals_sum / normals_sum_len;
+			let dst_normal = normals_sum / normals_sum_len;
 
-				// Increase roughness by adding deviation of normal.
-				let half_normal_deviation_cos = normals_sum_len / normals_lens_sum;
-				const MIN_HALF_NORMAL_DEVIATION_COS: f32 = 0.5;
-				let normal_deviation = (1.0 - half_normal_deviation_cos) / (1.0 - MIN_HALF_NORMAL_DEVIATION_COS);
+			// Increase roughness by adding deviation of normal.
+			// Since all normals are normalized, sum of lengths is 4.
+			let half_normal_deviation_cos = normals_sum_len * 0.25;
+			const MIN_HALF_NORMAL_DEVIATION_COS: f32 = 0.5;
+			let normal_deviation = (1.0 - half_normal_deviation_cos) / (1.0 - MIN_HALF_NORMAL_DEVIATION_COS);
 
-				let average_roughness = (p00_roughness + p01_roughness + p10_roughness + p11_roughness) * 0.25;
-				let dst_roughness = (average_roughness + normal_deviation).max(MIN_VALID_ROUGHNESS).min(1.0);
+			let roughness_sum = p00_roughness + p01_roughness + p10_roughness + p11_roughness;
+			let dst_roughness = f32_mul_add(roughness_sum, 0.25, normal_deviation)
+				.max(MIN_VALID_ROUGHNESS)
+				.min(1.0);
 
-				dst.packed_normal_roughness = PackedNormalRoughness::pack(&dst_normal, dst_roughness);
-			}
+			dst.packed_normal_roughness = PackedNormalRoughness::pack(&dst_normal, dst_roughness);
 		}
-		result[i] = mip;
 	}
-
-	result
 }
 
 pub fn make_texture_lite_mips(mip0: TextureLite) -> TextureLiteWithMips
@@ -410,7 +416,7 @@ pub fn make_texture_lite_mips(mip0: TextureLite) -> TextureLiteWithMips
 }
 
 // Do not allow absolte zero roughness. Limit this value to integer 1 in compressed format.
-const MIN_VALID_ROUGHNESS: f32 = 1.0 / (ROUGHNESS_SCALE - 1.0);
+pub const MIN_VALID_ROUGHNESS: f32 = 1.0 / (ROUGHNESS_SCALE - 1.0);
 
 fn renormalize_normal(normal: Vec3f) -> Vec3f
 {
