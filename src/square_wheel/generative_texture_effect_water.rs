@@ -250,7 +250,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectWater
 			&self.wave_field,
 			&mut out_texture_data.texture[0],
 			last_mip_texel_color,
-			texture_data.material.roughness,
+			texture_data.material.roughness.max(MIN_VALID_ROUGHNESS).min(1.0),
 			&self.color_image.pixels,
 		);
 

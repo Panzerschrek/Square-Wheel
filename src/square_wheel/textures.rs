@@ -416,7 +416,7 @@ pub fn make_texture_lite_mips(mip0: TextureLite) -> TextureLiteWithMips
 }
 
 // Do not allow absolte zero roughness. Limit this value to integer 1 in compressed format.
-const MIN_VALID_ROUGHNESS: f32 = 1.0 / (ROUGHNESS_SCALE - 1.0);
+pub const MIN_VALID_ROUGHNESS: f32 = 1.0 / (ROUGHNESS_SCALE - 1.0);
 
 fn renormalize_normal(normal: Vec3f) -> Vec3f
 {
