@@ -20,27 +20,40 @@ impl GenerativeTextureEffectWater
 {
 	pub fn new(water_effect: WaterEffect) -> Self
 	{
-		let size = 1 << (water_effect.resolution_log2[0] + water_effect.resolution_log2[1]);
 		if water_effect.resolution_log2[0] < 2 || water_effect.resolution_log2[1] < 2
 		{
 			panic!("Water texture must have size at least 4x4!");
 		}
-		if size >= (1 << 22)
+
+		let area = 1 << (water_effect.resolution_log2[0] + water_effect.resolution_log2[1]);
+		if area >= (1 << 22)
 		{
 			panic!("Water texture is too big!");
 		}
 
-		Self {
+		let resolution_log2 = water_effect.resolution_log2;
+
+		let mut result = Self {
 			update_frequency: water_effect.update_frequency.max(1.0).min(200.0),
 			water_effect,
-			wave_field: vec![0.0; size],
-			wave_field_old: vec![0.0; size],
+			wave_field: vec![0.0; area],
+			wave_field_old: vec![0.0; area],
 			color_image: Image::default(),
 			// Initialize random engine generator with good, but deterministic value.
 			rand_engine: RandEngine::seed_from_u64(0b1001100000111010100101010101010111000111010110100101111001010101),
 			update_step: 0,
 			prev_update_time_s: 0.0,
+		};
+
+		// Perform several steps of wave field update in order to reach some sort of dynamic equilibrium.
+		let diagonal_len = (((1 << (resolution_log2[0] * 2)) + (1 << (resolution_log2[1] * 2))) as f32).sqrt();
+		let num_steps = (diagonal_len as i32).min(512);
+		for _i in 0 .. num_steps
+		{
+			result.step_update_wave_field();
 		}
+
+		result
 	}
 
 	fn step_update_wave_field(&mut self)
