@@ -1689,118 +1689,118 @@ impl PartialRenderer
 			let polygon_data = &polygons_data[polygon_index as usize];
 			let surface_size = polygon_data.surface_size;
 
-			// Collect lights, affecting this polygon.
-			let mut polygon_lights = [&dummy_light; MAX_POLYGON_LIGHTS];
-			let mut num_polygon_lights = 0;
-
-			let lights_list = match polygon_data.parent
-			{
-				DrawPolygonParent::Leaf(leaf_index) =>
-				{
-					// Check only lights, located inside leaf of this polygon.
-					dynamic_lights_index.get_leaf_objects(leaf_index)
-				},
-				DrawPolygonParent::Submodel(submodel_index) =>
-				{
-					// Check only lights, affecting this submodel.
-					&self.submodels_info[submodel_index as usize].dynamic_lights
-				},
-			};
-			for light_index in lights_list
-			{
-				let light = &lights[*light_index as usize];
-				if polygon_is_affected_by_light(polygon, &polygon_data.basis_vecs, light)
-				{
-					polygon_lights[num_polygon_lights] = light;
-					num_polygon_lights += 1;
-					if num_polygon_lights == MAX_POLYGON_LIGHTS
-					{
-						break;
-					}
-				}
-			}
-
 			let extra_shift = materials_processor.get_texture_shift(polygon.texture);
 			let extra_shift_mip_compensated = [extra_shift[0] >> polygon_data.mip, extra_shift[1] >> polygon_data.mip];
-
-			let mut basis_vecs_scaled_and_corrected = polygon_data.basis_vecs.get_basis_vecs_for_mip(polygon_data.mip);
-			basis_vecs_scaled_and_corrected.start -= (extra_shift_mip_compensated[0] as f32) *
-				basis_vecs_scaled_and_corrected.u +
-				(extra_shift_mip_compensated[1] as f32) * basis_vecs_scaled_and_corrected.v;
 
 			let tc_start = [
 				polygon_data.surface_tc_min[0] as i32 + extra_shift_mip_compensated[0],
 				polygon_data.surface_tc_min[1] as i32 + extra_shift_mip_compensated[1],
 			];
 
-			let texture = &materials_processor.get_texture(polygon.texture)[polygon_data.mip as usize];
 			let surface_data = unsafe {
 				&mut surfaces_pixels_shared.get()[polygon_data.surface_pixels_offset ..
 					polygon_data.surface_pixels_offset + (surface_size[0] * surface_size[1]) as usize]
 			};
 
-			let mut lightmap_tc_shift: [u32; 2] = [0, 0];
-			for i in 0 .. 2
-			{
-				let round_mask = !((lightmap::LIGHTMAP_SCALE as i32) - 1);
-				let shift =
-					polygon_data.surface_tc_min[i] - ((polygon.tex_coord_min[i] & round_mask) >> polygon_data.mip);
-				debug_assert!(shift >= 0);
-				lightmap_tc_shift[i] = shift as u32;
-			}
+			let material = materials_processor.get_material(polygon.texture);
+			let apply_diffuse_layer = material.light && material.diffuse.is_some();
 
-			let lightmap_size = lightmap::get_polygon_lightmap_size(polygon);
-
-			let lightmap_scale_log2 = lightmap::LIGHTMAP_SCALE_LOG2 - polygon_data.mip;
-			if use_directional_lightmap
+			if apply_diffuse_layer
 			{
-				let polygon_lightmap_data = if polygon.lightmap_data_offset != 0
+				// Collect lights, affecting this polygon.
+				let mut polygon_lights = [&dummy_light; MAX_POLYGON_LIGHTS];
+				let mut num_polygon_lights = 0;
+
+				let lights_list = match polygon_data.parent
 				{
-					&directional_lightmaps_data[polygon.lightmap_data_offset as usize ..
-						((polygon.lightmap_data_offset + lightmap_size[0] * lightmap_size[1]) as usize)]
+					DrawPolygonParent::Leaf(leaf_index) =>
+					{
+						// Check only lights, located inside leaf of this polygon.
+						dynamic_lights_index.get_leaf_objects(leaf_index)
+					},
+					DrawPolygonParent::Submodel(submodel_index) =>
+					{
+						// Check only lights, affecting this submodel.
+						&self.submodels_info[submodel_index as usize].dynamic_lights
+					},
+				};
+				for light_index in lights_list
+				{
+					let light = &lights[*light_index as usize];
+					if polygon_is_affected_by_light(polygon, &polygon_data.basis_vecs, light)
+					{
+						polygon_lights[num_polygon_lights] = light;
+						num_polygon_lights += 1;
+						if num_polygon_lights == MAX_POLYGON_LIGHTS
+						{
+							break;
+						}
+					}
+				}
+
+				let mut basis_vecs_scaled_and_corrected =
+					polygon_data.basis_vecs.get_basis_vecs_for_mip(polygon_data.mip);
+				basis_vecs_scaled_and_corrected.start -= (extra_shift_mip_compensated[0] as f32) *
+					basis_vecs_scaled_and_corrected.u +
+					(extra_shift_mip_compensated[1] as f32) * basis_vecs_scaled_and_corrected.v;
+
+				let texture = &materials_processor.get_texture(polygon.texture)[polygon_data.mip as usize];
+
+				let mut lightmap_tc_shift: [u32; 2] = [0, 0];
+				for i in 0 .. 2
+				{
+					let round_mask = !((lightmap::LIGHTMAP_SCALE as i32) - 1);
+					let shift =
+						polygon_data.surface_tc_min[i] - ((polygon.tex_coord_min[i] & round_mask) >> polygon_data.mip);
+					debug_assert!(shift >= 0);
+					lightmap_tc_shift[i] = shift as u32;
+				}
+
+				let lightmap_size = lightmap::get_polygon_lightmap_size(polygon);
+				let lightmap_scale_log2 = lightmap::LIGHTMAP_SCALE_LOG2 - polygon_data.mip;
+
+				let lightmap_range = if polygon.lightmap_data_offset != 0
+				{
+					polygon.lightmap_data_offset as usize ..
+						((polygon.lightmap_data_offset + lightmap_size[0] * lightmap_size[1]) as usize)
 				}
 				else
 				{
-					&[]
+					0 .. 0
 				};
-				build_surface_directional_lightmap(
-					&basis_vecs_scaled_and_corrected,
-					surface_size,
-					tc_start,
-					texture,
-					lightmap_size,
-					lightmap_scale_log2,
-					lightmap_tc_shift,
-					polygon_lightmap_data,
-					&polygon_lights[.. num_polygon_lights],
-					&camera_matrices.position,
-					surface_data,
-				);
-			}
-			else
-			{
-				let polygon_lightmap_data = if polygon.lightmap_data_offset != 0
+
+				if use_directional_lightmap
 				{
-					&lightmaps_data[polygon.lightmap_data_offset as usize ..
-						((polygon.lightmap_data_offset + lightmap_size[0] * lightmap_size[1]) as usize)]
+					build_surface_directional_lightmap(
+						&basis_vecs_scaled_and_corrected,
+						surface_size,
+						tc_start,
+						texture,
+						lightmap_size,
+						lightmap_scale_log2,
+						lightmap_tc_shift,
+						&directional_lightmaps_data[lightmap_range],
+						&polygon_lights[.. num_polygon_lights],
+						&camera_matrices.position,
+						surface_data,
+					);
 				}
 				else
 				{
-					&[]
-				};
-				build_surface_simple_lightmap(
-					&basis_vecs_scaled_and_corrected,
-					surface_size,
-					tc_start,
-					texture,
-					lightmap_size,
-					lightmap_scale_log2,
-					lightmap_tc_shift,
-					polygon_lightmap_data,
-					&polygon_lights[.. num_polygon_lights],
-					&camera_matrices.position,
-					surface_data,
-				);
+					build_surface_simple_lightmap(
+						&basis_vecs_scaled_and_corrected,
+						surface_size,
+						tc_start,
+						texture,
+						lightmap_size,
+						lightmap_scale_log2,
+						lightmap_tc_shift,
+						&lightmaps_data[lightmap_range],
+						&polygon_lights[.. num_polygon_lights],
+						&camera_matrices.position,
+						surface_data,
+					);
+				}
 			}
 
 			if let Some(emissive_texture) = materials_processor.get_emissive_texture(polygon.texture)
@@ -1810,7 +1810,14 @@ impl PartialRenderer
 					surface_size,
 					tc_start,
 					&emissive_texture.0[polygon_data.mip as usize],
-					BlendingMode::Additive,
+					if apply_diffuse_layer
+					{
+						BlendingMode::Additive
+					}
+					else
+					{
+						BlendingMode::None
+					},
 					emissive_texture.1,
 					surface_data,
 				);
