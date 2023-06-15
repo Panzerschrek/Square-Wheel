@@ -39,7 +39,7 @@ impl GenerativeTextureEffectFire
 			palette[i] = Color32::from_rgb(i as u8, i as u8, i as u8);
 		}
 
-		Self {
+		let mut result = Self {
 			update_frequency: fire_effect.update_frequency.max(1.0).min(200.0),
 			fire_effect,
 			heat_map: vec![0; area],
@@ -50,7 +50,15 @@ impl GenerativeTextureEffectFire
 			rand_engine: RandEngine::seed_from_u64(0b1001100000111010100101010101010111000111010110100101111001010101),
 			rand_buffer: Vec::new(),
 			particles: Vec::with_capacity(MAX_PARTICLES),
+		};
+
+		// Perform some update steps in order to reach some sort of dynamic equilibrium.
+		for _i in 0 .. 16
+		{
+			result.step_update_heat_map()
 		}
+
+		result
 	}
 
 	fn step_update_heat_map(&mut self)
