@@ -51,6 +51,12 @@ impl GenerativeTextureEffectFire
 			1 << self.fire_effect.resolution_log2[0],
 			1 << self.fire_effect.resolution_log2[1],
 		];
+
+		// Update heat map after setting heat sources.
+		// Doing so ve avoid blurring sharp heat sources.
+		let attenuation = 1.0 - 1.0 / self.fire_effect.heat_conductivity.max(1.0).min(1000000.0);
+		update_heat_map(size, &mut self.heat_map, attenuation);
+
 		let size_mask = [size[0] - 1, size[1] - 1];
 		let v_shift = self.fire_effect.resolution_log2[0];
 
@@ -183,9 +189,6 @@ impl GenerativeTextureEffectFire
 			// No particle was removed - advance
 			i += 1;
 		}
-
-		let attenuation = 1.0 - 1.0 / self.fire_effect.heat_conductivity.max(1.0).min(1000000.0);
-		update_heat_map(size, &mut self.heat_map, attenuation);
 	}
 }
 
