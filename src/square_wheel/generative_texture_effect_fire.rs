@@ -10,6 +10,7 @@ pub struct GenerativeTextureEffectFire
 	heat_map: Vec<HeatMapElemement>,
 	palette: Palette,
 	update_step: u32,
+	prev_update_time_s: f32,
 	// Use random for some heat sources.
 	rand_engine: RandEngine,
 	particles: Vec<Particle>,
@@ -44,6 +45,7 @@ impl GenerativeTextureEffectFire
 			heat_map: vec![0; area],
 			palette,
 			update_step: 0,
+			prev_update_time_s: 0.0,
 			// Initialize random engine generator with good, but deterministic value.
 			rand_engine: RandEngine::seed_from_u64(0b1001100000111010100101010101010111000111010110100101111001010101),
 			rand_buffer: Vec::new(),
@@ -281,10 +283,27 @@ impl GenerativeTextureEffect for GenerativeTextureEffectFire
 		texture_data: &MapTextureData,
 		_all_textures_data: &[MapTextureData],
 		_textures_mapping_table: &[TextureMappingElement],
-		_current_time_s: f32,
+		current_time_s: f32,
 	)
 	{
-		self.step_update_heat_map();
+		// Heat map update works in fixed step.
+		// Perform 0 or more steps, but avoid performing too much steps (large map size, debug build).
+		let num_update_steps = ((current_time_s * self.update_frequency) as i32 -
+			(self.prev_update_time_s * self.update_frequency) as i32)
+			.max(0)
+			.min(10);
+
+		self.prev_update_time_s = current_time_s;
+
+		if num_update_steps == 0
+		{
+			return;
+		}
+
+		for _i in 0 .. num_update_steps
+		{
+			self.step_update_heat_map();
+		}
 
 		if out_texture_data.emissive_texture[0].pixels.is_empty()
 		{
@@ -316,13 +335,12 @@ impl GenerativeTextureEffect for GenerativeTextureEffectFire
 			}
 		}
 
-		let size = [
-			1 << self.fire_effect.resolution_log2[0],
-			1 << self.fire_effect.resolution_log2[1],
-		];
-
+		// Generate texture itself.
 		generate_emissive_texture_based_on_heat_map(
-			size,
+			[
+				1 << self.fire_effect.resolution_log2[0],
+				1 << self.fire_effect.resolution_log2[1],
+			],
 			&self.heat_map,
 			&self.palette,
 			&mut out_texture_data.emissive_texture[0],
