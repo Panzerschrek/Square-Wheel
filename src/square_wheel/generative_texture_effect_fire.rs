@@ -66,7 +66,7 @@ impl GenerativeTextureEffectFire
 		// Update heat map after setting heat sources.
 		// Doing so ve avoid blurring sharp heat sources.
 		let attenuation = 1.0 - 1.0 / self.fire_effect.heat_conductivity.max(1.0).min(1000000.0);
-		update_heat_map(size, &mut self.heat_map, attenuation);
+		update_heat_map(size, &mut self.heat_map, attenuation, self.fire_effect.slow);
 
 		let size_mask = [size[0] - 1, size[1] - 1];
 		let v_shift = self.fire_effect.resolution_log2[0];
@@ -419,7 +419,7 @@ fn convert_heat(heat: f32) -> HeatMapElemement
 	(heat * 255.0).max(0.0).min(255.0) as HeatMapElemement
 }
 
-fn update_heat_map(size: [u32; 2], heat_map: &mut [HeatMapElemement], attenuation: f32)
+fn update_heat_map(size: [u32; 2], heat_map: &mut [HeatMapElemement], attenuation: f32, slow: bool)
 {
 	debug_assert!(size[0] >= 4);
 	debug_assert!(size[1] >= 4);
@@ -436,68 +436,103 @@ fn update_heat_map(size: [u32; 2], heat_map: &mut [HeatMapElemement], attenuatio
 		debug_only_checked_write(heat_map, offset as usize, ((sum * attenuation_i) >> SHIFT) as u8);
 	};
 
-	for y in 0 .. size[1] - 2
+	if slow
 	{
-		let line_start = y * size[0];
-		let line_start_plus_one = line_start + 1;
-		let line_end_minus_one = line_start + size[0] - 1;
-
-		// Special case - left border.
-		update_func(
-			line_start,
-			line_end_minus_one + size[0],
-			line_start + size[0],
-			line_start + 1 + size[0],
-			line_start + size[0] * 2,
-		);
-
-		for x in line_start_plus_one .. line_end_minus_one
+		for y in 0 .. size[1] - 1
 		{
-			update_func(x, x - 1 + size[0], x + size[0], x + 1 + size[0], x + size[0] * 2);
+			let line_start = y * size[0];
+			let line_start_plus_one = line_start + 1;
+			let line_end_minus_one = line_start + size[0] - 1;
+
+			// Special case - left border.
+			update_func(
+				line_start,
+				line_end_minus_one,
+				line_start,
+				line_start + 1,
+				line_start + size[0],
+			);
+
+			for x in line_start_plus_one .. line_end_minus_one
+			{
+				update_func(x, x - 1, x, x + 1, x + size[0]);
+			}
+
+			// Special case - right border.
+			update_func(
+				line_end_minus_one,
+				line_end_minus_one - 1,
+				line_end_minus_one,
+				line_start,
+				line_end_minus_one + size[0],
+			);
+		}
+	}
+	else
+	{
+		for y in 0 .. size[1] - 2
+		{
+			let line_start = y * size[0];
+			let line_start_plus_one = line_start + 1;
+			let line_end_minus_one = line_start + size[0] - 1;
+
+			// Special case - left border.
+			update_func(
+				line_start,
+				line_end_minus_one + size[0],
+				line_start + size[0],
+				line_start + 1 + size[0],
+				line_start + size[0] * 2,
+			);
+
+			for x in line_start_plus_one .. line_end_minus_one
+			{
+				update_func(x, x - 1 + size[0], x + size[0], x + 1 + size[0], x + size[0] * 2);
+			}
+
+			// Special case - right border.
+			update_func(
+				line_end_minus_one,
+				line_end_minus_one - 1 + size[0],
+				line_end_minus_one + size[0],
+				line_start + size[0],
+				line_end_minus_one + size[0] * 2,
+			);
 		}
 
-		// Special case - right border.
-		update_func(
-			line_end_minus_one,
-			line_end_minus_one - 1 + size[0],
-			line_end_minus_one + size[0],
-			line_start + size[0],
-			line_end_minus_one + size[0] * 2,
-		);
-	}
-
-	{
-		// Special case - line before last.
-		// Clamp y + 2 to y + 1.
-		let line_start = (size[1] - 2) * size[0];
-		let line_start_plus_one = line_start + 1;
-		let line_end_minus_one = line_start + size[0] - 1;
-
-		// Special case - left border.
-		update_func(
-			line_start,
-			line_end_minus_one + size[0],
-			line_start + size[0],
-			line_start + 1 + size[0],
-			line_start + size[0],
-		);
-
-		for x in line_start_plus_one .. line_end_minus_one
 		{
-			update_func(x, x - 1 + size[0], x + size[0], x + 1 + size[0], x + size[0]);
-		}
+			// Special case - line before last.
+			// Clamp y + 2 to y + 1.
+			let line_start = (size[1] - 2) * size[0];
+			let line_start_plus_one = line_start + 1;
+			let line_end_minus_one = line_start + size[0] - 1;
 
-		// Special case - right border.
-		update_func(
-			line_end_minus_one,
-			line_end_minus_one - 1 + size[0],
-			line_end_minus_one + size[0],
-			line_start + size[0],
-			line_end_minus_one + size[0],
-		);
+			// Special case - left border.
+			update_func(
+				line_start,
+				line_end_minus_one + size[0],
+				line_start + size[0],
+				line_start + 1 + size[0],
+				line_start + size[0],
+			);
+
+			for x in line_start_plus_one .. line_end_minus_one
+			{
+				update_func(x, x - 1 + size[0], x + size[0], x + 1 + size[0], x + size[0]);
+			}
+
+			// Special case - right border.
+			update_func(
+				line_end_minus_one,
+				line_end_minus_one - 1 + size[0],
+				line_end_minus_one + size[0],
+				line_start + size[0],
+				line_end_minus_one + size[0],
+			);
+		}
 	}
 
-	// Zero last line.
+	// Zero last line in both cases - slow and fast.
 	for value in &mut heat_map[((size[1] - 1) * size[0]) as usize .. (size[1] * size[0]) as usize]
 	{
 		*value = 0;

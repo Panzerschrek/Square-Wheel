@@ -16,6 +16,10 @@ pub struct FireEffect
 	#[serde(default = "default_heat_conductivity")]
 	pub heat_conductivity: f32,
 
+	/// If true - slow heat propagation approach will be used.
+	#[serde(default)]
+	pub slow: bool,
+
 	/// If some - produce emissive texture by modulationg heat map, using this color.
 	/// Color is in range [0; 1], out of range values will be clamped.
 	/// Otherwise emissive image will be used as gradient image.
