@@ -105,12 +105,12 @@ impl GenerativeTextureEffect for GenerativeTextureEffectFire
 			&mut out_texture_data.emissive_texture[0],
 		);
 
-		for mip in 1 .. NUM_MIPS
+		// Generate mips.
+		// TODO - maybe reduce frequency of mips update?
+		for i in 1 .. NUM_MIPS
 		{
-			if out_texture_data.texture[mip].pixels.is_empty()
-			{
-				out_texture_data.emissive_texture[mip] = crate::common::image::make_stub();
-			}
+			let (s0, s1) = out_texture_data.emissive_texture.split_at_mut(i);
+			build_texture_lite_mip(&mut s1[0], &s0[i - 1]);
 		}
 	}
 }
