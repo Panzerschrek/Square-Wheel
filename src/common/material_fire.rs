@@ -28,7 +28,7 @@ pub enum HeatSource
 	{
 		center: [u32; 2],
 
-		#[serde(default = "default_one")]
+		#[serde(default = "default_heat")]
 		heat: f32,
 	},
 	/// Set heat along given line.
@@ -36,9 +36,28 @@ pub enum HeatSource
 	{
 		points: [[u32; 2]; 2],
 
-		#[serde(default = "default_one")]
+		#[serde(default = "default_heat")]
 		heat: f32,
 	},
+	/// Emit particles.
+	Fountain
+	{
+		center: [u32; 2],
+
+		// Particles/s.
+		/// If this value is greater than fire effect update frequency - new particle (but only one) will be emitted each frame.
+		#[serde(default = "default_one")]
+		frequency: f32,
+
+		// Heat of emited particles.
+		#[serde(default = "default_heat")]
+		heat: f32,
+	},
+}
+
+fn default_heat() -> f32
+{
+	1.0
 }
 
 fn default_one() -> f32

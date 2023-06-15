@@ -1,5 +1,5 @@
 use super::{fast_math::*, map_materials_processor_structs::*, textures::*};
-use crate::common::{color::*, fixed_math::*, material_fire::*};
+use crate::common::{color::*, fixed_math::*, material_fire::*, math_types::*};
 
 pub struct GenerativeTextureEffectFire
 {
@@ -8,6 +8,8 @@ pub struct GenerativeTextureEffectFire
 	fire_effect: FireEffect,
 	heat_map: Vec<HeatMapElemement>,
 	palette: Palette,
+	update_step: u32,
+	particles: Vec<Particle>,
 }
 
 impl GenerativeTextureEffectFire
@@ -30,11 +32,15 @@ impl GenerativeTextureEffectFire
 			fire_effect,
 			heat_map: vec![0; area],
 			palette: [Color32::black(); 256],
+			update_step: 0,
+			particles: Vec::with_capacity(MAX_PARTICLES),
 		}
 	}
 
 	fn step_update_heat_map(&mut self)
 	{
+		self.update_step += 1;
+
 		let size = [
 			1 << self.fire_effect.resolution_log2[0],
 			1 << self.fire_effect.resolution_log2[1],
@@ -96,7 +102,52 @@ impl GenerativeTextureEffectFire
 						}
 					}
 				},
+				HeatSource::Fountain {
+					center,
+					frequency,
+					heat,
+				} =>
+				{
+					let inv_frequency_int = (self.update_frequency / frequency).max(1.0) as u32;
+					if self.update_step % inv_frequency_int == 0
+					{
+						if self.particles.len() < MAX_PARTICLES
+						{
+							self.particles.push(Particle {
+								position: Vec2f::new(center[0] as f32, center[1] as f32),
+								velocity: Vec2f::new(10.0, 20.0) / self.update_frequency,
+								despawn_time: self.update_step + 30,
+								heat: *heat,
+							});
+						}
+					}
+				},
 			}
+		}
+
+		// Process particles
+		// Can't use for-loop here, because particle can be despawned.
+		let mut i = 0;
+		while i < self.particles.len()
+		{
+			let particle = &mut self.particles[i];
+			if particle.despawn_time <= self.update_step
+			{
+				self.particles.swap_remove(i);
+				// Skip incrementing counter.
+				continue;
+			}
+
+			particle.position += particle.velocity;
+
+			set_heat(
+				particle.position.x.floor() as i32 as u32,
+				particle.position.y.floor() as i32 as u32,
+				particle.heat,
+			);
+
+			// No particle was removed - advance
+			i += 1;
 		}
 
 		let attenuation = 1.0 - 1.0 / self.fire_effect.heat_conductivity.max(1.0).min(1000000.0);
@@ -154,6 +205,17 @@ impl GenerativeTextureEffect for GenerativeTextureEffectFire
 		}
 	}
 }
+
+struct Particle
+{
+	velocity: Vec2f,   // Pixels/step
+	position: Vec2f,   // Pixels
+	despawn_time: u32, // in ticks
+	// TODO - add also gravity.
+	heat: f32, // TODO - store byte value instead
+}
+
+const MAX_PARTICLES: usize = 256;
 
 type HeatMapElemement = u8;
 
