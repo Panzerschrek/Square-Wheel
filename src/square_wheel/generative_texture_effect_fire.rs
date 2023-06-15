@@ -72,11 +72,8 @@ impl GenerativeTextureEffectFire
 		let heat_map = &mut self.heat_map;
 		let mut set_heat = |x, y, heat: f32| {
 			let address = ((x & size_mask[0]) + ((y & size_mask[1]) << v_shift)) as usize;
-			// TODO - use unchecked to int conversion.
-			heat_map[address] = std::cmp::max(
-				heat_map[address],
-				(heat * 255.0).max(0.0).min(255.0) as HeatMapElemement,
-			)
+			let value = unsafe { debug_only_checked_access_mut(heat_map, address) };
+			*value = std::cmp::max(*value, (heat * 255.0).max(0.0).min(255.0) as HeatMapElemement)
 		};
 
 		let get_value_with_random_deviation = |rand_engine: &mut RandEngine, v: &ValueWithRandomDeviation| {
@@ -173,7 +170,8 @@ impl GenerativeTextureEffectFire
 						for x_offset in 0 ..= abs_dx as i32
 						{
 							let x = (points[0][0] as i32) + x_offset;
-							let y = fixed16_round_to_int(y_fract + self.rand_buffer[x_offset as usize]);
+							let y_add = unsafe { debug_only_checked_fetch(&self.rand_buffer, x_offset as usize) };
+							let y = fixed16_round_to_int(y_fract + y_add);
 							y_fract += y_step;
 							set_heat(x as u32, y as u32, heat);
 						}
@@ -190,7 +188,8 @@ impl GenerativeTextureEffectFire
 						for y_offset in 1 ..= abs_dy as i32
 						{
 							let y = (points[0][1] as i32) + y_offset;
-							let x = fixed16_round_to_int(x_fract + self.rand_buffer[y_offset as usize]);
+							let x_add = unsafe { debug_only_checked_fetch(&self.rand_buffer, y_offset as usize) };
+							let x = fixed16_round_to_int(x_fract + x_add);
 							x_fract += x_step;
 							set_heat(x as u32, y as u32, heat);
 						}
@@ -451,7 +450,6 @@ fn generate_emissive_texture_based_on_heat_map(
 
 	for (dst_texel, &heat_value) in texture.pixels.iter_mut().zip(heat_map)
 	{
-		// TODO - use unchecked palette fetch.
-		*dst_texel = palette[heat_value as usize]
+		*dst_texel = unsafe { debug_only_checked_fetch(palette, heat_value as usize) };
 	}
 }
