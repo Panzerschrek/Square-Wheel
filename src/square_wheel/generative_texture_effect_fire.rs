@@ -325,8 +325,9 @@ impl GenerativeTextureEffect for GenerativeTextureEffectFire
 {
 	fn get_estimated_texel_count(&self, _texture_data: &MapTextureData, _all_textures_data: &[MapTextureData]) -> u32
 	{
-		// TODO
-		0
+		// Count emissive texels as half-texels and heat buffer as quorter texel
+		let area = 1 << (self.fire_effect.resolution_log2[0] + self.fire_effect.resolution_log2[1]);
+		area / 2 + area / 4
 	}
 
 	fn update(
