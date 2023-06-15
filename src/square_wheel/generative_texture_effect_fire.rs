@@ -141,7 +141,12 @@ impl GenerativeTextureEffectFire
 						}
 					}
 				},
-				HeatSource::Lightning { points, heat, ramp } =>
+				HeatSource::Lightning {
+					points,
+					offset,
+					heat,
+					ramp,
+				} =>
 				{
 					let heat = convert_heat(get_value_with_random_deviation(rand_engine, heat));
 					let head_fract = int_to_fixed16(heat as i32);
@@ -154,12 +159,25 @@ impl GenerativeTextureEffectFire
 						(head_fract, head_fract)
 					};
 
-					// Perform line reasterization (with integer coords of points), shift coordinates by random value.
-					let mut points = *points;
-					let abs_dx = ((points[0][0] as i32) - (points[1][0] as i32)).abs();
-					let abs_dy = ((points[0][1] as i32) - (points[1][1] as i32)).abs();
+					// Shift start/end point according to offset function.
+					let mut points = [
+						[points[0][0] as i32, points[0][1] as i32],
+						[points[1][0] as i32, points[1][1] as i32],
+					];
+					for i in 0 .. 2
+					{
+						for j in 0 .. 2
+						{
+							points[i][j] += get_value_with_random_deviation(rand_engine, &offset[i][j]) as i32;
+						}
+					}
 
-					self.rand_buffer.resize((std::cmp::max(abs_dx, abs_dy) + 1) as usize, 0);
+					// Perform line reasterization (with integer coords of points), shift coordinates by random value.
+					let abs_dx = (points[0][0] - points[1][0]).abs();
+					let abs_dy = (points[0][1] - points[1][1]).abs();
+					let max_delta = std::cmp::max(abs_dx, abs_dy);
+
+					self.rand_buffer.resize((max_delta + 1) as usize, 0);
 					let mut rand_offset = 0;
 					for rand_val in &mut self.rand_buffer
 					{
@@ -169,7 +187,12 @@ impl GenerativeTextureEffectFire
 						rand_offset = *rand_val;
 					}
 
-					if abs_dx >= abs_dy
+					if max_delta == 0
+					{
+						// Start and end points are equal.
+						set_heat(points[0][0] as u32, points[0][1] as u32, heat);
+					}
+					else if abs_dx >= abs_dy
 					{
 						if points[0][0] > points[1][0]
 						{
@@ -177,16 +200,15 @@ impl GenerativeTextureEffectFire
 							std::mem::swap(&mut heat_start, &mut heat_end);
 						}
 
-						let y_step =
-							(int_to_fixed16((points[1][1] as i32) - (points[0][1] as i32)) - rand_offset) / abs_dx;
-						let mut y_fract = int_to_fixed16(points[0][1] as i32);
+						let y_step = (int_to_fixed16(points[1][1] - points[0][1]) - rand_offset) / abs_dx;
+						let mut y_fract = int_to_fixed16(points[0][1]);
 
 						let heat_step = (heat_end - heat_start) / abs_dx;
 						let mut heat_cur = heat_start;
 
-						for x_offset in 0 ..= abs_dx as i32
+						for x_offset in 0 ..= abs_dx
 						{
-							let x = (points[0][0] as i32) + x_offset;
+							let x = points[0][0] + x_offset;
 							let y_add = unsafe { debug_only_checked_fetch(&self.rand_buffer, x_offset as usize) };
 							let y = fixed16_round_to_int(y_fract + y_add);
 							set_heat(x as u32, y as u32, fixed16_floor_to_int(heat_cur) as HeatMapElemement);
@@ -202,16 +224,15 @@ impl GenerativeTextureEffectFire
 							std::mem::swap(&mut heat_start, &mut heat_end);
 						}
 
-						let x_step =
-							(int_to_fixed16((points[1][0] as i32) - (points[0][0] as i32)) - rand_offset) / abs_dy;
-						let mut x_fract = int_to_fixed16(points[0][0] as i32);
+						let x_step = (int_to_fixed16(points[1][0] - points[0][0]) - rand_offset) / abs_dy;
+						let mut x_fract = int_to_fixed16(points[0][0]);
 
 						let heat_step = (heat_end - heat_start) / abs_dy;
 						let mut heat_cur = heat_start;
 
-						for y_offset in 0 ..= abs_dy as i32
+						for y_offset in 0 ..= abs_dy
 						{
-							let y = (points[0][1] as i32) + y_offset;
+							let y = points[0][1] + y_offset;
 							let x_add = unsafe { debug_only_checked_fetch(&self.rand_buffer, y_offset as usize) };
 							let x = fixed16_round_to_int(x_fract + x_add);
 							set_heat(x as u32, y as u32, fixed16_floor_to_int(heat_cur) as HeatMapElemement);

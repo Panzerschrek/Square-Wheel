@@ -36,7 +36,7 @@ pub enum HeatSource
 	{
 		center: [u32; 2],
 
-		// Offset function for x/y coordinates.
+		/// Offset function for x/y coordinates.
 		#[serde(default)]
 		offset: [ValueWithRandomDeviation; 2],
 
@@ -55,6 +55,10 @@ pub enum HeatSource
 	Lightning
 	{
 		points: [[u32; 2]; 2],
+
+		/// Offset function for x/y coordinates of each point.
+		#[serde(default)]
+		offset: [[ValueWithRandomDeviation; 2]; 2],
 
 		#[serde(default = "default_heat")]
 		heat: ValueWithRandomDeviation,
