@@ -7,6 +7,7 @@ pub struct GenerativeTextureEffectFire
 	update_frequency: f32,
 	fire_effect: FireEffect,
 	heat_map: Vec<HeatMapElemement>,
+	palette: Palette,
 }
 
 impl GenerativeTextureEffectFire
@@ -28,6 +29,7 @@ impl GenerativeTextureEffectFire
 			update_frequency: fire_effect.update_frequency.max(1.0).min(200.0),
 			fire_effect,
 			heat_map: vec![0; area],
+			palette: [Color32::black(); 256],
 		}
 	}
 }
@@ -58,7 +60,22 @@ impl GenerativeTextureEffect for GenerativeTextureEffectFire
 
 		self.heat_map[(size[0] / 2 + size[1] / 2 * size[0]) as usize] = 255;
 
-		generate_emissive_texture_based_on_heat_map(size, &self.heat_map, &mut out_texture_data.emissive_texture[0]);
+		if out_texture_data.emissive_texture[0].pixels.is_empty()
+		{
+			// First update - generate palette.
+			// TODO - use emissive image for it.
+			for i in 0 .. 256
+			{
+				self.palette[i] = Color32::from_rgb(i as u8, i as u8, i as u8);
+			}
+		}
+
+		generate_emissive_texture_based_on_heat_map(
+			size,
+			&self.heat_map,
+			&self.palette,
+			&mut out_texture_data.emissive_texture[0],
+		);
 
 		for mip in 1 .. NUM_MIPS
 		{
@@ -93,19 +110,27 @@ fn update_heat_map(size: [u32; 2], heat_map: &mut [HeatMapElemement])
 			let sum = heat_map[(x - 1 - size[0]) as usize] as u32 +
 				heat_map[(x - size[0]) as usize] as u32 +
 				heat_map[(x + 1 - size[0]) as usize] as u32 +
-				heat_map[(x - 2 * size[0]) as usize] as u32;
+				heat_map[(x - size[0] * 2) as usize] as u32;
 			heat_map[x as usize] = ((sum * 255) >> 10) as u8;
 		}
 	}
 }
 
-fn generate_emissive_texture_based_on_heat_map(size: [u32; 2], heat_map: &[HeatMapElemement], texture: &mut TextureLite)
+type Palette = [Color32; 256];
+
+fn generate_emissive_texture_based_on_heat_map(
+	size: [u32; 2],
+	heat_map: &[HeatMapElemement],
+	palette: &Palette,
+	texture: &mut TextureLite,
+)
 {
 	texture.size = size;
 	texture.pixels.resize((size[0] * size[1]) as usize, Color32::black());
 
 	for (dst_texel, &heat_value) in texture.pixels.iter_mut().zip(heat_map)
 	{
-		*dst_texel = Color32::from_rgb(heat_value, heat_value, heat_value)
+		// TODO - use unchecked palette fetch.
+		*dst_texel = palette[heat_value as usize]
 	}
 }
