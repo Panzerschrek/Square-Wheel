@@ -329,7 +329,11 @@ fn update_heat_map(size: [u32; 2], heat_map: &mut [HeatMapElemement], attenuatio
 		);
 	}
 
-	// TODO - handle last line.
+	// Zero last line.
+	for value in &mut heat_map[((size[1] - 1) * size[0]) as usize .. (size[1] * size[0]) as usize]
+	{
+		*value = 0;
+	}
 }
 
 type Palette = [Color32; 256];
