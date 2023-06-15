@@ -1,4 +1,4 @@
-use super::{material_function::*, material_water::*};
+use super::{material_fire::*, material_function::*, material_water::*};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -160,6 +160,8 @@ pub enum SpecialMaterialEffect
 	/// Color image may be used and potentially deformed by the wave field.
 	/// Color image will be resized to size of wave filed (if sizes doen't equal).
 	Water(WaterEffect),
+
+	Fire(FireEffect),
 
 	/// Draw skybox instead of regular texture.
 	Skybox(SkyboxParams),

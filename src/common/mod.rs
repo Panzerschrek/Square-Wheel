@@ -22,6 +22,7 @@ pub mod map_file_q4;
 pub mod map_lights;
 pub mod map_polygonizer;
 pub mod material;
+pub mod material_fire;
 pub mod material_function;
 pub mod material_water;
 pub mod math_types;

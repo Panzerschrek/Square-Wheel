@@ -1,7 +1,7 @@
 use super::{
-	abstract_color::*, config, generative_texture_effect_layered::*, generative_texture_effect_turb::*,
-	generative_texture_effect_water::*, map_materials_processor_config::*, map_materials_processor_structs::*,
-	resources_manager::*, textures::*,
+	abstract_color::*, config, generative_texture_effect_fire::*, generative_texture_effect_layered::*,
+	generative_texture_effect_turb::*, generative_texture_effect_water::*, map_materials_processor_config::*,
+	map_materials_processor_structs::*, resources_manager::*, textures::*,
 };
 use crate::common::{bsp_map_compact, color::*, material::*};
 use rayon::prelude::*;
@@ -489,6 +489,7 @@ fn create_generative_texture_effect<MaterialLoadFunction: FnMut(&str) -> Texture
 			GenerativeTextureEffectLayered::new(layered_animation, material_load_function),
 		)),
 		SpecialMaterialEffect::Water(water_effect) => Some(Box::new(GenerativeTextureEffectWater::new(water_effect))),
+		SpecialMaterialEffect::Fire(fire_effect) => Some(Box::new(GenerativeTextureEffectFire::new(fire_effect))),
 		SpecialMaterialEffect::Skybox(..) => None,
 	}
 }
