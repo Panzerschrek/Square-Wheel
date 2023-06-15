@@ -161,6 +161,8 @@ pub enum SpecialMaterialEffect
 	/// Color image will be resized to size of wave filed (if sizes doen't equal).
 	Water(WaterEffect),
 
+	/// Perform heat map simulation and generate emissive texture based on it.
+	/// Regular texture (diffuse, normal map, roughness, etc.) is not affected.
 	Fire(FireEffect),
 
 	/// Draw skybox instead of regular texture.

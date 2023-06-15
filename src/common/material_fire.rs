@@ -16,13 +16,13 @@ pub struct FireEffect
 	#[serde(default = "default_heat_conductivity")]
 	pub heat_conductivity: f32,
 
-	/// If true - slow heat propagation approach will be used.
+	/// If true - use slow heat propagation approach.
 	#[serde(default)]
 	pub slow: bool,
 
-	/// If some - produce emissive texture by modulationg heat map, using this color.
+	/// If some - produce emissive texture by modulating heat map using this color.
 	/// Color is in range [0; 1], out of range values will be clamped.
-	/// Otherwise emissive image will be used as gradient image.
+	/// If none - emissive image will be used as gradient image.
 	#[serde(default)]
 	pub color: Option<[f32; 3]>,
 
@@ -76,16 +76,16 @@ pub enum HeatSource
 	{
 		center: [u32; 2],
 
-		// Particles/s.
+		/// Particles/s.
 		/// If this value is greater than fire effect update frequency - new particle (but only one) will be emitted each frame.
 		#[serde(default = "default_one")]
 		frequency: f32,
 
-		// Heat of emited particles.
+		/// Heat of emited particles.
 		#[serde(default = "default_heat")]
 		heat: ValueWithRandomDeviation,
 
-		// Angle of initial particle velocity.
+		/// Angle of initial particle velocity.
 		#[serde(default)]
 		angle: ValueWithRandomDeviation,
 
@@ -93,19 +93,19 @@ pub enum HeatSource
 		#[serde(default)]
 		speed: ValueWithRandomDeviation,
 
-		// pixels / (s * s).
+		/// pixels / (s * s).
 		#[serde(default)]
 		gravity: ValueWithRandomDeviation,
 
-		// Angle in which direction particle is spawned.
+		/// Angle in which direction particle is spawned.
 		#[serde(default)]
 		spawn_angle: ValueWithRandomDeviation,
 
-		// Distance from center (in pixels), where particle is spawned.
+		/// Distance from center (in pixels), where particle is spawned.
 		#[serde(default)]
 		spawn_distance: ValueWithRandomDeviation,
 
-		// Lifetime of spawned particle (in seconds(.
+		/// Lifetime of spawned particle (in seconds).
 		#[serde(default = "default_particle_lifetime")]
 		lifetime: ValueWithRandomDeviation,
 	},

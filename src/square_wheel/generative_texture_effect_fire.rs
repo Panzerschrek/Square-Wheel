@@ -71,7 +71,7 @@ impl GenerativeTextureEffectFire
 			1 << self.fire_effect.resolution_log2[1],
 		];
 
-		// Update heat map after setting heat sources.
+		// Update heat map before setting heat sources.
 		// Doing so ve avoid blurring sharp heat sources.
 		let attenuation = 1.0 - 1.0 / self.fire_effect.heat_conductivity.max(1.0).min(1000000.0);
 		update_heat_map(size, &mut self.heat_map, attenuation, self.fire_effect.slow);
@@ -83,6 +83,7 @@ impl GenerativeTextureEffectFire
 		let mut set_heat = |x, y, heat| {
 			let address = ((x & size_mask[0]) + ((y & size_mask[1]) << v_shift)) as usize;
 			let value = unsafe { debug_only_checked_access_mut(heat_map, address) };
+			// "Max" function produces good result.
 			*value = std::cmp::max(*value, heat)
 		};
 
@@ -91,9 +92,9 @@ impl GenerativeTextureEffectFire
 			let deviation = v.random_deviation.evaluate(time_s);
 			value - deviation + rand_engine.gen_range(0.0 ..= deviation.max(0.0) * 2.0)
 		};
-
 		let rand_engine = &mut self.rand_engine;
 
+		// Process heat sources.
 		for heat_source in &self.fire_effect.heat_sources
 		{
 			match heat_source
@@ -180,7 +181,7 @@ impl GenerativeTextureEffectFire
 						}
 					}
 
-					// Perform line reasterization (with integer coords of points), shift coordinates by random value.
+					// Perform line reasterization (with integer coords of points), shift coordinates by random value in order to produce something, that looks like a lightning.
 					let abs_dx = (points[0][0] - points[1][0]).abs();
 					let abs_dy = (points[0][1] - points[1][1]).abs();
 					let max_delta = std::cmp::max(abs_dx, abs_dy);
@@ -313,7 +314,7 @@ impl GenerativeTextureEffectFire
 				particle.heat,
 			);
 
-			// No particle was removed - advance
+			// No particle was removed - advance he ccounter.
 			i += 1;
 		}
 	}
@@ -325,7 +326,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectFire
 {
 	fn get_estimated_texel_count(&self, _texture_data: &MapTextureData, _all_textures_data: &[MapTextureData]) -> u32
 	{
-		// Count emissive texels as half-texels and heat buffer as quorter texel
+		// Count emissive texels as half-texels and heat buffer as quarter texel.
 		let area = 1 << (self.fire_effect.resolution_log2[0] + self.fire_effect.resolution_log2[1]);
 		area / 2 + area / 4
 	}
@@ -363,7 +364,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectFire
 			// First update - generate palette.
 			if let Some(color) = self.fire_effect.color
 			{
-				// use specified color for palette generation.
+				// Use specified color for palette generation.
 				for i in 0 .. 256
 				{
 					let scale = i as f32;
@@ -379,6 +380,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectFire
 				if !emissive_texture[0].pixels.is_empty()
 				{
 					// Use emissive layer texture as palette.
+					// Assume it contains gradient along U axis.
 					for i in 0 .. 256
 					{
 						self.palette[i as usize] =
@@ -414,7 +416,7 @@ struct Particle
 	velocity: Vec2f,   // Pixels/step
 	position: Vec2f,   // Pixels
 	despawn_time: u32, // in ticks
-	gravity: f32,
+	gravity: f32,      // pixels/(step * step)
 	heat: HeatMapElemement,
 }
 
@@ -422,7 +424,7 @@ const MAX_PARTICLES: usize = 256;
 
 type HeatMapElemement = u8;
 
-// Convert normalized float into byte value and clamp.
+// Convert normalized float with clamping into byte value.
 fn convert_heat(heat: f32) -> HeatMapElemement
 {
 	(heat * 255.0).max(0.0).min(255.0) as HeatMapElemement
