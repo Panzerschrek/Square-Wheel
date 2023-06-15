@@ -1,5 +1,6 @@
 use super::{fast_math::*, map_materials_processor_structs::*, textures::*};
 use crate::common::{color::*, fixed_math::*, material_fire::*, math_types::*};
+use rand::{Rng, SeedableRng};
 
 pub struct GenerativeTextureEffectFire
 {
@@ -9,6 +10,8 @@ pub struct GenerativeTextureEffectFire
 	heat_map: Vec<HeatMapElemement>,
 	palette: Palette,
 	update_step: u32,
+	// Use random for some heat sources.
+	rand_engine: RandEngine,
 	particles: Vec<Particle>,
 }
 
@@ -33,6 +36,8 @@ impl GenerativeTextureEffectFire
 			heat_map: vec![0; area],
 			palette: [Color32::black(); 256],
 			update_step: 0,
+			// Initialize random engine generator with good, but deterministic value.
+			rand_engine: RandEngine::seed_from_u64(0b1001100000111010100101010101010111000111010110100101111001010101),
 			particles: Vec::with_capacity(MAX_PARTICLES),
 		}
 	}
@@ -40,6 +45,7 @@ impl GenerativeTextureEffectFire
 	fn step_update_heat_map(&mut self)
 	{
 		self.update_step += 1;
+		let time_s = (self.update_step as f32) / self.update_frequency;
 
 		let size = [
 			1 << self.fire_effect.resolution_log2[0],
@@ -56,6 +62,13 @@ impl GenerativeTextureEffectFire
 				heat_map[address],
 				(heat * 255.0).max(0.0).min(255.0) as HeatMapElemement,
 			)
+		};
+
+		let rand_engine = &mut self.rand_engine;
+		let mut get_value_with_random_deviation = |v: &ValueWithRandomDeviation| {
+			let value = v.value.evaluate(time_s);
+			let deviation = v.random_deviation.evaluate(time_s);
+			value - deviation + rand_engine.gen_range(0.0 ..= deviation.max(0.0) * 2.0)
 		};
 
 		for heat_source in &self.fire_effect.heat_sources
@@ -106,6 +119,11 @@ impl GenerativeTextureEffectFire
 					center,
 					frequency,
 					heat,
+					particle_angle,
+					particle_speed,
+					particle_spawn_angle,
+					particle_spawn_distance,
+					particle_lifetime,
 				} =>
 				{
 					let inv_frequency_int = (self.update_frequency / frequency).max(1.0) as u32;
@@ -113,10 +131,22 @@ impl GenerativeTextureEffectFire
 					{
 						if self.particles.len() < MAX_PARTICLES
 						{
+							let particle_angle = get_value_with_random_deviation(particle_angle);
+							let particle_speed = get_value_with_random_deviation(particle_speed);
+							let particle_spawn_angle = get_value_with_random_deviation(particle_spawn_angle);
+							let particle_spawn_distance = get_value_with_random_deviation(particle_spawn_distance);
+							let particle_lifetime = get_value_with_random_deviation(particle_lifetime);
+
+							let velocity = Vec2f::new(particle_angle.cos(), particle_angle.sin()) *
+								(particle_speed / self.update_frequency);
+							let spawn_vec = Vec2f::new(particle_spawn_angle.cos(), particle_spawn_angle.sin()) *
+								particle_spawn_distance;
+							let lifetime = (particle_lifetime * self.update_frequency).max(1.0).min(1024.0) as u32;
+
 							self.particles.push(Particle {
-								position: Vec2f::new(center[0] as f32, center[1] as f32),
-								velocity: Vec2f::new(10.0, 20.0) / self.update_frequency,
-								despawn_time: self.update_step + 30,
+								position: Vec2f::new(center[0] as f32, center[1] as f32) + spawn_vec,
+								velocity,
+								despawn_time: self.update_step + lifetime,
 								heat: *heat,
 							});
 						}
@@ -154,6 +184,8 @@ impl GenerativeTextureEffectFire
 		update_heat_map(size, &mut self.heat_map, attenuation);
 	}
 }
+
+type RandEngine = rand::rngs::SmallRng;
 
 impl GenerativeTextureEffect for GenerativeTextureEffectFire
 {

@@ -1,3 +1,4 @@
+use super::material_function::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -52,7 +53,37 @@ pub enum HeatSource
 		// Heat of emited particles.
 		#[serde(default = "default_heat")]
 		heat: f32,
+
+		// Angle of initial particle velocity.
+		#[serde(default)]
+		particle_angle: ValueWithRandomDeviation,
+
+		// Initial speed (pixels/s).
+		#[serde(default)]
+		particle_speed: ValueWithRandomDeviation,
+
+		// Angle in which direction particle is spawned.
+		#[serde(default)]
+		particle_spawn_angle: ValueWithRandomDeviation,
+
+		// Distance from center (in pixels), where particle is spawned.
+		#[serde(default)]
+		particle_spawn_distance: ValueWithRandomDeviation,
+
+		// Lifetime of spawned particle (in seconds(.
+		#[serde(default = "default_particle_lifetime")]
+		particle_lifetime: ValueWithRandomDeviation,
 	},
+}
+
+// Result = value +- random_deviation
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct ValueWithRandomDeviation
+{
+	#[serde(default)]
+	pub value: SingleArgumentFunction,
+	#[serde(default)]
+	pub random_deviation: SingleArgumentFunction,
 }
 
 fn default_heat() -> f32
@@ -73,4 +104,12 @@ fn default_update_frequency() -> f32
 fn default_heat_conductivity() -> f32
 {
 	20.0
+}
+
+fn default_particle_lifetime() -> ValueWithRandomDeviation
+{
+	ValueWithRandomDeviation {
+		value: SingleArgumentFunction::Constant(1.0),
+		random_deviation: SingleArgumentFunction::default(),
+	}
 }
