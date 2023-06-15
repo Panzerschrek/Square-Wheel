@@ -1,4 +1,4 @@
-use super::{map_materials_processor_structs::*, textures::*};
+use super::{fast_math::*, map_materials_processor_structs::*, textures::*};
 use crate::common::{color::*, material_fire::*};
 
 pub struct GenerativeTextureEffectFire
@@ -56,9 +56,9 @@ impl GenerativeTextureEffect for GenerativeTextureEffectFire
 			1 << self.fire_effect.resolution_log2[1],
 		];
 
-		update_heat_map(size, &mut self.heat_map);
+		self.heat_map[(size[0] / 2 + (size[1] - 1) * size[0]) as usize] = 255;
 
-		self.heat_map[(size[0] / 2 + size[1] / 2 * size[0]) as usize] = 255;
+		update_heat_map(size, &mut self.heat_map);
 
 		if out_texture_data.emissive_texture[0].pixels.is_empty()
 		{
@@ -95,25 +95,79 @@ fn update_heat_map(size: [u32; 2], heat_map: &mut [HeatMapElemement])
 	debug_assert!(size[1] >= 4);
 	debug_assert!(heat_map.len() == (size[0] * size[1]) as usize);
 
-	// TODO - optimize this.
-	// TODO - handle corner cases.
-	// TODO - une attenuation.
+	// TODO - make it configurable.
+	let attenuation = 240;
 
-	for y in 2 .. size[1] - 1
+	let mut update_func = |offset, offset_y_plus_x_minus, offset_y_plus, offset_y_plus_x_plus, offset_y_plus_plus| unsafe {
+		let sum = (debug_only_checked_fetch(heat_map, offset_y_plus_x_minus as usize) as u32) +
+			(debug_only_checked_fetch(heat_map, offset_y_plus as usize) as u32) +
+			(debug_only_checked_fetch(heat_map, offset_y_plus_x_plus as usize) as u32) +
+			(debug_only_checked_fetch(heat_map, offset_y_plus_plus as usize) as u32);
+		debug_only_checked_write(heat_map, offset as usize, ((sum * attenuation) >> 10) as u8);
+	};
+
+	for y in 0 .. size[1] - 2
 	{
 		let line_start = y * size[0];
 		let line_start_plus_one = line_start + 1;
 		let line_end_minus_one = line_start + size[0] - 1;
 
+		// Special case - left border.
+		update_func(
+			line_start,
+			line_end_minus_one + size[0],
+			line_start + size[0],
+			line_start + 1 + size[0],
+			line_start + size[0] * 2,
+		);
+
 		for x in line_start_plus_one .. line_end_minus_one
 		{
-			let sum = heat_map[(x - 1 - size[0]) as usize] as u32 +
-				heat_map[(x - size[0]) as usize] as u32 +
-				heat_map[(x + 1 - size[0]) as usize] as u32 +
-				heat_map[(x - size[0] * 2) as usize] as u32;
-			heat_map[x as usize] = ((sum * 255) >> 10) as u8;
+			update_func(x, x - 1 + size[0], x + size[0], x + 1 + size[0], x + size[0] * 2);
 		}
+
+		// Special case - right border.
+		update_func(
+			line_end_minus_one,
+			line_end_minus_one - 1 + size[0],
+			line_end_minus_one + size[0],
+			line_start + size[0],
+			line_end_minus_one + size[0] * 2,
+		);
 	}
+
+	{
+		// Special case - line before last.
+		// Clamp y + 2 to y + 1.
+		let line_start = (size[1] - 2) * size[0];
+		let line_start_plus_one = line_start + 1;
+		let line_end_minus_one = line_start + size[0] - 1;
+
+		// Special case - left border.
+		update_func(
+			line_start,
+			line_end_minus_one + size[0],
+			line_start + size[0],
+			line_start + 1 + size[0],
+			line_start + size[0],
+		);
+
+		for x in line_start_plus_one .. line_end_minus_one
+		{
+			update_func(x, x - 1 + size[0], x + size[0], x + 1 + size[0], x + size[0]);
+		}
+
+		// Special case - right border.
+		update_func(
+			line_end_minus_one,
+			line_end_minus_one - 1 + size[0],
+			line_end_minus_one + size[0],
+			line_start + size[0],
+			line_end_minus_one + size[0],
+		);
+	}
+
+	// TODO - handle last line.
 }
 
 type Palette = [Color32; 256];
