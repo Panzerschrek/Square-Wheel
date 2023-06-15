@@ -81,9 +81,15 @@ impl GenerativeTextureEffectFire
 		{
 			match heat_source
 			{
-				HeatSource::Point { center, heat } =>
+				HeatSource::Point { center, offset, heat } =>
 				{
-					set_heat(center[0], center[1], get_value_with_random_deviation(heat))
+					let offset_x = get_value_with_random_deviation(&offset[0]);
+					let offset_y = get_value_with_random_deviation(&offset[1]);
+					set_heat(
+						(center[0] as f32 + offset_x).floor() as i32 as u32,
+						(center[1] as f32 + offset_y).floor() as i32 as u32,
+						get_value_with_random_deviation(heat),
+					)
 				},
 				HeatSource::Line { points, heat } =>
 				{

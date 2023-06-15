@@ -30,6 +30,10 @@ pub enum HeatSource
 	{
 		center: [u32; 2],
 
+		// Offset function for x/y coordinates.
+		#[serde(default)]
+		offset: [ValueWithRandomDeviation; 2],
+
 		#[serde(default = "default_heat")]
 		heat: ValueWithRandomDeviation,
 	},
