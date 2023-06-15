@@ -32,6 +32,36 @@ impl GenerativeTextureEffectFire
 			palette: [Color32::black(); 256],
 		}
 	}
+
+	fn step_update_heat_field(&mut self)
+	{
+		let size = [
+			1 << self.fire_effect.resolution_log2[0],
+			1 << self.fire_effect.resolution_log2[1],
+		];
+		let size_mask = [size[0] - 1, size[1] - 1];
+		let v_shift = self.fire_effect.resolution_log2[0];
+
+		let heat_map = &mut self.heat_map;
+		let mut set_heat = |x, y, heat: f32| {
+			let address = ((x & size_mask[0]) + ((y & size_mask[1]) << v_shift)) as usize;
+			// TODO - use unchecked to int conversion.
+			heat_map[address] = std::cmp::max(
+				heat_map[address],
+				(heat * 255.0).max(0.0).min(255.0) as HeatMapElemement,
+			)
+		};
+
+		for heat_source in &self.fire_effect.heat_sources
+		{
+			match heat_source
+			{
+				HeatSource::ConstantPoint { center, heat } => set_heat(center[0], center[1], *heat),
+			}
+		}
+
+		update_heat_map(size, &mut self.heat_map);
+	}
 }
 
 impl GenerativeTextureEffect for GenerativeTextureEffectFire
@@ -51,14 +81,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectFire
 		_current_time_s: f32,
 	)
 	{
-		let size = [
-			1 << self.fire_effect.resolution_log2[0],
-			1 << self.fire_effect.resolution_log2[1],
-		];
-
-		self.heat_map[(size[0] / 2 + (size[1] - 1) * size[0]) as usize] = 255;
-
-		update_heat_map(size, &mut self.heat_map);
+		self.step_update_heat_field();
 
 		if out_texture_data.emissive_texture[0].pixels.is_empty()
 		{
@@ -69,6 +92,11 @@ impl GenerativeTextureEffect for GenerativeTextureEffectFire
 				self.palette[i] = Color32::from_rgb(i as u8, i as u8, i as u8);
 			}
 		}
+
+		let size = [
+			1 << self.fire_effect.resolution_log2[0],
+			1 << self.fire_effect.resolution_log2[1],
+		];
 
 		generate_emissive_texture_based_on_heat_map(
 			size,
