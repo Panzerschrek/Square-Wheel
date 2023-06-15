@@ -81,9 +81,14 @@ impl GenerativeTextureEffectFire
 		{
 			match heat_source
 			{
-				HeatSource::ConstantPoint { center, heat } => set_heat(center[0], center[1], *heat),
-				HeatSource::ConstantLine { points, heat } =>
+				HeatSource::Point { center, heat } =>
 				{
+					set_heat(center[0], center[1], get_value_with_random_deviation(heat))
+				},
+				HeatSource::Line { points, heat } =>
+				{
+					let heat = get_value_with_random_deviation(heat);
+
 					// Perform simple line reasterization (with integer coords of points).
 					let mut points = *points;
 					let abs_dx = ((points[0][0] as i32) - (points[1][0] as i32)).abs();
@@ -101,7 +106,7 @@ impl GenerativeTextureEffectFire
 							let x = (points[0][0] as i32) + x_offset;
 							let y = fixed16_round_to_int(y_fract);
 							y_fract += y_step;
-							set_heat(x as u32, y as u32, *heat);
+							set_heat(x as u32, y as u32, heat);
 						}
 					}
 					else
@@ -117,7 +122,7 @@ impl GenerativeTextureEffectFire
 							let y = (points[0][1] as i32) + y_offset;
 							let x = fixed16_round_to_int(x_fract);
 							x_fract += x_step;
-							set_heat(x as u32, y as u32, *heat);
+							set_heat(x as u32, y as u32, heat);
 						}
 					}
 				},
@@ -138,6 +143,7 @@ impl GenerativeTextureEffectFire
 					{
 						if self.particles.len() < MAX_PARTICLES
 						{
+							let heat = get_value_with_random_deviation(heat);
 							let angle = get_value_with_random_deviation(angle);
 							let speed = get_value_with_random_deviation(speed);
 							let gravity = get_value_with_random_deviation(gravity);
@@ -154,7 +160,7 @@ impl GenerativeTextureEffectFire
 								velocity,
 								despawn_time: self.update_step + lifetime,
 								gravity: gravity / (self.update_frequency * self.update_frequency),
-								heat: *heat,
+								heat,
 							});
 						}
 					}

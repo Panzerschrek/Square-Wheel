@@ -22,23 +22,24 @@ pub struct FireEffect
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum HeatSource
 {
 	/// Set heat at given point.
-	ConstantPoint
+	Point
 	{
 		center: [u32; 2],
 
 		#[serde(default = "default_heat")]
-		heat: f32,
+		heat: ValueWithRandomDeviation,
 	},
 	/// Set heat along given line.
-	ConstantLine
+	Line
 	{
 		points: [[u32; 2]; 2],
 
 		#[serde(default = "default_heat")]
-		heat: f32,
+		heat: ValueWithRandomDeviation,
 	},
 	/// Emit particles.
 	Fountain
@@ -52,7 +53,7 @@ pub enum HeatSource
 
 		// Heat of emited particles.
 		#[serde(default = "default_heat")]
-		heat: f32,
+		heat: ValueWithRandomDeviation,
 
 		// Angle of initial particle velocity.
 		#[serde(default)]
@@ -90,9 +91,12 @@ pub struct ValueWithRandomDeviation
 	pub random_deviation: SingleArgumentFunction,
 }
 
-fn default_heat() -> f32
+fn default_heat() -> ValueWithRandomDeviation
 {
-	1.0
+	ValueWithRandomDeviation {
+		value: SingleArgumentFunction::Constant(1.0),
+		random_deviation: SingleArgumentFunction::default(),
+	}
 }
 
 fn default_one() -> f32
