@@ -141,9 +141,18 @@ impl GenerativeTextureEffectFire
 						}
 					}
 				},
-				HeatSource::Lightning { points, heat } =>
+				HeatSource::Lightning { points, heat, ramp } =>
 				{
 					let heat = convert_heat(get_value_with_random_deviation(rand_engine, heat));
+					let head_fract = int_to_fixed16(heat as i32);
+					let (mut heat_start, mut heat_end) = if *ramp
+					{
+						(head_fract, 0)
+					}
+					else
+					{
+						(head_fract, head_fract)
+					};
 
 					// Perform line reasterization (with integer coords of points), shift coordinates by random value.
 					let mut points = *points;
@@ -165,17 +174,24 @@ impl GenerativeTextureEffectFire
 						if points[0][0] > points[1][0]
 						{
 							points.swap(0, 1);
+							std::mem::swap(&mut heat_start, &mut heat_end);
 						}
+
 						let y_step =
 							(int_to_fixed16((points[1][1] as i32) - (points[0][1] as i32)) - rand_offset) / abs_dx;
 						let mut y_fract = int_to_fixed16(points[0][1] as i32);
+
+						let heat_step = (heat_end - heat_start) / abs_dx;
+						let mut heat_cur = heat_start;
+
 						for x_offset in 0 ..= abs_dx as i32
 						{
 							let x = (points[0][0] as i32) + x_offset;
 							let y_add = unsafe { debug_only_checked_fetch(&self.rand_buffer, x_offset as usize) };
 							let y = fixed16_round_to_int(y_fract + y_add);
+							set_heat(x as u32, y as u32, fixed16_floor_to_int(heat_cur) as HeatMapElemement);
 							y_fract += y_step;
-							set_heat(x as u32, y as u32, heat);
+							heat_cur += heat_step;
 						}
 					}
 					else
@@ -183,17 +199,24 @@ impl GenerativeTextureEffectFire
 						if points[0][1] > points[1][1]
 						{
 							points.swap(0, 1);
+							std::mem::swap(&mut heat_start, &mut heat_end);
 						}
+
 						let x_step =
 							(int_to_fixed16((points[1][0] as i32) - (points[0][0] as i32)) - rand_offset) / abs_dy;
 						let mut x_fract = int_to_fixed16(points[0][0] as i32);
-						for y_offset in 1 ..= abs_dy as i32
+
+						let heat_step = (heat_end - heat_start) / abs_dy;
+						let mut heat_cur = heat_start;
+
+						for y_offset in 0 ..= abs_dy as i32
 						{
 							let y = (points[0][1] as i32) + y_offset;
 							let x_add = unsafe { debug_only_checked_fetch(&self.rand_buffer, y_offset as usize) };
 							let x = fixed16_round_to_int(x_fract + x_add);
+							set_heat(x as u32, y as u32, fixed16_floor_to_int(heat_cur) as HeatMapElemement);
 							x_fract += x_step;
-							set_heat(x as u32, y as u32, heat);
+							heat_cur += heat_step;
 						}
 					}
 				},

@@ -58,6 +58,10 @@ pub enum HeatSource
 
 		#[serde(default = "default_heat")]
 		heat: ValueWithRandomDeviation,
+
+		/// If true - decay heat intensity from start to end.
+		#[serde(default)]
+		ramp: bool,
 	},
 	/// Emit particles.
 	Fountain
