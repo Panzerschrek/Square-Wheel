@@ -1,5 +1,5 @@
 use super::{fast_math::*, map_materials_processor_structs::*, textures::*};
-use crate::common::{color::*, material_fire::*};
+use crate::common::{color::*, fixed_math::*, material_fire::*};
 
 pub struct GenerativeTextureEffectFire
 {
@@ -57,6 +57,45 @@ impl GenerativeTextureEffectFire
 			match heat_source
 			{
 				HeatSource::ConstantPoint { center, heat } => set_heat(center[0], center[1], *heat),
+				HeatSource::ConstantLine { points, heat } =>
+				{
+					// Perform simple line reasterization (with integer coords of points).
+					let mut points = *points;
+					let abs_dx = ((points[0][0] as i32) - (points[1][0] as i32)).abs();
+					let abs_dy = ((points[0][1] as i32) - (points[1][1] as i32)).abs();
+					if abs_dx >= abs_dy
+					{
+						if points[0][0] > points[1][0]
+						{
+							points.swap(0, 1);
+						}
+						let y_step = int_to_fixed16((points[1][1] as i32) - (points[0][1] as i32)) / abs_dx;
+						let mut y_fract = int_to_fixed16(points[0][1] as i32);
+						for x_offset in 0 ..= abs_dx as i32
+						{
+							let x = (points[0][0] as i32) + x_offset;
+							let y = fixed16_round_to_int(y_fract);
+							y_fract += y_step;
+							set_heat(x as u32, y as u32, *heat);
+						}
+					}
+					else
+					{
+						if points[0][1] > points[1][1]
+						{
+							points.swap(0, 1);
+						}
+						let x_step = int_to_fixed16((points[1][0] as i32) - (points[0][0] as i32)) / abs_dy;
+						let mut x_fract = int_to_fixed16(points[0][0] as i32);
+						for y_offset in 1 ..= abs_dy as i32
+						{
+							let y = (points[0][1] as i32) + y_offset;
+							let x = fixed16_round_to_int(x_fract);
+							x_fract += x_step;
+							set_heat(x as u32, y as u32, *heat);
+						}
+					}
+				},
 			}
 		}
 

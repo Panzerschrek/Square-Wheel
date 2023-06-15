@@ -26,6 +26,14 @@ pub enum HeatSource
 		#[serde(default = "default_one")]
 		heat: f32,
 	},
+	/// Set heat along given line.
+	ConstantLine
+	{
+		points: [[u32; 2]; 2],
+
+		#[serde(default = "default_one")]
+		heat: f32,
+	},
 }
 
 fn default_one() -> f32
