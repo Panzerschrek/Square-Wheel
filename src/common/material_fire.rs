@@ -10,6 +10,11 @@ pub struct FireEffect
 	#[serde(default = "default_update_frequency")]
 	pub update_frequency: f32,
 
+	/// Greater value - less fire attenuation.
+	/// attenuation = 1.0 - 1.0 / heat_conductivity
+	#[serde(default = "default_heat_conductivity")]
+	pub heat_conductivity: f32,
+
 	/// Sources of heat.
 	/// Without any source fire texture is completely dark and boring.
 	pub heat_sources: Vec<HeatSource>,
@@ -44,4 +49,9 @@ fn default_one() -> f32
 fn default_update_frequency() -> f32
 {
 	30.0
+}
+
+fn default_heat_conductivity() -> f32
+{
+	20.0
 }

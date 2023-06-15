@@ -33,7 +33,7 @@ impl GenerativeTextureEffectFire
 		}
 	}
 
-	fn step_update_heat_field(&mut self)
+	fn step_update_heat_map(&mut self)
 	{
 		let size = [
 			1 << self.fire_effect.resolution_log2[0],
@@ -99,7 +99,8 @@ impl GenerativeTextureEffectFire
 			}
 		}
 
-		update_heat_map(size, &mut self.heat_map);
+		let attenuation = 1.0 - 1.0 / self.fire_effect.heat_conductivity.max(1.0).min(1000000.0);
+		update_heat_map(size, &mut self.heat_map, attenuation);
 	}
 }
 
@@ -120,7 +121,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectFire
 		_current_time_s: f32,
 	)
 	{
-		self.step_update_heat_field();
+		self.step_update_heat_map();
 
 		if out_texture_data.emissive_texture[0].pixels.is_empty()
 		{
@@ -156,21 +157,21 @@ impl GenerativeTextureEffect for GenerativeTextureEffectFire
 
 type HeatMapElemement = u8;
 
-fn update_heat_map(size: [u32; 2], heat_map: &mut [HeatMapElemement])
+fn update_heat_map(size: [u32; 2], heat_map: &mut [HeatMapElemement], attenuation: f32)
 {
 	debug_assert!(size[0] >= 4);
 	debug_assert!(size[1] >= 4);
 	debug_assert!(heat_map.len() == (size[0] * size[1]) as usize);
 
-	// TODO - make it configurable.
-	let attenuation = 240;
+	const SHIFT: u32 = 20;
+	let attenuation_i = (attenuation.max(0.0).min(1.0) * ((1 << (SHIFT - 2)) as f32)) as u32;
 
 	let mut update_func = |offset, offset_y_plus_x_minus, offset_y_plus, offset_y_plus_x_plus, offset_y_plus_plus| unsafe {
 		let sum = (debug_only_checked_fetch(heat_map, offset_y_plus_x_minus as usize) as u32) +
 			(debug_only_checked_fetch(heat_map, offset_y_plus as usize) as u32) +
 			(debug_only_checked_fetch(heat_map, offset_y_plus_x_plus as usize) as u32) +
 			(debug_only_checked_fetch(heat_map, offset_y_plus_plus as usize) as u32);
-		debug_only_checked_write(heat_map, offset as usize, ((sum * attenuation) >> 10) as u8);
+		debug_only_checked_write(heat_map, offset as usize, ((sum * attenuation_i) >> SHIFT) as u8);
 	};
 
 	for y in 0 .. size[1] - 2
