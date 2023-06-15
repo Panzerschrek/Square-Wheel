@@ -56,27 +56,27 @@ pub enum HeatSource
 
 		// Angle of initial particle velocity.
 		#[serde(default)]
-		particle_angle: ValueWithRandomDeviation,
+		angle: ValueWithRandomDeviation,
 
 		// Initial speed (pixels/s).
 		#[serde(default)]
-		particle_speed: ValueWithRandomDeviation,
+		speed: ValueWithRandomDeviation,
 
 		// pixels / (s * s).
 		#[serde(default)]
-		particle_gravity: ValueWithRandomDeviation,
+		gravity: ValueWithRandomDeviation,
 
 		// Angle in which direction particle is spawned.
 		#[serde(default)]
-		particle_spawn_angle: ValueWithRandomDeviation,
+		spawn_angle: ValueWithRandomDeviation,
 
 		// Distance from center (in pixels), where particle is spawned.
 		#[serde(default)]
-		particle_spawn_distance: ValueWithRandomDeviation,
+		spawn_distance: ValueWithRandomDeviation,
 
 		// Lifetime of spawned particle (in seconds(.
 		#[serde(default = "default_particle_lifetime")]
-		particle_lifetime: ValueWithRandomDeviation,
+		lifetime: ValueWithRandomDeviation,
 	},
 }
 

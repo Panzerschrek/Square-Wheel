@@ -125,12 +125,12 @@ impl GenerativeTextureEffectFire
 					center,
 					frequency,
 					heat,
-					particle_angle,
-					particle_speed,
-					particle_gravity,
-					particle_spawn_angle,
-					particle_spawn_distance,
-					particle_lifetime,
+					angle,
+					speed,
+					gravity,
+					spawn_angle,
+					spawn_distance,
+					lifetime,
 				} =>
 				{
 					let inv_frequency_int = (self.update_frequency / frequency).max(1.0) as u32;
@@ -138,24 +138,22 @@ impl GenerativeTextureEffectFire
 					{
 						if self.particles.len() < MAX_PARTICLES
 						{
-							let particle_angle = get_value_with_random_deviation(particle_angle);
-							let particle_speed = get_value_with_random_deviation(particle_speed);
-							let particle_gravity = get_value_with_random_deviation(particle_gravity);
-							let particle_spawn_angle = get_value_with_random_deviation(particle_spawn_angle);
-							let particle_spawn_distance = get_value_with_random_deviation(particle_spawn_distance);
-							let particle_lifetime = get_value_with_random_deviation(particle_lifetime);
+							let angle = get_value_with_random_deviation(angle);
+							let speed = get_value_with_random_deviation(speed);
+							let gravity = get_value_with_random_deviation(gravity);
+							let spawn_angle = get_value_with_random_deviation(spawn_angle);
+							let spawn_distance = get_value_with_random_deviation(spawn_distance);
+							let lifetime = get_value_with_random_deviation(lifetime);
 
-							let velocity = Vec2f::new(particle_angle.cos(), particle_angle.sin()) *
-								(particle_speed / self.update_frequency);
-							let spawn_vec = Vec2f::new(particle_spawn_angle.cos(), particle_spawn_angle.sin()) *
-								particle_spawn_distance;
-							let lifetime = (particle_lifetime * self.update_frequency).max(1.0).min(1024.0) as u32;
+							let velocity = Vec2f::new(angle.cos(), angle.sin()) * (speed / self.update_frequency);
+							let spawn_vec = Vec2f::new(spawn_angle.cos(), spawn_angle.sin()) * spawn_distance;
+							let lifetime = (lifetime * self.update_frequency).max(1.0).min(1024.0) as u32;
 
 							self.particles.push(Particle {
 								position: Vec2f::new(center[0] as f32, center[1] as f32) + spawn_vec,
 								velocity,
 								despawn_time: self.update_step + lifetime,
-								gravity: particle_gravity / (self.update_frequency * self.update_frequency),
+								gravity: gravity / (self.update_frequency * self.update_frequency),
 								heat: *heat,
 							});
 						}
