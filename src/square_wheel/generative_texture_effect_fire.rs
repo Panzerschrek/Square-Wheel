@@ -13,6 +13,7 @@ pub struct GenerativeTextureEffectFire
 	// Use random for some heat sources.
 	rand_engine: RandEngine,
 	particles: Vec<Particle>,
+	rand_buffer: Vec<Fixed16>,
 }
 
 impl GenerativeTextureEffectFire
@@ -38,6 +39,7 @@ impl GenerativeTextureEffectFire
 			update_step: 0,
 			// Initialize random engine generator with good, but deterministic value.
 			rand_engine: RandEngine::seed_from_u64(0b1001100000111010100101010101010111000111010110100101111001010101),
+			rand_buffer: Vec::new(),
 			particles: Vec::with_capacity(MAX_PARTICLES),
 		}
 	}
@@ -70,12 +72,13 @@ impl GenerativeTextureEffectFire
 			)
 		};
 
-		let rand_engine = &mut self.rand_engine;
-		let mut get_value_with_random_deviation = |v: &ValueWithRandomDeviation| {
+		let get_value_with_random_deviation = |rand_engine: &mut RandEngine, v: &ValueWithRandomDeviation| {
 			let value = v.value.evaluate(time_s);
 			let deviation = v.random_deviation.evaluate(time_s);
 			value - deviation + rand_engine.gen_range(0.0 ..= deviation.max(0.0) * 2.0)
 		};
+
+		let rand_engine = &mut self.rand_engine;
 
 		for heat_source in &self.fire_effect.heat_sources
 		{
@@ -83,17 +86,17 @@ impl GenerativeTextureEffectFire
 			{
 				HeatSource::Point { center, offset, heat } =>
 				{
-					let offset_x = get_value_with_random_deviation(&offset[0]);
-					let offset_y = get_value_with_random_deviation(&offset[1]);
+					let offset_x = get_value_with_random_deviation(rand_engine, &offset[0]);
+					let offset_y = get_value_with_random_deviation(rand_engine, &offset[1]);
 					set_heat(
 						(center[0] as f32 + offset_x).floor() as i32 as u32,
 						(center[1] as f32 + offset_y).floor() as i32 as u32,
-						get_value_with_random_deviation(heat),
+						get_value_with_random_deviation(rand_engine, heat),
 					)
 				},
 				HeatSource::Line { points, heat } =>
 				{
-					let heat = get_value_with_random_deviation(heat);
+					let heat = get_value_with_random_deviation(rand_engine, heat);
 
 					// Perform simple line reasterization (with integer coords of points).
 					let mut points = *points;
@@ -132,6 +135,60 @@ impl GenerativeTextureEffectFire
 						}
 					}
 				},
+				HeatSource::Lightning { points, heat } =>
+				{
+					let heat = get_value_with_random_deviation(rand_engine, heat);
+
+					// Perform line reasterization (with integer coords of points), shift coordinates by random value.
+					let mut points = *points;
+					let abs_dx = ((points[0][0] as i32) - (points[1][0] as i32)).abs();
+					let abs_dy = ((points[0][1] as i32) - (points[1][1] as i32)).abs();
+
+					self.rand_buffer.resize((std::cmp::max(abs_dx, abs_dy) + 1) as usize, 0);
+					let mut rand_offset = 0;
+					for rand_val in &mut self.rand_buffer
+					{
+						// use deviation no more than one - in order to avoid gaps in lightning.
+						// TODO - use faster random?
+						*rand_val = rand_offset + rand_engine.gen_range(-FIXED16_ONE ..= FIXED16_ONE);
+						rand_offset = *rand_val;
+					}
+
+					if abs_dx >= abs_dy
+					{
+						if points[0][0] > points[1][0]
+						{
+							points.swap(0, 1);
+						}
+						let y_step =
+							(int_to_fixed16((points[1][1] as i32) - (points[0][1] as i32)) - rand_offset) / abs_dx;
+						let mut y_fract = int_to_fixed16(points[0][1] as i32);
+						for x_offset in 0 ..= abs_dx as i32
+						{
+							let x = (points[0][0] as i32) + x_offset;
+							let y = fixed16_round_to_int(y_fract + self.rand_buffer[x_offset as usize]);
+							y_fract += y_step;
+							set_heat(x as u32, y as u32, heat);
+						}
+					}
+					else
+					{
+						if points[0][1] > points[1][1]
+						{
+							points.swap(0, 1);
+						}
+						let x_step =
+							(int_to_fixed16((points[1][0] as i32) - (points[0][0] as i32)) - rand_offset) / abs_dy;
+						let mut x_fract = int_to_fixed16(points[0][0] as i32);
+						for y_offset in 1 ..= abs_dy as i32
+						{
+							let y = (points[0][1] as i32) + y_offset;
+							let x = fixed16_round_to_int(x_fract + self.rand_buffer[y_offset as usize]);
+							x_fract += x_step;
+							set_heat(x as u32, y as u32, heat);
+						}
+					}
+				},
 				HeatSource::Fountain {
 					center,
 					frequency,
@@ -149,13 +206,13 @@ impl GenerativeTextureEffectFire
 					{
 						if self.particles.len() < MAX_PARTICLES
 						{
-							let heat = get_value_with_random_deviation(heat);
-							let angle = get_value_with_random_deviation(angle);
-							let speed = get_value_with_random_deviation(speed);
-							let gravity = get_value_with_random_deviation(gravity);
-							let spawn_angle = get_value_with_random_deviation(spawn_angle);
-							let spawn_distance = get_value_with_random_deviation(spawn_distance);
-							let lifetime = get_value_with_random_deviation(lifetime);
+							let heat = get_value_with_random_deviation(rand_engine, heat);
+							let angle = get_value_with_random_deviation(rand_engine, angle);
+							let speed = get_value_with_random_deviation(rand_engine, speed);
+							let gravity = get_value_with_random_deviation(rand_engine, gravity);
+							let spawn_angle = get_value_with_random_deviation(rand_engine, spawn_angle);
+							let spawn_distance = get_value_with_random_deviation(rand_engine, spawn_distance);
+							let lifetime = get_value_with_random_deviation(rand_engine, lifetime);
 
 							let velocity = Vec2f::new(angle.cos(), angle.sin()) * (speed / self.update_frequency);
 							let spawn_vec = Vec2f::new(spawn_angle.cos(), spawn_angle.sin()) * spawn_distance;

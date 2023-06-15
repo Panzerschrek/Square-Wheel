@@ -45,6 +45,14 @@ pub enum HeatSource
 		#[serde(default = "default_heat")]
 		heat: ValueWithRandomDeviation,
 	},
+	/// Draw lightning between specified points, using given heat.
+	Lightning
+	{
+		points: [[u32; 2]; 2],
+
+		#[serde(default = "default_heat")]
+		heat: ValueWithRandomDeviation,
+	},
 	/// Emit particles.
 	Fountain
 	{
