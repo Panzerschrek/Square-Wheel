@@ -121,6 +121,7 @@ impl GenerativeTextureEffectFire
 					heat,
 					particle_angle,
 					particle_speed,
+					particle_gravity,
 					particle_spawn_angle,
 					particle_spawn_distance,
 					particle_lifetime,
@@ -133,6 +134,7 @@ impl GenerativeTextureEffectFire
 						{
 							let particle_angle = get_value_with_random_deviation(particle_angle);
 							let particle_speed = get_value_with_random_deviation(particle_speed);
+							let particle_gravity = get_value_with_random_deviation(particle_gravity);
 							let particle_spawn_angle = get_value_with_random_deviation(particle_spawn_angle);
 							let particle_spawn_distance = get_value_with_random_deviation(particle_spawn_distance);
 							let particle_lifetime = get_value_with_random_deviation(particle_lifetime);
@@ -147,6 +149,7 @@ impl GenerativeTextureEffectFire
 								position: Vec2f::new(center[0] as f32, center[1] as f32) + spawn_vec,
 								velocity,
 								despawn_time: self.update_step + lifetime,
+								gravity: particle_gravity / (self.update_frequency * self.update_frequency),
 								heat: *heat,
 							});
 						}
@@ -168,6 +171,7 @@ impl GenerativeTextureEffectFire
 				continue;
 			}
 
+			particle.velocity.y += particle.gravity;
 			particle.position += particle.velocity;
 
 			set_heat(
@@ -243,7 +247,7 @@ struct Particle
 	velocity: Vec2f,   // Pixels/step
 	position: Vec2f,   // Pixels
 	despawn_time: u32, // in ticks
-	// TODO - add also gravity.
+	gravity: f32,
 	heat: f32, // TODO - store byte value instead
 }
 

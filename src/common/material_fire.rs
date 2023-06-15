@@ -62,6 +62,10 @@ pub enum HeatSource
 		#[serde(default)]
 		particle_speed: ValueWithRandomDeviation,
 
+		// pixels / (s * s).
+		#[serde(default)]
+		particle_gravity: ValueWithRandomDeviation,
+
 		// Angle in which direction particle is spawned.
 		#[serde(default)]
 		particle_spawn_angle: ValueWithRandomDeviation,
