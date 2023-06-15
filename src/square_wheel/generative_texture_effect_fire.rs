@@ -31,11 +31,18 @@ impl GenerativeTextureEffectFire
 			panic!("Fire texture is too big!");
 		}
 
+		// Fill dummy/backup palette.
+		let mut palette = [Color32::black(); 256];
+		for i in 0 .. 256
+		{
+			palette[i] = Color32::from_rgb(i as u8, i as u8, i as u8);
+		}
+
 		Self {
 			update_frequency: fire_effect.update_frequency.max(1.0).min(200.0),
 			fire_effect,
 			heat_map: vec![0; area],
-			palette: [Color32::black(); 256],
+			palette,
 			update_step: 0,
 			// Initialize random engine generator with good, but deterministic value.
 			rand_engine: RandEngine::seed_from_u64(0b1001100000111010100101010101010111000111010110100101111001010101),
@@ -272,7 +279,7 @@ impl GenerativeTextureEffect for GenerativeTextureEffectFire
 	fn update(
 		&mut self,
 		out_texture_data: &mut GenerativeTextureData,
-		_texture_data: &MapTextureData,
+		texture_data: &MapTextureData,
 		_all_textures_data: &[MapTextureData],
 		_textures_mapping_table: &[TextureMappingElement],
 		_current_time_s: f32,
@@ -283,10 +290,30 @@ impl GenerativeTextureEffect for GenerativeTextureEffectFire
 		if out_texture_data.emissive_texture[0].pixels.is_empty()
 		{
 			// First update - generate palette.
-			// TODO - use emissive image for it.
-			for i in 0 .. 256
+			if let Some(color) = self.fire_effect.color
 			{
-				self.palette[i] = Color32::from_rgb(i as u8, i as u8, i as u8);
+				// use specified color for palette generation.
+				for i in 0 .. 256
+				{
+					let scale = i as f32;
+					self.palette[i] = Color32::from_rgb(
+						(color[0] * scale).max(0.0).min(255.0) as u8,
+						(color[1] * scale).max(0.0).min(255.0) as u8,
+						(color[2] * scale).max(0.0).min(255.0) as u8,
+					);
+				}
+			}
+			else if let Some(emissive_texture) = &texture_data.emissive_texture
+			{
+				if !emissive_texture[0].pixels.is_empty()
+				{
+					// Use emissive layer texture as palette.
+					for i in 0 .. 256
+					{
+						self.palette[i as usize] =
+							emissive_texture[0].pixels[((i * emissive_texture[0].size[0]) >> 8) as usize];
+					}
+				}
 			}
 		}
 

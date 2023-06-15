@@ -16,6 +16,12 @@ pub struct FireEffect
 	#[serde(default = "default_heat_conductivity")]
 	pub heat_conductivity: f32,
 
+	/// If some - produce emissive texture by modulationg heat map, using this color.
+	/// Color is in range [0; 1], out of range values will be clamped.
+	/// Otherwise emissive image will be used as gradient image.
+	#[serde(default)]
+	pub color: Option<[f32; 3]>,
+
 	/// Sources of heat.
 	/// Without any source fire texture is completely dark and boring.
 	pub heat_sources: Vec<HeatSource>,
