@@ -70,10 +70,10 @@ impl GenerativeTextureEffectFire
 		let v_shift = self.fire_effect.resolution_log2[0];
 
 		let heat_map = &mut self.heat_map;
-		let mut set_heat = |x, y, heat: f32| {
+		let mut set_heat = |x, y, heat| {
 			let address = ((x & size_mask[0]) + ((y & size_mask[1]) << v_shift)) as usize;
 			let value = unsafe { debug_only_checked_access_mut(heat_map, address) };
-			*value = std::cmp::max(*value, (heat * 255.0).max(0.0).min(255.0) as HeatMapElemement)
+			*value = std::cmp::max(*value, heat)
 		};
 
 		let get_value_with_random_deviation = |rand_engine: &mut RandEngine, v: &ValueWithRandomDeviation| {
@@ -95,12 +95,12 @@ impl GenerativeTextureEffectFire
 					set_heat(
 						(center[0] as f32 + offset_x).floor() as i32 as u32,
 						(center[1] as f32 + offset_y).floor() as i32 as u32,
-						get_value_with_random_deviation(rand_engine, heat),
+						convert_heat(get_value_with_random_deviation(rand_engine, heat)),
 					)
 				},
 				HeatSource::Line { points, heat } =>
 				{
-					let heat = get_value_with_random_deviation(rand_engine, heat);
+					let heat = convert_heat(get_value_with_random_deviation(rand_engine, heat));
 
 					// Perform simple line reasterization (with integer coords of points).
 					let mut points = *points;
@@ -141,7 +141,7 @@ impl GenerativeTextureEffectFire
 				},
 				HeatSource::Lightning { points, heat } =>
 				{
-					let heat = get_value_with_random_deviation(rand_engine, heat);
+					let heat = convert_heat(get_value_with_random_deviation(rand_engine, heat));
 
 					// Perform line reasterization (with integer coords of points), shift coordinates by random value.
 					let mut points = *points;
@@ -229,7 +229,7 @@ impl GenerativeTextureEffectFire
 								velocity,
 								despawn_time: self.update_step + lifetime,
 								gravity: gravity / (self.update_frequency * self.update_frequency),
-								heat,
+								heat: convert_heat(heat),
 							});
 						}
 					}
@@ -344,12 +344,18 @@ struct Particle
 	position: Vec2f,   // Pixels
 	despawn_time: u32, // in ticks
 	gravity: f32,
-	heat: f32, // TODO - store byte value instead
+	heat: HeatMapElemement,
 }
 
 const MAX_PARTICLES: usize = 256;
 
 type HeatMapElemement = u8;
+
+// Convert normalized float into byte value and clamp.
+fn convert_heat(heat: f32) -> HeatMapElemement
+{
+	(heat * 255.0).max(0.0).min(255.0) as HeatMapElemement
+}
 
 fn update_heat_map(size: [u32; 2], heat_map: &mut [HeatMapElemement], attenuation: f32)
 {
