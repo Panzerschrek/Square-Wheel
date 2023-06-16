@@ -1,6 +1,5 @@
-use super::{fast_math::*, map_materials_processor_structs::*, textures::*};
+use super::{fast_math::*, generative_texture_effects_common::*, map_materials_processor_structs::*, textures::*};
 use crate::common::{color::*, fixed_math::*, image::*, material_water::*, math_types::*};
-use rand::{Rng, RngCore, SeedableRng};
 
 pub struct GenerativeTextureEffectWater
 {
@@ -40,8 +39,7 @@ impl GenerativeTextureEffectWater
 			wave_field: vec![0.0; area],
 			wave_field_old: vec![0.0; area],
 			color_image: Image::default(),
-			// Initialize random engine generator with good, but deterministic value.
-			rand_engine: RandEngine::seed_from_u64(0b1001100000111010100101010101010111000111010110100101111001010101),
+			rand_engine: create_rand_engine(),
 			update_step: 0,
 			prev_update_time_s: 0.0,
 		};
@@ -199,8 +197,6 @@ impl GenerativeTextureEffectWater
 		std::mem::swap(&mut self.wave_field, &mut self.wave_field_old);
 	}
 }
-
-type RandEngine = rand::rngs::SmallRng;
 
 impl GenerativeTextureEffect for GenerativeTextureEffectWater
 {

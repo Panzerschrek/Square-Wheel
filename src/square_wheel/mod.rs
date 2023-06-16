@@ -19,6 +19,7 @@ pub mod generative_texture_effect_fire;
 pub mod generative_texture_effect_layered;
 pub mod generative_texture_effect_turb;
 pub mod generative_texture_effect_water;
+pub mod generative_texture_effects_common;
 pub mod host;
 pub mod host_config;
 pub mod inline_models_index;

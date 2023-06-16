@@ -1,6 +1,5 @@
-use super::{fast_math::*, map_materials_processor_structs::*, textures::*};
+use super::{fast_math::*, generative_texture_effects_common::*, map_materials_processor_structs::*, textures::*};
 use crate::common::{color::*, fixed_math::*, material_fire::*, math_types::*};
-use rand::{Rng, SeedableRng};
 
 pub struct GenerativeTextureEffectFire
 {
@@ -46,8 +45,7 @@ impl GenerativeTextureEffectFire
 			palette,
 			update_step: 0,
 			prev_update_time_s: 0.0,
-			// Initialize random engine generator with good, but deterministic value.
-			rand_engine: RandEngine::seed_from_u64(0b1001100000111010100101010101010111000111010110100101111001010101),
+			rand_engine: create_rand_engine(),
 			rand_buffer: Vec::new(),
 			particles: Vec::with_capacity(MAX_PARTICLES),
 		};
@@ -321,9 +319,6 @@ impl GenerativeTextureEffectFire
 		}
 	}
 }
-
-type RandEngine = rand::rngs::SmallRng;
-
 impl GenerativeTextureEffect for GenerativeTextureEffectFire
 {
 	fn get_estimated_texel_count(&self, _texture_data: &MapTextureData, _all_textures_data: &[MapTextureData]) -> u32
