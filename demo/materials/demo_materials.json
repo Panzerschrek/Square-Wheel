@@ -10,6 +10,7 @@
 		"normal_map": "alpha_blend_normal.png",
 		"blending_mode": "AlphaBlend",
 		"blocks_view": false,
+		"decals": false,
 		"scroll_speed" : [0.0, -32.0]
 	},
 	"alpha_grid":
@@ -19,13 +20,15 @@
 		"roughness" : 0.05,
 		"is_metal" : true,
 		"blending_mode": "AlphaTest",
-		"blocks_view": false
+		"blocks_view": false,
+		"decals": false
 	},
 	"alpha_grid_mirror":
 	{
 		"diffuse": "alpha_grid_mirror.png",
 		"blocks_view": false,
 		"light": false,
+		"decals": false,
 		"portal_texture" : "alpha_grid_mirror.png",
 		"portal_blending_mode" : "AlphaTest"
 	},
@@ -178,6 +181,7 @@
 		"light" : false,
 		"draw" : false,
 		"solid" : false,
+		"decals" : false,
 		"comment" : "Leave triggers in BSP in order to avoid deleting trigger brushes"
 	},
 	"water":
@@ -188,6 +192,7 @@
 		"blending_mode": "Average",
 		"blocks_view": false,
 		"solid" : false,
+		"decals": false,
 		"special_effect":
 		{
 			"Turb":
@@ -206,6 +211,7 @@
 		"blending_mode": "Average",
 		"blocks_view": false,
 		"solid" : false,
+		"decals": false,
 		"scroll_speed": [0.0, -16.0]
 	},
 	"water_flowing_fast":
@@ -216,6 +222,7 @@
 		"blending_mode": "Average",
 		"blocks_view": false,
 		"solid" : false,
+		"decals": false,
 		"scroll_speed": [0.0, -64.0]
 	},
 	"well_top_limestone_bricks":

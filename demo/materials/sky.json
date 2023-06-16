@@ -11,6 +11,7 @@
 				"brightness" : 80.0
 			}
 		},
-		"light" : false
+		"light" : false,
+		"decals" : false
 	}
 }
