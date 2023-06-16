@@ -210,6 +210,15 @@ pub struct GeometryTouchExplodeComponent
 	pub radius: f32,
 }
 
+// Spawn a decal at explosion point.
+// TODO - make this component serializable.
+pub struct GeometryTouchExplodeDecalSpawnComponent
+{
+	pub decal: Decal,
+	// If zero - lives forever, else - despawn in given amount time.
+	pub lifetime_s: f32,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct PlateComponent
 {

@@ -151,10 +151,16 @@ pub fn update_player_entity(
 		let position = player_position;
 		let camera_vector = camera_rotation.rotate_vector(Vec3f::unit_x());
 
+		let shot_sprite = resources_manager.get_texture_lite("shot_sprite.png");
+		let shot_decal = resources_manager.get_texture_lite("shot_decal.png");
+
+		let images_scale = 0.4;
+		let phys_radius = 20.0;
+
 		ecs.spawn((
 			LocationComponent {
 				position: player_position,
-				rotation: QuaternionF::one(),
+				rotation: camera_rotation,
 			},
 			DynamicLightLocationLinkComponent {},
 			DynamicLight {
@@ -172,13 +178,34 @@ pub fn update_player_entity(
 			},
 			GeometryTouchExplodeComponent {
 				ignore_entity: player_entity,
-				radius: 24.0,
+				radius: phys_radius,
+			},
+			GeometryTouchExplodeDecalSpawnComponent {
+				decal: Decal {
+					position,
+					rotation: camera_rotation,
+					scale: images_scale *
+						0.5 * Vec3f::new(
+						// TODO - fix this. Tune decal depth after collision (based on collision geometry normal).
+						8.0 * phys_radius,
+						shot_decal[0].size[0] as f32,
+						shot_decal[0].size[1] as f32,
+					),
+					texture: shot_decal,
+					blending_mode: material::BlendingMode::AlphaBlend,
+					lightmap_light_scale: 1.0,
+					light_add: [0.0, 0.0, 0.0],
+				},
+				lifetime_s: 10.0,
 			},
 			Sprite {
 				position,
 				angle: 0.0,
-				radius: 32.0,
-				texture: resources_manager.get_texture_lite("shot_sprite.png"),
+				radius: images_scale *
+					0.5 * ((shot_sprite[0].size[0] * shot_sprite[0].size[0] +
+					shot_sprite[0].size[1] * shot_sprite[0].size[1]) as f32)
+					.sqrt(),
+				texture: shot_sprite,
 				orientation: SpriteOrientation::FacingTowardsCamera,
 				blending_mode: material::BlendingMode::AlphaBlend,
 				light_scale: 0.0,
@@ -906,11 +933,15 @@ pub fn update_named_activations(ecs: &mut hecs::World)
 pub fn update_touch_explode_entities(
 	ecs: &mut hecs::World,
 	ecs_command_buffer: &mut hecs::CommandBuffer,
+	game_time: f32,
 	physics: &TestGamePhysics,
 )
 {
-	for (id, (geometry_touch_explode_component, location_component)) in
-		ecs.query_mut::<(&GeometryTouchExplodeComponent, &LocationComponent)>()
+	// TODO - refactor this.
+	// Create proper physics body for such entities and handle collisions (with collision point and normal data).
+	for (id, (geometry_touch_explode_component, location_component)) in ecs
+		.query::<(&GeometryTouchExplodeComponent, &LocationComponent)>()
+		.into_iter()
 	{
 		let mut touched = false;
 		physics.get_sphere_touching_entities(
@@ -930,6 +961,31 @@ pub fn update_touch_explode_entities(
 		if touched
 		{
 			ecs_command_buffer.despawn(id);
+
+			if let Some(geometry_touch_explode_decal_spawn_component) = ecs
+				.query_one::<&GeometryTouchExplodeDecalSpawnComponent>(id)
+				.unwrap() // Accessing existing entity - unwrap is ok.
+				.get()
+			{
+				let mut decal = geometry_touch_explode_decal_spawn_component.decal.clone();
+				// TODO - orientate decal properly, based on collision point position and normal.
+				decal.position = location_component.position;
+				decal.rotation = location_component.rotation;
+
+				if geometry_touch_explode_decal_spawn_component.lifetime_s > 0.0
+				{
+					ecs_command_buffer.spawn((
+						decal,
+						TimedDespawnComponent {
+							despawn_time: game_time + geometry_touch_explode_decal_spawn_component.lifetime_s,
+						},
+					));
+				}
+				else
+				{
+					ecs_command_buffer.spawn((decal,));
+				}
+			}
 		}
 	}
 
