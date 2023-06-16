@@ -367,52 +367,51 @@ pub fn make_texture_lite_mips(mip0: TextureLite) -> TextureLiteWithMips
 	debug_assert!(mip0.size[0] >= (1 << MAX_MIP));
 	debug_assert!(mip0.size[1] >= (1 << MAX_MIP));
 
-	let mut result = [
-		mip0,
-		TextureLite::default(),
-		TextureLite::default(),
-		TextureLite::default(),
-		TextureLite::default(),
-	];
+	let mut mip1 = TextureLite::default();
+	build_texture_lite_mip(&mut mip1, &mip0);
+	let mut mip2 = TextureLite::default();
+	build_texture_lite_mip(&mut mip2, &mip1);
+	let mut mip3 = TextureLite::default();
+	build_texture_lite_mip(&mut mip3, &mip2);
+	let mut mip4 = TextureLite::default();
+	build_texture_lite_mip(&mut mip4, &mip3);
 
-	for i in 1 .. NUM_MIPS
+	[mip0, mip1, mip2, mip3, mip4]
+}
+
+// Build mip in-place.
+// Reuse existing pixels storage.
+// Usable for run-time mips update.
+pub fn build_texture_lite_mip(mip: &mut TextureLite, prev_mip: &TextureLite)
+{
+	mip.size = [prev_mip.size[0] >> 1, prev_mip.size[1] >> 1];
+	mip.pixels
+		.resize((mip.size[0] * mip.size[1]) as usize, Color32::black());
+
+	if mip.size[0] * mip.size[1] == 0
 	{
-		let prev_mip = &mut result[i - 1];
-		let mut mip = TextureLite {
-			size: [prev_mip.size[0] >> 1, prev_mip.size[1] >> 1],
-			pixels: Vec::new(),
-		};
-
-		if mip.size[0] * mip.size[1] == 0
-		{
-			continue;
-		}
-
-		mip.pixels = vec![Color32::black(); (mip.size[0] * mip.size[1]) as usize];
-
-		let prev_mip_width = prev_mip.size[0] as usize;
-		let mip_width = mip.size[0] as usize;
-		for y in 0 .. mip.size[1] as usize
-		{
-			let src_offset0 = (y * 2) * prev_mip_width;
-			let src_offset1 = (y * 2 + 1) * prev_mip_width;
-			for (dst, x) in mip.pixels[y * mip_width .. (y + 1) * mip_width]
-				.iter_mut()
-				.zip(0 .. mip_width)
-			{
-				let src_x = x * 2;
-				let p00 = prev_mip.pixels[src_x + src_offset0];
-				let p01 = prev_mip.pixels[src_x + src_offset1];
-				let p10 = prev_mip.pixels[src_x + 1 + src_offset0];
-				let p11 = prev_mip.pixels[src_x + 1 + src_offset1];
-
-				*dst = Color32::get_average_4([p00, p01, p10, p11]);
-			}
-		}
-		result[i] = mip;
+		return;
 	}
 
-	result
+	let prev_mip_width = prev_mip.size[0] as usize;
+	let mip_width = mip.size[0] as usize;
+	for y in 0 .. mip.size[1] as usize
+	{
+		let src_offset0 = (y * 2) * prev_mip_width;
+		let src_offset1 = (y * 2 + 1) * prev_mip_width;
+		for (dst, x) in mip.pixels[y * mip_width .. (y + 1) * mip_width]
+			.iter_mut()
+			.zip(0 .. mip_width)
+		{
+			let src_x = x * 2;
+			let p00 = unsafe { debug_only_checked_fetch(&prev_mip.pixels, src_x + src_offset0) };
+			let p01 = unsafe { debug_only_checked_fetch(&prev_mip.pixels, src_x + src_offset1) };
+			let p10 = unsafe { debug_only_checked_fetch(&prev_mip.pixels, src_x + 1 + src_offset0) };
+			let p11 = unsafe { debug_only_checked_fetch(&prev_mip.pixels, src_x + 1 + src_offset1) };
+
+			*dst = Color32::get_average_4([p00, p01, p10, p11]);
+		}
+	}
 }
 
 // Do not allow absolte zero roughness. Limit this value to integer 1 in compressed format.
