@@ -151,9 +151,10 @@ impl GenerativeTextureEffectWater
 					amplitude,
 				} =>
 				{
-					let inv_frequency_int = (self.update_frequency / frequency).max(1.0) as u32;
-					let phase_int = (self.update_frequency / frequency * phase) as u32;
-					if (self.update_step + phase_int) % inv_frequency_int == 0
+					let relative_frequency = frequency / self.update_frequency;
+					let begin = (self.update_step as f32 * relative_frequency + phase) as i32;
+					let end = ((self.update_step + 1) as f32 * relative_frequency + phase) as i32;
+					for _i in begin .. end
 					{
 						add_point_value(center[0], center[1], *amplitude);
 					}
