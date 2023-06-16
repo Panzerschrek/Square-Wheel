@@ -127,5 +127,50 @@
 				]
 			}
 		}
+	},
+	"fire_small":
+	{
+		"light" : false,
+		"blocks_view" : false,
+		"blending_mode" : "Additive",
+		"emissive_layer" :
+		{
+			"image" : "dummy.png",
+			"light" : [120.0, 120.0, 120.0]
+		},
+		"emissive_light" : [60.0, 60.0, 30.0],
+		"special_effect" :
+		{
+			"Fire" :
+			{
+				"resolution_log2" : [4, 5],
+				"heat_conductivity" : 20.0,
+				"color" : [1.0, 1.0, 0.5],
+				"update_frequency" : 20,
+				"heat_sources":
+				[
+					{
+						"Point":
+						{
+							"center": [8, 30],
+							"offset":
+							[
+								{
+									"value" : { "SinWave": { "frequency" : 0.25, "amplitude" : 2.0} }
+								},
+								{
+									"value" : { "SinWave": { "frequency" : 0.4045, "amplitude" : 1.0} }
+								}
+							],
+							"heat":
+							{
+								"value" : { "Constant" : 0.6 },
+								"random_deviation" : { "Constant" : 0.4 }
+							}
+						}
+					}
+				]
+			}
+		}
 	}
 }
