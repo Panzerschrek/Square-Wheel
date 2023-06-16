@@ -1,6 +1,6 @@
 use rapier3d::prelude as r3d;
 use serde::{Deserialize, Serialize};
-use square_wheel_lib::common::{bbox::*, bsp_map_compact, math_types::*};
+use square_wheel_lib::common::{bbox::*, bsp_map_compact, material::*, math_types::*};
 use std::sync::Arc;
 
 #[derive(Serialize, Deserialize)]
@@ -28,13 +28,13 @@ pub type ObjectHandle = r3d::RigidBodyHandle;
 
 impl TestGamePhysics
 {
-	pub fn new(map: Arc<bsp_map_compact::BSPMap>) -> Self
+	pub fn new(map: Arc<bsp_map_compact::BSPMap>, materials: &MaterialsMap) -> Self
 	{
 		let rigid_body_set = r3d::RigidBodySet::new();
 		let mut collider_set = r3d::ColliderSet::new();
 
 		// Static geometry.
-		let map_collider = collider_set.insert(make_map_collider(&map));
+		let map_collider = collider_set.insert(make_map_collider(&map, materials));
 
 		Self {
 			rigid_body_set,
@@ -304,8 +304,23 @@ impl TestGamePhysics
 	}
 }
 
-fn make_map_collider(map: &bsp_map_compact::BSPMap) -> r3d::Collider
+fn make_map_collider(map: &bsp_map_compact::BSPMap, materials: &MaterialsMap) -> r3d::Collider
 {
+	let textures_solid_flag = map
+		.textures
+		.iter()
+		.map(|texture| {
+			if let Some(material) = materials.get(bsp_map_compact::get_texture_string(texture))
+			{
+				if let Some(solid_flag) = material.extra.get("solid")
+				{
+					return solid_flag.as_bool().unwrap_or(true);
+				}
+			}
+			true
+		})
+		.collect::<Vec<bool>>();
+
 	let vertices = map
 		.vertices
 		.iter()
@@ -317,7 +332,12 @@ fn make_map_collider(map: &bsp_map_compact::BSPMap) -> r3d::Collider
 	{
 		for polygon in &map.polygons[leaf.first_polygon as usize .. (leaf.first_polygon + leaf.num_polygons) as usize]
 		{
-			// TODO - ignore polygons without collisions.
+			if !textures_solid_flag[polygon.texture as usize]
+			{
+				// Non-solid - has no collisions.
+				continue;
+			}
+
 			for i in 0 .. polygon.num_vertices - 2
 			{
 				indices.push([

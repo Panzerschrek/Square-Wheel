@@ -63,11 +63,14 @@ impl GameMap
 			.unwrap()
 			.register_command_queue(commands_queue_dyn.clone());
 
+		let mut r = resources_manager.lock().unwrap();
+
 		let mut ecs = hecs::World::new();
-		let mut physics = test_game_physics::TestGamePhysics::new(map.clone());
-		world_spawn::spawn_regular_entities(&mut ecs, &mut physics, &mut resources_manager.lock().unwrap(), &map);
-		let player_entity =
-			world_spawn::spawn_player(&mut ecs, &mut physics, &mut resources_manager.lock().unwrap(), &map);
+		let mut physics = test_game_physics::TestGamePhysics::new(map.clone(), &r.get_materials());
+		world_spawn::spawn_regular_entities(&mut ecs, &mut physics, &mut r, &map);
+		let player_entity = world_spawn::spawn_player(&mut ecs, &mut physics, &mut r, &map);
+
+		drop(r);
 
 		Self {
 			commands_processor,

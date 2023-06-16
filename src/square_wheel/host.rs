@@ -665,6 +665,9 @@ impl Host
 				active_map.map.clone(),
 			);
 
+			// Game itself may depend on materials.
+			// We need to decide what to do with it.
+
 			self.active_map = Some(active_map);
 		}
 	}

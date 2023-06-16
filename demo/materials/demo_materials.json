@@ -177,6 +177,7 @@
 		"bsp" : true,
 		"light" : false,
 		"draw" : false,
+		"solid" : false,
 		"comment" : "Leave triggers in BSP in order to avoid deleting trigger brushes"
 	},
 	"water":
@@ -186,6 +187,7 @@
 		"roughness": 0.0,
 		"blending_mode": "Average",
 		"blocks_view": false,
+		"solid" : false,
 		"special_effect":
 		{
 			"Turb":
@@ -203,6 +205,7 @@
 		"roughness": 0.0,
 		"blending_mode": "Average",
 		"blocks_view": false,
+		"solid" : false,
 		"scroll_speed": [0.0, -16.0]
 	},
 	"water_flowing_fast":
@@ -212,6 +215,7 @@
 		"roughness": 0.0,
 		"blending_mode": "Average",
 		"blocks_view": false,
+		"solid" : false,
 		"scroll_speed": [0.0, -64.0]
 	},
 	"well_top_limestone_bricks":

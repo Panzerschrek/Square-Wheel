@@ -9,10 +9,11 @@ def generate_material_json(textures_dir, texture_file_name):
 
 	if texture_file_name.startswith("*"):
 		res["special_effect"] = { "Turb" : { "amplitude" : 4.0, "wave_length" : 64.0, "frequency" : 0.1875 } }
-		if texture_file_name.find("WATER") != -1:
+		if texture_file_name.find("WATER") != -1 or texture_file_name.find("SLIME") != -1:
 			res["roughness"] = 1.0 / 128.0
 			res["blending_mode"] = "Average"
 			res["blocks_view"] = False
+			res["solid"] = False
 
 	fb_image_name = os.path.splitext(texture_file_name)[0] + "_fb.tga"
 	if os.path.exists(os.path.join(textures_dir, fb_image_name)):
