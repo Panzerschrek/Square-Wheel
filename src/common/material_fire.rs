@@ -77,7 +77,6 @@ pub enum HeatSource
 		center: [u32; 2],
 
 		/// Particles/s.
-		/// If this value is greater than fire effect update frequency - new particle (but only one) will be emitted each frame.
 		#[serde(default = "default_one")]
 		frequency: f32,
 

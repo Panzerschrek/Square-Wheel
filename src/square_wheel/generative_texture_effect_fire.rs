@@ -262,8 +262,10 @@ impl GenerativeTextureEffectFire
 					lifetime,
 				} =>
 				{
-					let inv_frequency_int = (self.update_frequency / frequency).max(1.0) as u32;
-					if self.update_step % inv_frequency_int == 0
+					let relative_frequency = frequency / self.update_frequency;
+					let begin = (self.update_step as f32 * relative_frequency) as i32;
+					let end = ((self.update_step + 1) as f32 * relative_frequency) as i32;
+					for _i in begin .. end
 					{
 						if self.particles.len() < MAX_PARTICLES
 						{
