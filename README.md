@@ -304,6 +304,9 @@ SquareWheel has also some special animations:
  This texture is based on wave field simulation.
  Normal map is recalculated based on the wave field.
  Additionaly diffuse texture ma be deformed.
+* Fire texture.
+  Perform simulation of heat map.
+  Use heat map in order to produce emissive texture layer.
 
 
 ### CPU-specific code

@@ -60,6 +60,27 @@ Eto pozvoläjet bez problem zadatj vse te že parametry tekstur - "diffuse", "no
 Režim smešivanija sloja takže berötsä iz sootvetstvujuscego jemu materiala.
 
 
+### Voda (realizovano)
+
+Rabotajet analogicno vode v "Unreal".
+Jestj volnovoje pole, obnovläjemoje pošagovo.
+Na volnovoje pole vlijajut razlicnyje istocniki voln (nastraivajemyje).
+
+Rezuljtirujuscaja tekstura polucajet kartu normalej, postrojennyju na osnove volnovogo polä.
+Opçionaljno sama tekstura možet bytj iskažena.
+
+
+### Ogonj (realizovano)
+
+Rabotajet analogicno ognü v "Unreal".
+Jestj teplovaja karta, obnovläjemaja pošagovo.
+Na teplovuju kartu vlijajut razlicnyje istocniki tepla (nastraivajemyje).
+Jestj istocniki, kotoryje mogut poroždatj castiçy, kotoryje tože vlijajut na teplovuju kartu.
+
+Svetäscijsä sloj rezuljtirujuscej tekstury obnovläjetsä na osnove teplovoj karty.
+Preobrazovanije znacenij tepla v çvet proishodit ili linejno, s ispoljzovanijem ukazannogo v svojstvah materiala sveta, ili že s ispoljzovanijem gradijentnoj tekstury.
+
+
 ### O proizvoditeljnosti
 
 Effekty, trebujuscije generaçii tekstur každyj kadr, mogut bytj vesjma medlennymi.

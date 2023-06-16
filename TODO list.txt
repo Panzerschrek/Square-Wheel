@@ -25,9 +25,10 @@ Renderer:
 * Animated simple textures (with color only), that are used for models, sprites, decals
 * Water texture - add possibility to generate emissive layer
 * Water texture - add mode with diffuse texture modulation by wave field
+* Water texture - alter wave sources with timed/random functions (like heat sources in fire texture)
+* Fire texture - add possibility to produce diffuse texture (not only emissive layer)
 * Unreal-style animated ice textrures (with one layer, refracted via another layer)
 * Mix normals and roughness in layered texture animations
-* Support materials without diffuse layer (only with emissive layer)
 * Support portals and mirrors with mixed texture, prepared as regular surface (with lightmaps, normal-mapping, dynamic lights, etc.)
 
 Lightmapper:
