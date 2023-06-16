@@ -183,6 +183,7 @@
 
 	"monkey_head/display":
 	{
+		"diffuse" : "none",
 		"blending_mode" : "None",
 		"emissive_light" : [4.0, 4.0, 4.0],
 		"emissive_layer" :
