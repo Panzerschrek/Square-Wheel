@@ -215,6 +215,12 @@ impl MapMaterialsProcessor
 					};
 
 					mapping_element.frame_change_time_point += duration;
+					if mapping_element.frame_change_time_point < current_time_s
+					{
+						// Make sure change time point is not less, than current time.
+						// This fixes problems when game time starts not from zero.
+						mapping_element.frame_change_time_point = current_time_s;
+					}
 				}
 			}
 		}
