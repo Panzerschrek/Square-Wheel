@@ -89,6 +89,18 @@ impl ResourcesManager
 		}))
 	}
 
+	// This reloads materials inside resources manager but doesn't change copied materials and materials textures.
+	pub fn reload_materials(&mut self)
+	{
+		self.materials = SharedResourcePtr::new(load_materials(Path::new(&self.config.materials_path)));
+
+		// Clear material-dependent resources.
+		// Do not reload them - they will be loaded on demand.
+		self.material_textures.clear();
+		self.skybox_textures_32.clear();
+		self.skybox_textures_64.clear();
+	}
+
 	pub fn get_materials(&mut self) -> SharedResourcePtr<MaterialsMap>
 	{
 		self.materials.clone()

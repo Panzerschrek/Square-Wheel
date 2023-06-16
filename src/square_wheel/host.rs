@@ -3,7 +3,7 @@ use super::{
 	host_config::*, performance_counter::*, postprocessor::*, renderer, resources_manager::*, text_printer,
 	ticks_counter::*,
 };
-use crate::common::{color::*, screenshot::*, system_window};
+use crate::common::{bsp_map_compact::*, color::*, screenshot::*, system_window};
 use sdl2::{event::Event, keyboard::Keycode};
 use std::{sync::atomic, time::Duration};
 
@@ -33,6 +33,7 @@ pub struct Host
 
 struct ActiveMap
 {
+	map: SharedResourcePtr<BSPMap>,
 	renderer: renderer::Renderer,
 	debug_stats_printer: DebugStatsPrinter,
 }
@@ -86,6 +87,7 @@ impl Host
 		let commands_queue = commands_queue::CommandsQueue::new(vec![
 			("map", Host::command_map),
 			("quit", Host::command_quit),
+			("reload_materials", Host::command_reload_materials),
 			("resize_window", Host::command_resize_window),
 			("screenshot", Host::command_screenshot),
 		]);
@@ -598,6 +600,7 @@ impl Host
 					);
 
 					*active_map = Some(ActiveMap {
+						map,
 						renderer,
 						debug_stats_printer: DebugStatsPrinter::new(config.show_debug_stats),
 					});
@@ -641,6 +644,29 @@ impl Host
 	fn command_quit(&mut self, _args: commands_queue::CommandArgs)
 	{
 		self.quit_requested = true;
+	}
+
+	fn command_reload_materials(&mut self, _args: commands_queue::CommandArgs)
+	{
+		// TODO - reload materials in background thread and draw loading animation?
+
+		self.resources_manager.lock().unwrap().reload_materials();
+
+		if let Some(mut active_map) = self.active_map.take()
+		{
+			// Recreate renderer in order to apply reloaded materials.
+			// It is fine sinse Renderer class is stateless (except some buffers and animated textures).
+			// Perform active_map dissassembly-assembly in order to construct new renderer instance after destroying old one.
+			drop(active_map.renderer);
+			active_map.renderer = renderer::Renderer::new(
+				self.resources_manager.clone(),
+				self.app_config.clone(),
+				self.console.clone(),
+				active_map.map.clone(),
+			);
+
+			self.active_map = Some(active_map);
+		}
 	}
 
 	fn command_resize_window(&mut self, args: commands_queue::CommandArgs)
