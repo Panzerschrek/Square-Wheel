@@ -16,7 +16,7 @@
 			{
 				"resolution_log2" : [6, 8],
 				"heat_conductivity" : 2.5,
-				"color" : [0.4, 0.4, 0.5],
+				"color" : [0.4, 0.4, 1.0],
 				"update_frequency" : 20,
 				"slow" : true,
 				"heat_sources":
@@ -48,7 +48,7 @@
 			{
 				"resolution_log2" : [7, 7],
 				"heat_conductivity" : 2.0,
-				"color" : [0.4, 0.4, 0.5],
+				"color" : [0.4, 0.4, 1.0],
 				"update_frequency" : 40,
 				"heat_sources":
 				[
@@ -60,42 +60,18 @@
 							[
 								[
 									{
-										"value" :
-										{
-											"SawToothWave":
-											{
-												"frequency" : 1.0, "amplitude" : -16.0, "offset" : -16.0
-											}
-										}
+										"value" : { "SawToothWave": { "frequency" : 1.0, "amplitude" : -16.0, "offset" : -16.0 } }
 									},
 									{
-										"value" :
-										{
-											"SawToothWave":
-											{
-												"frequency" : 1.0, "amplitude" : -48.0, "offset" : -48.0
-											}
-										}
+										"value" : { "SawToothWave": { "frequency" : 1.0, "amplitude" : -48.0, "offset" : -48.0 } }
 									}
 								],
 								[
 									{
-										"value" :
-										{
-											"SawToothWave":
-											{
-												"frequency" : 1.0, "amplitude" : 16.0, "offset" : 16.0
-											}
-										}
+										"value" : { "SawToothWave": { "frequency" : 1.0, "amplitude" : 16.0, "offset" : 16.0 } }
 									},
 									{
-										"value" :
-										{
-											"SawToothWave":
-											{
-												"frequency" : 1.0, "amplitude" : -48.0, "offset" : -48.0
-											}
-										}
+										"value" : { "SawToothWave": { "frequency" : 1.0, "amplitude" : -48.0, "offset" : -48.0 } }
 									}
 								]
 							]
@@ -122,7 +98,7 @@
 			{
 				"resolution_log2" : [7, 7],
 				"heat_conductivity" : 2.5,
-				"color" : [0.4, 0.4, 0.5],
+				"color" : [0.4, 0.4, 1.0],
 				"update_frequency" : 40,
 				"slow" : true,
 				"heat_sources":
