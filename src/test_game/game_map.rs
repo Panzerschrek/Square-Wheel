@@ -814,6 +814,7 @@ impl GameMap
 		world_update::update_touch_trigger_teleports(&mut self.ecs, &self.physics);
 		world_update::update_teleported_entities(&mut self.ecs, &mut self.physics);
 		world_update::update_named_activations(&mut self.ecs);
+		world_update::update_touch_explode_entities(&mut self.ecs, &mut self.ecs_command_buffer, &self.physics);
 
 		world_update::update_simple_animations(&mut self.ecs, self.game_time);
 		world_update::update_specific_animations(&mut self.ecs, time_delta_s);

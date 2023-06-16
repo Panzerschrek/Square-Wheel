@@ -170,6 +170,10 @@ pub fn update_player_entity(
 				velocity: camera_vector * 256.0,
 				angular_velocity: 5.0,
 			},
+			GeometryTouchExplodeComponent {
+				ignore_entity: player_entity,
+				radius: 24.0,
+			},
 			Sprite {
 				position,
 				angle: 0.0,
@@ -720,7 +724,7 @@ pub fn update_touch_triggers(ecs: &mut hecs::World, physics: &TestGamePhysics)
 		)>()
 		.iter()
 	{
-		physics.get_box_touching_entities(&touch_trigger_component.bbox, |entity| {
+		physics.get_box_touching_entities(&touch_trigger_component.bbox, false, |entity| {
 			// Check if this entity can activate triggers.
 			if let Ok(entity_ref) = ecs.entity(entity)
 			{
@@ -787,7 +791,7 @@ pub fn update_touch_trigger_teleports(ecs: &mut hecs::World, physics: &TestGameP
 		.query::<(&TouchTriggerTeleportComponent, &TargetNameComponent)>()
 		.iter()
 	{
-		physics.get_box_touching_entities(&touch_trigger_teleport_component.bbox, |entity| {
+		physics.get_box_touching_entities(&touch_trigger_teleport_component.bbox, false, |entity| {
 			if let Ok(mut q) = ecs.query_one::<&mut TeleportableComponent>(entity)
 			{
 				if let Some(teleportable_component) = q.get()
@@ -897,6 +901,39 @@ pub fn update_named_activations(ecs: &mut hecs::World)
 			}
 		}
 	}
+}
+
+pub fn update_touch_explode_entities(
+	ecs: &mut hecs::World,
+	ecs_command_buffer: &mut hecs::CommandBuffer,
+	physics: &TestGamePhysics,
+)
+{
+	for (id, (geometry_touch_explode_component, location_component)) in
+		ecs.query_mut::<(&GeometryTouchExplodeComponent, &LocationComponent)>()
+	{
+		let mut touched = false;
+		physics.get_sphere_touching_entities(
+			&location_component.position,
+			geometry_touch_explode_component.radius,
+			true, // Include world too.
+			|entity| {
+				if entity == geometry_touch_explode_component.ignore_entity
+				{
+					return;
+				}
+
+				touched = true;
+			},
+		);
+
+		if touched
+		{
+			ecs_command_buffer.despawn(id);
+		}
+	}
+
+	ecs_command_buffer.run_on(ecs);
 }
 
 pub fn update_simple_animations(ecs: &mut hecs::World, game_time: f32)

@@ -239,27 +239,56 @@ impl TestGamePhysics
 		)
 	}
 
-	pub fn get_box_touching_entities<Func: FnMut(hecs::Entity)>(&self, bbox: &BBox, mut func: Func)
+	pub fn get_box_touching_entities<Func: FnMut(hecs::Entity)>(&self, bbox: &BBox, include_world: bool, func: Func)
 	{
 		let bbox_half_size = bbox.get_size() * 0.5;
-		let bbox_center = bbox.get_center();
 
-		let shape = r3d::Cuboid::new(r3d::Vector::new(bbox_half_size.x, bbox_half_size.y, bbox_half_size.z));
-		let shape_center = r3d::Vector::new(bbox_center.x, bbox_center.y, bbox_center.z);
+		self.get_shape_touching_entities(
+			&r3d::Cuboid::new(r3d::Vector::new(bbox_half_size.x, bbox_half_size.y, bbox_half_size.z)),
+			&bbox.get_center(),
+			include_world,
+			func,
+		)
+	}
+
+	pub fn get_sphere_touching_entities<Func: FnMut(hecs::Entity)>(
+		&self,
+		center: &Vec3f,
+		radius: f32,
+		include_world: bool,
+		func: Func,
+	)
+	{
+		self.get_shape_touching_entities(&r3d::Ball::new(radius), center, include_world, func)
+	}
+
+	fn get_shape_touching_entities<Func: FnMut(hecs::Entity), S: r3d::Shape>(
+		&self,
+		shape: &S,
+		position: &Vec3f,
+		include_world: bool,
+		mut func: Func,
+	)
+	{
+		let mut filter = r3d::QueryFilter::default();
+		if !include_world
+		{
+			filter.exclude_collider = Some(self.map_collider);
+		}
 
 		self.query_pipeline.intersections_with_shape(
 			&self.rigid_body_set,
 			&self.collider_set,
-			&r3d::Isometry::new(shape_center, r3d::Vector::new(0.0, 0.0, 0.0)),
-			&shape,
-			r3d::QueryFilter::default().exclude_collider(self.map_collider),
+			&r3d::Isometry::new(
+				r3d::Vector::new(position.x, position.y, position.z),
+				r3d::Vector::new(0.0, 0.0, 0.0),
+			),
+			shape,
+			filter,
 			|collider_handle| {
 				let collider = &self.collider_set[collider_handle];
 				let dst_entity = entity_from_user_data(collider.user_data);
-				if dst_entity != hecs::Entity::DANGLING
-				{
-					func(dst_entity);
-				}
+				func(dst_entity);
 				true
 			},
 		);

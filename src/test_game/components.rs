@@ -202,6 +202,14 @@ pub struct EntityActivationComponent
 	pub activated: bool,
 }
 
+// Component for entities (like rockets) that explode while touching some geometry (world, other entities).
+#[derive(Serialize, Deserialize)]
+pub struct GeometryTouchExplodeComponent
+{
+	pub ignore_entity: hecs::Entity,
+	pub radius: f32,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct PlateComponent
 {

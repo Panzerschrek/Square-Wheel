@@ -359,6 +359,7 @@ impl<'a> hecs::serialize::row::SerializeContext for SerializeContext<'a>
 		self.try_serialize_component::<NamedTargetComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<WaitComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<EntityActivationComponent, S>(entity, &mut map)?;
+		self.try_serialize_component::<GeometryTouchExplodeComponent, S>(entity, &mut map)?;
 
 		self.try_serialize_component::<PlateComponent, S>(entity, &mut map)?;
 		self.try_serialize_component::<DoorComponent, S>(entity, &mut map)?;
@@ -481,6 +482,7 @@ impl<'a> hecs::serialize::row::DeserializeContext for DeserializeContext<'a>
 			self.try_deserialize_component::<NamedTargetComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<WaitComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<EntityActivationComponent, M>(&key, &mut map, entity)?;
+			self.try_deserialize_component::<GeometryTouchExplodeComponent, M>(&key, &mut map, entity)?;
 
 			self.try_deserialize_component::<PlateComponent, M>(&key, &mut map, entity)?;
 			self.try_deserialize_component::<DoorComponent, M>(&key, &mut map, entity)?;
