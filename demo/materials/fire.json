@@ -1,0 +1,108 @@
+{
+	"lightning_long_vertical":
+	{
+		"light" : false,
+		"blocks_view" : false,
+		"blending_mode" : "Additive",
+		"emissive_layer" :
+		{
+			"image" : "dummy.png",
+			"light" : [20.0, 20.0, 20.0]
+		},
+		"emissive_light" : [5.0, 5.0, 10.0],
+		"special_effect" :
+		{
+			"Fire" :
+			{
+				"resolution_log2" : [6, 8],
+				"heat_conductivity" : 2.5,
+				"color" : [0.4, 0.4, 0.5],
+				"update_frequency" : 20,
+				"slow" : true,
+				"heat_sources":
+				[
+					{
+						"Lightning":
+						{
+							"points": [[32, 0], [32, 255]]
+						}
+					}
+				]
+			}
+		}
+	},
+	"lightning_jacobs_ladder":
+	{
+		"light" : false,
+		"blocks_view" : false,
+		"blending_mode" : "Additive",
+		"emissive_layer" :
+		{
+			"image" : "dummy.png",
+			"light" : [20.0, 20.0, 20.0]
+		},
+		"emissive_light" : [5.0, 5.0, 10.0],
+		"special_effect" :
+		{
+			"Fire" :
+			{
+				"resolution_log2" : [7, 7],
+				"heat_conductivity" : 2.0,
+				"color" : [0.4, 0.4, 0.5],
+				"update_frequency" : 40,
+				"heat_sources":
+				[
+					{
+						"Lightning":
+						{
+							"points": [[31, 112], [96, 112]],
+							"offset":
+							[
+								[
+									{
+										"value" :
+										{
+											"SawToothWave":
+											{
+												"frequency" : 1.0, "amplitude" : -16.0, "offset" : -16.0
+											}
+										}
+									},
+									{
+										"value" :
+										{
+											"SawToothWave":
+											{
+												"frequency" : 1.0, "amplitude" : -48.0, "offset" : -48.0
+											}
+										}
+									}
+								],
+								[
+									{
+										"value" :
+										{
+											"SawToothWave":
+											{
+												"frequency" : 1.0, "amplitude" : 16.0, "offset" : 16.0
+											}
+										}
+									},
+									{
+										"value" :
+										{
+											"SawToothWave":
+											{
+												"frequency" : 1.0, "amplitude" : -48.0, "offset" : -48.0
+											}
+										}
+									}
+								]
+							]
+						}
+					}
+				]
+			}
+		}
+	}
+}
