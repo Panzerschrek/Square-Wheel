@@ -245,4 +245,115 @@
 			}
 		}
 	}
+	,
+	"fire_large":
+	{
+		"light" : false,
+		"blocks_view" : false,
+		"blending_mode" : "Additive",
+		"emissive_layer" :
+		{
+			"image" : "dummy.png",
+			"light" : [10.0, 10.0, 10.0]
+		},
+		"emissive_light" : [5.0, 10.0, 10.0],
+		"special_effect" :
+		{
+			"Fire" :
+			{
+				"resolution_log2" : [7, 7],
+				"heat_conductivity" : 10.0,
+				"color" : [0.5, 1.0, 1.0],
+				"update_frequency" : 40,
+				"heat_sources":
+				[
+					{
+						"Line":
+						{
+							"points": [[64, 74], [64, 125]],
+							"heat":
+							{
+								"value" : { "Constant" : 0.7 },
+								"random_deviation" : { "Constant" : 0.2 }
+							}
+						}
+					},
+					{
+						"Line":
+						{
+							"points": [[58, 80], [64, 125]],
+							"heat":
+							{
+								"value" : { "Constant" : 0.7 },
+								"random_deviation" : { "Constant" : 0.2 }
+							}
+						}
+					},
+					{
+						"Line":
+						{
+							"points": [[70, 80], [64, 125]],
+							"heat":
+							{
+								"value" : { "Constant" : 0.7 },
+								"random_deviation" : { "Constant" : 0.2 }
+							}
+						}
+					},
+					{
+						"Line":
+						{
+							"points": [[62, 123], [66, 123]],
+							"heat":
+							{
+								"value" : { "Constant" : 0.7 },
+								"random_deviation" : { "Constant" : 0.3 }
+							}
+						}
+					},
+					{
+						"Fountain":
+						{
+							"center": [64, 127],
+							"frequency" : 40.0,
+							"heat":
+							{
+								"value" : { "Constant" : 0.3 },
+								"random_deviation" : { "Constant" : 0.2 }
+							},
+							"angle":
+							{
+								"value" : { "StepWave" : { "frequency" : 20.0, "phase" : 0.1, "offset" : -1.57, "amplitude" : 1.1 } },
+								"random_deviation" : { "Constant" : 0.2 }
+							},
+							"speed":
+							{
+								"value" : { "Constant" : 40.0 },
+								"random_deviation" : { "Constant" : 10.0 }
+							},
+							"spawn_angle" :
+							{
+								"value" : { "Constant" : -1.57 },
+								"random_deviation" : { "Constant" : 0.1 }
+							},
+							"spawn_distance" :
+							{
+								"value" : { "Constant" : 40.0 },
+								"random_deviation" : { "Constant" : 20.0 }
+							},
+							"gravity" :
+							{
+								"value" : { "Constant" : 64.0 }
+							},
+							"lifetime:" :
+							{
+								"value" : { "Constant" : 2.5 },
+								"random_deviation" : { "Constant" : 0.5 }
+							}
+						}
+					}
+				]
+			}
+		}
+	}
 }
