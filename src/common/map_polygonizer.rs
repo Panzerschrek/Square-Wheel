@@ -82,7 +82,7 @@ fn polygonize_entity(input_entity: &map_file_q1::Entity) -> Entity
 	}
 }
 
-fn cut_polygon_by_brush_planes(polygon: Polygon, brush: &map_file_q1::Brush) -> Vec<Polygon>
+fn cut_polygon_by_brush_planes(mut polygon: Polygon, brush: &map_file_q1::Brush) -> Vec<Polygon>
 {
 	// Check if this polygon is trivially outisde.
 	for brush_side in brush
@@ -105,10 +105,9 @@ fn cut_polygon_by_brush_planes(polygon: Polygon, brush: &map_file_q1::Brush) -> 
 	}
 
 	// Cut polygon into pieces by sides of this brush.
-	// TODO - this can still cut polignos, that are totally outside. Handle such cases.
+	// TODO - this can still perform unnecessary splits for polygons, that are totally outside. Handle such cases.
 
-	// Polygon with outside flag.
-	let mut polygons = vec![(polygon, false)];
+	let mut result_polygons = Vec::new();
 
 	for brush_side in brush
 	{
@@ -121,37 +120,26 @@ fn cut_polygon_by_brush_planes(polygon: Polygon, brush: &map_file_q1::Brush) -> 
 			continue;
 		};
 
-		let mut step_polygons = Vec::new();
-		for polygon in polygons.drain(..)
+		// TODO - handle polygons lying in the plane.
+		let (front_polygon, back_polygon) = super::bsp_builder::split_polygon(&polygon, &plane);
+		if front_polygon.vertices.len() >= 3
 		{
-			// TODO - handle polygons lying in the plane.
-			let (front_polygon, back_polygon) = super::bsp_builder::split_polygon(&polygon.0, &plane);
-			if front_polygon.vertices.len() >= 3
-			{
-				step_polygons.push((front_polygon, true)); // This polygon is outside brush - outside of one of its planes.
-			}
-			if back_polygon.vertices.len() >= 3
-			{
-				step_polygons.push((back_polygon, polygon.1)); // Preserve outside flag.
-			}
+			result_polygons.push(front_polygon); // This polygon is outside brush - preserve it.
 		}
-		polygons = step_polygons;
+
+		if back_polygon.vertices.len() >= 3
+		{
+			// Continue clipping of inside piese.
+			polygon = back_polygon;
+		}
+		else
+		{
+			// Nothing left inside.
+			break;
+		}
 	} // for brush planes.
 
-	// Ignore polygons that are totally inside.
-	polygons
-		.drain(..)
-		.filter_map(|p| {
-			if p.1
-			{
-				Some(p.0)
-			}
-			else
-			{
-				None
-			}
-		})
-		.collect()
+	result_polygons
 }
 
 fn polygonize_entity_q4(input_entity: &map_file_q4::Entity) -> Entity
