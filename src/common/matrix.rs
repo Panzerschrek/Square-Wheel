@@ -36,8 +36,38 @@ pub fn build_view_matrix_with_full_rotation(
 	viewport_height: f32,
 ) -> CameraMatrices
 {
-	let rotate = Mat4f::from(rotation.conjugate());
+	let inv_half_fov_tan = 1.0 / ((fov * 0.5).tan());
+	let aspect = viewport_width / viewport_height;
+	let fov_scale = Vec2f::new(inv_half_fov_tan / aspect, inv_half_fov_tan);
 
+	complete_view_matrix(
+		position,
+		&get_full_ortation_matrix(rotation),
+		&fov_scale,
+		viewport_width,
+		viewport_height,
+	)
+}
+
+pub fn build_view_matrix_with_full_rotation_and_custom_fov(
+	position: Vec3f,
+	rotation: QuaternionF,
+	fov_scale: &Vec2f,
+	viewport_width: f32,
+	viewport_height: f32,
+) -> CameraMatrices
+{
+	complete_view_matrix(
+		position,
+		&get_full_ortation_matrix(rotation),
+		fov_scale,
+		viewport_width,
+		viewport_height,
+	)
+}
+
+fn get_full_ortation_matrix(rotation: QuaternionF) -> Mat4f
+{
 	let mut basis_change = Mat4f::identity();
 	basis_change.x.x = 0.0;
 	basis_change.y.y = 0.0;
@@ -46,22 +76,20 @@ pub fn build_view_matrix_with_full_rotation(
 	basis_change.y.x = -1.0;
 	basis_change.z.y = -1.0;
 
-	complete_view_matrix(position, &(basis_change * rotate), fov, viewport_width, viewport_height)
+	basis_change * Mat4f::from(rotation.conjugate())
 }
 
 pub fn complete_view_matrix(
 	position: Vec3f,
 	rotation_matrix: &Mat4f,
-	fov: f32,
+	fov_scale: &Vec2f,
 	viewport_width: f32,
 	viewport_height: f32,
 ) -> CameraMatrices
 {
 	let translate = Mat4f::from_translation(-position);
 
-	let inv_half_fov_tan = 1.0 / ((fov * 0.5).tan());
-	let aspect = viewport_width / viewport_height;
-	let perspective = Mat4f::from_nonuniform_scale(inv_half_fov_tan / aspect, inv_half_fov_tan, 1.0);
+	let perspective = Mat4f::from_nonuniform_scale(fov_scale.x, fov_scale.y, 1.0);
 
 	let resize_to_viewport = Mat4f::from_nonuniform_scale(viewport_width * 0.5, viewport_height * 0.5, 1.0);
 
