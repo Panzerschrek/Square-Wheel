@@ -54,12 +54,17 @@ fn polygonize_entity(input_entity: &map_file_q1::Entity) -> Entity
 			continue;
 		}
 
+		// Set this flag to true for all brushes after this.
+		// This is needed in order to choose only one polygons of two coplanar polygons of two intersecting brushes.
+		let mut preserve_coplanar = false;
+
 		// Clip polygons by planes of other brushes.
 		for other_brush in &input_entity.brushes
 		{
 			// TODO - speed-up this, perform bbox check.
 			if other_brush as *const map_file_q1::Brush == brush as *const map_file_q1::Brush
 			{
+				preserve_coplanar = true;
 				continue;
 			}
 
@@ -68,7 +73,11 @@ fn polygonize_entity(input_entity: &map_file_q1::Entity) -> Entity
 			let mut polygons_clipped = Vec::new();
 			for polygon in brush_polygons.drain(..)
 			{
-				polygons_clipped.append(&mut cut_polygon_by_brush_planes(polygon, other_brush));
+				polygons_clipped.append(&mut cut_polygon_by_brush_planes(
+					polygon,
+					other_brush,
+					preserve_coplanar,
+				));
 			}
 			brush_polygons = polygons_clipped;
 		} // for other brushes.
@@ -82,7 +91,11 @@ fn polygonize_entity(input_entity: &map_file_q1::Entity) -> Entity
 	}
 }
 
-fn cut_polygon_by_brush_planes(mut polygon: Polygon, brush: &map_file_q1::Brush) -> Vec<Polygon>
+fn cut_polygon_by_brush_planes(
+	mut polygon: Polygon,
+	brush: &map_file_q1::Brush,
+	preserve_coplanar: bool,
+) -> Vec<Polygon>
 {
 	// Check if this polygon is trivially outisde.
 	for brush_side in brush
@@ -132,7 +145,15 @@ fn cut_polygon_by_brush_planes(mut polygon: Polygon, brush: &map_file_q1::Brush)
 			{
 				// Leftover polygon is possible inside the brush - continue splitting.
 			},
-			super::bsp_builder::PolygonPositionRelativePlane::CoplanarFront |
+			super::bsp_builder::PolygonPositionRelativePlane::CoplanarFront =>
+			{
+				// We need to save polygon only if same polygon of other brush was previously skipped.
+				if preserve_coplanar
+				{
+					result_polygons.push(polygon);
+					break;
+				}
+			},
 			super::bsp_builder::PolygonPositionRelativePlane::CoplanarBack =>
 			{
 				// Preserve coplanar leftover polygon.
