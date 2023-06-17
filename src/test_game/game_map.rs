@@ -859,6 +859,20 @@ impl GameMap
 			surface_info.height as f32,
 		);
 
+		// Check if camera is under water.
+		let mut inside_water_volume = false;
+		for (_id, water_volume_component) in self.ecs.query::<&WaterVolumeComponent>().into_iter()
+		{
+			// TODO - support transformations of water volume.
+			if water_volume_component.bbox.contains_point(&pos)
+			{
+				inside_water_volume = true;
+				break;
+			}
+		}
+
+		let color_modulate = if inside_water_volume { [0.25, 0.45, 0.8] } else { [1.0; 3] };
+
 		let mut submodel_entities = vec![None; self.map.submodels.len()];
 		for (_id, submodel_entity_with_index) in self.ecs.query::<&SubmodelEntityWithIndex>().iter()
 		{
@@ -867,8 +881,8 @@ impl GameMap
 
 		FrameInfo {
 			camera_matrices,
+			color_modulate,
 			submodel_entities,
-			color_modulate: [1.0; 3],
 			skybox_rotation: QuaternionF::one(),
 			game_time_s: self.game_time,
 			lights: self.collect_drawable_components(),
