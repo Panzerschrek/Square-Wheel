@@ -63,7 +63,7 @@ pub fn build_leaf_bsp_tree(map_entities: &[map_polygonizer::Entity], materials: 
 	let bbox = build_bounding_box(world_entity);
 
 	// Build BSP tree for world entity.
-	let mut tree_root = build_leaf_bsp_tree_r(filter_out_invisible_polygons(&world_entity.polygons, materials));
+	let mut tree_root = build_leaf_bsp_tree_r(preprocess_input_polygons(&world_entity.polygons, materials));
 
 	// Build portals as links between BSP leafs.
 	let mut portals = build_protals(&tree_root, &bbox, materials);
@@ -275,8 +275,8 @@ pub fn build_submodel_bsp_tree(
 	materials: &material::MaterialsMap,
 ) -> SubmodelBSPNode
 {
-	let polygons_filtered = filter_out_invisible_polygons(&submodel.polygons, materials);
-	if polygons_filtered.is_empty()
+	let polygons_preprocessed = preprocess_input_polygons(&submodel.polygons, materials);
+	if polygons_preprocessed.is_empty()
 	{
 		return SubmodelBSPNode {
 			polygons: Vec::new(),
@@ -288,7 +288,7 @@ pub fn build_submodel_bsp_tree(
 		};
 	}
 
-	build_submodel_bsp_tree_r(polygons_filtered)
+	build_submodel_bsp_tree_r(polygons_preprocessed)
 }
 
 fn build_submodel_bsp_tree_r(mut in_polygons: Vec<Polygon>) -> SubmodelBSPNode
@@ -527,7 +527,8 @@ fn split_polygon(in_polygon: &Polygon, plane: &Plane) -> (Polygon, Polygon)
 	(polygon_front, polygon_back)
 }
 
-fn filter_out_invisible_polygons(polygons: &[Polygon], materials: &material::MaterialsMap) -> Vec<Polygon>
+// Remove invisible polygons, duplicate twosided poygons.
+fn preprocess_input_polygons(polygons: &[Polygon], materials: &material::MaterialsMap) -> Vec<Polygon>
 {
 	let mut result = Vec::new();
 
@@ -538,6 +539,14 @@ fn filter_out_invisible_polygons(polygons: &[Polygon], materials: &material::Mat
 			if !material.bsp
 			{
 				continue;
+			}
+
+			if material.twosided
+			{
+				let mut polygon_copy = polygon.clone();
+				polygon_copy.plane = polygon_copy.plane.get_inverted();
+				polygon_copy.vertices.reverse();
+				result.push(polygon_copy);
 			}
 		}
 
