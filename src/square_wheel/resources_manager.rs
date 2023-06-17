@@ -99,6 +99,10 @@ impl ResourcesManager
 		self.material_textures.clear();
 		self.skybox_textures_32.clear();
 		self.skybox_textures_64.clear();
+
+		// Clear lite textures, since they are used in some materials as emissive layer.
+		self.lite_textures.clear();
+		self.lite_textures_names.clear();
 	}
 
 	pub fn get_materials(&mut self) -> SharedResourcePtr<MaterialsMap>
