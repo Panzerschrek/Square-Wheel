@@ -48,13 +48,111 @@ fn polygonize_entity(input_entity: &map_file_q1::Entity) -> Entity
 	let mut polygons = Vec::new();
 	for brush in &input_entity.brushes
 	{
-		polygons.append(&mut polygonize_brush(brush));
-	}
+		let mut brush_polygons = polygonize_brush(brush);
+		if brush_polygons.is_empty()
+		{
+			continue;
+		}
+
+		// Clip polygons by planes of other brushes.
+		for other_brush in &input_entity.brushes
+		{
+			// TODO - speed-up this, perform bbox check.
+			if other_brush as *const map_file_q1::Brush == brush as *const map_file_q1::Brush
+			{
+				continue;
+			}
+
+			// TODO - ignore brushes with non-blocking textures and/or semitransparent textures.
+
+			let mut polygons_clipped = Vec::new();
+			for polygon in brush_polygons.drain(..)
+			{
+				polygons_clipped.append(&mut cut_polygon_by_brush_planes(polygon, other_brush));
+			}
+			brush_polygons = polygons_clipped;
+		} // for other brushes.
+
+		polygons.append(&mut brush_polygons);
+	} // for brushes.
 
 	Entity {
 		polygons,
 		keys: input_entity.keys.clone(),
 	}
+}
+
+fn cut_polygon_by_brush_planes(polygon: Polygon, brush: &map_file_q1::Brush) -> Vec<Polygon>
+{
+	// Check if this polygon is trivially outisde.
+	for brush_side in brush
+	{
+		// TODO - calculate brush planes exactly once.
+		let plane = if let Some(p) = get_brush_side_plane(brush_side)
+		{
+			p
+		}
+		else
+		{
+			continue;
+		};
+
+		let position = super::bsp_builder::get_polygon_position_relative_plane(&polygon, &plane);
+		if position == super::bsp_builder::PolygonPositionRelativePlane::Front
+		{
+			return vec![polygon];
+		}
+	}
+
+	// Cut polygon into pieces by sides of this brush.
+	// TODO - this can still cut polignos, that are totally outside. Handle such cases.
+
+	// Polygon with counter of front planes.
+	let mut polygons = vec![(polygon, 0)];
+
+	for brush_side in brush
+	{
+		let plane = if let Some(p) = get_brush_side_plane(brush_side)
+		{
+			p
+		}
+		else
+		{
+			continue;
+		};
+
+		let mut step_polygons = Vec::new();
+		for polygon in polygons.drain(..)
+		{
+			// TODO - handle polygons lying in the plane.
+			let (front_polygon, back_polygon) = super::bsp_builder::split_polygon(&polygon.0, &plane);
+			if front_polygon.vertices.len() >= 3
+			{
+				// Increase counter of front faces for this polygon piece.
+				step_polygons.push((front_polygon, polygon.1 + 1));
+			}
+			if back_polygon.vertices.len() >= 3
+			{
+				step_polygons.push((back_polygon, polygon.1));
+			}
+		}
+		polygons = step_polygons;
+	} // for brush planes.
+
+	// Ignore polygons that are totally inside.
+	polygons
+		.drain(..)
+		.filter_map(|p| {
+			if p.1 > 0
+			{
+				Some(p.0)
+			}
+			else
+			{
+				None
+			}
+		})
+		.collect()
 }
 
 fn polygonize_entity_q4(input_entity: &map_file_q4::Entity) -> Entity

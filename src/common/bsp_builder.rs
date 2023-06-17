@@ -471,8 +471,9 @@ fn get_submodel_splitter_plane_score(polygons: &[Polygon], plane: &Plane) -> Opt
 	Some(score_scaled)
 }
 
+// TODO - move into another file.
 // Returns pair of front and back polygons.
-fn split_polygon(in_polygon: &Polygon, plane: &Plane) -> (Polygon, Polygon)
+pub fn split_polygon(in_polygon: &Polygon, plane: &Plane) -> (Polygon, Polygon)
 {
 	let mut polygon_front = Polygon {
 		plane: in_polygon.plane,
@@ -567,8 +568,9 @@ fn build_bounding_box(entity: &map_polygonizer::Entity) -> BBox
 	bbox
 }
 
+// TODO - move into separate file.
 #[derive(PartialEq, Eq)]
-enum PolygonPositionRelativePlane
+pub enum PolygonPositionRelativePlane
 {
 	Front,
 	Back,
@@ -577,7 +579,8 @@ enum PolygonPositionRelativePlane
 	Splitted,
 }
 
-fn get_polygon_position_relative_plane(polygon: &Polygon, plane: &Plane) -> PolygonPositionRelativePlane
+// TODO - move into separate file.
+pub fn get_polygon_position_relative_plane(polygon: &Polygon, plane: &Plane) -> PolygonPositionRelativePlane
 {
 	let mut vertices_front = 0;
 	let mut vertices_back = 0;
