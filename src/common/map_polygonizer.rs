@@ -107,8 +107,8 @@ fn cut_polygon_by_brush_planes(polygon: Polygon, brush: &map_file_q1::Brush) -> 
 	// Cut polygon into pieces by sides of this brush.
 	// TODO - this can still cut polignos, that are totally outside. Handle such cases.
 
-	// Polygon with counter of front planes.
-	let mut polygons = vec![(polygon, 0)];
+	// Polygon with outside flag.
+	let mut polygons = vec![(polygon, false)];
 
 	for brush_side in brush
 	{
@@ -128,12 +128,11 @@ fn cut_polygon_by_brush_planes(polygon: Polygon, brush: &map_file_q1::Brush) -> 
 			let (front_polygon, back_polygon) = super::bsp_builder::split_polygon(&polygon.0, &plane);
 			if front_polygon.vertices.len() >= 3
 			{
-				// Increase counter of front faces for this polygon piece.
-				step_polygons.push((front_polygon, polygon.1 + 1));
+				step_polygons.push((front_polygon, true)); // This polygon is outside brush - outside of one of its planes.
 			}
 			if back_polygon.vertices.len() >= 3
 			{
-				step_polygons.push((back_polygon, polygon.1));
+				step_polygons.push((back_polygon, polygon.1)); // Preserve outside flag.
 			}
 		}
 		polygons = step_polygons;
@@ -143,7 +142,7 @@ fn cut_polygon_by_brush_planes(polygon: Polygon, brush: &map_file_q1::Brush) -> 
 	polygons
 		.drain(..)
 		.filter_map(|p| {
-			if p.1 > 0
+			if p.1
 			{
 				Some(p.0)
 			}
