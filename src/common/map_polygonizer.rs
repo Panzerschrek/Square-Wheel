@@ -97,8 +97,8 @@ fn cut_polygon_by_brush_planes(mut polygon: Polygon, brush: &map_file_q1::Brush)
 			continue;
 		};
 
-		let position = super::bsp_builder::get_polygon_position_relative_plane(&polygon, &plane);
-		if position == super::bsp_builder::PolygonPositionRelativePlane::Front
+		if super::bsp_builder::get_polygon_position_relative_plane(&polygon, &plane) ==
+			super::bsp_builder::PolygonPositionRelativePlane::Front
 		{
 			return vec![polygon];
 		}
@@ -120,23 +120,43 @@ fn cut_polygon_by_brush_planes(mut polygon: Polygon, brush: &map_file_q1::Brush)
 			continue;
 		};
 
-		// TODO - handle polygons lying in the plane.
-		let (front_polygon, back_polygon) = super::bsp_builder::split_polygon(&polygon, &plane);
-		if front_polygon.vertices.len() >= 3
+		match super::bsp_builder::get_polygon_position_relative_plane(&polygon, &plane)
 		{
-			result_polygons.push(front_polygon); // This polygon is outside brush - preserve it.
-		}
+			super::bsp_builder::PolygonPositionRelativePlane::Front =>
+			{
+				// Leftover polygon is outside the brush - can stop splitting.
+				result_polygons.push(polygon);
+				break;
+			},
+			super::bsp_builder::PolygonPositionRelativePlane::Back =>
+			{
+				// Leftover polygon is possible inside the brush - continue splitting.
+			},
+			super::bsp_builder::PolygonPositionRelativePlane::CoplanarFront |
+			super::bsp_builder::PolygonPositionRelativePlane::CoplanarBack =>
+			{
+				// Preserve coplanar leftover polygon.
+			},
+			super::bsp_builder::PolygonPositionRelativePlane::Splitted =>
+			{
+				let (front_polygon, back_polygon) = super::bsp_builder::split_polygon(&polygon, &plane);
+				if front_polygon.vertices.len() >= 3
+				{
+					result_polygons.push(front_polygon); // Front polygon piece is outside brush - preserve it.
+				}
 
-		if back_polygon.vertices.len() >= 3
-		{
-			// Continue clipping of inside piese.
-			polygon = back_polygon;
-		}
-		else
-		{
-			// Nothing left inside.
-			break;
-		}
+				if back_polygon.vertices.len() >= 3
+				{
+					// Continue clipping of inside piese.
+					polygon = back_polygon;
+				}
+				else
+				{
+					// Nothing left inside.
+					break;
+				}
+			},
+		};
 	} // for brush planes.
 
 	result_polygons
