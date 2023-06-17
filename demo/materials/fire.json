@@ -1,0 +1,615 @@
+{
+	"lightning_long_vertical":
+	{
+		"light" : false,
+		"blocks_view" : false,
+		"blending_mode" : "Additive",
+		"solid" : false,
+		"decals" : false,
+		"emissive_layer" :
+		{
+			"image" : "dummy.png",
+			"light" : [20.0, 20.0, 20.0]
+		},
+		"emissive_light" : [5.0, 5.0, 10.0],
+		"special_effect" :
+		{
+			"Fire" :
+			{
+				"resolution_log2" : [6, 8],
+				"heat_conductivity" : 2.5,
+				"color" : [0.4, 0.4, 1.0],
+				"update_frequency" : 20.0,
+				"slow" : true,
+				"heat_sources":
+				[
+					{
+						"Lightning":
+						{
+							"points": [[32, 0], [32, 255]]
+						}
+					}
+				]
+			}
+		}
+	},
+	"lightning_jacobs_ladder":
+	{
+		"light" : false,
+		"blocks_view" : false,
+		"blending_mode" : "Additive",
+		"solid" : false,
+		"decals" : false,
+		"emissive_layer" :
+		{
+			"image" : "dummy.png",
+			"light" : [20.0, 20.0, 20.0]
+		},
+		"emissive_light" : [5.0, 5.0, 10.0],
+		"special_effect" :
+		{
+			"Fire" :
+			{
+				"resolution_log2" : [7, 7],
+				"heat_conductivity" : 2.0,
+				"color" : [0.4, 0.4, 1.0],
+				"update_frequency" : 40.0,
+				"heat_sources":
+				[
+					{
+						"Lightning":
+						{
+							"points": [[31, 112], [96, 112]],
+							"offset":
+							[
+								[
+									{
+										"value" : { "SawToothWave": { "frequency" : 1.0, "amplitude" : -16.0, "offset" : -16.0 } }
+									},
+									{
+										"value" : { "SawToothWave": { "frequency" : 1.0, "amplitude" : -48.0, "offset" : -48.0 } }
+									}
+								],
+								[
+									{
+										"value" : { "SawToothWave": { "frequency" : 1.0, "amplitude" : 16.0, "offset" : 16.0 } }
+									},
+									{
+										"value" : { "SawToothWave": { "frequency" : 1.0, "amplitude" : -48.0, "offset" : -48.0 } }
+									}
+								]
+							]
+						}
+					}
+				]
+			}
+		}
+	},
+	"lightning_rotating":
+	{
+		"light" : false,
+		"blocks_view" : false,
+		"blending_mode" : "Additive",
+		"solid" : false,
+		"decals" : false,
+		"emissive_layer" :
+		{
+			"image" : "dummy.png",
+			"light" : [20.0, 20.0, 20.0]
+		},
+		"emissive_light" : [5.0, 5.0, 10.0],
+		"special_effect" :
+		{
+			"Fire" :
+			{
+				"resolution_log2" : [7, 7],
+				"heat_conductivity" : 2.5,
+				"color" : [0.4, 0.4, 1.0],
+				"update_frequency" : 40.0,
+				"slow" : true,
+				"heat_sources":
+				[
+					{
+						"Lightning":
+						{
+							"points": [[64, 64], [64, 64]],
+							"ramp" : true,
+							"offset":
+							[
+								[{},{}],
+								[
+									{
+										"value" : { "SinWave": { "frequency" : 0.33, "amplitude" : 57.0, "phase" : 0.0 } },
+										"random_deviation" : { "Constant" : 6.0 }
+									},
+									{
+										"value" : { "SinWave": { "frequency" : 0.33, "amplitude" : 57.0, "phase" : 1.57 } },
+										"random_deviation" : { "Constant" : 6.0 }
+									}
+								]
+							]
+						}
+					}
+				]
+			}
+		}
+	},
+	"magic_teleport":
+	{
+		"light" : false,
+		"blocks_view" : false,
+		"blending_mode" : "Additive",
+		"solid" : false,
+		"decals" : false,
+		"emissive_layer" :
+		{
+			"image" : "magic_teleport_gradient.png",
+			"light" : [40.0, 40.0, 40.0]
+		},
+		"emissive_light" : [12.0, 20.0, 10.0],
+		"special_effect" :
+		{
+			"Fire" :
+			{
+				"resolution_log2" : [7, 7],
+				"heat_conductivity" : 5.0,
+				"update_frequency" : 30.0,
+				"slow" : true,
+				"heat_sources":
+				[
+					{
+						"Lightning":
+						{
+							"points": [[64, 64], [64, 64]],
+							"heat" : { "value" : { "TriangleWave": { "frequency" : -0.7, "amplitude" : 0.5, "offset": 0.5, "phase" : 0.0 } } },
+							"offset":
+							[
+								[
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 2.6927937030769655 } } },
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 4.263590029871862 } } }
+								],
+								[
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 0.0 } } },
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 1.5707963267948966 } } }
+								]
+							]
+						}
+					},
+					{
+						"Lightning":
+						{
+							"points": [[64, 64], [64, 64]],
+							"heat" : { "value" : { "TriangleWave": { "frequency" : -0.7, "amplitude" : 0.5, "offset": 0.5, "phase" : 0.1429 } } },
+							"offset":
+							[
+								[
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 3.5903916041026207 } } },
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 5.161187930897517 } } }
+								],
+								[
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 0.8975979010256552 } } },
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 2.4683942278205517 } } }
+								]
+							]
+						}
+					},
+					{
+						"Lightning":
+						{
+							"points": [[64, 64], [64, 64]],
+							"heat" : { "value" : { "TriangleWave": { "frequency" : -0.7, "amplitude" : 0.5, "offset": 0.5, "phase" : 0.2857 } } },
+							"offset":
+							[
+								[
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 4.487989505128276 } } },
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 6.058785831923172 } } }
+								],
+								[
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 1.7951958020513104 } } },
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 3.365992128846207 } } }
+								]
+							]
+						}
+					},
+					{
+						"Lightning":
+						{
+							"points": [[64, 64], [64, 64]],
+							"heat" : { "value" : { "TriangleWave": { "frequency" : -0.7, "amplitude" : 0.5, "offset": 0.5, "phase" : 0.4286 } } },
+							"offset":
+							[
+								[
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 5.385587406153931 } } },
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 6.956383732948828 } } }
+								],
+								[
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 2.6927937030769655 } } },
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 4.263590029871862 } } }
+								]
+							]
+						}
+					},
+					{
+						"Lightning":
+						{
+							"points": [[64, 64], [64, 64]],
+							"heat" : { "value" : { "TriangleWave": { "frequency" : -0.7, "amplitude" : 0.5, "offset": 0.5, "phase" : 0.5714 } } },
+							"offset":
+							[
+								[
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 0.0 } } },
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 1.5707963267948966 } } }
+								],
+								[
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 3.5903916041026207 } } },
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 5.161187930897517 } } }
+								]
+							]
+						}
+					},
+					{
+						"Lightning":
+						{
+							"points": [[64, 64], [64, 64]],
+							"heat" : { "value" : { "TriangleWave": { "frequency" : -0.7, "amplitude" : 0.5, "offset": 0.5, "phase" : 0.7143 } } },
+							"offset":
+							[
+								[
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 0.8975979010256552 } } },
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 2.4683942278205517 } } }
+								],
+								[
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 4.487989505128276 } } },
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 6.058785831923172 } } }
+								]
+							]
+						}
+					},
+					{
+						"Lightning":
+						{
+							"points": [[64, 64], [64, 64]],
+							"heat" : { "value" : { "TriangleWave": { "frequency" : -0.7, "amplitude" : 0.5, "offset": 0.5, "phase" : 0.8571 } } },
+							"offset":
+							[
+								[
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 1.7951958020513104 } } },
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 3.365992128846207 } } }
+								],
+								[
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 5.385587406153931 } } },
+									{ "value" : { "SinWave": { "frequency" : 0.2, "amplitude" : 62.0, "phase" : 6.956383732948828 } } }
+								]
+							]
+						}
+					}
+				]
+			}
+		}
+	},
+	"sparking_circuit_board":
+	{
+		"diffuse" : "sparking_circuit_board.png",
+		"normal_map" : "sparking_circuit_board_normal.png",
+		"emissive_layer" :
+		{
+			"image" : "dummy.png",
+			"light" : [80.0, 80.0, 80.0]
+		},
+		"emissive_light" : [2.5, 1.25, 1.25],
+		"special_effect" :
+		{
+			"Fire" :
+			{
+				"resolution_log2" : [7, 7],
+				"heat_conductivity" : 5.0,
+				"color" : [1.0, 0.5, 0.5],
+				"update_frequency" : 20.0,
+				"heat_sources":
+				[
+					{
+						"Lightning":
+						{
+							"points": [[64, 64], [64, 64]],
+							"offset":
+							[
+								[
+									{ "random_deviation" : { "Constant" : 51.0 } },
+									{ "random_deviation" : { "Constant" : 51.0 } }
+								],
+								[
+									{ "random_deviation" : { "Constant" : 51.0 } },
+									{ "random_deviation" : { "Constant" : 51.0 } }
+								]
+							],
+							"heat":
+							{
+								"value" : { "TriangleWave": { "frequency" : 4.0, "amplitude" : 2.5, "offset" : -1.5 } }
+							}
+						}
+					},
+					{
+						"Point" :
+						{
+							"center" : [30, 94],
+							"offset":
+							[
+								{ "random_deviation" : { "Constant" : 2.0 } },
+								{ "random_deviation" : { "Constant" : 2.0 } }
+							],
+							"heat":
+							{
+								"value" : { "Constant" : 0.6 },
+								"random_deviation" : { "Constant" : 0.4 }
+							}
+						}
+					},
+					{
+						"Point" :
+						{
+							"center" : [98, 35],
+							"offset":
+							[
+								{ "random_deviation" : { "Constant" : 2.0 } },
+								{ "random_deviation" : { "Constant" : 2.0 } }
+							],
+							"heat":
+							{
+								"value" : { "Constant" : 0.5 },
+								"random_deviation" : { "Constant" : 0.3 }
+							}
+						}
+					},
+					{
+						"Point" :
+						{
+							"center" : [64, 64],
+							"offset":
+							[
+								{ "random_deviation" : { "Constant" : 52.0 } },
+								{ "random_deviation" : { "Constant" : 52.0 } }
+							],
+							"heat":
+							{
+								"value" : { "TriangleWave": { "frequency" : 5.0, "amplitude" : 3.0, "offset" : -2.5 } }
+							}
+						}
+					}
+				]
+			}
+		}
+	},
+	"fire_small":
+	{
+		"light" : false,
+		"blocks_view" : false,
+		"blending_mode" : "Additive",
+		"solid" : false,
+		"decals" : false,
+		"emissive_layer" :
+		{
+			"image" : "dummy.png",
+			"light" : [120.0, 120.0, 120.0]
+		},
+		"emissive_light" : [60.0, 60.0, 30.0],
+		"special_effect" :
+		{
+			"Fire" :
+			{
+				"resolution_log2" : [4, 5],
+				"heat_conductivity" : 20.0,
+				"color" : [1.0, 1.0, 0.5],
+				"update_frequency" : 20.0,
+				"heat_sources":
+				[
+					{
+						"Point":
+						{
+							"center": [8, 30],
+							"offset":
+							[
+								{
+									"value" : { "SinWave": { "frequency" : 0.25, "amplitude" : 2.0} }
+								},
+								{
+									"value" : { "SinWave": { "frequency" : 0.4045, "amplitude" : 1.0} }
+								}
+							],
+							"heat":
+							{
+								"value" : { "Constant" : 0.6 },
+								"random_deviation" : { "Constant" : 0.4 }
+							}
+						}
+					}
+				]
+			}
+		}
+	},
+	"fire_medium":
+	{
+		"light" : false,
+		"blocks_view" : false,
+		"blending_mode" : "Additive",
+		"solid" : false,
+		"decals" : false,
+		"emissive_layer" :
+		{
+			"image" : "dummy.png",
+			"light" : [80.0, 80.0, 80.0]
+		},
+		"emissive_light" : [40.0, 20.0, 40.0],
+		"special_effect" :
+		{
+			"Fire" :
+			{
+				"resolution_log2" : [5, 6],
+				"heat_conductivity" : 100.0,
+				"color" : [1.0, 0.5, 1.0],
+				"update_frequency" : 30.0,
+				"heat_sources":
+				[
+					{
+						"Point":
+						{
+							"center": [16, 62],
+							"heat":
+							{
+								"value" : { "Constant" : 0.5 },
+								"random_deviation" : { "Constant" : 0.5 }
+							}
+						}
+					},
+					{
+						"Point":
+						{
+							"center": [14, 61],
+							"offset":
+							[
+								{},
+								{
+									"value" : { "SinWave": { "frequency" : 0.4045, "amplitude" : 1.0} }
+								}
+							],
+							"heat":
+							{
+								"value" : { "Constant" : 0.5 },
+								"random_deviation" : { "Constant" : 0.5 }
+							}
+						}
+					},
+					{
+						"Point":
+						{
+							"center": [18, 61],
+							"offset":
+							[
+								{},
+								{
+									"value" : { "SinWave": { "frequency" : 0.25, "amplitude" : 1.0} }
+								}
+							],
+							"heat":
+							{
+								"value" : { "Constant" : 0.5 },
+								"random_deviation" : { "Constant" : 0.5 }
+							}
+						}
+					}
+				]
+			}
+		}
+	}
+	,
+	"fire_large":
+	{
+		"light" : false,
+		"blocks_view" : false,
+		"blending_mode" : "Additive",
+		"solid" : false,
+		"decals" : false,
+		"emissive_layer" :
+		{
+			"image" : "fire_large_gradient.png",
+			"light" : [10.0, 10.0, 10.0]
+		},
+		"emissive_light" : [2.5, 3.75, 5.0],
+		"special_effect" :
+		{
+			"Fire" :
+			{
+				"resolution_log2" : [7, 7],
+				"heat_conductivity" : 10.0,
+				"update_frequency" : 40.0,
+				"heat_sources":
+				[
+					{
+						"Line":
+						{
+							"points": [[64, 74], [64, 125]],
+							"heat":
+							{
+								"value" : { "Constant" : 0.7 },
+								"random_deviation" : { "Constant" : 0.2 }
+							}
+						}
+					},
+					{
+						"Line":
+						{
+							"points": [[58, 80], [64, 125]],
+							"heat":
+							{
+								"value" : { "Constant" : 0.7 },
+								"random_deviation" : { "Constant" : 0.2 }
+							}
+						}
+					},
+					{
+						"Line":
+						{
+							"points": [[70, 80], [64, 125]],
+							"heat":
+							{
+								"value" : { "Constant" : 0.7 },
+								"random_deviation" : { "Constant" : 0.2 }
+							}
+						}
+					},
+					{
+						"Line":
+						{
+							"points": [[62, 123], [66, 123]],
+							"heat":
+							{
+								"value" : { "Constant" : 0.7 },
+								"random_deviation" : { "Constant" : 0.3 }
+							}
+						}
+					},
+					{
+						"Fountain":
+						{
+							"center": [64, 127],
+							"frequency" : 40.0,
+							"heat":
+							{
+								"value" : { "Constant" : 0.7 },
+								"random_deviation" : { "Constant" : 0.3 }
+							},
+							"angle":
+							{
+								"value" : { "StepWave" : { "frequency" : 20.0, "phase" : 0.1, "offset" : -1.57, "amplitude" : 1.1 } },
+								"random_deviation" : { "Constant" : 0.2 }
+							},
+							"speed":
+							{
+								"value" : { "Constant" : 40.0 },
+								"random_deviation" : { "Constant" : 10.0 }
+							},
+							"spawn_angle" :
+							{
+								"value" : { "Constant" : -1.57 },
+								"random_deviation" : { "Constant" : 0.1 }
+							},
+							"spawn_distance" :
+							{
+								"value" : { "Constant" : 40.0 },
+								"random_deviation" : { "Constant" : 20.0 }
+							},
+							"gravity" :
+							{
+								"value" : { "Constant" : 64.0 }
+							},
+							"lifetime:" :
+							{
+								"value" : { "Constant" : 2.5 },
+								"random_deviation" : { "Constant" : 0.5 }
+							}
+						}
+					}
+				]
+			}
+		}
+	}
+}

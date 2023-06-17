@@ -1,0 +1,488 @@
+{
+	"connections": [
+		{
+			"from": "uniform",
+			"from_port": 0,
+			"to": "blend_2",
+			"to_port": 1
+		},
+		{
+			"from": "fill_to_random_grey",
+			"from_port": 0,
+			"to": "colorize",
+			"to_port": 0
+		},
+		{
+			"from": "colorize",
+			"from_port": 0,
+			"to": "blend_2",
+			"to_port": 0
+		},
+		{
+			"from": "normal_map2",
+			"from_port": 0,
+			"to": "Material",
+			"to_port": 4
+		},
+		{
+			"from": "shape",
+			"from_port": 0,
+			"to": "blend",
+			"to_port": 2
+		},
+		{
+			"from": "blend_2",
+			"from_port": 0,
+			"to": "blend",
+			"to_port": 0
+		},
+		{
+			"from": "uniform_2",
+			"from_port": 0,
+			"to": "blend",
+			"to_port": 1
+		},
+		{
+			"from": "bricks_uneven2_2",
+			"from_port": 0,
+			"to": "transform2",
+			"to_port": 0
+		},
+		{
+			"from": "bricks_uneven2_2",
+			"from_port": 1,
+			"to": "transform2_2",
+			"to_port": 0
+		},
+		{
+			"from": "transform2_2",
+			"from_port": 0,
+			"to": "fill_to_random_grey",
+			"to_port": 0
+		},
+		{
+			"from": "transform2_2",
+			"from_port": 0,
+			"to": "fill_to_random_grey_2",
+			"to_port": 0
+		},
+		{
+			"from": "transform2",
+			"from_port": 0,
+			"to": "blend_2",
+			"to_port": 2
+		},
+		{
+			"from": "blend",
+			"from_port": 0,
+			"to": "Material",
+			"to_port": 0
+		},
+		{
+			"from": "shape",
+			"from_port": 0,
+			"to": "blend_3",
+			"to_port": 2
+		},
+		{
+			"from": "blend_3",
+			"from_port": 0,
+			"to": "normal_map2",
+			"to_port": 0
+		},
+		{
+			"from": "perlin",
+			"from_port": 0,
+			"to": "blend_4",
+			"to_port": 1
+		},
+		{
+			"from": "fill_to_random_grey_2",
+			"from_port": 0,
+			"to": "blend_4",
+			"to_port": 0
+		},
+		{
+			"from": "blend_4",
+			"from_port": 0,
+			"to": "blend_3",
+			"to_port": 0
+		},
+		{
+			"from": "shape_2",
+			"from_port": 0,
+			"to": "colorize_2",
+			"to_port": 0
+		},
+		{
+			"from": "colorize_2",
+			"from_port": 0,
+			"to": "blend_3",
+			"to_port": 1
+		}
+	],
+	"label": "Graph",
+	"longdesc": "",
+	"name": "312",
+	"node_position": {
+		"x": 0,
+		"y": 0
+	},
+	"nodes": [
+		{
+			"export_paths": {
+
+			},
+			"name": "Material",
+			"node_position": {
+				"x": 1040,
+				"y": 340
+			},
+			"parameters": {
+				"albedo_color": {
+					"a": 1,
+					"b": 1,
+					"g": 1,
+					"r": 1,
+					"type": "Color"
+				},
+				"ao": 1,
+				"depth_scale": 0.5,
+				"emission_energy": 1,
+				"flags_transparent": true,
+				"metallic": 0,
+				"normal": 1,
+				"roughness": 1,
+				"size": 9,
+				"sss": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "material"
+		},
+		{
+			"name": "bricks_uneven2_2",
+			"node_position": {
+				"x": -660,
+				"y": 360
+			},
+			"parameters": {
+				"bevel": 0.03,
+				"corner": 0.1,
+				"iterations": 10,
+				"min_size": 0.25,
+				"mortar": 0.03,
+				"randomness": 0.6,
+				"round": 0.1
+			},
+			"seed": 0.70045,
+			"seed_locked": false,
+			"type": "bricks_uneven2"
+		},
+		{
+			"name": "blend_2",
+			"node_position": {
+				"x": 440,
+				"y": 340
+			},
+			"parameters": {
+				"amount": 1,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "uniform",
+			"node_position": {
+				"x": 240,
+				"y": 400
+			},
+			"parameters": {
+				"color": {
+					"a": 1,
+					"b": 0.240064,
+					"g": 0.185786,
+					"r": 0.185786,
+					"type": "Color"
+				}
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "uniform"
+		},
+		{
+			"name": "fill_to_random_grey",
+			"node_position": {
+				"x": -40,
+				"y": 320
+			},
+			"parameters": {
+				"edgecolor": 1
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "fill_to_random_grey"
+		},
+		{
+			"name": "colorize",
+			"node_position": {
+				"x": 200,
+				"y": 320
+			},
+			"parameters": {
+				"gradient": {
+					"interpolation": 1,
+					"points": [
+						{
+							"a": 1,
+							"b": 0.13562,
+							"g": 0.171875,
+							"pos": 0.036364,
+							"r": 0.140152
+						},
+						{
+							"a": 1,
+							"b": 0.093658,
+							"g": 0.363281,
+							"pos": 0.290909,
+							"r": 0.127361
+						},
+						{
+							"a": 1,
+							"b": 0.088211,
+							"g": 0.550781,
+							"pos": 0.654545,
+							"r": 0.503801
+						},
+						{
+							"a": 1,
+							"b": 0.090942,
+							"g": 0.40171,
+							"pos": 1,
+							"r": 0.582031
+						}
+					],
+					"type": "Gradient"
+				}
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "colorize"
+		},
+		{
+			"name": "fill_to_random_grey_2",
+			"node_position": {
+				"x": -40,
+				"y": 480
+			},
+			"parameters": {
+				"edgecolor": 1
+			},
+			"seed": 0.599023,
+			"seed_locked": false,
+			"type": "fill_to_random_grey"
+		},
+		{
+			"name": "normal_map2",
+			"node_position": {
+				"x": 760,
+				"y": 500
+			},
+			"parameters": {
+				"buffer": 0,
+				"param2": 0,
+				"size": 9,
+				"strength": 1
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "normal_map2"
+		},
+		{
+			"name": "shape",
+			"node_position": {
+				"x": 320,
+				"y": 720
+			},
+			"parameters": {
+				"edge": 0,
+				"radius": 0.875,
+				"shape": 1,
+				"sides": 4
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "shape"
+		},
+		{
+			"name": "blend",
+			"node_position": {
+				"x": 740,
+				"y": 320
+			},
+			"parameters": {
+				"amount": 1,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "uniform_2",
+			"node_position": {
+				"x": 422.917389,
+				"y": 248.440552
+			},
+			"parameters": {
+				"color": {
+					"a": 1,
+					"b": 0.542969,
+					"g": 0.512803,
+					"r": 0.512803,
+					"type": "Color"
+				}
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "uniform"
+		},
+		{
+			"name": "transform2",
+			"node_position": {
+				"x": -360,
+				"y": 220
+			},
+			"parameters": {
+				"mode": 0,
+				"rotate": 0,
+				"scale_x": 0.875,
+				"scale_y": 0.875,
+				"translate_x": 0,
+				"translate_y": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "transform2"
+		},
+		{
+			"name": "transform2_2",
+			"node_position": {
+				"x": -360,
+				"y": 440
+			},
+			"parameters": {
+				"mode": 0,
+				"rotate": 0,
+				"scale_x": 0.875,
+				"scale_y": 0.875,
+				"translate_x": 0,
+				"translate_y": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "transform2"
+		},
+		{
+			"name": "blend_3",
+			"node_position": {
+				"x": 480,
+				"y": 500
+			},
+			"parameters": {
+				"amount": 1,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "perlin",
+			"node_position": {
+				"x": -40,
+				"y": 580
+			},
+			"parameters": {
+				"iterations": 5,
+				"persistence": 0.5,
+				"scale_x": 16,
+				"scale_y": 16
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "perlin"
+		},
+		{
+			"name": "blend_4",
+			"node_position": {
+				"x": 220,
+				"y": 500
+			},
+			"parameters": {
+				"amount": 0.75,
+				"blend_type": 0
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "blend"
+		},
+		{
+			"name": "shape_2",
+			"node_position": {
+				"x": 40,
+				"y": 740
+			},
+			"parameters": {
+				"edge": 0.12,
+				"radius": 1,
+				"shape": 1,
+				"sides": 4
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "shape"
+		},
+		{
+			"name": "colorize_2",
+			"node_position": {
+				"x": 240,
+				"y": 620
+			},
+			"parameters": {
+				"gradient": {
+					"interpolation": 1,
+					"points": [
+						{
+							"a": 1,
+							"b": 1,
+							"g": 1,
+							"pos": 0,
+							"r": 1
+						},
+						{
+							"a": 1,
+							"b": 0.542969,
+							"g": 0.542969,
+							"pos": 1,
+							"r": 0.542969
+						}
+					],
+					"type": "Gradient"
+				}
+			},
+			"seed": 0,
+			"seed_locked": false,
+			"type": "colorize"
+		}
+	],
+	"parameters": {
+
+	},
+	"seed": 0,
+	"seed_locked": false,
+	"shortdesc": "",
+	"type": "graph"
+}

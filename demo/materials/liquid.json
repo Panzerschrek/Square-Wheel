@@ -1,0 +1,231 @@
+{
+	"color_grid_45":
+	{
+		"diffuse": "color_grid_45.png",
+		"blending_mode": "AlphaTest",
+		"blocks_view": false,
+		"decals": false,
+		"special_effect":
+		{
+			"Water":
+			{
+				"resolution_log2": [6, 6],
+				"update_frequency": 20.0,
+				"fluidity": 100.0,
+				"color_texture_apply_mode" : "SourceTextureNormalDeformed",
+				"wave_sources":
+				[
+					{
+						"WavyLine":
+						{
+							"points" : [ [ 63, 65 ], [ 65, 63 ] ],
+							"frequency": 1.0,
+							"amplitude": 0.05
+						}
+					},
+					{
+						"WavyLine":
+						{
+							"points" : [ [ 64, 31 ], [ 63, 33 ] ],
+							"frequency": 1.4142,
+							"amplitude": 0.05
+						}
+					},
+					{
+						"WavyLine":
+						{
+							"points" : [ [ 31, 65 ], [ 33, 63 ] ],
+							"frequency": 1.7321,
+							"amplitude": 0.05
+						}
+					},
+					{
+						"WavyLine":
+						{
+							"points" : [ [ 31, 33 ], [ 33, 31 ] ],
+							"frequency": 1.618,
+							"amplitude": 0.05
+						}
+					}
+				]
+			}
+		}
+	},
+	"mercury":
+	{
+		"diffuse": "mercury.png",
+		"roughness": 0.01,
+		"is_metal": true,
+		"decals": false,
+		"special_effect":
+		{
+			"Water":
+			{
+				"resolution_log2": [7, 7],
+				"update_frequency": 30.0,
+				"fluidity": 200.0,
+				"color_texture_apply_mode" : "SingleColor",
+				"wave_sources":
+				[
+					{
+						"WavyLine":
+						{
+							"points" : [ [ 127, 129 ], [ 129, 127 ] ],
+							"frequency": 1.0,
+							"amplitude": 0.1
+						}
+					},
+					{
+						"WavyLine":
+						{
+							"points" : [ [ 129, 63 ], [ 127, 65 ] ],
+							"frequency": 1.4142,
+							"amplitude": 0.1
+						}
+					},
+					{
+						"WavyLine":
+						{
+							"points" : [ [ 63, 129 ], [ 65, 127 ] ],
+							"frequency": 1.7321,
+							"amplitude": 0.1
+						}
+					},
+					{
+						"WavyLine":
+						{
+							"points" : [ [ 63, 65 ], [ 65, 63 ] ],
+							"frequency": 1.618,
+							"amplitude": 0.1
+						}
+					},
+					{
+						"Rain":
+						{
+							"frequency" : 1.0,
+							"amplitude" : 0.2
+						}
+					}
+				]
+			}
+		}
+	},
+	"water":
+	{
+		"diffuse": "water.png",
+		"normal_map": "water_normal.png",
+		"roughness": 0.0,
+		"blending_mode": "Average",
+		"blocks_view": false,
+		"decals": false,
+		"solid": false,
+		"special_effect":
+		{
+			"Turb":
+			{
+				"amplitude": 16.0,
+				"wave_length": 128.0,
+				"frequency": 0.25
+			}
+		}
+	},
+	"water_flowing_slow":
+	{
+		"diffuse": "water.png",
+		"normal_map": "water_normal.png",
+		"roughness": 0.0,
+		"blending_mode": "Average",
+		"blocks_view": false,
+		"decals": false,
+		"solid": false,
+		"scroll_speed": [0.0, -16.0]
+	},
+	"water_flowing_fast":
+	{
+		"diffuse": "water.png",
+		"normal_map": "water_normal.png",
+		"roughness": 0.0,
+		"blending_mode": "Average",
+		"blocks_view": false,
+		"decals": false,
+		"solid": false,
+		"scroll_speed": [0.0, -64.0]
+	},
+	"water_green":
+	{
+		"diffuse": "water_green.png",
+		"roughness": 0.01,
+		"blending_mode": "Average",
+		"blocks_view": false,
+		"decals": false,
+		"solid": false,
+		"special_effect":
+		{
+			"Water":
+			{
+				"resolution_log2": [8, 8],
+				"update_frequency": 30.0,
+				"fluidity": 600.0,
+				"color_texture_apply_mode" : "SourceTexture",
+				"wave_sources":
+				[
+					{
+						"WavySpot":
+						{
+							"center" : [ 143, 27 ],
+							"frequency": 2.1,
+							"amplitude": 0.1
+						}
+					},
+					{
+						"WavySpot":
+						{
+							"center" : [ 230, 133 ],
+							"frequency": 1.666,
+							"amplitude": 0.15
+						}
+					},
+					{
+						"WavyLine":
+						{
+							"points" : [ [4, 0], [8, 12] ],
+							"frequency": 1.0,
+							"amplitude": 0.075
+						}
+					},
+					{
+						"WavyLine":
+						{
+							"points" : [ [0, 8], [12, 4] ],
+							"frequency": 0.75,
+							"amplitude": 0.075
+						}
+					},
+					{
+						"WavyLine":
+						{
+							"points" : [ [128, 122], [128, 134] ],
+							"frequency": 1.2,
+							"amplitude": 0.075
+						}
+					},
+					{
+						"WavyLine":
+						{
+							"points" : [ [122, 128], [134, 128] ],
+							"frequency": 0.9,
+							"amplitude": 0.075
+						}
+					},
+					{
+						"Rain":
+						{
+							"frequency" : 1.0,
+							"amplitude" : 0.75
+						}
+					}
+				]
+			}
+		}
+	}
+}

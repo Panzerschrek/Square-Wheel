@@ -64,7 +64,7 @@ Use script with "i686" suffix on 32-bit system, use script with "_generic" suffi
 
 * Build engine itself. Rust compiler and SDL2 libraries are required. Use build scripts inside "src" directory in order to obtain diffirent executable versions.
 * Generate textures, using "export_textures.py" script. MaterialMaker v 0.99 (https://github.com/RodZill4/material-maker/) and GIMP 2.10 are required. Use directory "textures" as destination.
-* Copy png textures from "textures_src" into "textures" directory.
+* Copy png textures from "textures_src_bin" into "textures" directory.
 * Copy models textures into "textures" directory.
 * Export skybox textures, using "sky.blend".
 * Export models into "models" directory, using Blender and newest IQM export script (see "iqm" directory in repository root).

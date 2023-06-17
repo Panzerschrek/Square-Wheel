@@ -184,47 +184,6 @@
 		"decals" : false,
 		"comment" : "Leave triggers in BSP in order to avoid deleting trigger brushes"
 	},
-	"water":
-	{
-		"diffuse": "water.png",
-		"normal_map": "water_normal.png",
-		"roughness": 0.0,
-		"blending_mode": "Average",
-		"blocks_view": false,
-		"solid" : false,
-		"decals": false,
-		"special_effect":
-		{
-			"Turb":
-			{
-				"amplitude": 16.0,
-				"wave_length": 128.0,
-				"frequency": 0.25
-			}
-		}
-	},
-	"water_flowing_slow":
-	{
-		"diffuse": "water.png",
-		"normal_map": "water_normal.png",
-		"roughness": 0.0,
-		"blending_mode": "Average",
-		"blocks_view": false,
-		"solid" : false,
-		"decals": false,
-		"scroll_speed": [0.0, -16.0]
-	},
-	"water_flowing_fast":
-	{
-		"diffuse": "water.png",
-		"normal_map": "water_normal.png",
-		"roughness": 0.0,
-		"blending_mode": "Average",
-		"blocks_view": false,
-		"solid" : false,
-		"decals": false,
-		"scroll_speed": [0.0, -64.0]
-	},
 	"well_top_limestone_bricks":
 	{
 		"diffuse": "well_top_limestone_bricks.png",
