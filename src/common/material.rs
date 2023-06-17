@@ -32,6 +32,12 @@ pub struct Material
 	#[serde(default = "default_true")]
 	pub bsp: bool,
 
+	/// If true - map compiler will create duplicated polygon with inverted normal.
+	/// Duplicated polygon will be completely independent, have separate lightmap.
+	/// This affects only map compiler. Lightmaper or the engine ignore it.
+	#[serde(default)]
+	pub twosided: bool,
+
 	/// If false - do not draw polygons with such material.
 	#[serde(default = "default_true")]
 	pub draw: bool,
@@ -251,6 +257,7 @@ impl Default for Material
 			roughness_map: None,
 			is_metal: false,
 			bsp: true,
+			twosided: false,
 			draw: true,
 			blocks_view: true,
 			shadow: true,
