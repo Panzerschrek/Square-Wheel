@@ -410,6 +410,7 @@
 		"roughness" : 0.3,
 		"blending_mode": "AlphaTest",
 		"blocks_view" : false,
+		"decals" : false,
 		"special_effect":
 		{
 			"LayeredAnimation" :
