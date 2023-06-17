@@ -8,7 +8,6 @@
 	},
 	"TRIGGER":
 	{
-		"bsp" : false,
 		"draw" : false,
 		"blocks_view": false,
 		"solid": false,

@@ -40,6 +40,8 @@ def main():
 	result = dict()
 	for file_name in os.listdir(args.input_dir):
 		name_without_extension = file_name.replace(".tga", "")
+		if name_without_extension == "TRIGGER":
+			continue
 		material_json = generate_material_json(args.input_dir, file_name)
 		result[name_without_extension] = material_json
 
