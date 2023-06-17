@@ -69,6 +69,7 @@ impl Postprocessor
 		&mut self,
 		pixels: &mut [Color32],
 		surface_info: &system_window::SurfaceInfo,
+		color_modulate: &[f32; 3],
 		frame_duration_s: f32,
 		debug_stats_printer: &mut DebugStatsPrinter,
 	)
@@ -101,7 +102,7 @@ impl Postprocessor
 
 		let tonemapping_start_time = Clock::now();
 
-		let tonemapping_function = TonemappingFunction::new(self.current_exposure);
+		let tonemapping_function = TonemappingFunction::new(self.current_exposure, color_modulate);
 
 		let num_threads = rayon::current_num_threads();
 
@@ -1001,13 +1002,16 @@ struct TonemappingFunction
 
 impl TonemappingFunction
 {
-	fn new(exposure: f32) -> Self
+	fn new(exposure: f32, color_modulate: &[f32; 3]) -> Self
 	{
-		let inv_scale = 1.0 / exposure;
 		let inv_255 = 1.0 / 255.0;
 
 		Self {
-			inv_scale_vec: ColorVec::from_color_f32x3(&[inv_scale, inv_scale, inv_scale]),
+			inv_scale_vec: ColorVec::from_color_f32x3(&[
+				1.0 / (exposure * color_modulate[0]),
+				1.0 / (exposure * color_modulate[1]),
+				1.0 / (exposure * color_modulate[2]),
+			]),
 			inv_255_vec: ColorVec::from_color_f32x3(&[inv_255, inv_255, inv_255]),
 		}
 	}

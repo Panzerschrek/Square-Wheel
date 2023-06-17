@@ -868,6 +868,7 @@ impl GameMap
 		FrameInfo {
 			camera_matrices,
 			submodel_entities,
+			color_modulate: [1.0; 3],
 			skybox_rotation: QuaternionF::one(),
 			game_time_s: self.game_time,
 			lights: self.collect_drawable_components(),
