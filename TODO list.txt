@@ -34,13 +34,17 @@ Renderer:
 Lightmapper:
 * Colored shadows
 * Shadows from dynamic objects (configurable)
+* Emissive light from dynamic objects (configurable)
 * Alpha-shadows (with texture fetch in tracing code)
+* Shadow tracing speed-up
 
 Map compiler:
 * Speed-up of large maps compilation
+* Try to perform CSG on map brushes (and remove hidden surfaces) before building BSP tree - as Quake does
+* Two-sided surfaces (for water, fire, alpha-tested surfaces, etc.)
 * More map source formats (Quake II, Quake III Arena), Source Engine
 * Bezier curves support (perform tesselation during map compilation)
 
 Test game:
 * Load proper map while loading game
-* Materials without collisions, with collision filters (pass bulletes, but not player, etc.)
+* Materials with collision filters (pass bulletes, but not player, etc.)
