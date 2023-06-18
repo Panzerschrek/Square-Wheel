@@ -211,12 +211,15 @@ fn choose_best_splitter_plane(polygons: &[Polygon]) -> Option<Plane>
 		for &v in &polygon.vertices
 		{
 			let edge = v - prev_v;
+			prev_v = v;
 
 			for basis_vec in basis_vecs
 			{
 				let normal = edge.cross(basis_vec);
-				// TODO - use check with epsilon
-				if normal.magnitude2() == 0.0
+
+				// Do not divide by basis vec lenght, because it has length 1.
+				let edge_basis_vec_angle_sin_squared = normal.magnitude2() / edge.magnitude2();
+				if edge_basis_vec_angle_sin_squared <= 0.001
 				{
 					// edge is parallel to this basis vec.
 					continue;
@@ -241,7 +244,6 @@ fn choose_best_splitter_plane(polygons: &[Polygon]) -> Option<Plane>
 					}
 				}
 			}
-			prev_v = v;
 		}
 	}
 
