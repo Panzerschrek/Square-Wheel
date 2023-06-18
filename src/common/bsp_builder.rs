@@ -178,11 +178,13 @@ fn build_leaf_bsp_tree_r(mut in_polygons: Vec<Polygon>) -> BSPNodeChild
 fn choose_best_splitter_plane(polygons: &[Polygon]) -> Option<Plane>
 {
 	let mut best_score_plane: Option<(f32, Plane)> = None;
+
+	// Process planes of polygons itself.
 	for polygon in polygons
 	{
 		if let Some(score) = get_splitter_plane_score(polygons, &polygon.plane)
 		{
-			if let Some((prev_score, _)) = best_score_plane
+			if let Some((prev_score, _prev_plane)) = best_score_plane
 			{
 				if score < prev_score
 				{
@@ -193,6 +195,55 @@ fn choose_best_splitter_plane(polygons: &[Polygon]) -> Option<Plane>
 			{
 				best_score_plane = Some((score, polygon.plane))
 			}
+		}
+	}
+
+	if best_score_plane.is_none()
+	{
+		// Can't find any splitter plane laying on one of polygons - polygons form convex hull and thus BSP leaf may be formed.
+		return None;
+	}
+
+	// Try to build split planes on each edge of the polygon.
+	// Using splitter plane that is not based on any polygon sometimes may be usefull.
+	let basis_vecs = [Vec3f::unit_x(), Vec3f::unit_y(), Vec3f::unit_z()];
+	for polygon in polygons
+	{
+		let mut prev_v = *polygon.vertices.last().unwrap();
+		for &v in &polygon.vertices
+		{
+			let edge = v - prev_v;
+
+			for basis_vec in basis_vecs
+			{
+				let normal = edge.cross(basis_vec);
+				// TODO - use check with epsilon
+				if normal.magnitude2() == 0.0
+				{
+					// edge is parallel to this basis vec.
+					continue;
+				}
+
+				let plane = Plane {
+					vec: normal,
+					dist: normal.dot(v),
+				};
+				if let Some(score) = get_splitter_plane_score(polygons, &plane)
+				{
+					if let Some((prev_score, _prev_plane)) = best_score_plane
+					{
+						if score < prev_score
+						{
+							best_score_plane = Some((score, plane))
+						}
+					}
+					else
+					{
+						best_score_plane = Some((score, plane))
+					}
+				}
+			}
+			prev_v = v;
 		}
 	}
 
