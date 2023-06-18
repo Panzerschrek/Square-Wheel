@@ -6,6 +6,7 @@
 		"blending_mode" : "Additive",
 		"solid" : false,
 		"decals" : false,
+		"twosided" : true,
 		"emissive_layer" :
 		{
 			"image" : "dummy.png",
@@ -40,6 +41,7 @@
 		"blending_mode" : "Additive",
 		"solid" : false,
 		"decals" : false,
+		"twosided" : true,
 		"emissive_layer" :
 		{
 			"image" : "dummy.png",
@@ -92,6 +94,7 @@
 		"blending_mode" : "Additive",
 		"solid" : false,
 		"decals" : false,
+		"twosided" : true,
 		"emissive_layer" :
 		{
 			"image" : "dummy.png",
@@ -141,6 +144,7 @@
 		"blending_mode" : "Additive",
 		"solid" : false,
 		"decals" : false,
+		"twosided" : true,
 		"emissive_layer" :
 		{
 			"image" : "magic_teleport_gradient.png",
@@ -386,6 +390,7 @@
 		"blending_mode" : "Additive",
 		"solid" : false,
 		"decals" : false,
+		"twosided" : true,
 		"emissive_layer" :
 		{
 			"image" : "dummy.png",
@@ -433,6 +438,7 @@
 		"blending_mode" : "Additive",
 		"solid" : false,
 		"decals" : false,
+		"twosided" : true,
 		"emissive_layer" :
 		{
 			"image" : "dummy.png",
@@ -508,6 +514,7 @@
 		"blending_mode" : "Additive",
 		"solid" : false,
 		"decals" : false,
+		"twosided" : true,
 		"emissive_layer" :
 		{
 			"image" : "fire_large_gradient.png",

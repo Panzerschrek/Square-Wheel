@@ -5,6 +5,7 @@
 		"blending_mode": "AlphaTest",
 		"blocks_view": false,
 		"decals": false,
+		"twosided" : true,
 		"special_effect":
 		{
 			"Water":
@@ -119,6 +120,7 @@
 		"blocks_view": false,
 		"decals": false,
 		"solid": false,
+		"twosided" : true,
 		"special_effect":
 		{
 			"Turb":
@@ -138,6 +140,7 @@
 		"blocks_view": false,
 		"decals": false,
 		"solid": false,
+		"twosided" : true,
 		"scroll_speed": [0.0, -16.0]
 	},
 	"water_flowing_fast":
@@ -149,6 +152,7 @@
 		"blocks_view": false,
 		"decals": false,
 		"solid": false,
+		"twosided" : true,
 		"scroll_speed": [0.0, -64.0]
 	},
 	"water_green":
@@ -159,6 +163,7 @@
 		"blocks_view": false,
 		"decals": false,
 		"solid": false,
+		"twosided" : true,
 		"special_effect":
 		{
 			"Water":

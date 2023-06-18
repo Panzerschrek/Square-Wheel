@@ -20,6 +20,7 @@
 		"roughness" : 0.05,
 		"is_metal" : true,
 		"blending_mode": "AlphaTest",
+		"twosided": true,
 		"blocks_view": false,
 		"decals": false
 	},
