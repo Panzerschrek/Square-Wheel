@@ -46,6 +46,7 @@ fn main()
 
 	let materials = if let Some(dir) = opt.materials_dir
 	{
+		println!("Loading materials from {:?}", dir);
 		material::load_materials(&dir)
 	}
 	else
@@ -55,8 +56,10 @@ fn main()
 
 	let textures_dir = opt.textures_dir;
 
+	println!("Reading map file {:?}", opt.input);
 	let file_contents_str = std::fs::read_to_string(opt.input).unwrap();
 
+	println!("Polygonizing brushes");
 	let map_polygonized = match opt.input_format.unwrap_or_default().as_str()
 	{
 		"quake4" =>
@@ -82,12 +85,16 @@ fn main()
 		},
 	};
 
+	println!("Building BSP tree");
 	let bsp_tree = bsp_builder::build_leaf_bsp_tree(&map_polygonized, &materials);
+
+	println!("Polygonizing submodels BSP trees");
 	let submodels_bsp_trees = map_polygonized[1 ..]
 		.iter()
 		.map(|s| bsp_builder::build_submodel_bsp_tree(s, &materials))
 		.collect::<Vec<_>>();
 
+	println!("Converting BSP tree in compact format");
 	let mut map_compact = bsp_map_compact_conversion::convert_bsp_map_to_compact_format(
 		&bsp_tree,
 		&map_polygonized,
@@ -95,8 +102,10 @@ fn main()
 		&materials,
 	);
 
+	println!("Creating dummy lightmaps");
 	lightmaps_builder::build_dummy_lightmaps(&materials, &mut map_compact);
 
+	println!("Saving BSP map {:?}", opt.output);
 	bsp_map_save_load::save_map(&map_compact, &opt.output).unwrap();
 
 	if opt.print_stats
