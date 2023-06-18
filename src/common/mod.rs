@@ -17,6 +17,7 @@ pub mod light_trace;
 pub mod lightmap;
 pub mod lightmap_compression;
 pub mod lightmaps_builder;
+pub mod map_csg;
 pub mod map_file_common;
 pub mod map_file_q1;
 pub mod map_file_q4;

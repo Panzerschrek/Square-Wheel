@@ -1,7 +1,7 @@
 use super::debug_rasterizer::*;
 use square_wheel_lib::common::{
-	bsp_builder, bsp_map_compact, clipping::*, color::*, fixed_math::*, lightmap, lightmaps_builder, map_file_q1,
-	map_polygonizer, math_types::*, matrix::*, plane::*, system_window,
+	bsp_builder, bsp_map_compact, clipping::*, color::*, fixed_math::*, lightmap, lightmaps_builder, map_csg,
+	map_file_q1, map_polygonizer, math_types::*, matrix::*, plane::*, system_window,
 };
 
 #[derive(Default)]
@@ -27,7 +27,7 @@ pub fn draw_frame(
 	draw_options: &DrawOptions,
 	camera_matrices: &CameraMatrices,
 	map: Option<&map_file_q1::MapFileParsed>,
-	map_polygonized: Option<&map_polygonizer::MapPolygonized>,
+	map_csg_processed: Option<&map_csg::MapCSGProcessed>,
 	map_bsp: Option<&bsp_builder::BSPTree>,
 	map_bsp_compact: Option<&bsp_map_compact::BSPMap>,
 	secondary_light_sources: Option<&lightmaps_builder::SecondaryLightSources>,
@@ -40,7 +40,7 @@ pub fn draw_frame(
 		draw_options,
 		camera_matrices,
 		map,
-		map_polygonized,
+		map_csg_processed,
 		map_bsp,
 		map_bsp_compact,
 		secondary_light_sources,
@@ -63,7 +63,7 @@ fn draw_map(
 	draw_options: &DrawOptions,
 	camera_matrices: &CameraMatrices,
 	map: Option<&map_file_q1::MapFileParsed>,
-	map_polygonized: Option<&map_polygonizer::MapPolygonized>,
+	map_csg_processed: Option<&map_csg::MapCSGProcessed>,
 	map_bsp: Option<&bsp_builder::BSPTree>,
 	map_bsp_compact: Option<&bsp_map_compact::BSPMap>,
 	secondary_light_sources: Option<&lightmaps_builder::SecondaryLightSources>,
@@ -86,12 +86,12 @@ fn draw_map(
 
 	if draw_options.draw_polygonized_map
 	{
-		if let Some(map_polygonized_non_opt) = map_polygonized
+		if let Some(map_csg_processed_non_opt) = map_csg_processed
 		{
 			draw_map_polygonized(
 				&mut rasterizer,
 				camera_matrices,
-				map_polygonized_non_opt,
+				map_csg_processed_non_opt,
 				draw_options.draw_only_first_entity,
 				draw_options.draw_polygon_normals,
 			);
@@ -207,7 +207,7 @@ fn draw_map_brushes(
 fn draw_map_polygonized(
 	rasterizer: &mut DebugRasterizer,
 	camera_matrices: &CameraMatrices,
-	map: &map_polygonizer::MapPolygonized,
+	map: &map_csg::MapCSGProcessed,
 	draw_only_first_entity: bool,
 	draw_polygon_normals: bool,
 )

@@ -1,6 +1,6 @@
 use square_wheel_lib::common::{
-	bsp_builder, bsp_map_compact, bsp_map_compact_conversion, bsp_map_save_load, image, lightmaps_builder, map_file_q1,
-	map_file_q4, map_polygonizer, material,
+	bsp_builder, bsp_map_compact, bsp_map_compact_conversion, bsp_map_save_load, image, lightmaps_builder, map_csg,
+	map_file_q1, map_file_q4, map_polygonizer, material,
 };
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -78,15 +78,18 @@ fn main()
 		},
 	};
 
-	let bsp_tree = bsp_builder::build_leaf_bsp_tree(&map_polygonized, &materials);
-	let submodels_bsp_trees = map_polygonized[1 ..]
+	println!("Doing CSG for brushes");
+	let map_csg_processed = map_csg::perform_csg_for_map_brushes(&map_polygonized);
+
+	let bsp_tree = bsp_builder::build_leaf_bsp_tree(&map_csg_processed, &materials);
+	let submodels_bsp_trees = map_csg_processed[1 ..]
 		.iter()
 		.map(|s| bsp_builder::build_submodel_bsp_tree(s, &materials))
 		.collect::<Vec<_>>();
 
 	let mut map_compact = bsp_map_compact_conversion::convert_bsp_map_to_compact_format(
 		&bsp_tree,
-		&map_polygonized,
+		&map_csg_processed,
 		&submodels_bsp_trees,
 		&materials,
 	);
@@ -97,7 +100,13 @@ fn main()
 
 	if opt.print_stats
 	{
-		print_stats(&map_polygonized, &bsp_tree, &submodels_bsp_trees, &map_compact);
+		print_stats(
+			&map_polygonized,
+			&map_csg_processed,
+			&bsp_tree,
+			&submodels_bsp_trees,
+			&map_compact,
+		);
 	}
 }
 
@@ -140,6 +149,7 @@ fn get_material_texture_size(
 
 fn print_stats(
 	map_polygonized: &map_polygonizer::MapPolygonized,
+	map_csg_processed: &map_csg::MapCSGProcessed,
 	bsp_tree: &bsp_builder::BSPTree,
 	submodels_bsp_trees: &[bsp_builder::SubmodelBSPNode],
 	map_compact: &bsp_map_compact::BSPMap,
@@ -154,7 +164,15 @@ fn print_stats(
 	{
 		num_portal_vertices += portal.borrow().vertices.len();
 	}
-	println!("Initial polygons: {}", map_polygonized[0].polygons.len());
+
+	let mut initial_polygons = 0;
+	for brush in &map_polygonized[0].brushes
+	{
+		initial_polygons += brush.len();
+	}
+
+	println!("Initial polygons: {}", initial_polygons);
+	println!("Polygons after CSG: {}", map_csg_processed[0].polygons.len());
 	println!(
 		"BSP Tree stats: {:?}, average polygons in leaf: {}, average vertices in polygon: {}, portals: {}, portal \
 		 vertices: {}, average vertices in portal: {}",

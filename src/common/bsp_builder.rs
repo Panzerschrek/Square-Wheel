@@ -1,4 +1,6 @@
-use super::{bbox::*, clipping_bsp::*, lightmap, map_file_common, map_polygonizer, material, math_types::*, plane::*};
+use super::{
+	bbox::*, clipping_bsp::*, lightmap, map_csg, map_file_common, map_polygonizer, material, math_types::*, plane::*,
+};
 use std::{cell, rc};
 
 pub use map_polygonizer::Polygon;
@@ -57,7 +59,7 @@ pub struct SubmodelBSPNode
 	pub children: [Option<Box<SubmodelBSPNode>>; 2],
 }
 
-pub fn build_leaf_bsp_tree(map_entities: &[map_polygonizer::Entity], materials: &material::MaterialsMap) -> BSPTree
+pub fn build_leaf_bsp_tree(map_entities: &[map_csg::Entity], materials: &material::MaterialsMap) -> BSPTree
 {
 	let world_entity = &map_entities[0];
 	let bbox = build_bounding_box(world_entity);
@@ -270,10 +272,7 @@ fn get_splitter_plane_score(polygons: &[Polygon], plane: &Plane) -> Option<f32>
 	Some(score_scaled)
 }
 
-pub fn build_submodel_bsp_tree(
-	submodel: &map_polygonizer::Entity,
-	materials: &material::MaterialsMap,
-) -> SubmodelBSPNode
+pub fn build_submodel_bsp_tree(submodel: &map_csg::Entity, materials: &material::MaterialsMap) -> SubmodelBSPNode
 {
 	let polygons_filtered = filter_out_invisible_polygons(&submodel.polygons, materials);
 	if polygons_filtered.is_empty()
@@ -490,7 +489,7 @@ fn filter_out_invisible_polygons(polygons: &[Polygon], materials: &material::Mat
 	result
 }
 
-fn build_bounding_box(entity: &map_polygonizer::Entity) -> BBox
+fn build_bounding_box(entity: &map_csg::Entity) -> BBox
 {
 	let inf = 1.0e8;
 	let bbox_extend = 128.0;
@@ -1007,7 +1006,7 @@ fn set_leafs_portals(portals: &[LeafsPortalPtr])
 	}
 }
 
-fn collect_entities_positions(map_entities: &[map_polygonizer::Entity]) -> Vec<Vec3f>
+fn collect_entities_positions(map_entities: &[map_csg::Entity]) -> Vec<Vec3f>
 {
 	let mut result = Vec::new();
 	for entity in map_entities

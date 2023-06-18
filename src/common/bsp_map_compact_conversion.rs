@@ -1,9 +1,9 @@
-use super::{bsp_builder, bsp_map_compact::*, map_polygonizer, material::*, math_types::*};
+use super::{bsp_builder, bsp_map_compact::*, map_csg, material::*, math_types::*};
 use std::collections::HashMap;
 
 pub fn convert_bsp_map_to_compact_format(
 	bsp_tree: &bsp_builder::BSPTree,
-	entities: &[map_polygonizer::Entity],
+	entities: &[map_csg::Entity],
 	// Excluding world entity.
 	entites_bsp_trees: &[bsp_builder::SubmodelBSPNode],
 	materials: &MaterialsMap,
@@ -303,7 +303,7 @@ fn fill_textures(texture_name_to_index_map: &TextureNameToIndexMap, out_map: &mu
 }
 
 fn convert_entities_to_compact_format(
-	entities: &[map_polygonizer::Entity],
+	entities: &[map_csg::Entity],
 	// Excluding world entity.
 	entites_bsp_trees: &[bsp_builder::SubmodelBSPNode],
 	materials: &MaterialsMap,
@@ -404,7 +404,7 @@ fn convert_submodel_bsp_tree_node_to_compact_format_r(
 type StringsCache = std::collections::HashMap<String, StringRef>;
 
 fn convert_entity_to_compact_format(
-	entity: &map_polygonizer::Entity,
+	entity: &map_csg::Entity,
 	submodel_index: u32,
 	out_map: &mut BSPMap,
 	strings_cache: &mut StringsCache,

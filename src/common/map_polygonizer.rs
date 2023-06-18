@@ -1,4 +1,4 @@
-use super::{clipping_bsp::*, map_file_q1, map_file_q4, math_types::*, plane::Plane};
+use super::{map_file_q1, map_file_q4, math_types::*, plane::Plane};
 
 #[derive(Debug, Clone)]
 pub struct TextureInfo
@@ -15,10 +15,12 @@ pub struct Polygon
 	pub vertices: Vec<Vec3f>,
 }
 
+pub type Brush = Vec<Polygon>;
+
 #[derive(Debug, Clone)]
 pub struct Entity
 {
-	pub polygons: Vec<Polygon>,
+	pub brushes: Vec<Brush>,
 	pub keys: std::collections::HashMap<String, String>,
 }
 
@@ -45,153 +47,34 @@ pub fn polygonize_map_q4<TextureSizeGetter: FnMut(&str) -> [u32; 2]>(
 
 fn polygonize_entity(input_entity: &map_file_q1::Entity) -> Entity
 {
-	let mut polygons = Vec::new();
+	let mut brushes = Vec::new();
 	for brush in &input_entity.brushes
 	{
-		let mut brush_polygons = polygonize_brush(brush);
+		let brush_polygons = polygonize_brush(brush);
 		if brush_polygons.is_empty()
 		{
 			continue;
 		}
 
-		// Set this flag to true for all brushes after this.
-		// This is needed in order to choose only one polygons of two coplanar polygons of two intersecting brushes.
-		let mut preserve_coplanar = false;
-
-		// Clip polygons by planes of other brushes.
-		for other_brush in &input_entity.brushes
-		{
-			// TODO - speed-up this, perform bbox check.
-			if other_brush as *const map_file_q1::Brush == brush as *const map_file_q1::Brush
-			{
-				preserve_coplanar = true;
-				continue;
-			}
-
-			// TODO - ignore brushes with non-blocking textures and/or semitransparent textures.
-
-			let mut polygons_clipped = Vec::new();
-			for polygon in brush_polygons.drain(..)
-			{
-				polygons_clipped.append(&mut cut_polygon_by_brush_planes(
-					polygon,
-					other_brush,
-					preserve_coplanar,
-				));
-			}
-			brush_polygons = polygons_clipped;
-		} // for other brushes.
-
-		polygons.append(&mut brush_polygons);
+		brushes.push(brush_polygons);
 	} // for brushes.
 
 	Entity {
-		polygons,
+		brushes,
 		keys: input_entity.keys.clone(),
 	}
 }
 
-fn cut_polygon_by_brush_planes(
-	mut polygon: Polygon,
-	brush: &map_file_q1::Brush,
-	preserve_coplanar: bool,
-) -> Vec<Polygon>
-{
-	// Check if this polygon is trivially outisde.
-	for brush_side in brush
-	{
-		// TODO - calculate brush planes exactly once.
-		let plane = if let Some(p) = get_brush_side_plane(brush_side)
-		{
-			p
-		}
-		else
-		{
-			continue;
-		};
-
-		if get_polygon_position_relative_plane(&polygon, &plane) == PolygonPositionRelativePlane::Front
-		{
-			return vec![polygon];
-		}
-	}
-
-	// Cut polygon into pieces by sides of this brush.
-	// TODO - this can still perform unnecessary splits for polygons, that are totally outside. Handle such cases.
-
-	let mut result_polygons = Vec::new();
-
-	for brush_side in brush
-	{
-		let plane = if let Some(p) = get_brush_side_plane(brush_side)
-		{
-			p
-		}
-		else
-		{
-			continue;
-		};
-
-		match get_polygon_position_relative_plane(&polygon, &plane)
-		{
-			PolygonPositionRelativePlane::Front =>
-			{
-				// Leftover polygon is outside the brush - can stop splitting.
-				result_polygons.push(polygon);
-				break;
-			},
-			PolygonPositionRelativePlane::Back =>
-			{
-				// Leftover polygon is possible inside the brush - continue splitting.
-			},
-			PolygonPositionRelativePlane::CoplanarFront =>
-			{
-				// We need to save polygon only if same polygon of other brush was previously skipped.
-				if preserve_coplanar
-				{
-					result_polygons.push(polygon);
-					break;
-				}
-			},
-			PolygonPositionRelativePlane::CoplanarBack =>
-			{
-				// Preserve coplanar leftover polygon.
-			},
-			PolygonPositionRelativePlane::Splitted =>
-			{
-				let (front_polygon, back_polygon) = split_polygon(&polygon, &plane);
-				if front_polygon.vertices.len() >= 3
-				{
-					result_polygons.push(front_polygon); // Front polygon piece is outside brush - preserve it.
-				}
-
-				if back_polygon.vertices.len() >= 3
-				{
-					// Continue clipping of inside piese.
-					polygon = back_polygon;
-				}
-				else
-				{
-					// Nothing left inside.
-					break;
-				}
-			},
-		};
-	} // for brush planes.
-
-	result_polygons
-}
-
 fn polygonize_entity_q4(input_entity: &map_file_q4::Entity) -> Entity
 {
-	let mut polygons = Vec::new();
+	let mut brushes = Vec::new();
 	for brush in &input_entity.brushes
 	{
-		polygons.append(&mut polygonize_brush_q4(brush));
+		brushes.push(polygonize_brush_q4(brush));
 	}
 
 	Entity {
-		polygons,
+		brushes,
 		keys: input_entity.keys.clone(),
 	}
 }
@@ -203,18 +86,21 @@ fn correct_texture_basis_scale_q4<TextureSizeGetter: FnMut(&str) -> [u32; 2]>(
 {
 	// Quake IV uses normailzed texture coordinates, but we need to use absolute coordinates.
 	// So, perform such conversion.
-	for polygon in &mut entity.polygons
+	for brush in &mut entity.brushes
 	{
-		let texture_size = texture_size_getter(&polygon.texture_info.texture);
-		for i in 0 .. 2
+		for polygon in brush
 		{
-			polygon.texture_info.tex_coord_equation[i].vec *= texture_size[i] as f32;
-			polygon.texture_info.tex_coord_equation[i].dist *= texture_size[i] as f32;
+			let texture_size = texture_size_getter(&polygon.texture_info.texture);
+			for i in 0 .. 2
+			{
+				polygon.texture_info.tex_coord_equation[i].vec *= texture_size[i] as f32;
+				polygon.texture_info.tex_coord_equation[i].dist *= texture_size[i] as f32;
+			}
 		}
 	}
 }
 
-fn polygonize_brush(brush: &[map_file_q1::BrushPlane]) -> Vec<Polygon>
+fn polygonize_brush(brush: &[map_file_q1::BrushPlane]) -> Brush
 {
 	let mut result = Vec::new();
 
@@ -319,7 +205,7 @@ fn polygonize_brush(brush: &[map_file_q1::BrushPlane]) -> Vec<Polygon>
 	result
 }
 
-fn polygonize_brush_q4(brush: &[map_file_q4::BrushPlane]) -> Vec<Polygon>
+fn polygonize_brush_q4(brush: &[map_file_q4::BrushPlane]) -> Brush
 {
 	let mut result = Vec::new();
 

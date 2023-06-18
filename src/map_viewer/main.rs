@@ -4,7 +4,7 @@ mod debug_renderer;
 use sdl2::{event::Event, keyboard::Keycode};
 use square_wheel_lib::common::{
 	bsp_builder, bsp_map_compact_conversion, bsp_map_save_load, camera_controller, light_trace, lightmaps_builder,
-	map_file_q1, map_polygonizer, material, matrix::*, screenshot::*, system_window,
+	map_csg, map_file_q1, map_polygonizer, material, matrix::*, screenshot::*, system_window,
 };
 use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
@@ -65,7 +65,7 @@ pub fn main()
 	let materials = material::MaterialsMap::new();
 
 	let mut map_file_parsed_opt = None;
-	let mut map_polygonized_opt = None;
+	let mut map_csg_processed_opt = None;
 	let mut map_bsp_tree_opt = None;
 	let mut map_bsp_compact_opt = None;
 	let mut secondary_ligt_sources = None;
@@ -82,28 +82,29 @@ pub fn main()
 			if let Some(map_file) = &map_file_parsed_opt
 			{
 				let map_polygonized = map_polygonizer::polygonize_map(map_file);
+				let map_csg_processed = map_csg::perform_csg_for_map_brushes(&map_polygonized);
 				if opt.draw_bsp_map ||
 					opt.draw_bsp_map_compact ||
 					opt.draw_map_sectors_graph ||
 					opt.draw_map_sectors_graph_compact
 				{
-					map_bsp_tree_opt = Some(bsp_builder::build_leaf_bsp_tree(&map_polygonized, &materials));
+					map_bsp_tree_opt = Some(bsp_builder::build_leaf_bsp_tree(&map_csg_processed, &materials));
 					if opt.draw_bsp_map_compact || opt.draw_map_sectors_graph_compact
 					{
-						let submodels_bsp_trees = map_polygonized[1 ..]
+						let submodels_bsp_trees = map_csg_processed[1 ..]
 							.iter()
 							.map(|s| bsp_builder::build_submodel_bsp_tree(s, &materials))
 							.collect::<Vec<_>>();
 
 						map_bsp_compact_opt = Some(bsp_map_compact_conversion::convert_bsp_map_to_compact_format(
 							map_bsp_tree_opt.as_ref().unwrap(),
-							&map_polygonized,
+							&map_csg_processed,
 							&submodels_bsp_trees,
 							&materials,
 						));
 					}
 				}
-				map_polygonized_opt = Some(map_polygonized);
+				map_csg_processed_opt = Some(map_csg_processed);
 			}
 		}
 	}
@@ -191,7 +192,7 @@ pub fn main()
 					surface_info.height as f32,
 				),
 				map_file_parsed_opt.as_ref(),
-				map_polygonized_opt.as_ref(),
+				map_csg_processed_opt.as_ref(),
 				map_bsp_tree_opt.as_ref(),
 				map_bsp_compact_opt.as_ref(),
 				secondary_ligt_sources.as_ref(),
