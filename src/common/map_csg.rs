@@ -346,12 +346,25 @@ fn cut_polygon_by_planes(polygon: &Polygon, planes: &[Plane]) -> Polygon
 	let mut result = polygon.clone();
 	for plane in planes
 	{
-		let (front_polygon, _back_polygon) = split_polygon(&result, plane);
-		if front_polygon.vertices.len() < 3
+		match get_polygon_position_relative_plane(&result, &plane)
 		{
-			return front_polygon;
+			PolygonPositionRelativePlane::Front | PolygonPositionRelativePlane::CoplanarFront =>
+			{},
+			PolygonPositionRelativePlane::Back | PolygonPositionRelativePlane::CoplanarBack =>
+			{
+				result.vertices.clear();
+				return result;
+			},
+			PolygonPositionRelativePlane::Splitted =>
+			{
+				let (front_polygon, _back_polygon) = split_polygon(&result, plane);
+				if front_polygon.vertices.len() < 3
+				{
+					return front_polygon;
+				}
+				result = front_polygon;
+			},
 		}
-		result = front_polygon;
 	}
 
 	result
