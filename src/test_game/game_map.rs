@@ -850,14 +850,49 @@ impl GameMap
 	{
 		let (pos, angles) = self.get_camera_location();
 
+		// Check if camera is under water.
+		let mut inside_water_volume = false;
+		for (_id, water_volume_component) in self.ecs.query::<&WaterVolumeComponent>().into_iter()
+		{
+			// TODO - support transformations of water volume.
+			if water_volume_component.bbox.contains_point(&pos)
+			{
+				inside_water_volume = true;
+				break;
+			}
+		}
+
 		let fov = std::f32::consts::PI * 0.375;
-		let camera_matrices = build_view_matrix_with_full_rotation(
+		let inv_half_fov_tan = 1.0 / ((fov * 0.5).tan());
+		let mut fov_scale = Vec2f::new(
+			inv_half_fov_tan * (surface_info.height as f32) / (surface_info.width as f32),
+			inv_half_fov_tan,
+		);
+
+		if inside_water_volume
+		{
+			// Perform small periodical deformation of view matrix as Quake III Arena does for underwater effect.
+			let phase = self.game_time * 2.0;
+			fov_scale.x *= 0.95 + phase.sin() * 0.05;
+			fov_scale.y *= 0.95 + phase.cos() * 0.05;
+		}
+
+		let camera_matrices = build_view_matrix_with_full_rotation_and_custom_fov(
 			pos,
 			angles,
-			fov,
+			&fov_scale,
 			surface_info.width as f32,
 			surface_info.height as f32,
 		);
+
+		let color_modulate = if inside_water_volume
+		{
+			[0.25, 0.45, 0.8]
+		}
+		else
+		{
+			[1.0; 3]
+		};
 
 		let mut submodel_entities = vec![None; self.map.submodels.len()];
 		for (_id, submodel_entity_with_index) in self.ecs.query::<&SubmodelEntityWithIndex>().iter()
@@ -867,6 +902,7 @@ impl GameMap
 
 		FrameInfo {
 			camera_matrices,
+			color_modulate,
 			submodel_entities,
 			skybox_rotation: QuaternionF::one(),
 			game_time_s: self.game_time,

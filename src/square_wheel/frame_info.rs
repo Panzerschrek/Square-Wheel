@@ -6,6 +6,13 @@ pub struct FrameInfo
 {
 	pub camera_matrices: CameraMatrices,
 	pub game_time_s: f32,
+
+	// How to modulate output image color. Use 1 for normal cases.
+	// Use values greater than 1 to overexpose image.
+	// Use dark colored value in order to draw fullscreen blood or underwater effect.
+	// Use values only greater than zero!
+	pub color_modulate: [f32; 3],
+
 	// submodels mapped 1 to 1 to initial submodels.
 	pub submodel_entities: Vec<SubmodelEntityOpt>,
 	pub model_entities: Vec<ModelEntity>,
