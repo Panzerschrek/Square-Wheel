@@ -59,13 +59,20 @@ pub struct SubmodelBSPNode
 	pub children: [Option<Box<SubmodelBSPNode>>; 2],
 }
 
-pub fn build_leaf_bsp_tree(map_entities: &[map_csg::Entity], materials: &material::MaterialsMap) -> BSPTree
+pub fn build_leaf_bsp_tree(
+	map_entities: &[map_csg::Entity],
+	materials: &material::MaterialsMap,
+	perform_advanced_splitter_plane_selection: bool,
+) -> BSPTree
 {
 	let world_entity = &map_entities[0];
 	let bbox = build_bounding_box(world_entity);
 
 	// Build BSP tree for world entity.
-	let mut tree_root = build_leaf_bsp_tree_r(filter_out_invisible_polygons(&world_entity.polygons, materials));
+	let mut tree_root = build_leaf_bsp_tree_r(
+		filter_out_invisible_polygons(&world_entity.polygons, materials),
+		perform_advanced_splitter_plane_selection,
+	);
 
 	// Build portals as links between BSP leafs.
 	let mut portals = build_protals(&tree_root, &bbox, materials);
@@ -106,9 +113,10 @@ pub fn build_leaf_bsp_tree(map_entities: &[map_csg::Entity], materials: &materia
 	}
 }
 
-fn build_leaf_bsp_tree_r(mut in_polygons: Vec<Polygon>) -> BSPNodeChild
+fn build_leaf_bsp_tree_r(mut in_polygons: Vec<Polygon>, perform_advanced_splitter_plane_selection: bool)
+	-> BSPNodeChild
 {
-	let splitter_plane_opt = choose_best_splitter_plane(&in_polygons);
+	let splitter_plane_opt = choose_best_splitter_plane(&in_polygons, perform_advanced_splitter_plane_selection);
 	if splitter_plane_opt.is_none()
 	{
 		// No splitter plane means this is a leaf.
@@ -168,14 +176,14 @@ fn build_leaf_bsp_tree_r(mut in_polygons: Vec<Polygon>) -> BSPNodeChild
 	BSPNodeChild::NodeChild(rc::Rc::new(cell::RefCell::new(BSPNode {
 		plane: splitter_plane,
 		children: [
-			build_leaf_bsp_tree_r(polygons_front),
-			build_leaf_bsp_tree_r(polygons_back),
+			build_leaf_bsp_tree_r(polygons_front, perform_advanced_splitter_plane_selection),
+			build_leaf_bsp_tree_r(polygons_back, perform_advanced_splitter_plane_selection),
 		],
 	})))
 }
 
 // Returns None if can't find any situable splitter.
-fn choose_best_splitter_plane(polygons: &[Polygon]) -> Option<Plane>
+fn choose_best_splitter_plane(polygons: &[Polygon], check_edges: bool) -> Option<Plane>
 {
 	let mut best_score_plane: Option<(f32, Plane)> = None;
 
@@ -202,6 +210,11 @@ fn choose_best_splitter_plane(polygons: &[Polygon]) -> Option<Plane>
 	{
 		// Can't find any splitter plane laying on one of polygons - polygons form convex hull and thus BSP leaf may be formed.
 		return None;
+	}
+
+	if !check_edges
+	{
+		return best_score_plane.map(|x| x.1);
 	}
 
 	// Try to build split planes on each edge of the polygon.

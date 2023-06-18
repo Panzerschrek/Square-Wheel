@@ -88,7 +88,7 @@ pub fn main()
 					opt.draw_map_sectors_graph ||
 					opt.draw_map_sectors_graph_compact
 				{
-					map_bsp_tree_opt = Some(bsp_builder::build_leaf_bsp_tree(&map_csg_processed, &materials));
+					map_bsp_tree_opt = Some(bsp_builder::build_leaf_bsp_tree(&map_csg_processed, &materials, false));
 					if opt.draw_bsp_map_compact || opt.draw_map_sectors_graph_compact
 					{
 						let submodels_bsp_trees = map_csg_processed[1 ..]

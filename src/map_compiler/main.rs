@@ -22,6 +22,10 @@ struct Opt
 	#[structopt(long)]
 	perform_csg: bool,
 
+	#[structopt(long)]
+	/// Works good together with perform_csg flag.
+	perform_advanced_splitter_plane_selection: bool,
+
 	/// Print stats of input/result map
 	#[structopt(long)]
 	print_stats: bool,
@@ -102,7 +106,11 @@ fn main()
 	};
 
 	println!("Building BSP tree");
-	let bsp_tree = bsp_builder::build_leaf_bsp_tree(&map_csg_processed, &materials);
+	let bsp_tree = bsp_builder::build_leaf_bsp_tree(
+		&map_csg_processed,
+		&materials,
+		opt.perform_advanced_splitter_plane_selection,
+	);
 
 	println!("Building submodels BSP trees");
 	let submodels_bsp_trees = map_csg_processed[1 ..]
