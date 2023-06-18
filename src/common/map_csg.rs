@@ -22,6 +22,8 @@ pub fn perform_csg_for_map_brushes(map: &MapPolygonized) -> MapCSGProcessed
 		.collect()
 }
 
+// CSG allows to remove polygons that are lying between two brushes, or polygons of one brushes, lying inside another brush.
+// This prepass allows to reduce number of polygons and simplify further BSP building.
 pub fn perform_csg_for_entity_brushes(brushes: &[Vec<Polygon>]) -> Vec<Polygon>
 {
 	let mut result_polygons = Vec::new();
@@ -68,7 +70,7 @@ pub fn perform_csg_for_entity_brushes(brushes: &[Vec<Polygon>]) -> Vec<Polygon>
 	result_polygons
 }
 
-fn cut_polygon_by_brush_planes(mut polygon: Polygon, brush: &Vec<Polygon>, preserve_coplanar: bool) -> Vec<Polygon>
+fn cut_polygon_by_brush_planes(polygon: Polygon, brush: &Vec<Polygon>, preserve_coplanar: bool) -> Vec<Polygon>
 {
 	// Check if this polygon is trivially outisde.
 	for brush_polygon in brush
@@ -80,19 +82,17 @@ fn cut_polygon_by_brush_planes(mut polygon: Polygon, brush: &Vec<Polygon>, prese
 	}
 
 	// Cut polygon into pieces by sides of this brush.
-	// TODO - this can still perform unnecessary splits for polygons, that are totally outside. Handle such cases.
-
 	let mut result_polygons = Vec::new();
+	let mut leftover_polygon = polygon.clone();
 
 	for brush_polygon in brush
 	{
-		match get_polygon_position_relative_plane(&polygon, &brush_polygon.plane)
+		match get_polygon_position_relative_plane(&leftover_polygon, &brush_polygon.plane)
 		{
 			PolygonPositionRelativePlane::Front =>
 			{
-				// Leftover polygon is outside the brush - can stop splitting.
-				result_polygons.push(polygon);
-				break;
+				// Leftover polygon is outside the brush - splitting was unnecessary - return initial polygon.
+				return vec![polygon];
 			},
 			PolygonPositionRelativePlane::Back =>
 			{
@@ -103,8 +103,8 @@ fn cut_polygon_by_brush_planes(mut polygon: Polygon, brush: &Vec<Polygon>, prese
 				// We need to save polygon only if same polygon of other brush was previously skipped.
 				if preserve_coplanar
 				{
-					result_polygons.push(polygon);
-					break;
+					// Leftover polygon is outside the brush - splitting was unnecessary - return initial polygon.
+					return vec![polygon];
 				}
 			},
 			PolygonPositionRelativePlane::CoplanarBack =>
@@ -113,7 +113,7 @@ fn cut_polygon_by_brush_planes(mut polygon: Polygon, brush: &Vec<Polygon>, prese
 			},
 			PolygonPositionRelativePlane::Splitted =>
 			{
-				let (front_polygon, back_polygon) = split_polygon(&polygon, &brush_polygon.plane);
+				let (front_polygon, back_polygon) = split_polygon(&leftover_polygon, &brush_polygon.plane);
 				if front_polygon.vertices.len() >= 3
 				{
 					result_polygons.push(front_polygon); // Front polygon piece is outside brush - preserve it.
@@ -122,12 +122,12 @@ fn cut_polygon_by_brush_planes(mut polygon: Polygon, brush: &Vec<Polygon>, prese
 				if back_polygon.vertices.len() >= 3
 				{
 					// Continue clipping of inside piese.
-					polygon = back_polygon;
+					leftover_polygon = back_polygon;
 				}
 				else
 				{
-					// Nothing left inside.
-					break;
+					// Leftover polygon is outside the brush - splitting was unnecessary - return initial polygon.
+					return vec![polygon];
 				}
 			},
 		};
