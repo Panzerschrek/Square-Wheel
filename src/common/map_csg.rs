@@ -208,17 +208,16 @@ fn make_hole_in_polygon(polygon: Polygon, hole: &Polygon) -> Vec<Polygon>
 		let v_prev = hole.vertices[(i + num_hole_vertices - 1) % num_hole_vertices];
 		let v = hole.vertices[i];
 		let v_next = hole.vertices[(i + 1) % num_hole_vertices];
-		let edge_prev = v - v_prev;
-		let edge = v_next - v;
 
-		let edge_prev_normal = rotation_half_pi.rotate_vector(edge_prev);
-		let edge_normal = rotation_half_pi.rotate_vector(edge);
-
-		let mut selected_cut_plane_vec: Option<Vec3f> = None;
+		let mut selected_cut_plane_vec = None;
 		for possible_cut_plane_normal in &possible_cut_plane_normals
 		{
-			if edge_prev_normal.dot(*possible_cut_plane_normal) <= 0.0 &&
-				edge_normal.dot(*possible_cut_plane_normal) >= 0.0
+			let possible_cut_plane = Plane {
+				vec: *possible_cut_plane_normal,
+				dist: possible_cut_plane_normal.dot(v),
+			};
+			if possible_cut_plane.vec.dot(v_prev) <= possible_cut_plane.dist &&
+				possible_cut_plane.vec.dot(v_next) >= possible_cut_plane.dist
 			{
 				selected_cut_plane_vec = Some(*possible_cut_plane_normal);
 				break;
@@ -232,16 +231,21 @@ fn make_hole_in_polygon(polygon: Polygon, hole: &Polygon) -> Vec<Polygon>
 		}
 		else
 		{
-			// Sharp angle - must use two cut planes for this vertex.
-			let mut selected_cut_plane_vec_edge_prev: Option<Vec3f> = None;
-			let mut selected_cut_plane_vec_edge: Option<Vec3f> = None;
+			let mut selected_cut_plane_vec_edge_prev = None;
+			let mut selected_cut_plane_vec_edge = None;
 			for possible_cut_plane_normal in &possible_cut_plane_normals
 			{
-				if edge_prev_normal.dot(*possible_cut_plane_normal) <= 0.0 && selected_cut_plane_vec_edge_prev.is_none()
+				let possible_cut_plane = Plane {
+					vec: *possible_cut_plane_normal,
+					dist: possible_cut_plane_normal.dot(v),
+				};
+				if possible_cut_plane.vec.dot(v_prev) <= possible_cut_plane.dist &&
+					selected_cut_plane_vec_edge_prev.is_none()
 				{
 					selected_cut_plane_vec_edge_prev = Some(*possible_cut_plane_normal);
 				}
-				if edge_normal.dot(*possible_cut_plane_normal) >= 0.0 && selected_cut_plane_vec_edge.is_none()
+				if possible_cut_plane.vec.dot(v_next) >= possible_cut_plane.dist &&
+					selected_cut_plane_vec_edge.is_none()
 				{
 					selected_cut_plane_vec_edge = Some(*possible_cut_plane_normal);
 				}
@@ -278,8 +282,8 @@ fn make_hole_in_polygon(polygon: Polygon, hole: &Polygon) -> Vec<Polygon>
 				&polygon,
 				&[
 					Plane {
-						vec: -vec_prev,
-						dist: -vec_prev.dot(v),
+						vec: vec_prev,
+						dist: vec_prev.dot(v),
 					},
 					Plane {
 						vec: -vec,
@@ -301,7 +305,7 @@ fn make_hole_in_polygon(polygon: Polygon, hole: &Polygon) -> Vec<Polygon>
 		let cut_vec_next = match vertex_cuts[(i + 1) % num_hole_vertices]
 		{
 			VertexCut::Single(vec) => -vec,
-			VertexCut::Double(vec_prev, _vec) => vec_prev,
+			VertexCut::Double(vec_prev, _vec) => -vec_prev,
 		};
 
 		let edge_polygon = cut_polygon_by_planes(
