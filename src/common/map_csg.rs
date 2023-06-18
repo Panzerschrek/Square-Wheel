@@ -201,7 +201,6 @@ fn make_hole_in_polygon(polygon: Polygon, hole: &Polygon) -> Vec<Polygon>
 	];
 
 	let num_hole_vertices = hole.vertices.len();
-	let rotation_half_pi = QuaternionF::from_axis_angle(hole.plane.vec.normalize(), Rad(std::f32::consts::PI * 0.5));
 	let mut vertex_cuts = Vec::with_capacity(num_hole_vertices);
 	for i in 0 .. num_hole_vertices
 	{
@@ -272,11 +271,10 @@ fn make_hole_in_polygon(polygon: Polygon, hole: &Polygon) -> Vec<Polygon>
 		let v = hole.vertices[i];
 		let v_next = hole.vertices[(i + 1) % num_hole_vertices];
 		let edge = v_next - v;
-		let edge_normal = rotation_half_pi.rotate_vector(edge);
+		let edge_cut_plane_normal = hole.plane.vec.cross(edge);
 
 		if let VertexCut::Double(vec_prev, vec) = vertex_cuts[i]
 		{
-			// TODO - check this.
 			// Perform double cut for this vertex.
 			let corner_polygon = cut_polygon_by_planes(
 				&polygon,
@@ -320,8 +318,8 @@ fn make_hole_in_polygon(polygon: Polygon, hole: &Polygon) -> Vec<Polygon>
 					dist: cut_vec_next.dot(v_next),
 				},
 				Plane {
-					vec: edge_normal,
-					dist: edge_normal.dot(v),
+					vec: edge_cut_plane_normal,
+					dist: edge_cut_plane_normal.dot(v),
 				},
 			],
 		);
