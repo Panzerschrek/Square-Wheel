@@ -21,6 +21,10 @@ struct Opt
 	#[structopt(long)]
 	print_stats: bool,
 
+	/// Print stats of submodels
+	#[structopt(long)]
+	print_submodels_stats: bool,
+
 	/// Input map file format.
 	#[structopt(long)]
 	input_format: Option<String>,
@@ -100,13 +104,25 @@ fn main()
 
 	if opt.print_stats
 	{
-		print_stats(
-			&map_polygonized,
-			&map_csg_processed,
-			&bsp_tree,
-			&submodels_bsp_trees,
-			&map_compact,
-		);
+		print_stats(&map_polygonized, &map_csg_processed, &bsp_tree, &map_compact);
+	}
+
+	if opt.print_submodels_stats
+	{
+		for (index, submodels_bsp_tree) in submodels_bsp_trees.iter().enumerate()
+		{
+			let mut stats = SubmodelBSPStats::default();
+			calculate_submodel_bsp_tree_stats_r(submodels_bsp_tree, 0, &mut stats);
+			stats.average_depth /= stats.num_nodes as f32;
+
+			println!(
+				"Submodel {} BSP Tree stats: {:?}, average polygons in node: {}, average vertices in polygon: {}",
+				index + 1,
+				stats,
+				(stats.num_polygons as f32) / (stats.num_nodes as f32),
+				(stats.num_polygon_vertices as f32) / (stats.num_polygons.max(1) as f32),
+			);
+		}
 	}
 }
 
@@ -151,7 +167,6 @@ fn print_stats(
 	map_polygonized: &map_polygonizer::MapPolygonized,
 	map_csg_processed: &map_csg::MapCSGProcessed,
 	bsp_tree: &bsp_builder::BSPTree,
-	submodels_bsp_trees: &[bsp_builder::SubmodelBSPNode],
 	map_compact: &bsp_map_compact::BSPMap,
 )
 {
@@ -197,21 +212,6 @@ fn print_stats(
 		map_compact.submodels.len(),
 		map_compact.submodels_bsp_nodes.len()
 	);
-
-	for (index, submodels_bsp_tree) in submodels_bsp_trees.iter().enumerate()
-	{
-		let mut stats = SubmodelBSPStats::default();
-		calculate_submodel_bsp_tree_stats_r(submodels_bsp_tree, 0, &mut stats);
-		stats.average_depth /= stats.num_nodes as f32;
-
-		println!(
-			"Submodel {} BSP Tree stats: {:?}, average polygons in node: {}, average vertices in polygon: {}",
-			index + 1,
-			stats,
-			(stats.num_polygons as f32) / (stats.num_nodes as f32),
-			(stats.num_polygon_vertices as f32) / (stats.num_polygons.max(1) as f32),
-		);
-	}
 }
 
 #[derive(Debug, Default)]
