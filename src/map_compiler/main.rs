@@ -17,6 +17,11 @@ struct Opt
 	#[structopt(parse(from_os_str), short = "o", required(true))]
 	output: PathBuf,
 
+	/// Perform CSG for initial brushes. This may produce more optimal map, or may not.
+	/// Try to compile with/without this flag in order to know results.
+	#[structopt(long)]
+	perform_csg: bool,
+
 	/// Print stats of input/result map
 	#[structopt(long)]
 	print_stats: bool,
@@ -85,8 +90,16 @@ fn main()
 		},
 	};
 
-	println!("Doing CSG for brushes");
-	let map_csg_processed = map_csg::perform_csg_for_map_brushes(&map_polygonized, &materials);
+	let map_csg_processed = if opt.perform_csg
+	{
+		println!("Doing CSG for brushes");
+		map_csg::perform_csg_for_map_brushes(&map_polygonized, &materials)
+	}
+	else
+	{
+		println!("Skipping CSG step");
+		map_csg::perform_no_csg_for_map_brushes(&map_polygonized)
+	};
 
 	println!("Building BSP tree");
 	let bsp_tree = bsp_builder::build_leaf_bsp_tree(&map_csg_processed, &materials);

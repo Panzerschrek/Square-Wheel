@@ -13,6 +13,23 @@ pub struct Entity
 
 pub type MapCSGProcessed = Vec<Entity>;
 
+pub fn perform_no_csg_for_map_brushes(map: &MapPolygonized) -> MapCSGProcessed
+{
+	map.iter()
+		.map(|e| {
+			let mut polygons = Vec::new();
+			for brush in &e.brushes
+			{
+				polygons.extend_from_slice(&brush);
+			}
+			Entity {
+				polygons,
+				keys: e.keys.clone(),
+			}
+		})
+		.collect()
+}
+
 pub fn perform_csg_for_map_brushes(map: &MapPolygonized, materials: &material::MaterialsMap) -> MapCSGProcessed
 {
 	map.iter()
