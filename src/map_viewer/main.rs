@@ -82,7 +82,7 @@ pub fn main()
 			if let Some(map_file) = &map_file_parsed_opt
 			{
 				let map_polygonized = map_polygonizer::polygonize_map(map_file);
-				let map_csg_processed = map_csg::perform_csg_for_map_brushes(&map_polygonized);
+				let map_csg_processed = map_csg::perform_csg_for_map_brushes(&map_polygonized, &materials);
 				if opt.draw_bsp_map ||
 					opt.draw_bsp_map_compact ||
 					opt.draw_map_sectors_graph ||

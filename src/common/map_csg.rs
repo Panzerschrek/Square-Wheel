@@ -1,6 +1,7 @@
 use super::{
 	clipping_bsp::*,
-	map_polygonizer::{MapPolygonized, Polygon},
+	map_polygonizer::{Brush, MapPolygonized, Polygon},
+	material,
 };
 
 #[derive(Debug, Clone)]
@@ -12,11 +13,11 @@ pub struct Entity
 
 pub type MapCSGProcessed = Vec<Entity>;
 
-pub fn perform_csg_for_map_brushes(map: &MapPolygonized) -> MapCSGProcessed
+pub fn perform_csg_for_map_brushes(map: &MapPolygonized, materials: &material::MaterialsMap) -> MapCSGProcessed
 {
 	map.iter()
 		.map(|e| Entity {
-			polygons: perform_csg_for_entity_brushes(&e.brushes),
+			polygons: perform_csg_for_entity_brushes(&e.brushes, materials),
 			keys: e.keys.clone(),
 		})
 		.collect()
@@ -24,9 +25,28 @@ pub fn perform_csg_for_map_brushes(map: &MapPolygonized) -> MapCSGProcessed
 
 // CSG allows to remove polygons that are lying between two brushes, or polygons of one brushes, lying inside another brush.
 // This prepass allows to reduce number of polygons and simplify further BSP building.
-pub fn perform_csg_for_entity_brushes(brushes: &[Vec<Polygon>]) -> Vec<Polygon>
+pub fn perform_csg_for_entity_brushes(brushes: &[Brush], materials: &material::MaterialsMap) -> Vec<Polygon>
 {
 	let mut result_polygons = Vec::new();
+
+	// Fill table with solid flag for brushes.
+	// Brush is solid if all faces are solid.
+	let solid_flags = brushes
+		.iter()
+		.map(|brush| {
+			for polygon in brush
+			{
+				if let Some(material) = materials.get(&polygon.texture_info.texture)
+				{
+					if !material.blocks_view
+					{
+						return false;
+					}
+				}
+			}
+			true
+		})
+		.collect::<Vec<_>>();
 
 	for brush in brushes
 	{
@@ -41,7 +61,7 @@ pub fn perform_csg_for_entity_brushes(brushes: &[Vec<Polygon>]) -> Vec<Polygon>
 		// This is needed in order to choose only one polygons of two coplanar polygons of two intersecting brushes.
 		let mut preserve_coplanar = false;
 
-		for other_brush in brushes
+		for (other_brush, solid_flag) in brushes.iter().zip(solid_flags.iter())
 		{
 			// TODO - speed-up this, perform bbox check.
 			if other_brush as *const Vec<Polygon> == brush as *const Vec<Polygon>
@@ -50,7 +70,10 @@ pub fn perform_csg_for_entity_brushes(brushes: &[Vec<Polygon>]) -> Vec<Polygon>
 				continue;
 			}
 
-			// TODO - ignore brushes with non-blocking textures and/or semitransparent textures.
+			if !solid_flag
+			{
+				continue;
+			}
 
 			let mut polygons_clipped = Vec::new();
 			for polygon in brush_polygons.drain(..)

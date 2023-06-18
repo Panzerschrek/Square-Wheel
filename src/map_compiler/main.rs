@@ -79,7 +79,7 @@ fn main()
 	};
 
 	println!("Doing CSG for brushes");
-	let map_csg_processed = map_csg::perform_csg_for_map_brushes(&map_polygonized);
+	let map_csg_processed = map_csg::perform_csg_for_map_brushes(&map_polygonized, &materials);
 
 	let bsp_tree = bsp_builder::build_leaf_bsp_tree(&map_csg_processed, &materials);
 	let submodels_bsp_trees = map_csg_processed[1 ..]
