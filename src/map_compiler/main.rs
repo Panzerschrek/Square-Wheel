@@ -210,7 +210,7 @@ fn print_stats(
 
 	println!(
 		"Compact map nodes: {}, leafs: {}, polygons: {}, portals: {}, leafs_portals: {}, vertices: {}, textures: {}, \
-		 submodels: {}, sumbodels nodes: {}",
+		 submodels: {}, sumbodels nodes: {}, lightmap texels: {}",
 		map_compact.nodes.len(),
 		map_compact.leafs.len(),
 		map_compact.polygons.len(),
@@ -219,7 +219,8 @@ fn print_stats(
 		map_compact.vertices.len(),
 		map_compact.textures.len(),
 		map_compact.submodels.len(),
-		map_compact.submodels_bsp_nodes.len()
+		map_compact.submodels_bsp_nodes.len(),
+		map_compact.lightmaps_data.len()
 	);
 }
 
