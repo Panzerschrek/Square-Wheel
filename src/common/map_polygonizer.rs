@@ -1,4 +1,4 @@
-use super::{map_file_q1, map_file_q4, math_types::*, plane::Plane};
+use super::{clipping_bsp::*, map_file_q1, map_file_q4, math_types::*, plane::Plane};
 
 #[derive(Debug, Clone)]
 pub struct TextureInfo
@@ -110,8 +110,7 @@ fn cut_polygon_by_brush_planes(
 			continue;
 		};
 
-		if super::bsp_builder::get_polygon_position_relative_plane(&polygon, &plane) ==
-			super::bsp_builder::PolygonPositionRelativePlane::Front
+		if get_polygon_position_relative_plane(&polygon, &plane) == PolygonPositionRelativePlane::Front
 		{
 			return vec![polygon];
 		}
@@ -133,19 +132,19 @@ fn cut_polygon_by_brush_planes(
 			continue;
 		};
 
-		match super::bsp_builder::get_polygon_position_relative_plane(&polygon, &plane)
+		match get_polygon_position_relative_plane(&polygon, &plane)
 		{
-			super::bsp_builder::PolygonPositionRelativePlane::Front =>
+			PolygonPositionRelativePlane::Front =>
 			{
 				// Leftover polygon is outside the brush - can stop splitting.
 				result_polygons.push(polygon);
 				break;
 			},
-			super::bsp_builder::PolygonPositionRelativePlane::Back =>
+			PolygonPositionRelativePlane::Back =>
 			{
 				// Leftover polygon is possible inside the brush - continue splitting.
 			},
-			super::bsp_builder::PolygonPositionRelativePlane::CoplanarFront =>
+			PolygonPositionRelativePlane::CoplanarFront =>
 			{
 				// We need to save polygon only if same polygon of other brush was previously skipped.
 				if preserve_coplanar
@@ -154,13 +153,13 @@ fn cut_polygon_by_brush_planes(
 					break;
 				}
 			},
-			super::bsp_builder::PolygonPositionRelativePlane::CoplanarBack =>
+			PolygonPositionRelativePlane::CoplanarBack =>
 			{
 				// Preserve coplanar leftover polygon.
 			},
-			super::bsp_builder::PolygonPositionRelativePlane::Splitted =>
+			PolygonPositionRelativePlane::Splitted =>
 			{
-				let (front_polygon, back_polygon) = super::bsp_builder::split_polygon(&polygon, &plane);
+				let (front_polygon, back_polygon) = split_polygon(&polygon, &plane);
 				if front_polygon.vertices.len() >= 3
 				{
 					result_polygons.push(front_polygon); // Front polygon piece is outside brush - preserve it.

@@ -6,6 +6,7 @@ pub mod bsp_map_save_load;
 pub mod camera_controller;
 pub mod camera_rotation_controller;
 pub mod clipping;
+pub mod clipping_bsp;
 pub mod clipping_polygon;
 pub mod color;
 pub mod fixed_math;
