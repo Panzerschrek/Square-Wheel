@@ -91,11 +91,13 @@ pub fn split_polygon(in_polygon: &Polygon, plane: &Plane) -> (Polygon, Polygon)
 		plane: in_polygon.plane,
 		texture_info: in_polygon.texture_info.clone(),
 		vertices: Vec::new(),
+		original_index: in_polygon.original_index,
 	};
 	let mut polygon_back = Polygon {
 		plane: in_polygon.plane,
 		texture_info: in_polygon.texture_info.clone(),
 		vertices: Vec::new(),
+		original_index: in_polygon.original_index,
 	};
 
 	let mut prev_vert = in_polygon.vertices.last().unwrap();

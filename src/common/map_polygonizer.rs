@@ -13,6 +13,8 @@ pub struct Polygon
 	pub plane: Plane,
 	pub texture_info: TextureInfo,
 	pub vertices: Vec<Vec3f>,
+	// Used in some places in order to map derivative polygon to original one.
+	pub original_index: u32,
 }
 
 pub type Brush = Vec<Polygon>;
@@ -199,6 +201,7 @@ fn polygonize_brush(brush: &[map_file_q1::BrushPlane]) -> Brush
 			plane: plane_i,
 			texture_info: get_polygon_texture_info(&brush[i], &plane_i.vec),
 			vertices: vertices_sorted,
+			original_index: 0, // Now it is irrelevant.
 		});
 	} // for i
 
@@ -284,6 +287,7 @@ fn polygonize_brush_q4(brush: &[map_file_q4::BrushPlane]) -> Brush
 			plane: *plane_i,
 			texture_info: get_polygon_texture_info_q4(&brush[i]),
 			vertices: vertices_sorted,
+			original_index: 0, // Now it is irrelevant.
 		});
 	} // for i
 

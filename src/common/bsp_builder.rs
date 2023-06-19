@@ -65,51 +65,70 @@ pub fn build_leaf_bsp_tree(
 	perform_advanced_splitter_plane_selection: bool,
 ) -> BSPTree
 {
+	// Build BSP tree for world entity.
 	let world_entity = &map_entities[0];
 	let bbox = build_bounding_box(world_entity);
 
-	// Build BSP tree for world entity.
-	let mut tree_root = build_leaf_bsp_tree_r(
-		preprocess_input_polygons(&world_entity.polygons, materials),
-		perform_advanced_splitter_plane_selection,
-	);
-
-	// Build portals as links between BSP leafs.
-	let mut portals = build_protals(&tree_root, &bbox, materials);
-	set_leafs_portals(&portals);
-
-	// Now we have graph of leafs and portals.
-	// We need to remove ubnreachable leafs from this graph.
-	// In order to do this mark each entity's leaf as reachable and mark as reachable all leafs, reachable through portals.
 	let entities_positions = collect_entities_positions(&map_entities[1 ..]);
-	let reachable_leafs = collect_reachable_leafs(&tree_root, &entities_positions);
 
-	// Now correct BSP tree. Remove unreachable leafs and all nodes with only unreachable children.
-	let mut leafs_removal_stats = UnreachelbeLeafsRemovalStats {
-		total_leafs: 0,
-		leafs_removed: 0,
-	};
-	let root_is_reachable = remove_unreachable_leafs_r(&mut tree_root, &reachable_leafs, &mut leafs_removal_stats);
-	if !root_is_reachable
+	// Build BSP tree, than remove unreachable leafs and count lefover polygons.
+	// After that remove original polygons, that were completely removed in previous step and build BSP tree again.
+	let mut polygons_preprocessed = preprocess_input_polygons(&world_entity.polygons, materials);
+
+	let mut step = 0;
+	loop
 	{
-		// TODO - what we should do in such case?
-		println!("Warning, root node is unreachable!");
-	}
-	println!(
-		"Bsp leafs initial: {}, unreachable leafs removed: {}",
-		leafs_removal_stats.total_leafs, leafs_removal_stats.leafs_removed
-	);
+		let mut tree_root =
+			build_leaf_bsp_tree_r(polygons_preprocessed.clone(), perform_advanced_splitter_plane_selection);
 
-	// Remove portals between ureachable leafs from global portals list.
-	remove_unreachable_portals(&mut portals, &reachable_leafs);
+		// Build portals as links between BSP leafs.
+		let mut portals = build_protals(&tree_root, &bbox, materials);
+		set_leafs_portals(&portals);
 
-	// Normally reachable leafs should have no portals to unreachable leafs.
-	// But anyway try to remove removed portals from list of portals for each leaf.
-	remove_expired_portals_from_leafs_r(&mut tree_root);
+		// Now we have graph of leafs and portals.
+		// We need to remove ubnreachable leafs from this graph.
+		// In order to do this mark each entity's leaf as reachable and mark as reachable all leafs, reachable through portals.
+		let reachable_leafs = collect_reachable_leafs(&tree_root, &entities_positions);
 
-	BSPTree {
-		root: tree_root,
-		portals,
+		// Now correct BSP tree. Remove unreachable leafs and all nodes with only unreachable children.
+		let mut leafs_removal_stats = UnreachelbeLeafsRemovalStats {
+			total_leafs: 0,
+			leafs_removed: 0,
+		};
+		let root_is_reachable = remove_unreachable_leafs_r(&mut tree_root, &reachable_leafs, &mut leafs_removal_stats);
+		if !root_is_reachable
+		{
+			// TODO - what we should do in such case?
+			println!("Warning, root node is unreachable!");
+		}
+		println!(
+			"Step {}, bsp leafs initial: {}, unreachable leafs removed: {}",
+			step, leafs_removal_stats.total_leafs, leafs_removal_stats.leafs_removed
+		);
+
+		if step == 0
+		{
+			let mut leftover_polygons = std::collections::HashSet::new();
+			collect_leftover_original_polygons_r(&tree_root, &mut leftover_polygons);
+
+			polygons_preprocessed.retain(|p| leftover_polygons.contains(&p.original_index));
+
+			step += 1;
+		}
+		else
+		{
+			// Remove portals between ureachable leafs from global portals list.
+			remove_unreachable_portals(&mut portals, &reachable_leafs);
+
+			// Normally reachable leafs should have no portals to unreachable leafs.
+			// But anyway try to remove removed portals from list of portals for each leaf.
+			remove_expired_portals_from_leafs_r(&mut tree_root);
+
+			return BSPTree {
+				root: tree_root,
+				portals,
+			};
+		}
 	}
 }
 
@@ -537,13 +556,17 @@ fn get_submodel_splitter_plane_score(polygons: &[Polygon], plane: &Plane) -> Opt
 }
 
 // Remove invisible polygons, duplicate twosided poygons.
+// Also enumerate all polygons.
 fn preprocess_input_polygons(polygons: &[Polygon], materials: &material::MaterialsMap) -> Vec<Polygon>
 {
 	let mut result = Vec::new();
 
-	for polygon in polygons
+	for (polygon_index, in_polygon) in polygons.iter().enumerate()
 	{
-		if let Some(material) = materials.get(&polygon.texture_info.texture)
+		let mut out_polygon = in_polygon.clone();
+		out_polygon.original_index = polygon_index as u32;
+
+		if let Some(material) = materials.get(&in_polygon.texture_info.texture)
 		{
 			if !material.bsp
 			{
@@ -552,14 +575,14 @@ fn preprocess_input_polygons(polygons: &[Polygon], materials: &material::Materia
 
 			if material.twosided
 			{
-				let mut polygon_copy = polygon.clone();
+				let mut polygon_copy = out_polygon.clone();
 				polygon_copy.plane = polygon_copy.plane.get_inverted();
 				polygon_copy.vertices.reverse();
 				result.push(polygon_copy);
 			}
 		}
 
-		result.push(polygon.clone());
+		result.push(out_polygon);
 	}
 	result
 }
@@ -1242,6 +1265,30 @@ fn remove_expired_portals_from_leafs_r(node_child: &mut BSPNodeChild)
 				.borrow_mut()
 				.portals
 				.retain(|portal_weak_ptr| portal_weak_ptr.strong_count() > 0);
+		},
+	}
+}
+
+fn collect_leftover_original_polygons_r(
+	node_child: &BSPNodeChild,
+	leftover_polygons: &mut std::collections::HashSet<u32>,
+)
+{
+	match node_child
+	{
+		BSPNodeChild::NodeChild(node_ptr) =>
+		{
+			for child in &node_ptr.borrow().children
+			{
+				collect_leftover_original_polygons_r(child, leftover_polygons);
+			}
+		},
+		BSPNodeChild::LeafChild(leaf_ptr) =>
+		{
+			for polygon in &leaf_ptr.borrow().polygons
+			{
+				leftover_polygons.insert(polygon.original_index);
+			}
 		},
 	}
 }
