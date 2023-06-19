@@ -154,6 +154,12 @@ pub struct TeleportableComponent
 	pub destination: Option<LocationComponent>,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct WaterVolumeComponent
+{
+	pub bbox: BBox,
+}
+
 // Trigger than can be activated by touching.
 #[derive(Serialize, Deserialize)]
 pub struct TouchTriggerComponent

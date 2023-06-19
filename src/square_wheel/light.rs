@@ -79,7 +79,7 @@ pub fn calculate_cube_shadow_map_side_matrices(
 	complete_view_matrix(
 		position,
 		&get_cube_map_side_matrix(side),
-		std::f32::consts::PI * 0.5,
+		&Vec2f::new(1.0, 1.0),
 		shadow_map_size,
 		shadow_map_size,
 	)

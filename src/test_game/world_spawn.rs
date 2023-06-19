@@ -53,6 +53,17 @@ fn spawn_regular_entity(
 				add_entity_common_components(ecs, map, map_entity, entity);
 			}
 		},
+		Some("func_water") =>
+		{
+			let index = map_entity.submodel_index as usize;
+			if index < map.submodels.len()
+			{
+				let bbox = bsp_map_compact::get_submodel_bbox(map, &map.submodels[index]);
+
+				let entity = ecs.spawn((WaterVolumeComponent { bbox },));
+				add_entity_common_components(ecs, map, map_entity, entity);
+			}
+		},
 		Some("info_teleport_destination") =>
 		{
 			if let Some(origin) = get_entity_origin(map_entity, map)

@@ -70,7 +70,7 @@ pub fn build_leaf_bsp_tree(
 
 	// Build BSP tree for world entity.
 	let mut tree_root = build_leaf_bsp_tree_r(
-		filter_out_invisible_polygons(&world_entity.polygons, materials),
+		preprocess_input_polygons(&world_entity.polygons, materials),
 		perform_advanced_splitter_plane_selection,
 	);
 
@@ -340,8 +340,8 @@ fn get_splitter_plane_score(polygons: &[Polygon], plane: &Plane) -> Option<f32>
 
 pub fn build_submodel_bsp_tree(submodel: &map_csg::Entity, materials: &material::MaterialsMap) -> SubmodelBSPNode
 {
-	let polygons_filtered = filter_out_invisible_polygons(&submodel.polygons, materials);
-	if polygons_filtered.is_empty()
+	let polygons_preprocessed = preprocess_input_polygons(&submodel.polygons, materials);
+	if polygons_preprocessed.is_empty()
 	{
 		return SubmodelBSPNode {
 			polygons: Vec::new(),
@@ -353,7 +353,7 @@ pub fn build_submodel_bsp_tree(submodel: &map_csg::Entity, materials: &material:
 		};
 	}
 
-	build_submodel_bsp_tree_r(polygons_filtered)
+	build_submodel_bsp_tree_r(polygons_preprocessed)
 }
 
 fn build_submodel_bsp_tree_r(mut in_polygons: Vec<Polygon>) -> SubmodelBSPNode
@@ -536,7 +536,8 @@ fn get_submodel_splitter_plane_score(polygons: &[Polygon], plane: &Plane) -> Opt
 	Some(score_scaled)
 }
 
-fn filter_out_invisible_polygons(polygons: &[Polygon], materials: &material::MaterialsMap) -> Vec<Polygon>
+// Remove invisible polygons, duplicate twosided poygons.
+fn preprocess_input_polygons(polygons: &[Polygon], materials: &material::MaterialsMap) -> Vec<Polygon>
 {
 	let mut result = Vec::new();
 
@@ -547,6 +548,14 @@ fn filter_out_invisible_polygons(polygons: &[Polygon], materials: &material::Mat
 			if !material.bsp
 			{
 				continue;
+			}
+
+			if material.twosided
+			{
+				let mut polygon_copy = polygon.clone();
+				polygon_copy.plane = polygon_copy.plane.get_inverted();
+				polygon_copy.vertices.reverse();
+				result.push(polygon_copy);
 			}
 		}
 

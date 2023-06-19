@@ -12,6 +12,7 @@ def generate_material_json(textures_dir, texture_file_name):
 		if texture_file_name.find("WATER") != -1 or texture_file_name.find("SLIME") != -1:
 			res["roughness"] = 1.0 / 128.0
 			res["blending_mode"] = "Average"
+			res["twosided"] = True
 			res["blocks_view"] = False
 			res["solid"] = False
 

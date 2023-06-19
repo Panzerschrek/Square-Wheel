@@ -50,6 +50,16 @@ impl BBox
 			self.max.z >= other.max.z
 	}
 
+	pub fn contains_point(&self, point: &Vec3f) -> bool
+	{
+		point.x >= self.min.x &&
+			point.x <= self.max.x &&
+			point.y >= self.min.y &&
+			point.y <= self.max.y &&
+			point.z >= self.min.z &&
+			point.z <= self.max.z
+	}
+
 	pub fn touches_or_intersects(&self, other: &BBox) -> bool
 	{
 		!(self.max.x < other.min.x ||
