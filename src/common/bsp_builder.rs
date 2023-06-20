@@ -68,6 +68,9 @@ pub fn build_leaf_bsp_tree(
 	let world_entity = &map_entities[0];
 	let bbox = build_bounding_box(world_entity);
 
+	// TODO - try to perform two-stage BSP tree building.
+	// Remove unreachable initial polygons and rebuild BSP tree to achieve more balanced result.
+
 	// Build BSP tree for world entity.
 	let mut tree_root = build_leaf_bsp_tree_r(
 		preprocess_input_polygons(&world_entity.polygons, materials),
@@ -120,6 +123,10 @@ fn build_leaf_bsp_tree_r(mut in_polygons: Vec<Polygon>, perform_advanced_splitte
 	if splitter_plane_opt.is_none()
 	{
 		// No splitter plane means this is a leaf.
+
+		// TODO - create subtree including all leaf polygons as splitter planes with this leaf and all its polygons as last leaf of this subtree.
+		// Such approach will improve portals clippng po leaf polygons.
+
 		return BSPNodeChild::LeafChild(rc::Rc::new(cell::RefCell::new(BSPLeaf {
 			polygons: in_polygons,
 			portals: Vec::new(),
@@ -296,6 +303,10 @@ fn get_splitter_plane_score(polygons: &[Polygon], plane: &Plane) -> Option<f32>
 			},
 			PolygonPositionRelativePlane::Splitted =>
 			{
+				// TODO - improve this. Some splits are not so bad, than other.
+				// Use different score for different splits.
+				// It is ok to perform split of long polygons along one of texture axis,
+				// but it is not so good to perform diagonal cuts and cuts of small polygons.
 				polygons_splitted += 1;
 			},
 		}
@@ -880,6 +891,11 @@ fn build_leafs_portals(in_portals: &[LeafPortalInitial], materials: &material::M
 			{
 				continue;
 			}
+
+			// TODO - perform more advanced check.
+			// Cut portal poygon by polygons of both leafs, that are lying on portal plane.
+			// Remove this portal is no leftover subpolygon was left.
+			// Also it is possible to reduce portal by constructing convex polygon for all leftover portal polygon pieces.
 
 			if portal_is_fully_covered_by_leaf_polygons(
 				&plane,

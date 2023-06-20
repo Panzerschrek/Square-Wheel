@@ -181,14 +181,17 @@ fn cut_polygon_by_brush_planes(polygon: Polygon, brush: &Vec<Polygon>, preserve_
 		return result_polygons;
 	}
 
-	// We can't just return result pieces, because they are cuttet (potentially) very crudely.
+	// We can't just return result pieces, because they are cutted (potentially) very crudely.
 	// We need to cut source polygon, using leftover polygon, preserving cut directions orthogonal.
+	// TODO - make tis behaviour configurable.
 	return make_hole_in_polygon(polygon, &leftover_polygon);
 }
 
 // Hole must be inside polygon.
 fn make_hole_in_polygon(polygon: Polygon, hole: &Polygon) -> Vec<Polygon>
 {
+	// TODO - check if this works for all corner cases.
+
 	// Perform cuts from vertices of hole polygon.
 	// Perform cuts only along texture axis.
 
@@ -230,6 +233,8 @@ fn make_hole_in_polygon(polygon: Polygon, hole: &Polygon) -> Vec<Polygon>
 		}
 		else
 		{
+			// TODO - maybe just select edge as cut plane base?
+
 			let mut selected_cut_plane_vec_edge_prev = None;
 			let mut selected_cut_plane_vec_edge = None;
 			for possible_cut_plane_normal in &possible_cut_plane_normals
