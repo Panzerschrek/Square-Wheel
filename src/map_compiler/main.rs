@@ -1,6 +1,6 @@
 use square_wheel_lib::common::{
-	bsp_builder, bsp_map_compact, bsp_map_compact_conversion, bsp_map_save_load, image, lightmaps_builder, map_file_q1,
-	map_file_q4, map_polygonizer, material,
+	bsp_builder, bsp_map_compact, bsp_map_compact_conversion, bsp_map_save_load, image, lightmaps_builder, map_csg,
+	map_file_q1, map_file_q4, map_polygonizer, material,
 };
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -17,9 +17,22 @@ struct Opt
 	#[structopt(parse(from_os_str), short = "o", required(true))]
 	output: PathBuf,
 
+	/// Perform CSG for initial brushes. This may produce more optimal map, or may not.
+	/// Try to compile with/without this flag in order to know results.
+	#[structopt(long)]
+	perform_csg: bool,
+
+	#[structopt(long)]
+	/// Works good together with perform_csg flag.
+	perform_advanced_splitter_plane_selection: bool,
+
 	/// Print stats of input/result map
 	#[structopt(long)]
 	print_stats: bool,
+
+	/// Print stats of submodels
+	#[structopt(long)]
+	print_submodels_stats: bool,
 
 	/// Input map file format.
 	#[structopt(long)]
@@ -42,6 +55,7 @@ fn main()
 
 	let materials = if let Some(dir) = opt.materials_dir
 	{
+		println!("Loading materials from {:?}", dir);
 		material::load_materials(&dir)
 	}
 	else
@@ -51,8 +65,10 @@ fn main()
 
 	let textures_dir = opt.textures_dir;
 
+	println!("Reading map file {:?}", opt.input);
 	let file_contents_str = std::fs::read_to_string(opt.input).unwrap();
 
+	println!("Polygonizing brushes");
 	let map_polygonized = match opt.input_format.unwrap_or_default().as_str()
 	{
 		"quake4" =>
@@ -78,26 +94,65 @@ fn main()
 		},
 	};
 
-	let bsp_tree = bsp_builder::build_leaf_bsp_tree(&map_polygonized, &materials);
-	let submodels_bsp_trees = map_polygonized[1 ..]
+	let map_csg_processed = if opt.perform_csg
+	{
+		println!("Doing CSG for brushes");
+		map_csg::perform_csg_for_map_brushes(&map_polygonized, &materials)
+	}
+	else
+	{
+		println!("Skipping CSG step");
+		map_csg::perform_no_csg_for_map_brushes(&map_polygonized)
+	};
+
+	println!("Building BSP tree");
+	let bsp_tree = bsp_builder::build_leaf_bsp_tree(
+		&map_csg_processed,
+		&materials,
+		opt.perform_advanced_splitter_plane_selection,
+	);
+
+	println!("Building submodels BSP trees");
+	let submodels_bsp_trees = map_csg_processed[1 ..]
 		.iter()
 		.map(|s| bsp_builder::build_submodel_bsp_tree(s, &materials))
 		.collect::<Vec<_>>();
 
+	println!("Converting BSP tree in compact format");
 	let mut map_compact = bsp_map_compact_conversion::convert_bsp_map_to_compact_format(
 		&bsp_tree,
-		&map_polygonized,
+		&map_csg_processed,
 		&submodels_bsp_trees,
 		&materials,
 	);
 
+	println!("Creating dummy lightmaps");
 	lightmaps_builder::build_dummy_lightmaps(&materials, &mut map_compact);
 
+	println!("Saving BSP map {:?}", opt.output);
 	bsp_map_save_load::save_map(&map_compact, &opt.output).unwrap();
 
 	if opt.print_stats
 	{
-		print_stats(&map_polygonized, &bsp_tree, &submodels_bsp_trees, &map_compact);
+		print_stats(&map_polygonized, &map_csg_processed, &bsp_tree, &map_compact);
+	}
+
+	if opt.print_submodels_stats
+	{
+		for (index, submodels_bsp_tree) in submodels_bsp_trees.iter().enumerate()
+		{
+			let mut stats = SubmodelBSPStats::default();
+			calculate_submodel_bsp_tree_stats_r(submodels_bsp_tree, 0, &mut stats);
+			stats.average_depth /= stats.num_nodes as f32;
+
+			println!(
+				"Submodel {} BSP Tree stats: {:?}, average polygons in node: {}, average vertices in polygon: {}",
+				index + 1,
+				stats,
+				(stats.num_polygons as f32) / (stats.num_nodes as f32),
+				(stats.num_polygon_vertices as f32) / (stats.num_polygons.max(1) as f32),
+			);
+		}
 	}
 }
 
@@ -140,8 +195,8 @@ fn get_material_texture_size(
 
 fn print_stats(
 	map_polygonized: &map_polygonizer::MapPolygonized,
+	map_csg_processed: &map_csg::MapCSGProcessed,
 	bsp_tree: &bsp_builder::BSPTree,
-	submodels_bsp_trees: &[bsp_builder::SubmodelBSPNode],
 	map_compact: &bsp_map_compact::BSPMap,
 )
 {
@@ -154,7 +209,15 @@ fn print_stats(
 	{
 		num_portal_vertices += portal.borrow().vertices.len();
 	}
-	println!("Initial polygons: {}", map_polygonized[0].polygons.len());
+
+	let mut initial_polygons = 0;
+	for brush in &map_polygonized[0].brushes
+	{
+		initial_polygons += brush.len();
+	}
+
+	println!("Initial polygons: {}", initial_polygons);
+	println!("Polygons after CSG: {}", map_csg_processed[0].polygons.len());
 	println!(
 		"BSP Tree stats: {:?}, average polygons in leaf: {}, average vertices in polygon: {}, portals: {}, portal \
 		 vertices: {}, average vertices in portal: {}",
@@ -168,7 +231,7 @@ fn print_stats(
 
 	println!(
 		"Compact map nodes: {}, leafs: {}, polygons: {}, portals: {}, leafs_portals: {}, vertices: {}, textures: {}, \
-		 submodels: {}, sumbodels nodes: {}",
+		 submodels: {}, sumbodels nodes: {}, lightmap texels: {}",
 		map_compact.nodes.len(),
 		map_compact.leafs.len(),
 		map_compact.polygons.len(),
@@ -177,23 +240,9 @@ fn print_stats(
 		map_compact.vertices.len(),
 		map_compact.textures.len(),
 		map_compact.submodels.len(),
-		map_compact.submodels_bsp_nodes.len()
+		map_compact.submodels_bsp_nodes.len(),
+		map_compact.lightmaps_data.len()
 	);
-
-	for (index, submodels_bsp_tree) in submodels_bsp_trees.iter().enumerate()
-	{
-		let mut stats = SubmodelBSPStats::default();
-		calculate_submodel_bsp_tree_stats_r(submodels_bsp_tree, 0, &mut stats);
-		stats.average_depth /= stats.num_nodes as f32;
-
-		println!(
-			"Submodel {} BSP Tree stats: {:?}, average polygons in node: {}, average vertices in polygon: {}",
-			index + 1,
-			stats,
-			(stats.num_polygons as f32) / (stats.num_nodes as f32),
-			(stats.num_polygon_vertices as f32) / (stats.num_polygons.max(1) as f32),
-		);
-	}
 }
 
 #[derive(Debug, Default)]

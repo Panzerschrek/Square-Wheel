@@ -15,10 +15,12 @@ pub struct Polygon
 	pub vertices: Vec<Vec3f>,
 }
 
+pub type Brush = Vec<Polygon>;
+
 #[derive(Debug, Clone)]
 pub struct Entity
 {
-	pub polygons: Vec<Polygon>,
+	pub brushes: Vec<Brush>,
 	pub keys: std::collections::HashMap<String, String>,
 }
 
@@ -45,28 +47,34 @@ pub fn polygonize_map_q4<TextureSizeGetter: FnMut(&str) -> [u32; 2]>(
 
 fn polygonize_entity(input_entity: &map_file_q1::Entity) -> Entity
 {
-	let mut polygons = Vec::new();
+	let mut brushes = Vec::new();
 	for brush in &input_entity.brushes
 	{
-		polygons.append(&mut polygonize_brush(brush));
-	}
+		let brush_polygons = polygonize_brush(brush);
+		if brush_polygons.is_empty()
+		{
+			continue;
+		}
+
+		brushes.push(brush_polygons);
+	} // for brushes.
 
 	Entity {
-		polygons,
+		brushes,
 		keys: input_entity.keys.clone(),
 	}
 }
 
 fn polygonize_entity_q4(input_entity: &map_file_q4::Entity) -> Entity
 {
-	let mut polygons = Vec::new();
+	let mut brushes = Vec::new();
 	for brush in &input_entity.brushes
 	{
-		polygons.append(&mut polygonize_brush_q4(brush));
+		brushes.push(polygonize_brush_q4(brush));
 	}
 
 	Entity {
-		polygons,
+		brushes,
 		keys: input_entity.keys.clone(),
 	}
 }
@@ -78,18 +86,21 @@ fn correct_texture_basis_scale_q4<TextureSizeGetter: FnMut(&str) -> [u32; 2]>(
 {
 	// Quake IV uses normailzed texture coordinates, but we need to use absolute coordinates.
 	// So, perform such conversion.
-	for polygon in &mut entity.polygons
+	for brush in &mut entity.brushes
 	{
-		let texture_size = texture_size_getter(&polygon.texture_info.texture);
-		for i in 0 .. 2
+		for polygon in brush
 		{
-			polygon.texture_info.tex_coord_equation[i].vec *= texture_size[i] as f32;
-			polygon.texture_info.tex_coord_equation[i].dist *= texture_size[i] as f32;
+			let texture_size = texture_size_getter(&polygon.texture_info.texture);
+			for i in 0 .. 2
+			{
+				polygon.texture_info.tex_coord_equation[i].vec *= texture_size[i] as f32;
+				polygon.texture_info.tex_coord_equation[i].dist *= texture_size[i] as f32;
+			}
 		}
 	}
 }
 
-fn polygonize_brush(brush: &[map_file_q1::BrushPlane]) -> Vec<Polygon>
+fn polygonize_brush(brush: &[map_file_q1::BrushPlane]) -> Brush
 {
 	let mut result = Vec::new();
 
@@ -194,7 +205,7 @@ fn polygonize_brush(brush: &[map_file_q1::BrushPlane]) -> Vec<Polygon>
 	result
 }
 
-fn polygonize_brush_q4(brush: &[map_file_q4::BrushPlane]) -> Vec<Polygon>
+fn polygonize_brush_q4(brush: &[map_file_q4::BrushPlane]) -> Brush
 {
 	let mut result = Vec::new();
 

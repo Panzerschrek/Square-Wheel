@@ -1,4 +1,6 @@
-use super::{bbox::*, clipping, lightmap, map_file_common, map_polygonizer, material, math_types::*, plane::*};
+use super::{
+	bbox::*, clipping_bsp::*, lightmap, map_csg, map_file_common, map_polygonizer, material, math_types::*, plane::*,
+};
 use std::{cell, rc};
 
 pub use map_polygonizer::Polygon;
@@ -57,13 +59,23 @@ pub struct SubmodelBSPNode
 	pub children: [Option<Box<SubmodelBSPNode>>; 2],
 }
 
-pub fn build_leaf_bsp_tree(map_entities: &[map_polygonizer::Entity], materials: &material::MaterialsMap) -> BSPTree
+pub fn build_leaf_bsp_tree(
+	map_entities: &[map_csg::Entity],
+	materials: &material::MaterialsMap,
+	perform_advanced_splitter_plane_selection: bool,
+) -> BSPTree
 {
 	let world_entity = &map_entities[0];
 	let bbox = build_bounding_box(world_entity);
 
+	// TODO - try to perform two-stage BSP tree building.
+	// Remove unreachable initial polygons and rebuild BSP tree to achieve more balanced result.
+
 	// Build BSP tree for world entity.
-	let mut tree_root = build_leaf_bsp_tree_r(preprocess_input_polygons(&world_entity.polygons, materials));
+	let mut tree_root = build_leaf_bsp_tree_r(
+		preprocess_input_polygons(&world_entity.polygons, materials),
+		perform_advanced_splitter_plane_selection,
+	);
 
 	// Build portals as links between BSP leafs.
 	let mut portals = build_protals(&tree_root, &bbox, materials);
@@ -104,12 +116,17 @@ pub fn build_leaf_bsp_tree(map_entities: &[map_polygonizer::Entity], materials: 
 	}
 }
 
-fn build_leaf_bsp_tree_r(mut in_polygons: Vec<Polygon>) -> BSPNodeChild
+fn build_leaf_bsp_tree_r(mut in_polygons: Vec<Polygon>, perform_advanced_splitter_plane_selection: bool)
+	-> BSPNodeChild
 {
-	let splitter_plane_opt = choose_best_splitter_plane(&in_polygons);
+	let splitter_plane_opt = choose_best_splitter_plane(&in_polygons, perform_advanced_splitter_plane_selection);
 	if splitter_plane_opt.is_none()
 	{
 		// No splitter plane means this is a leaf.
+
+		// TODO - create subtree including all leaf polygons as splitter planes with this leaf and all its polygons as last leaf of this subtree.
+		// Such approach will improve portals clippng po leaf polygons.
+
 		return BSPNodeChild::LeafChild(rc::Rc::new(cell::RefCell::new(BSPLeaf {
 			polygons: in_polygons,
 			portals: Vec::new(),
@@ -166,21 +183,23 @@ fn build_leaf_bsp_tree_r(mut in_polygons: Vec<Polygon>) -> BSPNodeChild
 	BSPNodeChild::NodeChild(rc::Rc::new(cell::RefCell::new(BSPNode {
 		plane: splitter_plane,
 		children: [
-			build_leaf_bsp_tree_r(polygons_front),
-			build_leaf_bsp_tree_r(polygons_back),
+			build_leaf_bsp_tree_r(polygons_front, perform_advanced_splitter_plane_selection),
+			build_leaf_bsp_tree_r(polygons_back, perform_advanced_splitter_plane_selection),
 		],
 	})))
 }
 
 // Returns None if can't find any situable splitter.
-fn choose_best_splitter_plane(polygons: &[Polygon]) -> Option<Plane>
+fn choose_best_splitter_plane(polygons: &[Polygon], check_edges: bool) -> Option<Plane>
 {
 	let mut best_score_plane: Option<(f32, Plane)> = None;
+
+	// Process planes of polygons itself.
 	for polygon in polygons
 	{
 		if let Some(score) = get_splitter_plane_score(polygons, &polygon.plane)
 		{
-			if let Some((prev_score, _)) = best_score_plane
+			if let Some((prev_score, _prev_plane)) = best_score_plane
 			{
 				if score < prev_score
 				{
@@ -190,6 +209,63 @@ fn choose_best_splitter_plane(polygons: &[Polygon]) -> Option<Plane>
 			else
 			{
 				best_score_plane = Some((score, polygon.plane))
+			}
+		}
+	}
+
+	#[allow(clippy::question_mark)]
+	if best_score_plane.is_none()
+	{
+		// Can't find any splitter plane laying on one of polygons - polygons form convex hull and thus BSP leaf may be formed.
+		return None;
+	}
+
+	if !check_edges
+	{
+		return best_score_plane.map(|x| x.1);
+	}
+
+	// Try to build split planes on each edge of the polygon.
+	// Using splitter plane that is not based on any polygon sometimes may be usefull.
+	let basis_vecs = [Vec3f::unit_x(), Vec3f::unit_y(), Vec3f::unit_z()];
+	for polygon in polygons
+	{
+		let mut prev_v = *polygon.vertices.last().unwrap();
+		for &v in &polygon.vertices
+		{
+			let edge = v - prev_v;
+			prev_v = v;
+
+			for basis_vec in basis_vecs
+			{
+				let normal = edge.cross(basis_vec);
+
+				// Do not divide by basis vec lenght, because it has length 1.
+				let edge_basis_vec_angle_sin_squared = normal.magnitude2() / edge.magnitude2();
+				if edge_basis_vec_angle_sin_squared <= 0.001
+				{
+					// edge is parallel to this basis vec.
+					continue;
+				}
+
+				let plane = Plane {
+					vec: normal,
+					dist: normal.dot(v),
+				};
+				if let Some(score) = get_splitter_plane_score(polygons, &plane)
+				{
+					if let Some((prev_score, _prev_plane)) = best_score_plane
+					{
+						if score < prev_score
+						{
+							best_score_plane = Some((score, plane))
+						}
+					}
+					else
+					{
+						best_score_plane = Some((score, plane))
+					}
+				}
 			}
 		}
 	}
@@ -228,6 +304,10 @@ fn get_splitter_plane_score(polygons: &[Polygon], plane: &Plane) -> Option<f32>
 			},
 			PolygonPositionRelativePlane::Splitted =>
 			{
+				// TODO - improve this. Some splits are not so bad, than other.
+				// Use different score for different splits.
+				// It is ok to perform split of long polygons along one of texture axis,
+				// but it is not so good to perform diagonal cuts and cuts of small polygons.
 				polygons_splitted += 1;
 			},
 		}
@@ -270,10 +350,7 @@ fn get_splitter_plane_score(polygons: &[Polygon], plane: &Plane) -> Option<f32>
 	Some(score_scaled)
 }
 
-pub fn build_submodel_bsp_tree(
-	submodel: &map_polygonizer::Entity,
-	materials: &material::MaterialsMap,
-) -> SubmodelBSPNode
+pub fn build_submodel_bsp_tree(submodel: &map_csg::Entity, materials: &material::MaterialsMap) -> SubmodelBSPNode
 {
 	let polygons_preprocessed = preprocess_input_polygons(&submodel.polygons, materials);
 	if polygons_preprocessed.is_empty()
@@ -471,62 +548,6 @@ fn get_submodel_splitter_plane_score(polygons: &[Polygon], plane: &Plane) -> Opt
 	Some(score_scaled)
 }
 
-// Returns pair of front and back polygons.
-fn split_polygon(in_polygon: &Polygon, plane: &Plane) -> (Polygon, Polygon)
-{
-	let mut polygon_front = Polygon {
-		plane: in_polygon.plane,
-		texture_info: in_polygon.texture_info.clone(),
-		vertices: Vec::new(),
-	};
-	let mut polygon_back = Polygon {
-		plane: in_polygon.plane,
-		texture_info: in_polygon.texture_info.clone(),
-		vertices: Vec::new(),
-	};
-
-	let mut prev_vert = in_polygon.vertices.last().unwrap();
-	let mut prev_vert_pos = get_point_position_relative_plane(prev_vert, plane);
-	for vert in &in_polygon.vertices
-	{
-		let vert_pos = get_point_position_relative_plane(vert, plane);
-
-		match vert_pos
-		{
-			PointPositionRelativePlane::Front =>
-			{
-				if prev_vert_pos == PointPositionRelativePlane::Back
-				{
-					let intersection = clipping::get_line_plane_intersection(prev_vert, vert, plane);
-					polygon_back.vertices.push(intersection);
-					polygon_front.vertices.push(intersection);
-				}
-				polygon_front.vertices.push(*vert);
-			},
-			PointPositionRelativePlane::Back =>
-			{
-				if prev_vert_pos == PointPositionRelativePlane::Front
-				{
-					let intersection = clipping::get_line_plane_intersection(prev_vert, vert, plane);
-					polygon_front.vertices.push(intersection);
-					polygon_back.vertices.push(intersection);
-				}
-				polygon_back.vertices.push(*vert);
-			},
-			PointPositionRelativePlane::OnPlane =>
-			{
-				polygon_front.vertices.push(*vert);
-				polygon_back.vertices.push(*vert);
-			},
-		};
-
-		prev_vert = vert;
-		prev_vert_pos = vert_pos;
-	}
-
-	(polygon_front, polygon_back)
-}
-
 // Remove invisible polygons, duplicate twosided poygons.
 fn preprocess_input_polygons(polygons: &[Polygon], materials: &material::MaterialsMap) -> Vec<Polygon>
 {
@@ -555,7 +576,7 @@ fn preprocess_input_polygons(polygons: &[Polygon], materials: &material::Materia
 	result
 }
 
-fn build_bounding_box(entity: &map_polygonizer::Entity) -> BBox
+fn build_bounding_box(entity: &map_csg::Entity) -> BBox
 {
 	let inf = 1.0e8;
 	let bbox_extend = 128.0;
@@ -574,88 +595,6 @@ fn build_bounding_box(entity: &map_polygonizer::Entity) -> BBox
 	bbox.max += Vec3f::new(bbox_extend, bbox_extend, bbox_extend);
 
 	bbox
-}
-
-#[derive(PartialEq, Eq)]
-enum PolygonPositionRelativePlane
-{
-	Front,
-	Back,
-	CoplanarFront,
-	CoplanarBack,
-	Splitted,
-}
-
-fn get_polygon_position_relative_plane(polygon: &Polygon, plane: &Plane) -> PolygonPositionRelativePlane
-{
-	let mut vertices_front = 0;
-	let mut vertices_back = 0;
-	for v in &polygon.vertices
-	{
-		match get_point_position_relative_plane(v, plane)
-		{
-			PointPositionRelativePlane::Front =>
-			{
-				vertices_front += 1;
-			},
-			PointPositionRelativePlane::Back =>
-			{
-				vertices_back += 1;
-			},
-			PointPositionRelativePlane::OnPlane =>
-			{},
-		};
-	}
-
-	if vertices_front != 0 && vertices_back != 0
-	{
-		PolygonPositionRelativePlane::Splitted
-	}
-	else if vertices_front != 0
-	{
-		PolygonPositionRelativePlane::Front
-	}
-	else if vertices_back != 0
-	{
-		PolygonPositionRelativePlane::Back
-	}
-	else if polygon.plane.vec.dot(plane.vec) >= 0.0
-	{
-		PolygonPositionRelativePlane::CoplanarFront
-	}
-	else
-	{
-		PolygonPositionRelativePlane::CoplanarBack
-	}
-}
-
-#[derive(PartialEq, Eq)]
-enum PointPositionRelativePlane
-{
-	Front,
-	Back,
-	OnPlane,
-}
-
-const POINT_POSITION_EPS: f32 = 1.0 / 16.0;
-
-fn get_point_position_relative_plane(point: &Vec3f, plane: &Plane) -> PointPositionRelativePlane
-{
-	// Polygon vector is unnormalized. So, scale epsilon to length of this vector.
-	let dist_scaled = point.dot(plane.vec) - plane.dist;
-	let eps_scaled = POINT_POSITION_EPS * plane.vec.magnitude();
-	if dist_scaled > eps_scaled
-	{
-		PointPositionRelativePlane::Front
-	}
-	else if dist_scaled < -eps_scaled
-	{
-		PointPositionRelativePlane::Back
-	}
-	else
-	{
-		PointPositionRelativePlane::OnPlane
-	}
 }
 
 fn build_protals(node: &BSPNodeChild, map_bbox: &BBox, materials: &material::MaterialsMap) -> Vec<LeafsPortalPtr>
@@ -954,6 +893,11 @@ fn build_leafs_portals(in_portals: &[LeafPortalInitial], materials: &material::M
 				continue;
 			}
 
+			// TODO - perform more advanced check.
+			// Cut portal poygon by polygons of both leafs, that are lying on portal plane.
+			// Remove this portal is no leftover subpolygon was left.
+			// Also it is possible to reduce portal by constructing convex polygon for all leftover portal polygon pieces.
+
 			if portal_is_fully_covered_by_leaf_polygons(
 				&plane,
 				&portals_intersection,
@@ -1154,7 +1098,7 @@ fn set_leafs_portals(portals: &[LeafsPortalPtr])
 	}
 }
 
-fn collect_entities_positions(map_entities: &[map_polygonizer::Entity]) -> Vec<Vec3f>
+fn collect_entities_positions(map_entities: &[map_csg::Entity]) -> Vec<Vec3f>
 {
 	let mut result = Vec::new();
 	for entity in map_entities
