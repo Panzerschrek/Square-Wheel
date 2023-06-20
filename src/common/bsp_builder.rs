@@ -213,6 +213,7 @@ fn choose_best_splitter_plane(polygons: &[Polygon], check_edges: bool) -> Option
 		}
 	}
 
+	#[allow(clippy::question_mark)]
 	if best_score_plane.is_none()
 	{
 		// Can't find any splitter plane laying on one of polygons - polygons form convex hull and thus BSP leaf may be formed.

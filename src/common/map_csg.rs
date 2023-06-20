@@ -22,7 +22,7 @@ pub fn perform_no_csg_for_map_brushes(map: &MapPolygonized) -> MapCSGProcessed
 			let mut polygons = Vec::new();
 			for brush in &e.brushes
 			{
-				polygons.extend_from_slice(&brush);
+				polygons.extend_from_slice(brush);
 			}
 			Entity {
 				polygons,
@@ -83,7 +83,7 @@ pub fn perform_csg_for_entity_brushes(brushes: &[Brush], materials: &material::M
 		for (other_brush, solid_flag) in brushes.iter().zip(solid_flags.iter())
 		{
 			// TODO - speed-up this, perform bbox check.
-			if other_brush as *const Vec<Polygon> == brush as *const Vec<Polygon>
+			if std::ptr::eq(other_brush, brush)
 			{
 				preserve_coplanar = true;
 				continue;
@@ -184,7 +184,7 @@ fn cut_polygon_by_brush_planes(polygon: Polygon, brush: &Vec<Polygon>, preserve_
 	// We can't just return result pieces, because they are cutted (potentially) very crudely.
 	// We need to cut source polygon, using leftover polygon, preserving cut directions orthogonal.
 	// TODO - make tis behaviour configurable.
-	return make_hole_in_polygon(polygon, &leftover_polygon);
+	make_hole_in_polygon(polygon, &leftover_polygon)
 }
 
 // Hole must be inside polygon.
@@ -349,7 +349,7 @@ fn cut_polygon_by_planes(polygon: &Polygon, planes: &[Plane]) -> Polygon
 	let mut result = polygon.clone();
 	for plane in planes
 	{
-		match get_polygon_position_relative_plane(&result, &plane)
+		match get_polygon_position_relative_plane(&result, plane)
 		{
 			PolygonPositionRelativePlane::Front | PolygonPositionRelativePlane::CoplanarFront =>
 			{},
