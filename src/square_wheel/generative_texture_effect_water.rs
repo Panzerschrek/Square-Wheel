@@ -20,18 +20,17 @@ impl GenerativeTextureEffectWater
 {
 	pub fn new(water_effect: WaterEffect) -> Self
 	{
-		if water_effect.resolution_log2[0] < 2 || water_effect.resolution_log2[1] < 2
+		let resolution_log2 = water_effect.resolution_log2;
+		if resolution_log2[0] < MAX_MIP as u32 || resolution_log2[1] < MAX_MIP as u32
 		{
-			panic!("Water texture must have size at least 4x4!");
+			panic!("Water texture must have size at least {}x{}!", MAX_MIP, MAX_MIP);
 		}
 
-		let area = 1 << (water_effect.resolution_log2[0] + water_effect.resolution_log2[1]);
+		let area = 1 << (resolution_log2[0] + resolution_log2[1]);
 		if area >= (1 << 22)
 		{
 			panic!("Water texture is too big!");
 		}
-
-		let resolution_log2 = water_effect.resolution_log2;
 
 		let mut result = Self {
 			update_frequency: water_effect.update_frequency.max(1.0).min(200.0),

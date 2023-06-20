@@ -20,9 +20,9 @@ impl GenerativeTextureEffectFire
 {
 	pub fn new(fire_effect: FireEffect) -> Self
 	{
-		if fire_effect.resolution_log2[0] < 2 || fire_effect.resolution_log2[1] < 2
+		if fire_effect.resolution_log2[0] < MAX_MIP as u32 || fire_effect.resolution_log2[1] < MAX_MIP as u32
 		{
-			panic!("Fire texture must have size at least 4x4!");
+			panic!("Fire texture must have size at least {}x{}!", MAX_MIP, MAX_MIP);
 		}
 
 		let area = 1 << (fire_effect.resolution_log2[0] + fire_effect.resolution_log2[1]);
