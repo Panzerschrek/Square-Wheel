@@ -40,8 +40,7 @@ Lightmapper:
 
 Map compiler:
 * Speed-up of large maps compilation
-* Try to perform CSG on map brushes (and remove hidden surfaces) before building BSP tree - as Quake does
-* Two-sided surfaces (for water, fire, alpha-tested surfaces, etc.)
+* Improve portals clipping/discarding - build helper leafs on all polygons, perform full clipping of portal by all leaf polygons lying on portal plane
 * More map source formats (Quake II, Quake III Arena), Source Engine
 * Bezier curves support (perform tesselation during map compilation)
 
