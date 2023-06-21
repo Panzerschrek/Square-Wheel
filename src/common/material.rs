@@ -251,7 +251,8 @@ impl Default for Material
 	fn default() -> Self
 	{
 		Self {
-			diffuse: None,
+			// Use dummy diffuse image name in order to draw surfaces with missing materials, using dummy texture.
+			diffuse: Some(String::new()),
 			normal_map: None,
 			roughness: 1.0,
 			roughness_map: None,
