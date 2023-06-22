@@ -77,6 +77,10 @@ pub enum WaveSource
 	{
 		points: [[u32; 2]; 2],
 
+		/// Offset function for x/y coordinates of both points.
+		#[serde(default)]
+		points_offset: [[SingleArgumentFunction; 2]; 2],
+
 		#[serde(default = "default_one")]
 		frequency: f32,
 
