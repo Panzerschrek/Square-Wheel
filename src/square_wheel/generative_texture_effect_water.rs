@@ -164,6 +164,7 @@ impl GenerativeTextureEffectWater
 				},
 				WaveSource::PeriodicDroplet {
 					center,
+					center_offset,
 					frequency,
 					phase,
 					amplitude,
@@ -172,9 +173,14 @@ impl GenerativeTextureEffectWater
 					let relative_frequency = frequency / self.update_frequency;
 					let begin = (self.update_step as f32 * relative_frequency + phase) as i32;
 					let end = ((self.update_step + 1) as f32 * relative_frequency + phase) as i32;
-					for _i in begin .. end
+					if begin < end
 					{
-						add_point_value(center[0], center[1], *amplitude);
+						let x = (center[0] as f32 + center_offset[0].evaluate(time_s)) as i32 as u32;
+						let y = (center[1] as f32 + center_offset[1].evaluate(time_s)) as i32 as u32;
+						for _i in begin .. end
+						{
+							add_point_value(x, y, *amplitude);
+						}
 					}
 				},
 				WaveSource::Rain {

@@ -98,6 +98,10 @@ pub enum WaveSource
 	{
 		center: [u32; 2],
 
+		/// Offset function for x/y coordinates.
+		#[serde(default)]
+		center_offset: [SingleArgumentFunction; 2],
+
 		#[serde(default = "default_one")]
 		frequency: f32,
 
