@@ -85,6 +85,7 @@ impl GenerativeTextureEffectWater
 			{
 				WaveSource::WavySpot {
 					center,
+					center_offset,
 					frequency,
 					phase,
 					amplitude,
@@ -93,34 +94,52 @@ impl GenerativeTextureEffectWater
 				{
 					let field_value =
 						(time_s * frequency * std::f32::consts::TAU + phase).sin() * amplitude * frequency + offset;
-					add_point_value(center[0], center[1], field_value);
+					add_point_value(
+						(center[0] as f32 + center_offset[0].evaluate(time_s)) as i32 as u32,
+						(center[1] as f32 + center_offset[1].evaluate(time_s)) as i32 as u32,
+						field_value,
+					);
 				},
 				WaveSource::WavyLine {
 					points,
+					points_offset,
 					frequency,
 					phase,
 					amplitude,
 					offset,
 				} =>
 				{
+					let mut points = [
+						[
+							(points[0][0] as f32 + points_offset[0][0].evaluate(time_s)) as i32,
+							(points[0][1] as f32 + points_offset[0][1].evaluate(time_s)) as i32,
+						],
+						[
+							(points[1][0] as f32 + points_offset[1][0].evaluate(time_s)) as i32,
+							(points[1][1] as f32 + points_offset[1][1].evaluate(time_s)) as i32,
+						],
+					];
 					let field_value =
 						(time_s * frequency * std::f32::consts::TAU + phase).sin() * amplitude * frequency + offset;
 
 					// Perform simple line reasterization (with integer coords of points).
-					let mut points = *points;
-					let abs_dx = ((points[0][0] as i32) - (points[1][0] as i32)).abs();
-					let abs_dy = ((points[0][1] as i32) - (points[1][1] as i32)).abs();
-					if abs_dx >= abs_dy
+					let abs_dx = (points[0][0] - points[1][0]).abs();
+					let abs_dy = (points[0][1] - points[1][1]).abs();
+					if abs_dx == 0 && abs_dy == 0
+					{
+						add_point_value(points[0][0] as u32, points[0][1] as u32, field_value);
+					}
+					else if abs_dx >= abs_dy
 					{
 						if points[0][0] > points[1][0]
 						{
 							points.swap(0, 1);
 						}
-						let y_step = int_to_fixed16((points[1][1] as i32) - (points[0][1] as i32)) / abs_dx;
-						let mut y_fract = int_to_fixed16(points[0][1] as i32);
-						for x_offset in 0 ..= abs_dx as i32
+						let y_step = int_to_fixed16(points[1][1] - points[0][1]) / abs_dx;
+						let mut y_fract = int_to_fixed16(points[0][1]);
+						for x_offset in 0 ..= abs_dx
 						{
-							let x = (points[0][0] as i32) + x_offset;
+							let x = points[0][0] + x_offset;
 							let y = fixed16_round_to_int(y_fract);
 							y_fract += y_step;
 							add_point_value(x as u32, y as u32, field_value);
@@ -132,11 +151,11 @@ impl GenerativeTextureEffectWater
 						{
 							points.swap(0, 1);
 						}
-						let x_step = int_to_fixed16((points[1][0] as i32) - (points[0][0] as i32)) / abs_dy;
-						let mut x_fract = int_to_fixed16(points[0][0] as i32);
-						for y_offset in 1 ..= abs_dy as i32
+						let x_step = int_to_fixed16(points[1][0] - points[0][0]) / abs_dy;
+						let mut x_fract = int_to_fixed16(points[0][0]);
+						for y_offset in 1 ..= abs_dy
 						{
-							let y = (points[0][1] as i32) + y_offset;
+							let y = points[0][1] + y_offset;
 							let x = fixed16_round_to_int(x_fract);
 							x_fract += x_step;
 							add_point_value(x as u32, y as u32, field_value);
@@ -145,6 +164,7 @@ impl GenerativeTextureEffectWater
 				},
 				WaveSource::PeriodicDroplet {
 					center,
+					center_offset,
 					frequency,
 					phase,
 					amplitude,
@@ -153,9 +173,14 @@ impl GenerativeTextureEffectWater
 					let relative_frequency = frequency / self.update_frequency;
 					let begin = (self.update_step as f32 * relative_frequency + phase) as i32;
 					let end = ((self.update_step + 1) as f32 * relative_frequency + phase) as i32;
-					for _i in begin .. end
+					if begin < end
 					{
-						add_point_value(center[0], center[1], *amplitude);
+						let x = (center[0] as f32 + center_offset[0].evaluate(time_s)) as i32 as u32;
+						let y = (center[1] as f32 + center_offset[1].evaluate(time_s)) as i32 as u32;
+						for _i in begin .. end
+						{
+							add_point_value(x, y, *amplitude);
+						}
 					}
 				},
 				WaveSource::Rain {

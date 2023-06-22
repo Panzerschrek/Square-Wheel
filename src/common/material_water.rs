@@ -1,3 +1,4 @@
+use super::material_function::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -55,6 +56,10 @@ pub enum WaveSource
 	{
 		center: [u32; 2],
 
+		/// Offset function for x/y coordinates.
+		#[serde(default)]
+		center_offset: [SingleArgumentFunction; 2],
+
 		#[serde(default = "default_one")]
 		frequency: f32,
 
@@ -72,6 +77,10 @@ pub enum WaveSource
 	{
 		points: [[u32; 2]; 2],
 
+		/// Offset function for x/y coordinates of both points.
+		#[serde(default)]
+		points_offset: [[SingleArgumentFunction; 2]; 2],
+
 		#[serde(default = "default_one")]
 		frequency: f32,
 
@@ -88,6 +97,10 @@ pub enum WaveSource
 	PeriodicDroplet
 	{
 		center: [u32; 2],
+
+		/// Offset function for x/y coordinates.
+		#[serde(default)]
+		center_offset: [SingleArgumentFunction; 2],
 
 		#[serde(default = "default_one")]
 		frequency: f32,
