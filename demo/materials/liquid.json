@@ -192,6 +192,47 @@
 		"twosided" : true,
 		"scroll_speed": [0.0, -64.0]
 	},
+	"unnatural_liquid":
+	{
+		"diffuse": "unnatural_liquid.png",
+		"blending_mode": "Average",
+		"blocks_view": false,
+		"decals": false,
+		"solid": false,
+		"twosided" : true,
+		"special_effect":
+		{
+			"Water":
+			{
+				"resolution_log2": [7, 7],
+				"update_frequency": 20.0,
+				"fluidity": 40.0,
+				"color_texture_apply_mode" : "SourceTextureNormalDeformed",
+				"wave_sources":
+				[
+					{
+						"WavyLine":
+						{
+							"points" : [ [64, 64], [64, 64] ],
+							"points_offset" :
+							[
+								[
+									{ "SinWave" : { "frequency" : 0.5, "amplitude" : 6.0, "phase" : 0.0 } },
+									{ "SinWave" : { "frequency" : 0.5, "amplitude" : 6.0, "phase" : 1.57 } }
+								],
+								[
+									{ "SinWave" : { "frequency" : 0.5, "amplitude" : -6.0, "phase" : 0.0 } },
+									{ "SinWave" : { "frequency" : 0.5, "amplitude" : -6.0, "phase" : 1.57 } }
+								]
+							],
+							"frequency": 1.0,
+							"amplitude": 0.4
+						}
+					}
+				]
+			}
+		}
+	},
 	"water_green":
 	{
 		"diffuse": "water_green.png",
