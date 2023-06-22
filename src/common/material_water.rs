@@ -1,3 +1,4 @@
+use super::material_function::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -54,6 +55,10 @@ pub enum WaveSource
 	WavySpot
 	{
 		center: [u32; 2],
+
+		/// Offset function for x/y coordinates.
+		#[serde(default)]
+		center_offset: [SingleArgumentFunction; 2],
 
 		#[serde(default = "default_one")]
 		frequency: f32,

@@ -85,6 +85,7 @@ impl GenerativeTextureEffectWater
 			{
 				WaveSource::WavySpot {
 					center,
+					center_offset,
 					frequency,
 					phase,
 					amplitude,
@@ -93,7 +94,11 @@ impl GenerativeTextureEffectWater
 				{
 					let field_value =
 						(time_s * frequency * std::f32::consts::TAU + phase).sin() * amplitude * frequency + offset;
-					add_point_value(center[0], center[1], field_value);
+					add_point_value(
+						(center[0] as f32 + center_offset[0].evaluate(time_s)) as i32 as u32,
+						(center[1] as f32 + center_offset[1].evaluate(time_s)) as i32 as u32,
+						field_value,
+					);
 				},
 				WaveSource::WavyLine {
 					points,
