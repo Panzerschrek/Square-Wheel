@@ -57,11 +57,13 @@ impl MapVisibilityCalculator
 
 		// Mark all leafs near current leaf as visible in order to fix corner cases, when camera lies on one of portal polygons.
 		// TODO - use this hack only for some portals.
-		// TODO - avoid heap allocation.
-		let mut start_leafs = Vec::new();
-		start_leafs.push(current_leaf);
+		const MAX_START_LEAFS: usize = 32;
+		let mut start_leafs = [0; MAX_START_LEAFS];
+		start_leafs[0] = current_leaf;
+		let mut num_start_leafs = 1;
+
 		let leaf_value = self.map.leafs[current_leaf as usize];
-		for &portal in &self.map.leafs_portals[(leaf_value.first_leaf_portal as usize) ..
+		for &portal in &self.map.leafs_portals[leaf_value.first_leaf_portal as usize ..
 			((leaf_value.first_leaf_portal + leaf_value.num_leaf_portals) as usize)]
 		{
 			let portal_value = &self.map.portals[portal as usize];
@@ -73,10 +75,16 @@ impl MapVisibilityCalculator
 			{
 				portal_value.leafs[0]
 			};
-			start_leafs.push(next_leaf);
+
+			start_leafs[num_start_leafs] = next_leaf;
+			num_start_leafs += 1;
+			if num_start_leafs == MAX_START_LEAFS
+			{
+				break;
+			}
 		}
 
-		self.mark_reachable_leafs_iterative(&start_leafs, camera_matrices, frame_bounds);
+		self.mark_reachable_leafs_iterative(&start_leafs[.. num_start_leafs], camera_matrices, frame_bounds);
 
 		self.is_inside_leaf_volume = self.is_inside_leaf_volume(camera_matrices, current_leaf);
 	}
