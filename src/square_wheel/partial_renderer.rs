@@ -172,9 +172,6 @@ impl PartialRenderer
 		self.current_frame.next();
 
 		performance_counters.visible_leafs_search.run_with_measure(|| {
-			// TODO - before preparing frame try to shift camera a little bit away from all planes of BSP nodes before current leaf.
-			// This is needed to fix possible z_near clipping of current leaf portals.
-
 			let frame_bounds =
 				ClippingPolygon::from_box(0.0, 0.0, surface_info.width as f32, surface_info.height as f32);
 			if let Some(start_leafs) = visibility_search_start_leafs
