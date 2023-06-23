@@ -513,7 +513,7 @@ impl GameMap
 			)
 			.ok();
 
-		if args.len() >= 2
+		if args.len() >= 3
 		{
 			let animation_name = &args[2];
 			for (animation_index, animation) in model.animations.iter().enumerate()
