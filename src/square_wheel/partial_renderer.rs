@@ -1303,11 +1303,13 @@ impl PartialRenderer
 		}
 
 		let root_node = bsp_map_compact::get_root_node_index(&self.map);
+		let mut objects_sortet = draw_ordering::ObjectsSorter::new();
 		self.draw_tree_r(
 			rasterizer,
 			frame_info,
 			camera_matrices,
 			renderers_common_data,
+			&mut objects_sortet,
 			viewport_clipping_polygon,
 			root_node,
 		);
@@ -2455,6 +2457,7 @@ impl PartialRenderer
 		frame_info: &FrameWorldInfo,
 		camera_matrices: &CameraMatrices,
 		renderers_common_data: &RenderersCommonData,
+		objects_sorter: &mut draw_ordering::ObjectsSorter,
 		viewport_clipping_polygon: &ClippingPolygon,
 		current_index: u32,
 	)
@@ -2472,6 +2475,7 @@ impl PartialRenderer
 						frame_info,
 						camera_matrices,
 						renderers_common_data,
+						objects_sorter,
 						&leaf_bounds,
 						leaf,
 					);
@@ -2494,6 +2498,7 @@ impl PartialRenderer
 					frame_info,
 					camera_matrices,
 					renderers_common_data,
+					objects_sorter,
 					viewport_clipping_polygon,
 					node.children[(i ^ mask) as usize],
 				);
@@ -2507,6 +2512,7 @@ impl PartialRenderer
 		frame_info: &FrameWorldInfo,
 		camera_matrices: &CameraMatrices,
 		renderers_common_data: &RenderersCommonData,
+		objects_sorter: &mut draw_ordering::ObjectsSorter,
 		bounds: &ClippingPolygon,
 		leaf_index: u32,
 	)
@@ -2649,21 +2655,17 @@ impl PartialRenderer
 		}
 
 		// Multiple objects. Sort them.
-
-		// TODO - use uninitialized memory and increase this value.
-		const MAX_OBJECTS_IN_LEAF: usize = 12;
-		let mut objects_for_sorting = [draw_ordering::BBoxForDrawOrdering::default(); MAX_OBJECTS_IN_LEAF];
-
+		objects_sorter.clear();
 		const SUBMODEL_INDEX_ADD: u32 = 65536;
 		const DYNAMIC_MESH_INDEX_ADD: u32 = SUBMODEL_INDEX_ADD + 65536;
 		const SPRITE_INDEX_ADD: u32 = DYNAMIC_MESH_INDEX_ADD + 65536;
 		const PORTAL_INDEX_ADD: u32 = SPRITE_INDEX_ADD + 65536;
 
-		for (&model_index, model_for_sorting) in leaf_submodels.iter().zip(objects_for_sorting.iter_mut())
+		for &model_index in leaf_submodels
 		{
 			if let Some(submodel_matrices) = &self.submodels_info[model_index as usize].matrices
 			{
-				*model_for_sorting = (
+				objects_sorter.add_object((
 					model_index + SUBMODEL_INDEX_ADD,
 					draw_ordering::project_bbox(
 						&renderers_common_data
@@ -2671,18 +2673,12 @@ impl PartialRenderer
 							.get_model_bbox_for_ordering(model_index),
 						&submodel_matrices.camera_matrices,
 					),
-				);
+				));
 			}
 		}
-		let mut num_objects = std::cmp::min(leaf_submodels.len(), MAX_OBJECTS_IN_LEAF);
 
 		for dynamic_model_index in leaf_dynamic_models
 		{
-			if num_objects == MAX_OBJECTS_IN_LEAF
-			{
-				break;
-			}
-
 			let model = &frame_info.model_entities[*dynamic_model_index as usize];
 			let bbox = if let Some(bb) = model.ordering_custom_bbox
 			{
@@ -2696,44 +2692,28 @@ impl PartialRenderer
 			let entry = self.dynamic_model_to_dynamic_meshes_index[*dynamic_model_index as usize];
 			for visible_mesh_index in entry.first_visible_mesh .. entry.first_visible_mesh + entry.num_visible_meshes
 			{
-				if num_objects == MAX_OBJECTS_IN_LEAF
-				{
-					break;
-				}
-
 				let mesh = &self.visible_dynamic_meshes_list[visible_mesh_index as usize];
-				objects_for_sorting[num_objects] = (
+				objects_sorter.add_object((
 					visible_mesh_index + DYNAMIC_MESH_INDEX_ADD,
 					draw_ordering::project_bbox(&bbox, &mesh.camera_matrices),
-				);
-				num_objects += 1;
+				));
 			}
 		}
 
 		for sprite_index in leaf_sprites
 		{
-			if num_objects == MAX_OBJECTS_IN_LEAF
-			{
-				break;
-			}
 			let sprite = &frame_info.sprites[*sprite_index as usize];
 			let extend_vec = Vec3f::new(sprite.radius, sprite.radius, sprite.radius);
 			let bbox = BBox::from_min_max(sprite.position - extend_vec, sprite.position + extend_vec);
 
-			objects_for_sorting[num_objects] = (
+			objects_sorter.add_object((
 				sprite_index + SPRITE_INDEX_ADD,
 				draw_ordering::project_bbox(&bbox, camera_matrices),
-			);
-			num_objects += 1;
+			));
 		}
 
 		for portal_index in leaf_portals
 		{
-			if num_objects == MAX_OBJECTS_IN_LEAF
-			{
-				break;
-			}
-
 			let portal = &frame_info.portals[*portal_index as usize];
 
 			let mut bbox = BBox::from_point(&portal.vertices[0]);
@@ -2742,17 +2722,16 @@ impl PartialRenderer
 				bbox.extend_with_point(v);
 			}
 
-			objects_for_sorting[num_objects] = (
+			objects_sorter.add_object((
 				portal_index + PORTAL_INDEX_ADD,
 				draw_ordering::project_bbox(&bbox, camera_matrices),
-			);
-			num_objects += 1;
+			));
 		}
 
-		draw_ordering::order_bboxes(&mut objects_for_sorting[.. num_objects]);
+		objects_sorter.do_sorting();
 
 		// Draw dynamic objects located in this leaf, after leaf polygons.
-		for (object_index, _bbox) in &objects_for_sorting[.. num_objects]
+		for (object_index, _bbox) in objects_sorter.get_objects()
 		{
 			if *object_index >= PORTAL_INDEX_ADD
 			{
