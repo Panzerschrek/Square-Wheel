@@ -59,6 +59,7 @@ impl MapVisibilityCalculator
 		// TODO - use this hack only for some portals.
 		// TODO - avoid heap allocation.
 		let mut start_leafs = Vec::new();
+		start_leafs.push(current_leaf);
 		let leaf_value = self.map.leafs[current_leaf as usize];
 		for &portal in &self.map.leafs_portals[(leaf_value.first_leaf_portal as usize) ..
 			((leaf_value.first_leaf_portal + leaf_value.num_leaf_portals) as usize)]
