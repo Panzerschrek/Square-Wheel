@@ -55,8 +55,8 @@ impl MapVisibilityCalculator
 		let root_node = bsp_map_compact::get_root_node_index(&self.map);
 		let current_leaf = self.find_current_leaf(root_node, &camera_matrices.planes_matrix);
 
-		// Mark all leafs near current leaf as visible in order to fix corner cases, when camera lies on one of portal polygons.
-		// TODO - use this hack only for some portals.
+		// Start search with current leaf and all adjusted leafs, that are too close to camera.
+		// Doing so we prevent some artifacts when camera lies (almost) on portal plane.
 		const MAX_START_LEAFS: usize = 32;
 		let mut start_leafs = [0; MAX_START_LEAFS];
 		start_leafs[0] = current_leaf;
@@ -67,20 +67,28 @@ impl MapVisibilityCalculator
 			((leaf_value.first_leaf_portal + leaf_value.num_leaf_portals) as usize)]
 		{
 			let portal_value = &self.map.portals[portal as usize];
-			let next_leaf = if portal_value.leafs[0] == current_leaf
-			{
-				portal_value.leafs[1]
-			}
-			else
-			{
-				portal_value.leafs[0]
-			};
 
-			start_leafs[num_start_leafs] = next_leaf;
-			num_start_leafs += 1;
-			if num_start_leafs == MAX_START_LEAFS
+			let scaled_dist = portal_value.plane.vec.dot(camera_matrices.position) - portal_value.plane.dist;
+			let eps = Z_NEAR * 2.0;
+			if scaled_dist.abs() <= eps * portal_value.plane.vec.magnitude()
 			{
-				break;
+				// Camera is too close to plane of this portal.
+				// Assume, that leaft behind this portal is fully visible.
+				let next_leaf = if portal_value.leafs[0] == current_leaf
+				{
+					portal_value.leafs[1]
+				}
+				else
+				{
+					portal_value.leafs[0]
+				};
+
+				start_leafs[num_start_leafs] = next_leaf;
+				num_start_leafs += 1;
+				if num_start_leafs == MAX_START_LEAFS
+				{
+					break;
+				}
 			}
 		}
 
