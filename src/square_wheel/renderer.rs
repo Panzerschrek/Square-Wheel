@@ -72,29 +72,31 @@ impl Renderer
 		let materials_update_performance_counter = &mut self.materials_update_performance_counter;
 		let object_index_build_performance_counter = &mut self.object_index_build_performance_counter;
 
+		let frame_world_info = &frame_info.world;
+
 		materials_update_performance_counter
-			.run_with_measure(|| common_data.materials_processor.update(frame_info.game_time_s));
+			.run_with_measure(|| common_data.materials_processor.update(frame_world_info.game_time_s));
 
 		object_index_build_performance_counter.run_with_measure(|| {
 			common_data
 				.inline_models_index
-				.position_models(&frame_info.submodel_entities);
+				.position_models(&frame_world_info.submodel_entities);
 			common_data
 				.dynamic_models_index
-				.position_models(&frame_info.model_entities);
-			common_data.decals_index.position_decals(&frame_info.decals);
-			common_data.sprites_index.position_sprites(&frame_info.sprites);
+				.position_models(&frame_world_info.model_entities);
+			common_data.decals_index.position_decals(&frame_world_info.decals);
+			common_data.sprites_index.position_sprites(&frame_world_info.sprites);
 			common_data
 				.dynamic_lights_index
-				.position_dynamic_lights(&frame_info.lights);
-			common_data.portals_index.position_portals(&frame_info.portals);
+				.position_dynamic_lights(&frame_world_info.lights);
+			common_data.portals_index.position_portals(&frame_world_info.portals);
 		});
 
 		self.root_renderer.prepare_frame::<ColorT>(
 			surface_info,
-			frame_info,
-			&frame_info.camera_matrices,
-			frame_info.is_third_person_view,
+			frame_world_info,
+			&frame_info.view.camera_matrices,
+			frame_info.view.is_third_person_view,
 			None,
 			&self.common_data,
 			&mut self.debug_stats,
@@ -112,8 +114,8 @@ impl Renderer
 		self.root_renderer.draw_frame(
 			pixels,
 			surface_info,
-			frame_info,
-			&frame_info.camera_matrices,
+			&frame_info.world,
+			&frame_info.view.camera_matrices,
 			&self.common_data,
 			&mut self.debug_stats,
 		);

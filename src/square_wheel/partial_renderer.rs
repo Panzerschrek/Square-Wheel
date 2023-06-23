@@ -156,7 +156,7 @@ impl PartialRenderer
 	pub fn prepare_frame<ColorT: AbstractColor>(
 		&mut self,
 		surface_info: &system_window::SurfaceInfo,
-		frame_info: &FrameInfo,
+		frame_info: &FrameWorldInfo,
 		camera_matrices: &CameraMatrices,
 		is_third_person_view: bool,
 		visibility_search_start_leafs: Option<&[u32]>,
@@ -240,7 +240,7 @@ impl PartialRenderer
 		&mut self,
 		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
-		frame_info: &FrameInfo,
+		frame_info: &FrameWorldInfo,
 		camera_matrices: &CameraMatrices,
 		renderers_common_data: &RenderersCommonData,
 		debug_stats: &mut RendererDebugStats,
@@ -289,7 +289,7 @@ impl PartialRenderer
 
 	fn populate_debug_stats(
 		&self,
-		frame_info: &FrameInfo,
+		frame_info: &FrameWorldInfo,
 		renderers_common_data: &RenderersCommonData,
 		debug_stats: &mut RendererDebugStats,
 	)
@@ -400,7 +400,7 @@ impl PartialRenderer
 
 	fn prepare_dynamic_lights(
 		&mut self,
-		frame_info: &FrameInfo,
+		frame_info: &FrameWorldInfo,
 		camera_matrices: &CameraMatrices,
 		dynamic_lights_index: &DynamicObjectsIndex,
 	)
@@ -595,7 +595,7 @@ impl PartialRenderer
 	// Call this only after dynamic lights preparation.
 	fn prepare_submodels(
 		&mut self,
-		frame_info: &FrameInfo,
+		frame_info: &FrameWorldInfo,
 		camera_matrices: &CameraMatrices,
 		inline_models_index: &InlineModelsIndex,
 	)
@@ -665,7 +665,7 @@ impl PartialRenderer
 	}
 
 	// Call this after lights preparation.
-	fn prepare_decals(&mut self, frame_info: &FrameInfo, camera_matrices: &CameraMatrices)
+	fn prepare_decals(&mut self, frame_info: &FrameWorldInfo, camera_matrices: &CameraMatrices)
 	{
 		self.decals_info.clear();
 		for decal in &frame_info.decals
@@ -742,7 +742,7 @@ impl PartialRenderer
 	// Call this after visible leafs search.
 	fn prepare_sprites(
 		&mut self,
-		frame_info: &FrameInfo,
+		frame_info: &FrameWorldInfo,
 		camera_matrices: &CameraMatrices,
 		sprites_index: &DynamicObjectsIndex,
 	)
@@ -1196,7 +1196,7 @@ impl PartialRenderer
 		&self,
 		pixels: &mut [ColorT],
 		surface_info: &system_window::SurfaceInfo,
-		frame_info: &FrameInfo,
+		frame_info: &FrameWorldInfo,
 		camera_matrices: &CameraMatrices,
 		renderers_common_data: &RenderersCommonData,
 	)
@@ -1288,7 +1288,7 @@ impl PartialRenderer
 	fn perform_rasterization_for_viewport_part<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
-		frame_info: &FrameInfo,
+		frame_info: &FrameWorldInfo,
 		camera_matrices: &CameraMatrices,
 		renderers_common_data: &RenderersCommonData,
 		viewport_clipping_polygon: &ClippingPolygon,
@@ -1838,7 +1838,7 @@ impl PartialRenderer
 
 	fn prepare_view_portals_textures(
 		&mut self,
-		frame_info: &FrameInfo,
+		frame_info: &FrameWorldInfo,
 		camera_matrices: &CameraMatrices,
 		portals_index: &DynamicObjectsIndex,
 	)
@@ -2012,7 +2012,7 @@ impl PartialRenderer
 
 	fn build_view_portals_textures<ColorT: AbstractColor>(
 		&mut self,
-		frame_info: &FrameInfo,
+		frame_info: &FrameWorldInfo,
 		camera_matrices: &CameraMatrices,
 		renderers_common_data: &RenderersCommonData,
 		debug_stats: &mut RendererDebugStats,
@@ -2455,7 +2455,7 @@ impl PartialRenderer
 	fn draw_tree_r<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
-		frame_info: &FrameInfo,
+		frame_info: &FrameWorldInfo,
 		camera_matrices: &CameraMatrices,
 		renderers_common_data: &RenderersCommonData,
 		viewport_clipping_polygon: &ClippingPolygon,
@@ -2507,7 +2507,7 @@ impl PartialRenderer
 	fn draw_leaf<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
-		frame_info: &FrameInfo,
+		frame_info: &FrameWorldInfo,
 		camera_matrices: &CameraMatrices,
 		renderers_common_data: &RenderersCommonData,
 		bounds: &ClippingPolygon,
@@ -3113,7 +3113,7 @@ impl PartialRenderer
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		materials_processor: &MapMaterialsProcessor,
-		frame_info: &FrameInfo,
+		frame_info: &FrameWorldInfo,
 		clip_planes: &ClippingPolygonPlanes,
 		leaf_clip_planes: &[Plane],
 		leaf_clip_planes_world_space: &[Plane],
@@ -3142,7 +3142,7 @@ impl PartialRenderer
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		materials_processor: &MapMaterialsProcessor,
-		frame_info: &FrameInfo,
+		frame_info: &FrameWorldInfo,
 		submodel_planes_matrix: &Mat4f,
 		clip_planes: &ClippingPolygonPlanes,
 		leaf_clip_planes: &[Plane],

@@ -901,17 +901,21 @@ impl GameMap
 		}
 
 		FrameInfo {
-			camera_matrices,
-			color_modulate,
-			submodel_entities,
-			skybox_rotation: QuaternionF::one(),
-			game_time_s: self.game_time,
-			lights: self.collect_drawable_components(),
-			model_entities: self.collect_drawable_components(),
-			decals: self.collect_drawable_components(),
-			sprites: self.collect_drawable_components(),
-			portals: self.collect_drawable_components(),
-			is_third_person_view: false,
+			view: FrameViewInfo {
+				camera_matrices,
+				color_modulate,
+				is_third_person_view: false,
+			},
+			world: FrameWorldInfo {
+				game_time_s: self.game_time,
+				skybox_rotation: QuaternionF::one(),
+				submodel_entities,
+				lights: self.collect_drawable_components(),
+				model_entities: self.collect_drawable_components(),
+				decals: self.collect_drawable_components(),
+				sprites: self.collect_drawable_components(),
+				portals: self.collect_drawable_components(),
+			},
 		}
 	}
 

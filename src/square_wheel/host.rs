@@ -356,7 +356,7 @@ impl Host
 						postprocessor.perform_postprocessing(
 							pixels_scaled,
 							&surface_info_scaled,
-							&frame_info_ref.color_modulate,
+							&frame_info_ref.view.color_modulate,
 							time_delta_s,
 							&mut active_map.debug_stats_printer,
 						);
@@ -476,7 +476,7 @@ impl Host
 						postprocessor.perform_postprocessing(
 							pixels,
 							surface_info,
-							&frame_info_ref.color_modulate,
+							&frame_info_ref.view.color_modulate,
 							time_delta_s,
 							&mut active_map.debug_stats_printer,
 						);

@@ -2,10 +2,19 @@ use super::{resources_manager::*, textures::*, triangle_model::*};
 use crate::common::{bbox::*, material::BlendingMode, math_types::*, matrix::*, plane::*};
 use serde::{Deserialize, Serialize};
 
+// This file contains structs, used to describe world state for Renderer in order to draw a frame properly.
+
 pub struct FrameInfo
 {
+	// Root view info - for image, rendered on screen.
+	pub view: FrameViewInfo,
+	pub world: FrameWorldInfo,
+}
+
+// View-associated frame info.
+pub struct FrameViewInfo
+{
 	pub camera_matrices: CameraMatrices,
-	pub game_time_s: f32,
 
 	// How to modulate output image color. Use 1 for normal cases.
 	// Use values greater than 1 to overexpose image.
@@ -13,6 +22,16 @@ pub struct FrameInfo
 	// Use values only greater than zero!
 	pub color_modulate: [f32; 3],
 
+	pub is_third_person_view: bool,
+}
+
+// Frame info, independent on view point.
+// Game code should avoid building this depending on view point, for example, removing objects far from camera,
+// since it is possible to render view from another point via portals/mirrors.
+pub struct FrameWorldInfo
+{
+	pub game_time_s: f32,
+	pub skybox_rotation: QuaternionF,
 	// submodels mapped 1 to 1 to initial submodels.
 	pub submodel_entities: Vec<SubmodelEntityOpt>,
 	pub model_entities: Vec<ModelEntity>,
@@ -20,8 +39,6 @@ pub struct FrameInfo
 	pub sprites: Vec<Sprite>,
 	pub lights: Vec<DynamicLight>,
 	pub portals: Vec<ViewPortal>,
-	pub skybox_rotation: QuaternionF,
-	pub is_third_person_view: bool,
 }
 
 pub type SubmodelEntityOpt = Option<SubmodelEntity>;
@@ -113,6 +130,8 @@ pub struct Sprite
 	pub radius: f32,
 	pub texture: SharedResourcePtr<TextureLiteWithMips>,
 	pub blending_mode: BlendingMode,
+	// Describe only the way to obtain result vertices of the sprite, instead of describing vertices itself.
+	// This is needed in order to draw sprites properly in portals/mirrors.
 	pub orientation: SpriteOrientation,
 	pub light_scale: f32,
 	pub light_add: [f32; 3],
