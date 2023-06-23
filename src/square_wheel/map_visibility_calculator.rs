@@ -54,7 +54,28 @@ impl MapVisibilityCalculator
 		self.current_frame.next();
 		let root_node = bsp_map_compact::get_root_node_index(&self.map);
 		let current_leaf = self.find_current_leaf(root_node, &camera_matrices.planes_matrix);
-		self.mark_reachable_leafs_iterative(&[current_leaf], camera_matrices, frame_bounds);
+
+		// Mark all leafs near current leaf as visible in order to fix corner cases, when camera lies on one of portal polygons.
+		// TODO - use this hack only for some portals.
+		// TODO - avoid heap allocation.
+		let mut start_leafs = Vec::new();
+		let leaf_value = self.map.leafs[current_leaf as usize];
+		for &portal in &self.map.leafs_portals[(leaf_value.first_leaf_portal as usize) ..
+			((leaf_value.first_leaf_portal + leaf_value.num_leaf_portals) as usize)]
+		{
+			let portal_value = &self.map.portals[portal as usize];
+			let next_leaf = if portal_value.leafs[0] == current_leaf
+			{
+				portal_value.leafs[1]
+			}
+			else
+			{
+				portal_value.leafs[0]
+			};
+			start_leafs.push(next_leaf);
+		}
+
+		self.mark_reachable_leafs_iterative(&start_leafs, camera_matrices, frame_bounds);
 
 		self.is_inside_leaf_volume = self.is_inside_leaf_volume(camera_matrices, current_leaf);
 	}
