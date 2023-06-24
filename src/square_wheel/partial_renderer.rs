@@ -1302,16 +1302,12 @@ impl PartialRenderer
 			);
 		}
 
-		let root_node = bsp_map_compact::get_root_node_index(&self.map);
-		let mut objects_sortet = draw_ordering::LeafObjectsSorter::new();
-		self.draw_tree_r(
+		self.draw_tree(
 			rasterizer,
 			frame_info,
 			camera_matrices,
 			renderers_common_data,
-			&mut objects_sortet,
 			viewport_clipping_polygon,
-			root_node,
 		);
 
 		if self.config.invert_polygons_order
@@ -2451,6 +2447,42 @@ impl PartialRenderer
 		}
 	}
 
+	fn draw_tree<'a, ColorT: AbstractColor>(
+		&self,
+		rasterizer: &mut Rasterizer<'a, ColorT>,
+		frame_info: &FrameWorldInfo,
+		camera_matrices: &CameraMatrices,
+		renderers_common_data: &RenderersCommonData,
+		viewport_clipping_polygon: &ClippingPolygon,
+	)
+	{
+		let mut objects_sorter = draw_ordering::LeafObjectsSorter::new();
+
+		if self.config.iterative_bsp_tree_traverse
+		{
+			self.draw_tree_iterative(
+				rasterizer,
+				frame_info,
+				camera_matrices,
+				renderers_common_data,
+				&mut objects_sorter,
+				viewport_clipping_polygon,
+			);
+		}
+		else
+		{
+			self.draw_tree_r(
+				rasterizer,
+				frame_info,
+				camera_matrices,
+				renderers_common_data,
+				&mut objects_sorter,
+				viewport_clipping_polygon,
+				bsp_map_compact::get_root_node_index(&self.map),
+			);
+		}
+	}
+
 	fn draw_tree_r<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
@@ -2502,6 +2534,68 @@ impl PartialRenderer
 					viewport_clipping_polygon,
 					node.children[(i ^ mask) as usize],
 				);
+			}
+		}
+	}
+
+	fn draw_tree_iterative<'a, ColorT: AbstractColor>(
+		&self,
+		rasterizer: &mut Rasterizer<'a, ColorT>,
+		frame_info: &FrameWorldInfo,
+		camera_matrices: &CameraMatrices,
+		renderers_common_data: &RenderersCommonData,
+		objects_sorter: &mut draw_ordering::LeafObjectsSorter,
+		viewport_clipping_polygon: &ClippingPolygon,
+	)
+	{
+		// Stack size must be greater, than maximum BSP tree depth.
+		// BSP tree should be more or less balanced, thus small stack size is enough.
+		const MAX_STACK_SIZE: usize = 128;
+		let mut nodes_stack = [0; MAX_STACK_SIZE];
+
+		nodes_stack[0] = bsp_map_compact::get_root_node_index(&self.map);
+		let mut num_nodes_on_stack = 1;
+
+		while num_nodes_on_stack > 0
+		{
+			let node_index = nodes_stack[num_nodes_on_stack - 1];
+			if node_index >= bsp_map_compact::FIRST_LEAF_INDEX
+			{
+				// Leaf - pop current node from stack.
+				num_nodes_on_stack -= 1;
+
+				let leaf = node_index - bsp_map_compact::FIRST_LEAF_INDEX;
+				if let Some(mut leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf)
+				{
+					leaf_bounds.intersect(viewport_clipping_polygon);
+					if leaf_bounds.is_valid_and_non_empty()
+					{
+						self.draw_leaf(
+							rasterizer,
+							frame_info,
+							camera_matrices,
+							renderers_common_data,
+							objects_sorter,
+							&leaf_bounds,
+							leaf,
+						);
+					}
+				}
+			}
+			else if num_nodes_on_stack < MAX_STACK_SIZE
+			{
+				// Node - remove current node, push back and front nodes.
+
+				let node = &self.map.nodes[node_index as usize];
+				let plane_transformed = camera_matrices.planes_matrix * node.plane.vec.extend(-node.plane.dist);
+				let mut mask = if plane_transformed.w >= 0.0 { 1 } else { 0 };
+				if self.config.invert_polygons_order
+				{
+					mask ^= 1;
+				}
+				nodes_stack[num_nodes_on_stack - 1] = node.children[(1 ^ mask) as usize];
+				nodes_stack[num_nodes_on_stack] = node.children[mask as usize];
+				num_nodes_on_stack += 1;
 			}
 		}
 	}
