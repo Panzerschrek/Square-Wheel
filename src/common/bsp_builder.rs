@@ -49,6 +49,9 @@ pub struct LeafsPortal
 pub type LeafsPortalPtr = rc::Rc<cell::RefCell<LeafsPortal>>;
 pub type LeafsPortalWeakPtr = rc::Weak<cell::RefCell<LeafsPortal>>;
 
+// BSP tree builder should pruduce more or less balanced tree in order to avoid reaching this limit.
+pub const MAX_BSP_TREE_DEPTH: usize = 128;
+
 #[derive(Debug)]
 pub struct SubmodelBSPNode
 {
@@ -109,6 +112,19 @@ pub fn build_leaf_bsp_tree(
 	// Normally reachable leafs should have no portals to unreachable leafs.
 	// But anyway try to remove removed portals from list of portals for each leaf.
 	remove_expired_portals_from_leafs_r(&mut tree_root);
+
+	let tree_depth = get_tree_max_depth(&tree_root);
+	if tree_depth < MAX_BSP_TREE_DEPTH
+	{
+		println!("BSP tree max depth: {}", tree_depth);
+	}
+	else
+	{
+		println!(
+			"Warning, BPS tree max depth {} is greater than limit {}",
+			tree_depth, MAX_BSP_TREE_DEPTH
+		);
+	}
 
 	BSPTree {
 		root: tree_root,
@@ -1348,4 +1364,26 @@ fn split_long_polygon_r(polygon: &Polygon, out_polygons: &mut Vec<Polygon>, recu
 
 	// No need to split this polygon.
 	out_polygons.push(polygon.clone());
+}
+
+fn get_tree_max_depth(tree_root: &BSPNodeChild) -> usize
+{
+	get_tree_max_depth_r(tree_root, 1)
+}
+
+fn get_tree_max_depth_r(node_child: &BSPNodeChild, current_depth: usize) -> usize
+{
+	match node_child
+	{
+		BSPNodeChild::NodeChild(node_ptr) =>
+		{
+			let node = node_ptr.borrow();
+			let next_depth = current_depth + 1;
+			std::cmp::max(
+				get_tree_max_depth_r(&node.children[0], next_depth),
+				get_tree_max_depth_r(&node.children[1], next_depth),
+			)
+		},
+		BSPNodeChild::LeafChild(_leaf_ptr) => current_depth,
+	}
 }

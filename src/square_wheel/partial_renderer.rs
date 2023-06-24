@@ -2462,9 +2462,8 @@ impl PartialRenderer
 		// which is unnecessary, since all arguments except except one are the same.
 		let mut objects_sorter = draw_ordering::LeafObjectsSorter::new();
 
-		// Stack size must be greater, than maximum BSP tree depth.
-		// BSP tree should be more or less balanced, thus small stack size is enough.
-		const MAX_STACK_SIZE: usize = 128;
+		// Stack size must be greater or equal, than maximum BSP tree depth.
+		const MAX_STACK_SIZE: usize = bsp_map_compact::MAX_BSP_TREE_DEPTH;
 		let mut nodes_stack = [0; MAX_STACK_SIZE];
 
 		nodes_stack[0] = bsp_map_compact::get_root_node_index(&self.map);
