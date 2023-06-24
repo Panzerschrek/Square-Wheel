@@ -20,7 +20,6 @@ Renderer:
 * Models rendering improvements - avoid splitting models into pieces for each BSP tree leaf in some cases
 * Shadows from triangle models
 * Multithreaded shadowmaps building
-* Increase max number of dynamic objects drawn in one leaf
 * Animated simple textures (with color only), that are used for models, sprites, decals
 * Water texture - add possibility to generate emissive layer
 * Water texture - add mode with diffuse texture modulation by wave field
