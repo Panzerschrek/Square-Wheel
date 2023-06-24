@@ -2456,98 +2456,12 @@ impl PartialRenderer
 		viewport_clipping_polygon: &ClippingPolygon,
 	)
 	{
+		// Use iterative approach of BSP tree traverse.
+		// This is more effective way to do this,
+		// because compiler can't properly optimize recursive calls and saves all arguments on stack,
+		// which is unnecessary, since all arguments except except one are the same.
 		let mut objects_sorter = draw_ordering::LeafObjectsSorter::new();
 
-		if self.config.iterative_bsp_tree_traverse
-		{
-			self.draw_tree_iterative(
-				rasterizer,
-				frame_info,
-				camera_matrices,
-				renderers_common_data,
-				&mut objects_sorter,
-				viewport_clipping_polygon,
-			);
-		}
-		else
-		{
-			self.draw_tree_r(
-				rasterizer,
-				frame_info,
-				camera_matrices,
-				renderers_common_data,
-				&mut objects_sorter,
-				viewport_clipping_polygon,
-				bsp_map_compact::get_root_node_index(&self.map),
-			);
-		}
-	}
-
-	fn draw_tree_r<'a, ColorT: AbstractColor>(
-		&self,
-		rasterizer: &mut Rasterizer<'a, ColorT>,
-		frame_info: &FrameWorldInfo,
-		camera_matrices: &CameraMatrices,
-		renderers_common_data: &RenderersCommonData,
-		objects_sorter: &mut draw_ordering::LeafObjectsSorter,
-		viewport_clipping_polygon: &ClippingPolygon,
-		current_index: u32,
-	)
-	{
-		if current_index >= bsp_map_compact::FIRST_LEAF_INDEX
-		{
-			let leaf = current_index - bsp_map_compact::FIRST_LEAF_INDEX;
-			if let Some(mut leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf)
-			{
-				leaf_bounds.intersect(viewport_clipping_polygon);
-				if leaf_bounds.is_valid_and_non_empty()
-				{
-					self.draw_leaf(
-						rasterizer,
-						frame_info,
-						camera_matrices,
-						renderers_common_data,
-						objects_sorter,
-						&leaf_bounds,
-						leaf,
-					);
-				}
-			}
-		}
-		else
-		{
-			let node = &self.map.nodes[current_index as usize];
-			let plane_transformed = camera_matrices.planes_matrix * node.plane.vec.extend(-node.plane.dist);
-			let mut mask = if plane_transformed.w >= 0.0 { 1 } else { 0 };
-			if self.config.invert_polygons_order
-			{
-				mask ^= 1;
-			}
-			for i in 0 .. 2
-			{
-				self.draw_tree_r(
-					rasterizer,
-					frame_info,
-					camera_matrices,
-					renderers_common_data,
-					objects_sorter,
-					viewport_clipping_polygon,
-					node.children[(i ^ mask) as usize],
-				);
-			}
-		}
-	}
-
-	fn draw_tree_iterative<'a, ColorT: AbstractColor>(
-		&self,
-		rasterizer: &mut Rasterizer<'a, ColorT>,
-		frame_info: &FrameWorldInfo,
-		camera_matrices: &CameraMatrices,
-		renderers_common_data: &RenderersCommonData,
-		objects_sorter: &mut draw_ordering::LeafObjectsSorter,
-		viewport_clipping_polygon: &ClippingPolygon,
-	)
-	{
 		// Stack size must be greater, than maximum BSP tree depth.
 		// BSP tree should be more or less balanced, thus small stack size is enough.
 		const MAX_STACK_SIZE: usize = 128;
@@ -2575,7 +2489,7 @@ impl PartialRenderer
 							frame_info,
 							camera_matrices,
 							renderers_common_data,
-							objects_sorter,
+							&mut objects_sorter,
 							&leaf_bounds,
 							leaf,
 						);
