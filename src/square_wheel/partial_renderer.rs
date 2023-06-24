@@ -1303,7 +1303,7 @@ impl PartialRenderer
 		}
 
 		let root_node = bsp_map_compact::get_root_node_index(&self.map);
-		let mut objects_sortet = draw_ordering::ObjectsSorter::new();
+		let mut objects_sortet = draw_ordering::LeafObjectsSorter::new();
 		self.draw_tree_r(
 			rasterizer,
 			frame_info,
@@ -2457,7 +2457,7 @@ impl PartialRenderer
 		frame_info: &FrameWorldInfo,
 		camera_matrices: &CameraMatrices,
 		renderers_common_data: &RenderersCommonData,
-		objects_sorter: &mut draw_ordering::ObjectsSorter,
+		objects_sorter: &mut draw_ordering::LeafObjectsSorter,
 		viewport_clipping_polygon: &ClippingPolygon,
 		current_index: u32,
 	)
@@ -2512,7 +2512,7 @@ impl PartialRenderer
 		frame_info: &FrameWorldInfo,
 		camera_matrices: &CameraMatrices,
 		renderers_common_data: &RenderersCommonData,
-		objects_sorter: &mut draw_ordering::ObjectsSorter,
+		objects_sorter: &mut draw_ordering::LeafObjectsSorter,
 		bounds: &ClippingPolygon,
 		leaf_index: u32,
 	)
@@ -2728,7 +2728,7 @@ impl PartialRenderer
 			));
 		}
 
-		objects_sorter.do_sorting();
+		objects_sorter.sort_objects();
 
 		// Draw dynamic objects located in this leaf, after leaf polygons.
 		for (object_index, _bbox) in objects_sorter.get_objects()

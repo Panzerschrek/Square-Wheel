@@ -1,15 +1,15 @@
 use crate::common::{bbox::*, math_types::*, matrix::*, plane::*};
 
-// Class for sorting objects inside leaf.
+// Class for sorting objects inside a leaf.
 // uses internal storage and has limit for number of objects.
 // Allocate it once per frame and reuse for sorting of objects in leafs.
-pub struct ObjectsSorter
+pub struct LeafObjectsSorter
 {
 	objects: [BBoxForDrawOrdering; MAX_OBJECTS],
 	num_objects: usize,
 }
 
-impl ObjectsSorter
+impl LeafObjectsSorter
 {
 	pub fn new() -> Self
 	{
@@ -34,7 +34,7 @@ impl ObjectsSorter
 		self.num_objects = 0;
 	}
 
-	pub fn do_sorting(&mut self)
+	pub fn sort_objects(&mut self)
 	{
 		order_bboxes(&mut self.objects[.. self.num_objects]);
 	}
@@ -83,7 +83,7 @@ pub fn project_bbox(bbox: &BBox, camera_matrices: &CameraMatrices) -> ProjectedB
 	}
 }
 
-pub fn order_bboxes(bboxes: &mut [BBoxForDrawOrdering])
+fn order_bboxes(bboxes: &mut [BBoxForDrawOrdering])
 {
 	if bboxes.len() <= 1
 	{
