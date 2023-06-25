@@ -1368,22 +1368,21 @@ fn split_long_polygon_r(polygon: &Polygon, out_polygons: &mut Vec<Polygon>, recu
 
 fn get_tree_max_depth(tree_root: &BSPNodeChild) -> usize
 {
-	get_tree_max_depth_r(tree_root, 1)
+	get_tree_max_depth_r(tree_root)
 }
 
-fn get_tree_max_depth_r(node_child: &BSPNodeChild, current_depth: usize) -> usize
+fn get_tree_max_depth_r(node_child: &BSPNodeChild) -> usize
 {
 	match node_child
 	{
 		BSPNodeChild::NodeChild(node_ptr) =>
 		{
 			let node = node_ptr.borrow();
-			let next_depth = current_depth + 1;
 			std::cmp::max(
-				get_tree_max_depth_r(&node.children[0], next_depth),
-				get_tree_max_depth_r(&node.children[1], next_depth),
-			)
+				get_tree_max_depth_r(&node.children[0]),
+				get_tree_max_depth_r(&node.children[1]),
+			) + 1
 		},
-		BSPNodeChild::LeafChild(_leaf_ptr) => current_depth,
+		BSPNodeChild::LeafChild(_leaf_ptr) => 1,
 	}
 }

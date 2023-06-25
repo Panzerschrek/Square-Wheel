@@ -2459,7 +2459,7 @@ impl PartialRenderer
 		// Use iterative approach of BSP tree traverse.
 		// This is more effective way to do this,
 		// because compiler can't properly optimize recursive calls and saves all arguments on stack,
-		// which is unnecessary, since all arguments except except one are the same.
+		// which is unnecessary, since all arguments except one are the same.
 		let mut objects_sorter = draw_ordering::LeafObjectsSorter::new();
 
 		// Stack size must be greater or equal, than maximum BSP tree depth.
@@ -2477,8 +2477,8 @@ impl PartialRenderer
 				// Leaf - pop current node from stack.
 				num_nodes_on_stack -= 1;
 
-				let leaf = node_index - bsp_map_compact::FIRST_LEAF_INDEX;
-				if let Some(mut leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf)
+				let leaf_index = node_index - bsp_map_compact::FIRST_LEAF_INDEX;
+				if let Some(mut leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf_index)
 				{
 					leaf_bounds.intersect(viewport_clipping_polygon);
 					if leaf_bounds.is_valid_and_non_empty()
@@ -2490,7 +2490,7 @@ impl PartialRenderer
 							renderers_common_data,
 							&mut objects_sorter,
 							&leaf_bounds,
-							leaf,
+							leaf_index,
 						);
 					}
 				}
