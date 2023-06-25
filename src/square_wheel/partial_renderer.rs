@@ -2114,9 +2114,9 @@ impl PartialRenderer
 					{
 						// Transform portal vertices and determine BSP leafs, where it is located.
 						// Use this list as start point for visibility calculation algorithm.
-						let mut portal_vertices_transofrmed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
+						let mut portal_vertices_transformed = [Vec3f::zero(); MAX_VERTICES]; // TODO - use uninitialized memory
 						for (out_vertex, in_vertex) in
-							portal_vertices_transofrmed.iter_mut().zip(portal.vertices.iter())
+							portal_vertices_transformed.iter_mut().zip(portal.vertices.iter())
 						{
 							*out_vertex = (transform_matrix * in_vertex.extend(1.0)).truncate();
 						}
@@ -2124,7 +2124,7 @@ impl PartialRenderer
 						self.portals_rendering_data.transformed_portal_leafs.clear();
 						bsp_map_compact::get_convex_hull_bsp_leafs(
 							&self.map,
-							&portal_vertices_transofrmed[.. std::cmp::min(portal.vertices.len(), MAX_VERTICES)],
+							&portal_vertices_transformed[.. std::cmp::min(portal.vertices.len(), MAX_VERTICES)],
 							&mut self.portals_rendering_data.transformed_portal_leafs,
 						);
 					}
