@@ -344,9 +344,13 @@ pub fn reject_triangle_model_back_faces(
 pub fn sort_model_triangles(transformed_vertices: &[ModelVertex3d], triangles: &mut [Triangle])
 {
 	// Dumb triangles sorting, using Z coordinate.
-	// TODO - try to use other criterias - min_z, center_z, min_z + max_z ...
 
-	triangles.sort_by(|a, b| {
+	// Use unstable sorting, since it does not allocate.
+	// It is fine to reorder vertices with equal Z because this is almost impossible to have same Z.
+
+	triangles.sort_unstable_by(|a, b| {
+		// Compare max z of two triangles.
+		// TODO - try to use other criterias - min_z, center_z, min_z + max_z ...
 		let a_z = triangle_vertex_debug_checked_fetch(transformed_vertices, a[0])
 			.pos
 			.z
