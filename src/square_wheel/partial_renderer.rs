@@ -3114,7 +3114,7 @@ impl PartialRenderer
 				rasterizer,
 				materials_processor,
 				frame_info,
-				&submodel_matrices.camera_matrices.planes_matrix,
+				&submodel_matrices.camera_matrices.planes_matrix.row(3),
 				clip_planes,
 				leaf_clip_planes,
 				leaf_clip_planes_world_space,
@@ -3129,7 +3129,7 @@ impl PartialRenderer
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		materials_processor: &MapMaterialsProcessor,
 		frame_info: &FrameWorldInfo,
-		submodel_planes_matrix: &Mat4f,
+		submodel_planes_matrix_w: &Vec4f,
 		clip_planes: &ClippingPolygonPlanes,
 		leaf_clip_planes: &[Plane],
 		leaf_clip_planes_world_space: &[Plane],
@@ -3139,9 +3139,7 @@ impl PartialRenderer
 	{
 		let &node = &self.map.submodels_bsp_nodes[node_index as usize];
 
-		let plane_transformed_w = submodel_planes_matrix
-			.row(3)
-			.dot(node.plane.vec.extend(-node.plane.dist));
+		let plane_transformed_w = submodel_planes_matrix_w.dot(node.plane.vec.extend(-node.plane.dist));
 		let mut mask = if plane_transformed_w >= 0.0 { 1 } else { 0 };
 		if self.config.invert_polygons_order
 		{
@@ -3158,7 +3156,7 @@ impl PartialRenderer
 				rasterizer,
 				materials_processor,
 				frame_info,
-				submodel_planes_matrix,
+				submodel_planes_matrix_w,
 				clip_planes,
 				leaf_clip_planes,
 				leaf_clip_planes_world_space,
@@ -3197,7 +3195,7 @@ impl PartialRenderer
 				rasterizer,
 				materials_processor,
 				frame_info,
-				submodel_planes_matrix,
+				submodel_planes_matrix_w,
 				clip_planes,
 				leaf_clip_planes,
 				leaf_clip_planes_world_space,
