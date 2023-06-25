@@ -52,8 +52,7 @@ impl MapVisibilityCalculator
 	pub fn update_visibility(&mut self, camera_matrices: &CameraMatrices, frame_bounds: &ClippingPolygon)
 	{
 		self.current_frame.next();
-		let root_node = bsp_map_compact::get_root_node_index(&self.map);
-		let current_leaf = self.find_current_leaf(root_node, &camera_matrices.planes_matrix);
+		let current_leaf = self.find_current_leaf(camera_matrices);
 
 		// Start search with current leaf and all adjusted leafs, that are too close to camera.
 		// Doing so we prevent some artifacts when camera lies (almost) on portal plane.
@@ -131,9 +130,10 @@ impl MapVisibilityCalculator
 		self.is_inside_leaf_volume
 	}
 
-	fn find_current_leaf(&self, mut index: u32, planes_matrix: &Mat4f) -> u32
+	fn find_current_leaf(&self, camera_matrices: &CameraMatrices) -> u32
 	{
-		let planes_matrix_w_row = planes_matrix.row(3);
+		let mut index = bsp_map_compact::get_root_node_index(&self.map);
+		let planes_matrix_w_row = camera_matrices.planes_matrix.row(3);
 		loop
 		{
 			if index >= bsp_map_compact::FIRST_LEAF_INDEX
