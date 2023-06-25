@@ -34,7 +34,11 @@ pub struct TriangleModelFrameInfo
 pub struct TriangleModelBoneInfo
 {
 	pub name: String,
-	pub parent: u32, // invalid index if has no parent
+	// Index of parent matrix.
+	// Invalid index if has no parent.
+	// Parent index should be less than index of this bone -
+	// in order to calculate matrix for this bone after matrix of parent.
+	pub parent: u32,
 }
 
 #[derive(Copy, Clone, Serialize, Deserialize)]

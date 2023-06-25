@@ -2,6 +2,7 @@ use super::{fast_math::*, frame_info::*, light::*, textures::*, triangle_model::
 use crate::common::{
 	bbox::*, bsp_map_compact, clipping::*, clipping_polygon::*, light_cube::*, math_types::*, matrix::*, plane::*,
 };
+use std::mem::MaybeUninit;
 
 pub fn animate_and_transform_triangle_mesh_vertices(
 	model: &TriangleModel,
@@ -104,11 +105,18 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 			}
 			else
 			{
-				let frame_bones0 = &model.frame_bones[frame0 * model.bones.len() .. (frame0 + 1) * model.bones.len()];
-				let frame_bones1 = &model.frame_bones[frame1 * model.bones.len() .. (frame1 + 1) * model.bones.len()];
+				let num_bones = model.bones.len();
+				debug_assert!(num_bones <= MAX_TRIANGLE_MODEL_BONES);
+				let frame_bones0 = &model.frame_bones[frame0 * num_bones .. (frame0 + 1) * num_bones];
+				let frame_bones1 = &model.frame_bones[frame1 * num_bones .. (frame1 + 1) * num_bones];
 
-				// TODO - use uninitialized memory.
-				let mut matrices = [Mat4f::zero(); MAX_TRIANGLE_MODEL_BONES];
+				// Use uninitialized memory for buffers of matrices.
+				// It is important, since it is is too costly to use safe zeroing,
+				// because size of these buffers is currently HUGE (25600 bytes).
+				// TODO - check this is a proper way to create really-uninitialized stack buffers.
+				let mut matrices = [MaybeUninit::<Mat4f>::uninit(); MAX_TRIANGLE_MODEL_BONES];
+				let mut normals_matrices = [MaybeUninit::<Mat3f>::uninit(); MAX_TRIANGLE_MODEL_BONES];
+
 				// This code relies on fact that all bones are sorted in hierarchy order.
 				if perform_lerp
 				{
@@ -121,11 +129,12 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 						let mat = frame_bone0.matrix * lerp0 + frame_bone1.matrix * lerp1;
 						if parent < model.bones.len()
 						{
-							matrices[bone_index] = matrices[parent] * mat;
+							debug_assert!(parent < bone_index);
+							matrices[bone_index].write(unsafe { matrices[parent].assume_init_ref() * mat });
 						}
 						else
 						{
-							matrices[bone_index] = mat;
+							matrices[bone_index].write(mat);
 						}
 					}
 				}
@@ -138,35 +147,37 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 						let parent = model.bones[bone_index].parent as usize;
 						if parent < model.bones.len()
 						{
-							matrices[bone_index] = matrices[parent] * frame_bone.matrix;
+							debug_assert!(parent < bone_index);
+							matrices[bone_index]
+								.write(unsafe { matrices[parent].assume_init_ref() * frame_bone.matrix });
 						}
 						else
 						{
-							matrices[bone_index] = frame_bone.matrix;
+							matrices[bone_index].write(frame_bone.matrix);
 						}
 					}
 				}
-
-				// TODO - use uninitialized memory.
-				let mut normals_matrices = [Mat3f::zero(); MAX_TRIANGLE_MODEL_BONES];
 
 				// Calculate normals matrix based on object normals matrix and bone matrix.
 				// Multiply bone matrix by model view matrix.
 				let weight_scale = 1.0 / 255.0;
 				let normals_matrix_weight_scaled = normals_matrix * weight_scale;
 				let model_view_matrix_weight_scaled = model_view_matrix * weight_scale;
-				for (bone_matrix, bone_normal_matrix) in matrices.iter_mut().zip(normals_matrices.iter_mut())
+				for (bone_matrix, bone_normal_matrix) in
+					matrices.iter_mut().zip(normals_matrices.iter_mut()).take(num_bones)
 				{
-					*bone_normal_matrix = normals_matrix_weight_scaled * get_normals_matrix(bone_matrix);
-					*bone_matrix = model_view_matrix_weight_scaled * *bone_matrix;
+					bone_normal_matrix.write(unsafe {
+						normals_matrix_weight_scaled * get_normals_matrix(bone_matrix.assume_init_ref())
+					});
+					bone_matrix.write(unsafe { model_view_matrix_weight_scaled * bone_matrix.assume_init_ref() });
 				}
 
 				for (v, dst_v) in v.iter().zip(dst_vertices.iter_mut())
 				{
 					let i0 = v.bones_description[0].bone_index as usize;
 					let w0 = v.bones_description[0].weight as f32;
-					let mut mat = matrices[i0] * w0;
-					let mut normal_mat = normals_matrices[i0] * w0;
+					let mut mat = unsafe { matrices[i0].assume_init_ref() * w0 };
+					let mut normal_mat = unsafe { normals_matrices[i0].assume_init_ref() * w0 };
 					for i in 1 .. 4
 					{
 						// Avoid costly matrix operation if weight is zero.
@@ -174,8 +185,8 @@ pub fn animate_and_transform_triangle_mesh_vertices(
 						{
 							let ii = v.bones_description[i].bone_index as usize;
 							let wi = v.bones_description[i].weight as f32;
-							mat += matrices[ii] * wi;
-							normal_mat += normals_matrices[ii] * wi;
+							mat += unsafe { matrices[ii].assume_init_ref() * wi };
+							normal_mat += unsafe { normals_matrices[ii].assume_init_ref() * wi };
 						}
 					}
 
