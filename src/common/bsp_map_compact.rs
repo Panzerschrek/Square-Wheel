@@ -200,6 +200,8 @@ impl Default for LightGridElement
 	}
 }
 
+pub use super::bsp_builder::MAX_BSP_TREE_DEPTH;
+
 pub fn get_map_string(s: StringRef, map: &BSPMap) -> &str
 {
 	std::str::from_utf8(&map.strings_data[(s.offset as usize) .. ((s.offset + s.size) as usize)]).unwrap_or("")

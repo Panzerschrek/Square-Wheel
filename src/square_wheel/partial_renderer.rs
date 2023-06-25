@@ -1302,16 +1302,12 @@ impl PartialRenderer
 			);
 		}
 
-		let root_node = bsp_map_compact::get_root_node_index(&self.map);
-		let mut objects_sortet = draw_ordering::LeafObjectsSorter::new();
-		self.draw_tree_r(
+		self.draw_tree(
 			rasterizer,
 			frame_info,
 			camera_matrices,
 			renderers_common_data,
-			&mut objects_sortet,
 			viewport_clipping_polygon,
-			root_node,
 		);
 
 		if self.config.invert_polygons_order
@@ -2451,57 +2447,68 @@ impl PartialRenderer
 		}
 	}
 
-	fn draw_tree_r<'a, ColorT: AbstractColor>(
+	fn draw_tree<'a, ColorT: AbstractColor>(
 		&self,
 		rasterizer: &mut Rasterizer<'a, ColorT>,
 		frame_info: &FrameWorldInfo,
 		camera_matrices: &CameraMatrices,
 		renderers_common_data: &RenderersCommonData,
-		objects_sorter: &mut draw_ordering::LeafObjectsSorter,
 		viewport_clipping_polygon: &ClippingPolygon,
-		current_index: u32,
 	)
 	{
-		if current_index >= bsp_map_compact::FIRST_LEAF_INDEX
+		// Use iterative approach of BSP tree traverse.
+		// This is more effective way to do this,
+		// because compiler can't properly optimize recursive calls and saves all arguments on stack,
+		// which is unnecessary, since all arguments except one are the same.
+		let mut objects_sorter = draw_ordering::LeafObjectsSorter::new();
+
+		// Stack size must be greater or equal, than maximum BSP tree depth.
+		const MAX_STACK_SIZE: usize = bsp_map_compact::MAX_BSP_TREE_DEPTH;
+		let mut nodes_stack = [0; MAX_STACK_SIZE];
+
+		nodes_stack[0] = bsp_map_compact::get_root_node_index(&self.map);
+		let mut num_nodes_on_stack = 1;
+
+		while num_nodes_on_stack > 0
 		{
-			let leaf = current_index - bsp_map_compact::FIRST_LEAF_INDEX;
-			if let Some(mut leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf)
+			let node_index = nodes_stack[num_nodes_on_stack - 1];
+			if node_index >= bsp_map_compact::FIRST_LEAF_INDEX
 			{
-				leaf_bounds.intersect(viewport_clipping_polygon);
-				if leaf_bounds.is_valid_and_non_empty()
+				// Leaf - pop current node from stack.
+				num_nodes_on_stack -= 1;
+
+				let leaf_index = node_index - bsp_map_compact::FIRST_LEAF_INDEX;
+				if let Some(mut leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf_index)
 				{
-					self.draw_leaf(
-						rasterizer,
-						frame_info,
-						camera_matrices,
-						renderers_common_data,
-						objects_sorter,
-						&leaf_bounds,
-						leaf,
-					);
+					leaf_bounds.intersect(viewport_clipping_polygon);
+					if leaf_bounds.is_valid_and_non_empty()
+					{
+						self.draw_leaf(
+							rasterizer,
+							frame_info,
+							camera_matrices,
+							renderers_common_data,
+							&mut objects_sorter,
+							&leaf_bounds,
+							leaf_index,
+						);
+					}
 				}
 			}
-		}
-		else
-		{
-			let node = &self.map.nodes[current_index as usize];
-			let plane_transformed = camera_matrices.planes_matrix * node.plane.vec.extend(-node.plane.dist);
-			let mut mask = if plane_transformed.w >= 0.0 { 1 } else { 0 };
-			if self.config.invert_polygons_order
+			else if num_nodes_on_stack < MAX_STACK_SIZE
 			{
-				mask ^= 1;
-			}
-			for i in 0 .. 2
-			{
-				self.draw_tree_r(
-					rasterizer,
-					frame_info,
-					camera_matrices,
-					renderers_common_data,
-					objects_sorter,
-					viewport_clipping_polygon,
-					node.children[(i ^ mask) as usize],
-				);
+				// Node - remove current node, push back and front nodes.
+
+				let node = &self.map.nodes[node_index as usize];
+				let plane_transformed = camera_matrices.planes_matrix * node.plane.vec.extend(-node.plane.dist);
+				let mut mask = if plane_transformed.w >= 0.0 { 1 } else { 0 };
+				if self.config.invert_polygons_order
+				{
+					mask ^= 1;
+				}
+				nodes_stack[num_nodes_on_stack - 1] = node.children[(1 ^ mask) as usize];
+				nodes_stack[num_nodes_on_stack] = node.children[mask as usize];
+				num_nodes_on_stack += 1;
 			}
 		}
 	}
