@@ -351,6 +351,7 @@ pub fn sort_model_triangles(transformed_vertices: &[ModelVertex3d], triangles: &
 	triangles.sort_unstable_by(|a, b| {
 		// Compare max z of two triangles.
 		// TODO - try to use other criterias - min_z, center_z, min_z + max_z ...
+
 		let a_z = triangle_vertex_debug_checked_fetch(transformed_vertices, a[0])
 			.pos
 			.z
@@ -361,8 +362,21 @@ pub fn sort_model_triangles(transformed_vertices: &[ModelVertex3d], triangles: &
 			.z
 			.max(triangle_vertex_debug_checked_fetch(transformed_vertices, b[1]).pos.z)
 			.max(triangle_vertex_debug_checked_fetch(transformed_vertices, b[2]).pos.z);
-		// TODO - avoid unwrap.
-		b_z.partial_cmp(&a_z).unwrap()
+
+		// Manually calculate order and ignore NaNs.
+		// Invert order since we need to sort traingles back to front (greater Z to less Z).
+		if a_z < b_z
+		{
+			std::cmp::Ordering::Greater
+		}
+		else if a_z > b_z
+		{
+			std::cmp::Ordering::Less
+		}
+		else
+		{
+			std::cmp::Ordering::Equal
+		}
 	});
 }
 
