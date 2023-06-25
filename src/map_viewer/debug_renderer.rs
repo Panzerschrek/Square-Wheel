@@ -339,14 +339,14 @@ fn draw_map_bsp_compact_r(
 	bsp_map: &bsp_map_compact::BSPMap,
 )
 {
+	let plane_transformed_w = camera_matrices
+		.planes_matrix
+		.row(3)
+		.dot(bsp_node.plane.vec.extend(-bsp_node.plane.dist));
+	let start_index = if plane_transformed_w >= 0.0 { 0 } else { 1 };
+
 	for i in 0 .. 2
 	{
-		let plane_transformed_w = camera_matrices
-			.planes_matrix
-			.row(3)
-			.dot(bsp_node.plane.vec.extend(-bsp_node.plane.dist));
-		let start_index = if plane_transformed_w >= 0.0 { 0 } else { 1 };
-
 		let child = bsp_node.children[i ^ start_index];
 		if child >= bsp_map_compact::FIRST_LEAF_INDEX
 		{
@@ -382,11 +382,7 @@ fn draw_map_sectors_graph_compact(
 	bsp_map: &bsp_map_compact::BSPMap,
 )
 {
-	let current_sector = find_current_sector_compact(
-		(bsp_map.nodes.len() - 1) as u32,
-		bsp_map,
-		&camera_matrices.planes_matrix,
-	);
+	let current_sector = find_current_sector_compact(bsp_map, camera_matrices);
 	let mut reachable_sectors = ReachablebleSectorsCompactMap::new();
 	find_reachable_sectors_compact_r(current_sector, bsp_map, 0, &mut reachable_sectors);
 
@@ -402,8 +398,10 @@ fn draw_map_sectors_graph_compact(
 	}
 }
 
-fn find_current_sector_compact(mut index: u32, bsp_map: &bsp_map_compact::BSPMap, planes_matrix: &Mat4f) -> u32
+fn find_current_sector_compact(bsp_map: &bsp_map_compact::BSPMap, camera_matrices: &CameraMatrices) -> u32
 {
+	let mut index = bsp_map_compact::get_root_node_index(bsp_map);
+	let planes_matrix_w_row = camera_matrices.planes_matrix.row(3);
 	loop
 	{
 		if index >= bsp_map_compact::FIRST_LEAF_INDEX
@@ -412,7 +410,7 @@ fn find_current_sector_compact(mut index: u32, bsp_map: &bsp_map_compact::BSPMap
 		}
 
 		let node = &bsp_map.nodes[index as usize];
-		let plane_transformed_w = planes_matrix.row(3).dot(node.plane.vec.extend(-node.plane.dist));
+		let plane_transformed_w = planes_matrix_w_row.dot(node.plane.vec.extend(-node.plane.dist));
 		index = if plane_transformed_w >= 0.0
 		{
 			node.children[0]
@@ -741,19 +739,27 @@ fn draw_map_sectors_graph(
 
 fn find_current_sector(bsp_node_child: &bsp_builder::BSPNodeChild, planes_matrix: &Mat4f) -> bsp_builder::BSPLeafPtr
 {
+	find_current_sector_r(bsp_node_child, &planes_matrix.row(3))
+}
+
+fn find_current_sector_r(
+	bsp_node_child: &bsp_builder::BSPNodeChild,
+	planes_matrix_row_w: &Vec4f,
+) -> bsp_builder::BSPLeafPtr
+{
 	match bsp_node_child
 	{
 		bsp_builder::BSPNodeChild::NodeChild(node_ptr) =>
 		{
 			let node = node_ptr.borrow();
-			let plane_transformed_w = planes_matrix.row(3).dot(node.plane.vec.extend(-node.plane.dist));
+			let plane_transformed_w = planes_matrix_row_w.dot(node.plane.vec.extend(-node.plane.dist));
 			if plane_transformed_w >= 0.0
 			{
-				find_current_sector(&node.children[0], planes_matrix)
+				find_current_sector_r(&node.children[0], planes_matrix_row_w)
 			}
 			else
 			{
-				find_current_sector(&node.children[1], planes_matrix)
+				find_current_sector_r(&node.children[1], planes_matrix_row_w)
 			}
 		},
 		bsp_builder::BSPNodeChild::LeafChild(leaf_ptr) => leaf_ptr.clone(),
