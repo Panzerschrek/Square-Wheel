@@ -50,7 +50,7 @@ pub type LeafsPortalPtr = rc::Rc<cell::RefCell<LeafsPortal>>;
 pub type LeafsPortalWeakPtr = rc::Weak<cell::RefCell<LeafsPortal>>;
 
 // BSP tree builder should pruduce more or less balanced tree in order to avoid reaching this limit.
-pub const MAX_BSP_TREE_DEPTH: usize = 128;
+pub const MAX_BSP_TREE_DEPTH: usize = 72;
 
 #[derive(Debug)]
 pub struct SubmodelBSPNode
