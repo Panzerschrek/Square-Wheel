@@ -83,8 +83,11 @@ impl DepthRenderer
 		else
 		{
 			let node = &self.map.nodes[current_index as usize];
-			let plane_transformed = camera_matrices.planes_matrix * node.plane.vec.extend(-node.plane.dist);
-			let mask = if plane_transformed.w >= 0.0 { 1 } else { 0 };
+			let plane_transformed_w = camera_matrices
+				.planes_matrix
+				.row(3)
+				.dot(node.plane.vec.extend(-node.plane.dist));
+			let mask = if plane_transformed_w >= 0.0 { 1 } else { 0 };
 			for i in 0 .. 2
 			{
 				self.draw_tree_r(rasterizer, camera_matrices, node.children[(i ^ mask) as usize]);

@@ -133,6 +133,7 @@ impl MapVisibilityCalculator
 
 	fn find_current_leaf(&self, mut index: u32, planes_matrix: &Mat4f) -> u32
 	{
+		let planes_matrix_w_row = planes_matrix.row(3);
 		loop
 		{
 			if index >= bsp_map_compact::FIRST_LEAF_INDEX
@@ -141,8 +142,8 @@ impl MapVisibilityCalculator
 			}
 
 			let node = &self.map.nodes[index as usize];
-			let plane_transformed = planes_matrix * node.plane.vec.extend(-node.plane.dist);
-			index = if plane_transformed.w >= 0.0
+			let plane_transformed_w = planes_matrix_w_row.dot(node.plane.vec.extend(-node.plane.dist));
+			index = if plane_transformed_w >= 0.0
 			{
 				node.children[0]
 			}

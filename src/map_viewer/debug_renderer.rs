@@ -243,8 +243,11 @@ fn draw_map_bsp_r(
 		bsp_builder::BSPNodeChild::NodeChild(node_ptr) =>
 		{
 			let node = node_ptr.borrow();
-			let plane_transformed = camera_matrices.planes_matrix * node.plane.vec.extend(-node.plane.dist);
-			if plane_transformed.w >= 0.0
+			let plane_transformed_w = camera_matrices
+				.planes_matrix
+				.row(3)
+				.dot(node.plane.vec.extend(-node.plane.dist));
+			if plane_transformed_w >= 0.0
 			{
 				draw_map_bsp_r(
 					rasterizer,
@@ -338,8 +341,11 @@ fn draw_map_bsp_compact_r(
 {
 	for i in 0 .. 2
 	{
-		let plane_transformed = camera_matrices.planes_matrix * bsp_node.plane.vec.extend(-bsp_node.plane.dist);
-		let start_index = if plane_transformed.w >= 0.0 { 0 } else { 1 };
+		let plane_transformed_w = camera_matrices
+			.planes_matrix
+			.row(3)
+			.dot(bsp_node.plane.vec.extend(-bsp_node.plane.dist));
+		let start_index = if plane_transformed_w >= 0.0 { 0 } else { 1 };
 
 		let child = bsp_node.children[i ^ start_index];
 		if child >= bsp_map_compact::FIRST_LEAF_INDEX
@@ -406,8 +412,8 @@ fn find_current_sector_compact(mut index: u32, bsp_map: &bsp_map_compact::BSPMap
 		}
 
 		let node = &bsp_map.nodes[index as usize];
-		let plane_transformed = planes_matrix * node.plane.vec.extend(-node.plane.dist);
-		index = if plane_transformed.w >= 0.0
+		let plane_transformed_w = planes_matrix.row(3).dot(node.plane.vec.extend(-node.plane.dist));
+		index = if plane_transformed_w >= 0.0
 		{
 			node.children[0]
 		}
@@ -740,8 +746,8 @@ fn find_current_sector(bsp_node_child: &bsp_builder::BSPNodeChild, planes_matrix
 		bsp_builder::BSPNodeChild::NodeChild(node_ptr) =>
 		{
 			let node = node_ptr.borrow();
-			let plane_transformed = planes_matrix * node.plane.vec.extend(-node.plane.dist);
-			if plane_transformed.w >= 0.0
+			let plane_transformed_w = planes_matrix.row(3).dot(node.plane.vec.extend(-node.plane.dist));
+			if plane_transformed_w >= 0.0
 			{
 				find_current_sector(&node.children[0], planes_matrix)
 			}

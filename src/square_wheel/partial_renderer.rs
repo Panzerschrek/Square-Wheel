@@ -2460,7 +2460,10 @@ impl PartialRenderer
 		// This is more effective way to do this,
 		// because compiler can't properly optimize recursive calls and saves all arguments on stack,
 		// which is unnecessary, since all arguments except one are the same.
+
 		let mut objects_sorter = draw_ordering::LeafObjectsSorter::new();
+
+		let planes_matrix_w_row = camera_matrices.planes_matrix.row(3);
 
 		// Stack size must be greater or equal, than maximum BSP tree depth.
 		const MAX_STACK_SIZE: usize = bsp_map_compact::MAX_BSP_TREE_DEPTH;
@@ -2500,8 +2503,8 @@ impl PartialRenderer
 				// Node - remove current node, push back and front nodes.
 
 				let node = &self.map.nodes[node_index as usize];
-				let plane_transformed = camera_matrices.planes_matrix * node.plane.vec.extend(-node.plane.dist);
-				let mut mask = if plane_transformed.w >= 0.0 { 1 } else { 0 };
+				let plane_transformed_w = planes_matrix_w_row.dot(node.plane.vec.extend(-node.plane.dist));
+				let mut mask = if plane_transformed_w >= 0.0 { 1 } else { 0 };
 				if self.config.invert_polygons_order
 				{
 					mask ^= 1;
@@ -3136,8 +3139,10 @@ impl PartialRenderer
 	{
 		let &node = &self.map.submodels_bsp_nodes[node_index as usize];
 
-		let plane_transformed = submodel_planes_matrix * node.plane.vec.extend(-node.plane.dist);
-		let mut mask = if plane_transformed.w >= 0.0 { 1 } else { 0 };
+		let plane_transformed_w = submodel_planes_matrix
+			.row(3)
+			.dot(node.plane.vec.extend(-node.plane.dist));
+		let mut mask = if plane_transformed_w >= 0.0 { 1 } else { 0 };
 		if self.config.invert_polygons_order
 		{
 			mask ^= 1;
