@@ -54,43 +54,56 @@ impl DepthRenderer
 	)
 	{
 		let mut rasterizer = DepthRasterizer::new(pixels, width, height);
-		let root_node = bsp_map_compact::get_root_node_index(&self.map);
-
-		// TODO - before preparing frame try to shift camera a little bit away from all planes of BSP nodes before current leaf.
-		// This is needed to fix possible z_near clipping of current leaf portals.
 
 		let frame_bounds = ClippingPolygon::from_box(0.0, 0.0, width as f32, height as f32);
 		self.visibility_calculator
 			.update_visibility(camera_matrices, &frame_bounds);
 
 		// Draw BSP tree in back to front order, skip unreachable leafs.
-		self.draw_tree_r(&mut rasterizer, camera_matrices, root_node);
+		self.draw_tree(&mut rasterizer, camera_matrices);
 
 		// Draw submodels atop of static map geometry (using depth test).
 		self.draw_submodels(&mut rasterizer, camera_matrices, inline_models_index);
 	}
 
-	fn draw_tree_r(&self, rasterizer: &mut DepthRasterizer, camera_matrices: &CameraMatrices, current_index: u32)
+	fn draw_tree(&self, rasterizer: &mut DepthRasterizer, camera_matrices: &CameraMatrices)
 	{
-		if current_index >= bsp_map_compact::FIRST_LEAF_INDEX
+		// Use iterative BSP tree traverse (with internal nodes stack), because it is faster, than recursive approach.
+
+		let planes_matrix_w_row = camera_matrices.planes_matrix.row(3);
+
+		// Stack size must be greater or equal, than maximum BSP tree depth.
+		const MAX_STACK_SIZE: usize = bsp_map_compact::MAX_BSP_TREE_DEPTH;
+		let mut nodes_stack = [0; MAX_STACK_SIZE];
+
+		nodes_stack[0] = bsp_map_compact::get_root_node_index(&self.map);
+		let mut num_nodes_on_stack = 1;
+
+		while num_nodes_on_stack > 0
 		{
-			let leaf = current_index - bsp_map_compact::FIRST_LEAF_INDEX;
-			if let Some(leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf)
+			let node_index = nodes_stack[num_nodes_on_stack - 1];
+			if node_index >= bsp_map_compact::FIRST_LEAF_INDEX
 			{
-				self.draw_leaf(rasterizer, camera_matrices, &leaf_bounds, leaf);
+				// Leaf - pop current node from stack.
+				num_nodes_on_stack -= 1;
+
+				let leaf_index = node_index - bsp_map_compact::FIRST_LEAF_INDEX;
+				if let Some(leaf_bounds) = self.visibility_calculator.get_current_frame_leaf_bounds(leaf_index)
+				{
+					self.draw_leaf(rasterizer, camera_matrices, &leaf_bounds, leaf_index);
+				}
 			}
-		}
-		else
-		{
-			let node = &self.map.nodes[current_index as usize];
-			let plane_transformed_w = camera_matrices
-				.planes_matrix
-				.row(3)
-				.dot(node.plane.vec.extend(-node.plane.dist));
-			let mask = if plane_transformed_w >= 0.0 { 1 } else { 0 };
-			for i in 0 .. 2
+			else if num_nodes_on_stack < MAX_STACK_SIZE
 			{
-				self.draw_tree_r(rasterizer, camera_matrices, node.children[(i ^ mask) as usize]);
+				// Node - remove current node, push back and front nodes.
+
+				let node = &self.map.nodes[node_index as usize];
+				let plane_transformed_w = planes_matrix_w_row.dot(node.plane.vec.extend(-node.plane.dist));
+				let mask = if plane_transformed_w >= 0.0 { 1 } else { 0 };
+
+				nodes_stack[num_nodes_on_stack - 1] = node.children[(1 ^ mask) as usize];
+				nodes_stack[num_nodes_on_stack] = node.children[mask as usize];
+				num_nodes_on_stack += 1;
 			}
 		}
 	}
