@@ -17,23 +17,29 @@ pub fn normalize_bsp_map_file_path(mut file_path: PathBuf) -> PathBuf
 	file_path
 }
 
-// Just write raw bytes of map structs into file.
-// This is fine until we use plain structs and load this file on machined with same bytes order.
-
 pub fn save_map(bsp_map: &BSPMap, file_path: &Path) -> Result<(), std::io::Error>
 {
-	let mut header = BspMapHeader {
-		id: BSP_MAP_ID,
-		version: BSP_MAP_VERSION,
-		lumps: unsafe { std::mem::zeroed() },
-	};
-
 	let mut file = std::fs::OpenOptions::new()
 		.read(true)
 		.write(true)
 		.create(true)
 		.truncate(true)
 		.open(file_path)?;
+	save_map_into_writer(bsp_map, &mut file)?;
+	file.sync_data()?;
+	Ok(())
+}
+
+pub fn save_map_into_writer<F: Write + Seek>(bsp_map: &BSPMap, writer: &mut F) -> Result<(), std::io::Error>
+{
+	// Just write raw bytes of map structs into file.
+	// This is fine until we use plain structs and load this file on machined with same bytes order.
+
+	let mut header = BspMapHeader {
+		id: BSP_MAP_ID,
+		version: BSP_MAP_VERSION,
+		lumps: unsafe { std::mem::zeroed() },
+	};
 
 	// Write header first time to advance current file position.
 	let header_bytes = unsafe {
@@ -42,69 +48,44 @@ pub fn save_map(bsp_map: &BSPMap, file_path: &Path) -> Result<(), std::io::Error
 			std::mem::size_of::<BspMapHeader>(),
 		)
 	};
-	file.write_all(header_bytes)?;
+	writer.write_all(header_bytes)?;
 
 	let mut offset = header_bytes.len();
 
-	write_lump(&bsp_map.nodes, &mut file, &mut header.lumps[LUMP_NODES], &mut offset)?;
-	write_lump(&bsp_map.leafs, &mut file, &mut header.lumps[LUMP_LEAFS], &mut offset)?;
-	write_lump(
-		&bsp_map.polygons,
-		&mut file,
-		&mut header.lumps[LUMP_POLYGONS],
-		&mut offset,
-	)?;
-	write_lump(
-		&bsp_map.portals,
-		&mut file,
-		&mut header.lumps[LUMP_PORTALS],
-		&mut offset,
-	)?;
+	write_lump(&bsp_map.nodes, writer, &mut header.lumps[LUMP_NODES], &mut offset)?;
+	write_lump(&bsp_map.leafs, writer, &mut header.lumps[LUMP_LEAFS], &mut offset)?;
+	write_lump(&bsp_map.polygons, writer, &mut header.lumps[LUMP_POLYGONS], &mut offset)?;
+	write_lump(&bsp_map.portals, writer, &mut header.lumps[LUMP_PORTALS], &mut offset)?;
 	write_lump(
 		&bsp_map.leafs_portals,
-		&mut file,
+		writer,
 		&mut header.lumps[LUMP_LEAFS_PORTALS],
 		&mut offset,
 	)?;
-	write_lump(
-		&bsp_map.vertices,
-		&mut file,
-		&mut header.lumps[LUMP_VERTICES],
-		&mut offset,
-	)?;
-	write_lump(
-		&bsp_map.textures,
-		&mut file,
-		&mut header.lumps[LUMP_TEXTURES],
-		&mut offset,
-	)?;
+	write_lump(&bsp_map.vertices, writer, &mut header.lumps[LUMP_VERTICES], &mut offset)?;
+	write_lump(&bsp_map.textures, writer, &mut header.lumps[LUMP_TEXTURES], &mut offset)?;
 	write_lump(
 		&bsp_map.submodels,
-		&mut file,
+		writer,
 		&mut header.lumps[LUMP_SUBMODELS],
 		&mut offset,
 	)?;
 	write_lump(
 		&bsp_map.submodels_bsp_nodes,
-		&mut file,
+		writer,
 		&mut header.lumps[LUMP_SUBMODELS_BSP_NODES],
 		&mut offset,
 	)?;
-	write_lump(
-		&bsp_map.entities,
-		&mut file,
-		&mut header.lumps[LUMP_ENTITIES],
-		&mut offset,
-	)?;
+	write_lump(&bsp_map.entities, writer, &mut header.lumps[LUMP_ENTITIES], &mut offset)?;
 	write_lump(
 		&bsp_map.key_value_pairs,
-		&mut file,
+		writer,
 		&mut header.lumps[LUMP_KEY_VALUE_PAIRS],
 		&mut offset,
 	)?;
 	write_lump(
 		&bsp_map.strings_data,
-		&mut file,
+		writer,
 		&mut header.lumps[LUMP_STRINGS_DATA],
 		&mut offset,
 	)?;
@@ -114,7 +95,7 @@ pub fn save_map(bsp_map: &BSPMap, file_path: &Path) -> Result<(), std::io::Error
 			.iter()
 			.map(LightmapElementCompressed::compress)
 			.collect::<Vec<_>>(),
-		&mut file,
+		writer,
 		&mut header.lumps[LUMP_LIGHTMAPS_DATA],
 		&mut offset,
 	)?;
@@ -124,19 +105,19 @@ pub fn save_map(bsp_map: &BSPMap, file_path: &Path) -> Result<(), std::io::Error
 			.iter()
 			.map(DirectionalLightmapElementCompressed::compress)
 			.collect::<Vec<_>>(),
-		&mut file,
+		writer,
 		&mut header.lumps[LUMP_DIRECTIONAL_LIGHTMAPS_DATA],
 		&mut offset,
 	)?;
 	write_single_element_lump(
 		&bsp_map.light_grid_header,
-		&mut file,
+		writer,
 		&mut header.lumps[LUMP_LIGHT_GRID_HEADER],
 		&mut offset,
 	)?;
 	write_lump(
 		&bsp_map.light_grid_columns,
-		&mut file,
+		writer,
 		&mut header.lumps[LUMP_LIGHT_GRID_COLUMNS],
 		&mut offset,
 	)?;
@@ -146,15 +127,14 @@ pub fn save_map(bsp_map: &BSPMap, file_path: &Path) -> Result<(), std::io::Error
 			.iter()
 			.map(LightGridElementCompressed::compress)
 			.collect::<Vec<_>>(),
-		&mut file,
+		writer,
 		&mut header.lumps[LUMP_LIGHT_GRID_SAMPLES],
 		&mut offset,
 	)?;
 
 	// Write header again to update lumps headers.
-	file.seek(std::io::SeekFrom::Start(0))?;
-	file.write_all(header_bytes)?;
-	file.sync_data()?;
+	writer.seek(std::io::SeekFrom::Start(0))?;
+	writer.write_all(header_bytes)?;
 
 	Ok(())
 }
@@ -167,12 +147,17 @@ pub fn load_map(file_path: &Path) -> Result<Option<BSPMap>, std::io::Error>
 		.create(false)
 		.open(file_path)?;
 
+	load_map_from_reader(&mut file)
+}
+
+pub fn load_map_from_reader<F: Read + Seek>(reader: &mut F) -> Result<Option<BSPMap>, std::io::Error>
+{
 	let header_size = std::mem::size_of::<BspMapHeader>();
 	let mut header = unsafe { std::mem::zeroed::<BspMapHeader>() };
 	let header_bytes =
 		unsafe { std::slice::from_raw_parts_mut((&mut header) as *mut BspMapHeader as *mut u8, header_size) };
 
-	if file.read(header_bytes)? != header_size
+	if reader.read(header_bytes)? != header_size
 	{
 		println!("Can't read BSP map header");
 		return Ok(None);
@@ -193,29 +178,29 @@ pub fn load_map(file_path: &Path) -> Result<Option<BSPMap>, std::io::Error>
 	}
 
 	let map = BSPMap {
-		nodes: read_lump(&mut file, &header.lumps[LUMP_NODES])?,
-		leafs: read_lump(&mut file, &header.lumps[LUMP_LEAFS])?,
-		polygons: read_lump(&mut file, &header.lumps[LUMP_POLYGONS])?,
-		portals: read_lump(&mut file, &header.lumps[LUMP_PORTALS])?,
-		leafs_portals: read_lump(&mut file, &header.lumps[LUMP_LEAFS_PORTALS])?,
-		vertices: read_lump(&mut file, &header.lumps[LUMP_VERTICES])?,
-		textures: read_lump(&mut file, &header.lumps[LUMP_TEXTURES])?,
-		submodels: read_lump(&mut file, &header.lumps[LUMP_SUBMODELS])?,
-		submodels_bsp_nodes: read_lump(&mut file, &header.lumps[LUMP_SUBMODELS_BSP_NODES])?,
-		entities: read_lump(&mut file, &header.lumps[LUMP_ENTITIES])?,
-		key_value_pairs: read_lump(&mut file, &header.lumps[LUMP_KEY_VALUE_PAIRS])?,
-		strings_data: read_lump(&mut file, &header.lumps[LUMP_STRINGS_DATA])?,
-		lightmaps_data: read_lump(&mut file, &header.lumps[LUMP_LIGHTMAPS_DATA])?
+		nodes: read_lump(reader, &header.lumps[LUMP_NODES])?,
+		leafs: read_lump(reader, &header.lumps[LUMP_LEAFS])?,
+		polygons: read_lump(reader, &header.lumps[LUMP_POLYGONS])?,
+		portals: read_lump(reader, &header.lumps[LUMP_PORTALS])?,
+		leafs_portals: read_lump(reader, &header.lumps[LUMP_LEAFS_PORTALS])?,
+		vertices: read_lump(reader, &header.lumps[LUMP_VERTICES])?,
+		textures: read_lump(reader, &header.lumps[LUMP_TEXTURES])?,
+		submodels: read_lump(reader, &header.lumps[LUMP_SUBMODELS])?,
+		submodels_bsp_nodes: read_lump(reader, &header.lumps[LUMP_SUBMODELS_BSP_NODES])?,
+		entities: read_lump(reader, &header.lumps[LUMP_ENTITIES])?,
+		key_value_pairs: read_lump(reader, &header.lumps[LUMP_KEY_VALUE_PAIRS])?,
+		strings_data: read_lump(reader, &header.lumps[LUMP_STRINGS_DATA])?,
+		lightmaps_data: read_lump(reader, &header.lumps[LUMP_LIGHTMAPS_DATA])?
 			.iter()
 			.map(LightmapElementCompressed::decompress)
 			.collect(),
-		directional_lightmaps_data: read_lump(&mut file, &header.lumps[LUMP_DIRECTIONAL_LIGHTMAPS_DATA])?
+		directional_lightmaps_data: read_lump(reader, &header.lumps[LUMP_DIRECTIONAL_LIGHTMAPS_DATA])?
 			.iter()
 			.map(DirectionalLightmapElementCompressed::decompress)
 			.collect(),
-		light_grid_header: read_single_element_lump(&mut file, &header.lumps[LUMP_LIGHT_GRID_HEADER])?,
-		light_grid_columns: read_lump(&mut file, &header.lumps[LUMP_LIGHT_GRID_COLUMNS])?,
-		light_grid_samples: read_lump(&mut file, &header.lumps[LUMP_LIGHT_GRID_SAMPLES])?
+		light_grid_header: read_single_element_lump(reader, &header.lumps[LUMP_LIGHT_GRID_HEADER])?,
+		light_grid_columns: read_lump(reader, &header.lumps[LUMP_LIGHT_GRID_COLUMNS])?,
+		light_grid_samples: read_lump(reader, &header.lumps[LUMP_LIGHT_GRID_SAMPLES])?
 			.iter()
 			.map(LightGridElementCompressed::decompress)
 			.collect(),
@@ -263,9 +248,9 @@ const LUMP_LIGHT_GRID_HEADER: usize = 14;
 const LUMP_LIGHT_GRID_COLUMNS: usize = 15;
 const LUMP_LIGHT_GRID_SAMPLES: usize = 16;
 
-fn write_lump<T>(
+fn write_lump<T, F: Write>(
 	data: &[T],
-	file: &mut std::fs::File,
+	writer: &mut F,
 	lump: &mut Lump,
 	offset: &mut usize,
 ) -> Result<(), std::io::Error>
@@ -282,14 +267,14 @@ fn write_lump<T>(
 	}
 
 	let bytes = unsafe { std::slice::from_raw_parts((&data[0]) as *const T as *const u8, element_size * data.len()) };
-	file.write_all(bytes)?;
+	writer.write_all(bytes)?;
 
 	*offset += bytes.len();
 
 	Ok(())
 }
 
-fn read_lump<T: Copy>(file: &mut std::fs::File, lump: &Lump) -> Result<Vec<T>, std::io::Error>
+fn read_lump<T: Copy, F: Read + Seek>(file: &mut F, lump: &Lump) -> Result<Vec<T>, std::io::Error>
 {
 	let element_size = std::mem::size_of::<T>();
 	if lump.element_size != (element_size as u32)
@@ -319,9 +304,9 @@ fn read_lump<T: Copy>(file: &mut std::fs::File, lump: &Lump) -> Result<Vec<T>, s
 	Ok(result)
 }
 
-fn write_single_element_lump<T>(
+fn write_single_element_lump<T, F: Write>(
 	element: &T,
-	file: &mut std::fs::File,
+	writer: &mut F,
 	lump: &mut Lump,
 	offset: &mut usize,
 ) -> Result<(), std::io::Error>
@@ -333,14 +318,14 @@ fn write_single_element_lump<T>(
 	lump.element_count = 1;
 
 	let bytes = unsafe { std::slice::from_raw_parts(element as *const T as *const u8, element_size) };
-	file.write_all(bytes)?;
+	writer.write_all(bytes)?;
 
 	*offset += bytes.len();
 
 	Ok(())
 }
 
-fn read_single_element_lump<T: Copy>(file: &mut std::fs::File, lump: &Lump) -> Result<T, std::io::Error>
+fn read_single_element_lump<T: Copy, F: Read + Seek>(reader: &mut F, lump: &Lump) -> Result<T, std::io::Error>
 {
 	let mut result = unsafe { std::mem::zeroed::<T>() };
 
@@ -353,10 +338,10 @@ fn read_single_element_lump<T: Copy>(file: &mut std::fs::File, lump: &Lump) -> R
 	}
 
 	// TODO - what if seek fails?
-	file.seek(std::io::SeekFrom::Start(lump.offset as u64))?;
+	reader.seek(std::io::SeekFrom::Start(lump.offset as u64))?;
 
 	let bytes = unsafe { std::slice::from_raw_parts_mut((&mut result) as *mut T as *mut u8, std::mem::size_of::<T>()) };
-	file.read_exact(bytes)?;
+	reader.read_exact(bytes)?;
 
 	Ok(result)
 }
