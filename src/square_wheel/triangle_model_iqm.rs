@@ -9,13 +9,17 @@ pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleMode
 		.write(false)
 		.create(false)
 		.open(file_path)?;
+	load_model_iqm_from_reader(&mut file)
+}
 
+pub fn load_model_iqm_from_reader<F: Read + Seek>(reader: &mut F) -> Result<Option<TriangleModel>, std::io::Error>
+{
 	let header_size = std::mem::size_of::<IQMHeader>();
 	let mut header = unsafe { std::mem::zeroed::<IQMHeader>() };
 	let header_bytes =
 		unsafe { std::slice::from_raw_parts_mut((&mut header) as *mut IQMHeader as *mut u8, header_size) };
 
-	if file.read(header_bytes)? != header_size
+	if reader.read(header_bytes)? != header_size
 	{
 		println!("Can't read IQM header");
 		return Ok(None);
@@ -49,14 +53,14 @@ pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleMode
 		return Ok(None);
 	}
 
-	let texts = load_texts(&mut file, &header)?;
-	let meshes = load_meshes(&mut file, &header)?;
-	let triangles = load_triangles(&mut file, &header)?;
-	let vertices = load_vertices(&mut file, &header)?;
-	let bounds = load_bounds(&mut file, &header)?;
-	let joints = load_joints(&mut file, &header)?;
-	let poses = load_poses(&mut file, &header)?;
-	let animations = load_animations(&mut file, &header)?;
+	let texts = load_texts(reader, &header)?;
+	let meshes = load_meshes(reader, &header)?;
+	let triangles = load_triangles(reader, &header)?;
+	let vertices = load_vertices(reader, &header)?;
+	let bounds = load_bounds(reader, &header)?;
+	let joints = load_joints(reader, &header)?;
+	let poses = load_poses(reader, &header)?;
+	let animations = load_animations(reader, &header)?;
 
 	let bones = joints
 		.iter()
@@ -66,7 +70,7 @@ pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleMode
 		})
 		.collect();
 
-	let frame_bones = create_frames(&mut file, &header, &joints, &poses)?;
+	let frame_bones = create_frames(reader, &header, &joints, &poses)?;
 
 	let mut frames_info: Vec<_> = bounds
 		.iter()
@@ -131,9 +135,9 @@ pub fn load_model_iqm(file_path: &std::path::Path) -> Result<Option<TriangleMode
 	}))
 }
 
-fn load_texts(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<u8>, std::io::Error>
+fn load_texts<F: Read + Seek>(reader: &mut F, header: &IQMHeader) -> Result<Vec<u8>, std::io::Error>
 {
-	read_vector(file, header.ofs_text as u64, header.num_text)
+	read_vector(reader, header.ofs_text as u64, header.num_text)
 }
 
 fn get_text_str(texts: &[u8], offset: u32) -> &str
@@ -147,19 +151,22 @@ fn get_text_str(texts: &[u8], offset: u32) -> &str
 	std::str::from_utf8(&texts[start .. end]).unwrap_or("")
 }
 
-fn load_meshes(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<IQMMesh>, std::io::Error>
+fn load_meshes<F: Read + Seek>(reader: &mut F, header: &IQMHeader) -> Result<Vec<IQMMesh>, std::io::Error>
 {
-	read_vector(file, header.ofs_meshes as u64, header.num_meshes)
+	read_vector(reader, header.ofs_meshes as u64, header.num_meshes)
 }
 
-fn load_triangles(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<IQMTriangle>, std::io::Error>
+fn load_triangles<F: Read + Seek>(reader: &mut F, header: &IQMHeader) -> Result<Vec<IQMTriangle>, std::io::Error>
 {
-	read_vector(file, header.ofs_triangles as u64, header.num_triangles)
+	read_vector(reader, header.ofs_triangles as u64, header.num_triangles)
 }
 
-fn load_vertices(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<SkeletonAnimatedVertex>, std::io::Error>
+fn load_vertices<F: Read + Seek>(
+	reader: &mut F,
+	header: &IQMHeader,
+) -> Result<Vec<SkeletonAnimatedVertex>, std::io::Error>
 {
-	let vertex_arrays = load_vertex_arrays(file, header)?;
+	let vertex_arrays = load_vertex_arrays(reader, header)?;
 
 	let mut vertices = vec![
 		SkeletonAnimatedVertex {
@@ -186,7 +193,7 @@ fn load_vertices(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<Ske
 				{
 					// TODO - use uninitialized memory.
 					let mut positions = vec![Vec3f::zero(); vertices.len()];
-					read_chunk(file, vertex_array.offset as u64, &mut positions)?;
+					read_chunk(reader, vertex_array.offset as u64, &mut positions)?;
 					for (v, p) in vertices.iter_mut().zip(positions.iter())
 					{
 						v.position = *p;
@@ -199,7 +206,7 @@ fn load_vertices(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<Ske
 				{
 					// TODO - use uninitialized memory.
 					let mut tex_coords = vec![[0.0, 0.0]; vertices.len()];
-					read_chunk(file, vertex_array.offset as u64, &mut tex_coords)?;
+					read_chunk(reader, vertex_array.offset as u64, &mut tex_coords)?;
 					for (v, tc) in vertices.iter_mut().zip(tex_coords.iter())
 					{
 						v.tex_coord = *tc;
@@ -212,7 +219,7 @@ fn load_vertices(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<Ske
 				{
 					// TODO - use uninitialized memory.
 					let mut normals = vec![Vec3f::zero(); vertices.len()];
-					read_chunk(file, vertex_array.offset as u64, &mut normals)?;
+					read_chunk(reader, vertex_array.offset as u64, &mut normals)?;
 					for (v, n) in vertices.iter_mut().zip(normals.iter())
 					{
 						v.normal = *n;
@@ -228,7 +235,7 @@ fn load_vertices(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<Ske
 					let zero_indexes: [u8; 4] = [0, 0, 0, 0];
 					// TODO - use uninitialized memory.
 					let mut indexes = vec![zero_indexes; vertices.len()];
-					read_chunk(file, vertex_array.offset as u64, &mut indexes)?;
+					read_chunk(reader, vertex_array.offset as u64, &mut indexes)?;
 					for (v, index) in vertices.iter_mut().zip(indexes.iter())
 					{
 						for i in 0 .. 4
@@ -245,7 +252,7 @@ fn load_vertices(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<Ske
 					let zero_weights: [u8; 4] = [0, 0, 0, 0];
 					// TODO - use uninitialized memory.
 					let mut weights = vec![zero_weights; vertices.len()];
-					read_chunk(file, vertex_array.offset as u64, &mut weights)?;
+					read_chunk(reader, vertex_array.offset as u64, &mut weights)?;
 					for (v, weight) in vertices.iter_mut().zip(weights.iter())
 					{
 						for i in 0 .. 4
@@ -263,33 +270,34 @@ fn load_vertices(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<Ske
 	Ok(vertices)
 }
 
-fn load_vertex_arrays(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<IQMVertexArray>, std::io::Error>
+fn load_vertex_arrays<F: Read + Seek>(reader: &mut F, header: &IQMHeader)
+	-> Result<Vec<IQMVertexArray>, std::io::Error>
 {
-	read_vector(file, header.ofs_vertexarrays as u64, header.num_vertexarrays)
+	read_vector(reader, header.ofs_vertexarrays as u64, header.num_vertexarrays)
 }
 
-fn load_bounds(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<IQMBounds>, std::io::Error>
+fn load_bounds<F: Read + Seek>(reader: &mut F, header: &IQMHeader) -> Result<Vec<IQMBounds>, std::io::Error>
 {
-	read_vector(file, header.ofs_bounds as u64, header.num_frames)
+	read_vector(reader, header.ofs_bounds as u64, header.num_frames)
 }
 
-fn load_joints(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<IQMJoint>, std::io::Error>
+fn load_joints<F: Read + Seek>(reader: &mut F, header: &IQMHeader) -> Result<Vec<IQMJoint>, std::io::Error>
 {
-	read_vector(file, header.ofs_joints as u64, header.num_joints)
+	read_vector(reader, header.ofs_joints as u64, header.num_joints)
 }
 
-fn load_poses(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<IQMPose>, std::io::Error>
+fn load_poses<F: Read + Seek>(reader: &mut F, header: &IQMHeader) -> Result<Vec<IQMPose>, std::io::Error>
 {
-	read_vector(file, header.ofs_poses as u64, header.num_poses)
+	read_vector(reader, header.ofs_poses as u64, header.num_poses)
 }
 
-fn load_animations(file: &mut std::fs::File, header: &IQMHeader) -> Result<Vec<IQMAnim>, std::io::Error>
+fn load_animations<F: Read + Seek>(reader: &mut F, header: &IQMHeader) -> Result<Vec<IQMAnim>, std::io::Error>
 {
-	read_vector(file, header.ofs_anims as u64, header.num_anims)
+	read_vector(reader, header.ofs_anims as u64, header.num_anims)
 }
 
-fn create_frames(
-	file: &mut std::fs::File,
+fn create_frames<F: Read + Seek>(
+	reader: &mut F,
 	header: &IQMHeader,
 	joints: &[IQMJoint],
 	poses: &[IQMPose],
@@ -327,9 +335,9 @@ fn create_frames(
 		poses.len() * (header.num_frames as usize)
 	];
 
-	file.seek(std::io::SeekFrom::Start(header.ofs_frames as u64))?;
+	reader.seek(std::io::SeekFrom::Start(header.ofs_frames as u64))?;
 	let mut frame_data = Vec::new();
-	file.read_to_end(&mut frame_data)?;
+	reader.read_to_end(&mut frame_data)?;
 
 	// TODO - what if alignment is wrong?
 	let frame_data_u16 = unsafe { frame_data.align_to::<u16>().1 };

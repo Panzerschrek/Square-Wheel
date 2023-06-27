@@ -9,13 +9,17 @@ pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleMode
 		.write(false)
 		.create(false)
 		.open(file_path)?;
+	load_model_md3_from_reader(&mut file)
+}
 
+pub fn load_model_md3_from_reader<F: Read + Seek>(reader: &mut F) -> Result<Option<TriangleModel>, std::io::Error>
+{
 	let header_size = std::mem::size_of::<Md3Header>();
 	let mut header = unsafe { std::mem::zeroed::<Md3Header>() };
 	let header_bytes =
 		unsafe { std::slice::from_raw_parts_mut((&mut header) as *mut Md3Header as *mut u8, header_size) };
 
-	if file.read(header_bytes)? != header_size
+	if reader.read(header_bytes)? != header_size
 	{
 		println!("Can't read Md3 header");
 		return Ok(None);
@@ -35,8 +39,8 @@ pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleMode
 		return Ok(None);
 	}
 
-	let frames_src = read_vector::<Md3Frame>(&mut file, header.lump_frameinfo as u64, header.num_frames)?;
-	let tags_src = read_vector::<Md3Tag>(&mut file, header.lump_tags as u64, header.num_tags * header.num_frames)?;
+	let frames_src = read_vector::<Md3Frame, F>(reader, header.lump_frameinfo as u64, header.num_frames)?;
+	let tags_src = read_vector::<Md3Tag, F>(reader, header.lump_tags as u64, header.num_tags * header.num_frames)?;
 
 	// TODO - shouldn't we use "origin" here?
 	let frames_info = frames_src
@@ -75,7 +79,7 @@ pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleMode
 		})
 		.collect();
 
-	file.seek(std::io::SeekFrom::Start(header.lump_meshes as u64))?;
+	reader.seek(std::io::SeekFrom::Start(header.lump_meshes as u64))?;
 	let mut meshes = Vec::with_capacity(header.num_meshes as usize);
 	let mut offset = header.lump_meshes as u64;
 	for _i in 0 .. header.num_meshes
@@ -85,19 +89,19 @@ pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleMode
 		let mesh_header_bytes =
 			unsafe { std::slice::from_raw_parts_mut((&mut mesh_header) as *mut Md3Mesh as *mut u8, mesh_header_size) };
 
-		if file.read(mesh_header_bytes)? != mesh_header_size
+		if reader.read(mesh_header_bytes)? != mesh_header_size
 		{
 			println!("Can't read Md3 mesh header");
 			break;
 		}
 
-		if let Some(mesh) = load_md3_mesh(&mesh_header, offset, &mut file)?
+		if let Some(mesh) = load_md3_mesh(&mesh_header, offset, reader)?
 		{
 			meshes.push(mesh);
 		}
 
 		offset += mesh_header.lump_end as u64;
-		file.seek(std::io::SeekFrom::Start(offset as u64))?;
+		reader.seek(std::io::SeekFrom::Start(offset as u64))?;
 	}
 
 	// Add extra shift because we use texture coordinates floor, instead of linear OpenGL interpolation as Quake III does.
@@ -113,10 +117,10 @@ pub fn load_model_md3(file_path: &std::path::Path) -> Result<Option<TriangleMode
 	}))
 }
 
-fn load_md3_mesh(
+fn load_md3_mesh<F: Read + Seek>(
 	src_mesh: &Md3Mesh,
 	mesh_offset: u64,
-	file: &mut std::fs::File,
+	reader: &mut F,
 ) -> Result<Option<TriangleModelMesh>, std::io::Error>
 {
 	if src_mesh.ident != MD3_ID
@@ -125,22 +129,23 @@ fn load_md3_mesh(
 		return Ok(None);
 	}
 
-	let triangles_src = read_vector::<Md3Triangle>(
-		file,
+	let triangles_src = read_vector::<Md3Triangle, F>(
+		reader,
 		src_mesh.lump_triangles as u64 + mesh_offset,
 		src_mesh.num_triangles,
 	)?;
-	let tex_coords_src = read_vector::<Md3TexCoord>(
-		file,
+	let tex_coords_src = read_vector::<Md3TexCoord, F>(
+		reader,
 		src_mesh.lump_texcoords as u64 + mesh_offset,
 		src_mesh.num_vertices,
 	)?;
-	let frames_src = read_vector::<Md3Vertex>(
-		file,
+	let frames_src = read_vector::<Md3Vertex, F>(
+		reader,
 		src_mesh.lump_framevertices as u64 + mesh_offset,
 		src_mesh.num_vertices * src_mesh.num_frames,
 	)?;
-	let shaders_src = read_vector::<Md3Shader>(file, src_mesh.lump_shaders as u64 + mesh_offset, src_mesh.num_shaders)?;
+	let shaders_src =
+		read_vector::<Md3Shader, F>(reader, src_mesh.lump_shaders as u64 + mesh_offset, src_mesh.num_shaders)?;
 
 	let triangles = triangles_src
 		.iter()
