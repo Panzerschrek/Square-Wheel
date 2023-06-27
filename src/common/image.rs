@@ -1,4 +1,5 @@
 use super::color::*;
+use std::io::{BufRead, Seek};
 
 #[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Image
@@ -17,45 +18,65 @@ pub struct Image64
 pub fn load(file_path: &std::path::Path) -> Option<Image>
 {
 	let src_image = image::open(file_path).ok()?.into_rgba8();
-	Some(Image {
+	Some(convert_loaded_image(&src_image))
+}
+
+pub fn load_from_reader<F: BufRead + Seek>(reader: &mut F, format: image::ImageFormat) -> Option<Image>
+{
+	let src_image = image::load(reader, format).ok()?.into_rgba8();
+	Some(convert_loaded_image(&src_image))
+}
+
+fn convert_loaded_image(src_image: &image::RgbaImage) -> Image
+{
+	Image {
 		size: [src_image.width(), src_image.height()],
 		pixels: src_image
 			.pixels()
 			.map(|p| Color32::from_rgba(p[0], p[1], p[2], p[3]))
 			.collect(),
-	})
+	}
 }
 
 pub fn load64(file_path: &std::path::Path) -> Option<Image64>
 {
-	let src_image = image::open(file_path).ok()?;
+	Some(convert_loaded_image_64(image::open(file_path).ok()?))
+}
+
+pub fn load64_from_reader<F: BufRead + Seek>(reader: &mut F, format: image::ImageFormat) -> Option<Image64>
+{
+	Some(convert_loaded_image_64(image::load(reader, format).ok()?))
+}
+
+fn convert_loaded_image_64(src_image: image::DynamicImage) -> Image64
+{
 	if let Some(image16) = src_image.as_rgba16()
 	{
-		return Some(Image64 {
+		return Image64 {
 			size: [image16.width(), image16.height()],
 			pixels: image16
 				.pixels()
 				.map(|p| Color64::from_rgba(p[0], p[1], p[2], p[3]))
 				.collect(),
-		});
+		};
 	}
 	if let Some(image16) = src_image.as_rgb16()
 	{
-		return Some(Image64 {
+		return Image64 {
 			size: [image16.width(), image16.height()],
 			pixels: image16.pixels().map(|p| Color64::from_rgb(p[0], p[1], p[2])).collect(),
-		});
+		};
 	}
 
 	let image8 = src_image.into_rgba8();
 
-	Some(Image64 {
+	Image64 {
 		size: [image8.width(), image8.height()],
 		pixels: image8
 			.pixels()
 			.map(|p| Color64::from_rgba(p[0] as u16, p[1] as u16, p[2] as u16, p[3] as u16))
 			.collect(),
-	})
+	}
 }
 
 pub fn save(image: &Image, file_path: &std::path::Path) -> bool
