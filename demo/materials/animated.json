@@ -141,6 +141,7 @@
 		"normal_map" : "basket_weave_grid_normal.png",
 		"blocks_view" : false,
 		"blending_mode" : "AlphaTest",
+		"twosided" : true,
 		"emissive_layer":
 		{
 			"image" : "basket_weave_grid_mask.png",
@@ -178,7 +179,8 @@
 		"diffuse" : "rolling_ball.png",
 		"normal_map" : "rolling_ball_normal.png",
 		"blocks_view" : false,
-		"blending_mode" : "AlphaTest"
+		"blending_mode" : "AlphaTest",
+		"twosided" : true
 	},
 
 	"monkey_head/display":
@@ -412,6 +414,7 @@
 		"blending_mode": "AlphaTest",
 		"blocks_view" : false,
 		"decals" : false,
+		"twosided" : true,
 		"special_effect":
 		{
 			"LayeredAnimation" :

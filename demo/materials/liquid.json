@@ -5,6 +5,7 @@
 		"blending_mode": "AlphaTest",
 		"blocks_view": false,
 		"decals": false,
+		"twosided" : true,
 		"special_effect":
 		{
 			"Water":
@@ -63,47 +64,84 @@
 			{
 				"resolution_log2": [7, 7],
 				"update_frequency": 30.0,
-				"fluidity": 200.0,
+				"fluidity": 250.0,
 				"color_texture_apply_mode" : "SingleColor",
 				"wave_sources":
 				[
 					{
 						"WavyLine":
 						{
-							"points" : [ [ 127, 129 ], [ 129, 127 ] ],
+							"points" : [ [ 72, 82 ], [ 75, 85 ] ],
+							"points_offset" :
+							[
+								[
+									{ "SinWave" : { "frequency" : 0.125, "amplitude" : 6.0, "phase" : 0.0 } },
+									{ "SinWave" : { "frequency" : 0.166666, "amplitude" : 6.0, "phase" : 1.57 } }
+								],
+								[
+									{ "SinWave" : { "frequency" : 0.25, "amplitude" : 6.0, "phase" : 0.0 } },
+									{ "SinWave" : { "frequency" : 0.166666, "amplitude" : 6.0, "phase" : 1.57 } }
+								]
+							],
 							"frequency": 1.0,
-							"amplitude": 0.1
+							"amplitude": 0.05
 						}
 					},
 					{
 						"WavyLine":
 						{
-							"points" : [ [ 129, 63 ], [ 127, 65 ] ],
-							"frequency": 1.4142,
-							"amplitude": 0.1
+							"points" : [ [ 72, 85 ], [ 75, 82 ] ],
+							"points_offset" :
+							[
+								[
+									{ "SinWave" : { "frequency" : 0.25, "amplitude" : 6.0, "phase" : 0.0 } },
+									{ "SinWave" : { "frequency" : 0.166666, "amplitude" : 6.0, "phase" : 1.57 } }
+								],
+								[
+									{ "SinWave" : { "frequency" : 0.125, "amplitude" : 6.0, "phase" : 0.0 } },
+									{ "SinWave" : { "frequency" : 0.166666, "amplitude" : 6.0, "phase" : 1.57 } }
+								]
+							],
+							"frequency": 1.0,
+							"amplitude": 0.05
 						}
 					},
 					{
 						"WavyLine":
 						{
-							"points" : [ [ 63, 129 ], [ 65, 127 ] ],
-							"frequency": 1.7321,
-							"amplitude": 0.1
+							"points" : [ [ 0, 0 ], [ 5, 5 ] ],
+							"points_offset" :
+							[
+								[
+									{ "SinWave" : { "frequency" : 0.2, "amplitude" : 7.0, "phase" : 0.0 } },
+									{ "SinWave" : { "frequency" : 0.15, "amplitude" : 7.0, "phase" : 1.57 } }
+								],
+								[
+									{ "SinWave" : { "frequency" : 0.2, "amplitude" : 7.0, "phase" : 0.0 } },
+									{ "SinWave" : { "frequency" : 0.15, "amplitude" : 7.0, "phase" : 1.57 } }
+								]
+							],
+							"frequency": 0.75,
+							"amplitude": 0.05
 						}
 					},
 					{
 						"WavyLine":
 						{
-							"points" : [ [ 63, 65 ], [ 65, 63 ] ],
-							"frequency": 1.618,
-							"amplitude": 0.1
-						}
-					},
-					{
-						"Rain":
-						{
-							"frequency" : 1.0,
-							"amplitude" : 0.2
+							"points" : [ [ 5, 0 ], [ 0, 5 ] ],
+							"points_offset" :
+							[
+								[
+									{ "SinWave" : { "frequency" : 0.2, "amplitude" : 7.0, "phase" : 0.0 } },
+									{ "SinWave" : { "frequency" : 0.15, "amplitude" : 7.0, "phase" : 1.57 } }
+								],
+								[
+									{ "SinWave" : { "frequency" : 0.2, "amplitude" : 7.0, "phase" : 0.0 } },
+									{ "SinWave" : { "frequency" : 0.15, "amplitude" : 7.0, "phase" : 1.57 } }
+								]
+							],
+							"frequency": 0.75,
+							"amplitude": 0.05
 						}
 					}
 				]
@@ -119,6 +157,7 @@
 		"blocks_view": false,
 		"decals": false,
 		"solid": false,
+		"twosided" : true,
 		"special_effect":
 		{
 			"Turb":
@@ -138,6 +177,7 @@
 		"blocks_view": false,
 		"decals": false,
 		"solid": false,
+		"twosided" : true,
 		"scroll_speed": [0.0, -16.0]
 	},
 	"water_flowing_fast":
@@ -149,7 +189,49 @@
 		"blocks_view": false,
 		"decals": false,
 		"solid": false,
+		"twosided" : true,
 		"scroll_speed": [0.0, -64.0]
+	},
+	"unnatural_liquid":
+	{
+		"diffuse": "unnatural_liquid.png",
+		"blending_mode": "Average",
+		"blocks_view": false,
+		"decals": false,
+		"solid": false,
+		"twosided" : true,
+		"special_effect":
+		{
+			"Water":
+			{
+				"resolution_log2": [7, 7],
+				"update_frequency": 20.0,
+				"fluidity": 40.0,
+				"color_texture_apply_mode" : "SourceTextureNormalDeformed",
+				"wave_sources":
+				[
+					{
+						"WavyLine":
+						{
+							"points" : [ [64, 64], [64, 64] ],
+							"points_offset" :
+							[
+								[
+									{ "SinWave" : { "frequency" : 0.5, "amplitude" : 6.0, "phase" : 0.0 } },
+									{ "SinWave" : { "frequency" : 0.5, "amplitude" : 6.0, "phase" : 1.57 } }
+								],
+								[
+									{ "SinWave" : { "frequency" : 0.5, "amplitude" : -6.0, "phase" : 0.0 } },
+									{ "SinWave" : { "frequency" : 0.5, "amplitude" : -6.0, "phase" : 1.57 } }
+								]
+							],
+							"frequency": 1.0,
+							"amplitude": 0.4
+						}
+					}
+				]
+			}
+		}
 	},
 	"water_green":
 	{
@@ -159,6 +241,7 @@
 		"blocks_view": false,
 		"decals": false,
 		"solid": false,
+		"twosided" : true,
 		"special_effect":
 		{
 			"Water":
