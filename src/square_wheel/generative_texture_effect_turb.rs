@@ -101,7 +101,7 @@ fn make_turb_distortion<T: Copy + Default>(
 	let time_based_shift = current_time_s * turb.frequency * std::f32::consts::TAU;
 
 	// Precalculate shifts.
-	temp_buffer.resize(size[0] as usize, 0);
+	temp_buffer.resize(std::cmp::max(size[0], size[1]) as usize, 0);
 	for (dst_shift, x) in temp_buffer.iter_mut().zip(0 .. size[0])
 	{
 		// TODO - speed-up this. Use unsafe f32 -> i32 conversion.
