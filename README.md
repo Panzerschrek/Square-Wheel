@@ -329,4 +329,4 @@ IQM library:
 Copyright (c) 2010-2019 Lee Salzman.
 
 SquareWheel uses a lot of third-party libraries, like _SDL2_, _Rapier_, _hecs_, _serde_, _cgmath_ and others.
-See list of dependencies in _src/Carto.toml_ file for more details.
+See list of dependencies in _src/Cargo.toml_ file for more details.
