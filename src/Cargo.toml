@@ -7,6 +7,7 @@ edition = "2018"
 [profile.release]
 panic = "abort"
 lto = true
+strip = true
 
 [features]
 rasterizer_unchecked_div = []
