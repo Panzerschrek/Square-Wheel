@@ -19,14 +19,13 @@ hecs = { version = "0.9.0", features = ["column-serialize", "row-serialize" ] }
 image = { version = "0.24.3", default-features = false, features = ["png", "jpeg", "tga"] }
 num_cpus = "1.13.1"
 rand = { version = "0.8.5", default-features = false, features = ["small_rng"] }
+rapier3d = { version= "0.14.0", features= ["serde-serialize"] }
 rayon = "1.5.3"
 sdl2 = { version = "0.35" }
 serde = { version = "1.0", features = ["derive"] }
 serde-name = "0.2.1"
 serde_json = "1.0"
 structopt = "0.3"
-
-rapier3d = { path = "../rapier/crates/rapier3d", features= ["serde-serialize"] }
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"
