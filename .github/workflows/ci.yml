@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
     # Clone repository and submodules
     - name: Fetch
@@ -36,7 +36,7 @@ jobs:
       run: ./clippy.sh
     # Check formatting in parallel, using nightly toolchain.
   check_fmt:
-      runs-on: ubuntu-20.04
+      runs-on: ubuntu-22.04
       steps:
       - name: Fetch
         uses: actions/checkout@v2
