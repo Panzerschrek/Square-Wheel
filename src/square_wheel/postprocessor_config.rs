@@ -45,14 +45,14 @@ impl PostprocessorConfig
 {
 	pub fn from_app_config(app_config: &config::ConfigSharedPtr) -> Self
 	{
-		serde_json::from_value(app_config.lock().unwrap()["postprocessor"].clone()).unwrap_or_default()
+		serde_json::from_value(app_config.read().unwrap()["postprocessor"].clone()).unwrap_or_default()
 	}
 
 	pub fn update_app_config(&self, app_config: &config::ConfigSharedPtr)
 	{
 		if let Ok(json) = serde_json::to_value(self)
 		{
-			app_config.lock().unwrap()["postprocessor"] = json;
+			app_config.write().unwrap()["postprocessor"] = json;
 		}
 	}
 }

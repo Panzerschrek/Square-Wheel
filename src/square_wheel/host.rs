@@ -706,6 +706,6 @@ impl Drop for Host
 {
 	fn drop(&mut self)
 	{
-		config::save(&self.app_config.lock().unwrap(), &self.config_file_path);
+		config::save(&self.app_config.read().unwrap(), &self.config_file_path);
 	}
 }

@@ -1,10 +1,10 @@
 use std::{
 	fs,
 	path::Path,
-	sync::{Arc, Mutex},
+	sync::{Arc, RwLock},
 };
 
-pub type ConfigSharedPtr = Arc<Mutex<serde_json::Value>>;
+pub type ConfigSharedPtr = Arc<RwLock<serde_json::Value>>;
 
 pub fn load(file_path: &Path) -> Option<serde_json::Value>
 {
@@ -26,5 +26,5 @@ pub fn save(config: &serde_json::Value, file_path: &Path)
 
 pub fn make_shared(config: serde_json::Value) -> ConfigSharedPtr
 {
-	Arc::new(Mutex::new(config))
+	Arc::new(RwLock::new(config))
 }
