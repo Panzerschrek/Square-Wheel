@@ -82,8 +82,7 @@ impl MapVisibilityCalculator
 			}
 		}
 
-		let root_node_index = bsp_map_compact::get_root_node_index(&self.map);
-		self.update_visibility_r(root_node_index, camera_matrices);
+		self.update_visibility_impl(camera_matrices);
 
 		self.is_inside_leaf_volume = self.is_inside_leaf_volume(camera_matrices, current_leaf);
 	}
@@ -113,8 +112,7 @@ impl MapVisibilityCalculator
 			leaf_data.bounds = Some(*frame_bounds);
 		}
 
-		let root_node_index = bsp_map_compact::get_root_node_index(&self.map);
-		self.update_visibility_r(root_node_index, camera_matrices);
+		self.update_visibility_impl(camera_matrices);
 
 		// Can't properly determine this.
 		self.is_inside_leaf_volume = true;
@@ -154,79 +152,97 @@ impl MapVisibilityCalculator
 		}
 	}
 
-	fn update_visibility_r(&mut self, node_index: u32, camera_matrices: &CameraMatrices)
+	fn update_visibility_impl(&mut self, camera_matrices: &CameraMatrices)
 	{
-		if node_index >= bsp_map_compact::FIRST_LEAF_INDEX
+		let planes_matrix_w_row = camera_matrices.planes_matrix.row(3);
+
+		// Use iterative approach of BSP tree traverse.
+		// This is more effective way to do this,
+		// because compiler can't properly optimize recursive calls and saves all arguments on stack,
+		// which is unnecessary, since all arguments except one are the same.
+
+		// Stack size must be greater or equal, than maximum BSP tree depth.
+		const MAX_STACK_SIZE: usize = bsp_map_compact::MAX_BSP_TREE_DEPTH;
+		let mut nodes_stack = [0; MAX_STACK_SIZE];
+		nodes_stack[0] = bsp_map_compact::get_root_node_index(&self.map);
+		let mut num_nodes_on_stack = 1;
+
+		while num_nodes_on_stack > 0
 		{
-			let leaf_index = node_index - bsp_map_compact::FIRST_LEAF_INDEX;
-
-			let leaf_value = &self.map.leafs[leaf_index as usize];
-			let leaf_data = &mut self.leafs_data[leaf_index as usize];
-
-			// Visit all portals of this leaf.
-			// If at least one portal is visible in this frame, assume this leaf to be visible.
-			// Build clipping bounds as intersection of all portal clipping bounds.
-			for &portal in &self.map.leafs_portals[(leaf_value.first_leaf_portal as usize) ..
-				((leaf_value.first_leaf_portal + leaf_value.num_leaf_portals) as usize)]
+			let node_index = nodes_stack[num_nodes_on_stack - 1];
+			if node_index >= bsp_map_compact::FIRST_LEAF_INDEX
 			{
-				let portal_data = &self.portals_data[portal as usize];
+				// Leaf - pop current node from stack.
+				num_nodes_on_stack -= 1;
 
-				if let Some(portal_bounds) = &portal_data.bounds
-				{
-					if let Some(leaf_bounds) = &mut leaf_data.bounds
-					{
-						leaf_bounds.extend(portal_bounds)
-					}
-					else
-					{
-						leaf_data.bounds = Some(*portal_bounds);
-					}
-				}
-			}
+				let leaf_index = node_index - bsp_map_compact::FIRST_LEAF_INDEX;
 
-			if let Some(leaf_bounds) = &leaf_data.bounds
-			{
-				// Iterate over all out portals of the leaf.
-				// If it's an optput portal (with no bounds set yet) - calculate its bounds as intersection of its own polygon bounds and input leaf bounds.
+				let leaf_value = &self.map.leafs[leaf_index as usize];
+				let leaf_data = &mut self.leafs_data[leaf_index as usize];
+
+				// Visit all portals of this leaf.
+				// If at least one portal is visible in this frame, assume this leaf to be visible.
+				// Build clipping bounds as intersection of all portal clipping bounds.
 				for &portal in &self.map.leafs_portals[(leaf_value.first_leaf_portal as usize) ..
 					((leaf_value.first_leaf_portal + leaf_value.num_leaf_portals) as usize)]
 				{
-					let portal_value = &self.map.portals[portal as usize];
-					let portal_data = &mut self.portals_data[portal as usize];
+					let portal_data = &self.portals_data[portal as usize];
 
-					if portal_data.bounds.is_none()
+					if let Some(portal_bounds) = &portal_data.bounds
 					{
-						if let Some(mut portal_projection) =
-							project_portal(portal_value, &self.map, &camera_matrices.view_matrix)
+						if let Some(leaf_bounds) = &mut leaf_data.bounds
 						{
-							portal_projection.intersect(leaf_bounds);
-							if portal_projection.is_valid_and_non_empty()
+							leaf_bounds.extend(portal_bounds)
+						}
+						else
+						{
+							leaf_data.bounds = Some(*portal_bounds);
+						}
+					}
+				}
+
+				if let Some(leaf_bounds) = &leaf_data.bounds
+				{
+					// Iterate over all out portals of the leaf.
+					// If it's an optput portal (with no bounds set yet) - calculate its bounds as intersection of its own polygon bounds and input leaf bounds.
+					for &portal in &self.map.leafs_portals[(leaf_value.first_leaf_portal as usize) ..
+						((leaf_value.first_leaf_portal + leaf_value.num_leaf_portals) as usize)]
+					{
+						let portal_value = &self.map.portals[portal as usize];
+						let portal_data = &mut self.portals_data[portal as usize];
+
+						if portal_data.bounds.is_none()
+						{
+							if let Some(mut portal_projection) =
+								project_portal(portal_value, &self.map, &camera_matrices.view_matrix)
 							{
-								portal_data.bounds = Some(portal_projection);
+								portal_projection.intersect(leaf_bounds);
+								if portal_projection.is_valid_and_non_empty()
+								{
+									portal_data.bounds = Some(portal_projection);
+								}
 							}
 						}
 					}
 				}
 			}
-		}
-		else
-		{
-			let node = &self.map.nodes[node_index as usize];
+			else if num_nodes_on_stack < MAX_STACK_SIZE
+			{
+				// Node - remove current node, push back and front nodes.
 
-			let plane_transformed_w = camera_matrices
-				.planes_matrix
-				.row(3)
-				.dot(node.plane.vec.extend(-node.plane.dist));
-			let node_children = node.children;
-			if plane_transformed_w >= 0.0
-			{
-				self.update_visibility_r(node_children[0], camera_matrices);
-				self.update_visibility_r(node_children[1], camera_matrices);
-			}
-			else
-			{
-				self.update_visibility_r(node_children[1], camera_matrices);
-				self.update_visibility_r(node_children[0], camera_matrices);
+				let node = &self.map.nodes[node_index as usize];
+				let plane_transformed_w = planes_matrix_w_row.dot(node.plane.vec.extend(-node.plane.dist));
+				if plane_transformed_w >= 0.0
+				{
+					nodes_stack[num_nodes_on_stack - 1] = node.children[1];
+					nodes_stack[num_nodes_on_stack] = node.children[0];
+				}
+				else
+				{
+					nodes_stack[num_nodes_on_stack - 1] = node.children[0];
+					nodes_stack[num_nodes_on_stack] = node.children[1];
+				}
+				num_nodes_on_stack += 1;
 			}
 		}
 	}
