@@ -57,7 +57,7 @@ impl DepthRenderer
 
 		let frame_bounds = ClippingPolygon::from_box(0.0, 0.0, width as f32, height as f32);
 		self.visibility_calculator
-			.update_visibility_new(camera_matrices, &frame_bounds);
+			.update_visibility(camera_matrices, &frame_bounds);
 
 		// Draw BSP tree in back to front order, skip unreachable leafs.
 		self.draw_tree(&mut rasterizer, camera_matrices);

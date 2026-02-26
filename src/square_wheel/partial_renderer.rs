@@ -176,7 +176,7 @@ impl PartialRenderer
 				ClippingPolygon::from_box(0.0, 0.0, surface_info.width as f32, surface_info.height as f32);
 			if let Some(start_leafs) = visibility_search_start_leafs
 			{
-				self.visibility_calculator.update_visibility_with_start_leafs_new(
+				self.visibility_calculator.update_visibility_with_start_leafs(
 					camera_matrices,
 					&frame_bounds,
 					start_leafs,
@@ -185,7 +185,7 @@ impl PartialRenderer
 			else
 			{
 				self.visibility_calculator
-					.update_visibility_new(camera_matrices, &frame_bounds);
+					.update_visibility(camera_matrices, &frame_bounds);
 			}
 		});
 

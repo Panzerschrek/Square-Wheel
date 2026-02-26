@@ -40,7 +40,7 @@ impl MapVisibilityCalculator
 		}
 	}
 
-	pub fn update_visibility_new(&mut self, camera_matrices: &CameraMatrices, frame_bounds: &ClippingPolygon)
+	pub fn update_visibility(&mut self, camera_matrices: &CameraMatrices, frame_bounds: &ClippingPolygon)
 	{
 		let current_leaf = self.find_current_leaf(camera_matrices);
 
@@ -54,8 +54,7 @@ impl MapVisibilityCalculator
 			portal_data.bounds = None;
 		}
 
-		let current_leaf_ref = &mut self.leafs_data[current_leaf as usize];
-		current_leaf_ref.bounds = Some(*frame_bounds);
+		self.leafs_data[current_leaf as usize].bounds = Some(*frame_bounds);
 
 		let leaf_value = self.map.leafs[current_leaf as usize];
 		for &portal in &self.map.leafs_portals[leaf_value.first_leaf_portal as usize ..
@@ -84,14 +83,14 @@ impl MapVisibilityCalculator
 		}
 
 		let root_node_index = bsp_map_compact::get_root_node_index(&self.map);
-		self.update_visibility_new_r(root_node_index, camera_matrices);
+		self.update_visibility_r(root_node_index, camera_matrices);
 
 		self.is_inside_leaf_volume = self.is_inside_leaf_volume(camera_matrices, current_leaf);
 	}
 
 	// Use this method for portals or mirrors
 	// - where camera position can be far away from actual visibility search start point (position of portal or mirror).
-	pub fn update_visibility_with_start_leafs_new(
+	pub fn update_visibility_with_start_leafs(
 		&mut self,
 		camera_matrices: &CameraMatrices,
 		frame_bounds: &ClippingPolygon,
@@ -115,7 +114,7 @@ impl MapVisibilityCalculator
 		}
 
 		let root_node_index = bsp_map_compact::get_root_node_index(&self.map);
-		self.update_visibility_new_r(root_node_index, camera_matrices);
+		self.update_visibility_r(root_node_index, camera_matrices);
 
 		// Can't properly determine this.
 		self.is_inside_leaf_volume = true;
@@ -155,7 +154,7 @@ impl MapVisibilityCalculator
 		}
 	}
 
-	fn update_visibility_new_r(&mut self, node_index: u32, camera_matrices: &CameraMatrices)
+	fn update_visibility_r(&mut self, node_index: u32, camera_matrices: &CameraMatrices)
 	{
 		if node_index >= bsp_map_compact::FIRST_LEAF_INDEX
 		{
@@ -221,13 +220,13 @@ impl MapVisibilityCalculator
 			let node_children = node.children;
 			if plane_transformed_w >= 0.0
 			{
-				self.update_visibility_new_r(node_children[0], camera_matrices);
-				self.update_visibility_new_r(node_children[1], camera_matrices);
+				self.update_visibility_r(node_children[0], camera_matrices);
+				self.update_visibility_r(node_children[1], camera_matrices);
 			}
 			else
 			{
-				self.update_visibility_new_r(node_children[1], camera_matrices);
-				self.update_visibility_new_r(node_children[0], camera_matrices);
+				self.update_visibility_r(node_children[1], camera_matrices);
+				self.update_visibility_r(node_children[0], camera_matrices);
 			}
 		}
 	}
