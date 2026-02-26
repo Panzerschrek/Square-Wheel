@@ -1,10 +1,9 @@
-use super::{frame_number::*, renderer_utils::*};
+use super::renderer_utils::*;
 use crate::common::{bsp_map_compact, clipping::*, clipping_polygon::*, math_types::*, matrix::*};
 use std::sync::Arc;
 
 pub struct MapVisibilityCalculator
 {
-	current_frame: FrameNumber,
 	map: Arc<bsp_map_compact::BSPMap>,
 	leafs_data: Vec<LeafData>,
 	portals_data: Vec<PortalData>,
@@ -14,19 +13,14 @@ pub struct MapVisibilityCalculator
 #[derive(Default, Copy, Clone)]
 struct LeafData
 {
-	// Frame last time this leaf was visible.
-	visible_frame: FrameNumber,
-	// Bounds, combined from all paths through portals.
-	current_frame_bounds: ClippingPolygon,
+	// Bounds combined from all paths through input portals.
+	bounds: Option<ClippingPolygon>,
 }
 
 #[derive(Default, Copy, Clone)]
 struct PortalData
 {
-	// Frame last time this portal was visible.
-	visible_frame: FrameNumber,
-	// None if behind camera.
-	current_frame_projection: Option<ClippingPolygon>,
+	bounds: Option<ClippingPolygon>,
 }
 
 type LeafsSearchWaveElement = u32; // Leaf index
@@ -39,7 +33,6 @@ impl MapVisibilityCalculator
 	pub fn new(map: Arc<bsp_map_compact::BSPMap>) -> Self
 	{
 		Self {
-			current_frame: FrameNumber::default(),
 			leafs_data: vec![LeafData::default(); map.leafs.len()],
 			portals_data: vec![PortalData::default(); map.portals.len()],
 			map,
@@ -49,17 +42,20 @@ impl MapVisibilityCalculator
 
 	pub fn update_visibility_new(&mut self, camera_matrices: &CameraMatrices, frame_bounds: &ClippingPolygon)
 	{
-		self.current_frame.next();
 		let current_leaf = self.find_current_leaf(camera_matrices);
+
+		for leaf_data in &mut self.leafs_data
+		{
+			leaf_data.bounds = None;
+		}
 
 		for portal_data in &mut self.portals_data
 		{
-			portal_data.current_frame_projection = None;
+			portal_data.bounds = None;
 		}
 
 		let current_leaf_ref = &mut self.leafs_data[current_leaf as usize];
-		current_leaf_ref.current_frame_bounds = *frame_bounds;
-		current_leaf_ref.visible_frame = self.current_frame;
+		current_leaf_ref.bounds = Some(*frame_bounds);
 
 		let leaf_value = self.map.leafs[current_leaf as usize];
 		for &portal in &self.map.leafs_portals[leaf_value.first_leaf_portal as usize ..
@@ -72,7 +68,7 @@ impl MapVisibilityCalculator
 			if scaled_dist.abs() <= eps * portal_value.plane.vec.magnitude()
 			{
 				// Camera is too close to plane of this portal.
-				// Assume, that leaft behind this portal is fully visible.
+				// Assume, that leaf behind this portal is fully visible.
 				let next_leaf = if portal_value.leafs[0] == current_leaf
 				{
 					portal_value.leafs[1]
@@ -83,8 +79,7 @@ impl MapVisibilityCalculator
 				};
 
 				let next_leaf_ref = &mut self.leafs_data[next_leaf as usize];
-				next_leaf_ref.current_frame_bounds = *frame_bounds;
-				next_leaf_ref.visible_frame = self.current_frame;
+				next_leaf_ref.bounds = Some(*frame_bounds);
 			}
 		}
 
@@ -103,18 +98,20 @@ impl MapVisibilityCalculator
 		start_leafs: &[u32],
 	)
 	{
-		self.current_frame.next();
+		for leaf_data in &mut self.leafs_data
+		{
+			leaf_data.bounds = None;
+		}
 
 		for portal_data in &mut self.portals_data
 		{
-			portal_data.current_frame_projection = None;
+			portal_data.bounds = None;
 		}
 
 		for leaf in start_leafs
 		{
 			let leaf_data = &mut self.leafs_data[*leaf as usize];
-			leaf_data.current_frame_bounds = *frame_bounds;
-			leaf_data.visible_frame = self.current_frame;
+			leaf_data.bounds = Some(*frame_bounds);
 		}
 
 		let root_node_index = bsp_map_compact::get_root_node_index(&self.map);
@@ -126,15 +123,7 @@ impl MapVisibilityCalculator
 
 	pub fn get_current_frame_leaf_bounds(&self, leaf_index: u32) -> Option<ClippingPolygon>
 	{
-		let leaf_data = &self.leafs_data[leaf_index as usize];
-		if leaf_data.visible_frame != self.current_frame
-		{
-			None
-		}
-		else
-		{
-			Some(leaf_data.current_frame_bounds)
-		}
+		return self.leafs_data[leaf_index as usize].bounds;
 	}
 
 	pub fn is_current_camera_inside_leaf_volume(&self) -> bool
@@ -173,46 +162,49 @@ impl MapVisibilityCalculator
 			let leaf_index = node_index - bsp_map_compact::FIRST_LEAF_INDEX;
 
 			let leaf_value = &self.map.leafs[leaf_index as usize];
-
 			let leaf_data = &mut self.leafs_data[leaf_index as usize];
 
 			// Visit all portals of this leaf.
 			// If at least one portal is visible in this frame, assume this leaf to be visible.
-			// Build clipping polygon as intersection of all portal clipping polygons.
+			// Build clipping bounds as intersection of all portal clipping bounds.
 			for &portal in &self.map.leafs_portals[(leaf_value.first_leaf_portal as usize) ..
 				((leaf_value.first_leaf_portal + leaf_value.num_leaf_portals) as usize)]
 			{
 				let portal_data = &self.portals_data[portal as usize];
 
-				if let Some(portal_current_frame_projection) = &portal_data.current_frame_projection
+				if let Some(portal_bounds) = &portal_data.bounds
 				{
-					if leaf_data.visible_frame != self.current_frame
+					if let Some(leaf_bounds) = &mut leaf_data.bounds
 					{
-						leaf_data.visible_frame = self.current_frame;
-						leaf_data.current_frame_bounds = *portal_current_frame_projection;
+						leaf_bounds.extend(portal_bounds)
 					}
 					else
 					{
-						leaf_data.current_frame_bounds.extend(portal_current_frame_projection)
+						leaf_data.bounds = Some(*portal_bounds);
 					}
 				}
 			}
 
-			if leaf_data.visible_frame == self.current_frame
+			if let Some(leaf_bounds) = &leaf_data.bounds
 			{
 				// Iterate over all out portals of the leaf.
+				// If it's an optput portal (with no bounds set yet) - calculate its bounds as intersection of its own polygon bounds and input leaf bounds.
 				for &portal in &self.map.leafs_portals[(leaf_value.first_leaf_portal as usize) ..
 					((leaf_value.first_leaf_portal + leaf_value.num_leaf_portals) as usize)]
 				{
 					let portal_value = &self.map.portals[portal as usize];
+					let portal_data = &mut self.portals_data[portal as usize];
 
-					if let Some(mut portal_projection) =
-						project_portal(portal_value, &self.map, &camera_matrices.view_matrix)
+					if portal_data.bounds.is_none()
 					{
-						portal_projection.intersect(&leaf_data.current_frame_bounds);
-						if portal_projection.is_valid_and_non_empty()
+						if let Some(mut portal_projection) =
+							project_portal(portal_value, &self.map, &camera_matrices.view_matrix)
 						{
-							self.portals_data[portal as usize].current_frame_projection = Some(portal_projection);
+							portal_projection.intersect(leaf_bounds);
+							if portal_projection.is_valid_and_non_empty()
+							{
+								portal_data.bounds = Some(portal_projection);
+							}
 						}
 					}
 				}
