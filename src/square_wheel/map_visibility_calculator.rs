@@ -156,6 +156,13 @@ impl MapVisibilityCalculator
 
 	fn update_visibility_impl(&mut self, camera_matrices: &CameraMatrices)
 	{
+		// Iterate over the whole BSP tree in front to back order.
+		// For each leaf we calculate its bounds based on bounds of input portals (visited before).
+		// Then we update bounds of output portals, which will be input portals of leafs visited later.
+		//
+		// This approach has guaranted linear time complexity (even in worst cases) proportional to size of the BSP tree.
+		// TODO - find a way to optimize this even further and avoid visitng the whole BSP tree.
+
 		let planes_matrix_w_row = camera_matrices.planes_matrix.row(3);
 
 		// Use iterative approach of BSP tree traverse.
