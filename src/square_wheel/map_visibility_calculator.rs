@@ -94,6 +94,34 @@ impl MapVisibilityCalculator
 		self.update_visibility_new_r(root_node_index, camera_matrices)
 	}
 
+	pub fn update_visibility_with_start_leafs_new(
+		&mut self,
+		camera_matrices: &CameraMatrices,
+		frame_bounds: &ClippingPolygon,
+		start_leafs: &[u32],
+	)
+	{
+		self.current_frame.next();
+
+		for portal_data in &mut self.portals_data
+		{
+			portal_data.current_frame_projection = None;
+		}
+
+		for leaf in start_leafs
+		{
+			let leaf_data = &mut self.leafs_data[*leaf as usize];
+			leaf_data.current_frame_bounds = *frame_bounds;
+			leaf_data.visible_frame = self.current_frame;
+		}
+
+		let root_node_index = bsp_map_compact::get_root_node_index(&self.map);
+		self.update_visibility_new_r(root_node_index, camera_matrices);
+
+		// Can't properly determine this.
+		self.is_inside_leaf_volume = true;
+	}
+
 	fn update_visibility_new_r(&mut self, node_index: u32, camera_matrices: &CameraMatrices)
 	{
 		if node_index >= bsp_map_compact::FIRST_LEAF_INDEX
