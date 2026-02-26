@@ -185,7 +185,7 @@ impl PartialRenderer
 			else
 			{
 				self.visibility_calculator
-					.update_visibility(camera_matrices, &frame_bounds);
+					.update_visibility_new(camera_matrices, &frame_bounds);
 			}
 		});
 
